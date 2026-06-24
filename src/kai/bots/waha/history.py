@@ -1,0 +1,152 @@
+"""Chat-history tool and helpers for the WAHA bot.
+
+Extracted from ``__init__.py`` to keep the main bot module lean.  The
+:func:`register_chat_history_tool` function is called once during
+:meth:`Bot.configure` to register the ``get_chat_history`` LLM tool.
+"""
+
+from __future__ import annotations
+
+import logging
+from typing import TYPE_CHECKING
+
+from llama_index.core.tools import FunctionTool
+
+if TYPE_CHECKING:
+    from kai.agent.core import KaiAgent
+    from kai.bots.waha.client import WahaClient
+
+logger = logging.getLogger(__name__)
+
+
+def _extract_history_sender_id(msg: dict) -> str:
+    """Extract the sender JID from a history message (mirrors payload._extract_sender_id).
+
+    WAHA group messages carry the sender in ``participant``; when absent the
+    ``_data.author`` field (dict or string) is the fallback, then top-level
+    ``from``.
+    """
+    participant = msg.get("participant")
+    if participant:
+        return participant
+    data = msg.get("_data") or {}
+    author = data.get("author")
+    if isinstance(author, dict):
+        return author.get("_serialized", "")
+    if isinstance(author, str) and author:
+        return author
+    return msg.get("from", "")
+
+
+def _sanitize_history_name(name: str) -> str:
+    """Sanitize a display name for the [Name] body format (mirrors payload._sanitize_name)."""
+    return name.replace("[", "").replace("]", "").replace("\n", " ").strip()[:80]
+
+
+def _history_sender_name(msg: dict, sender_id: str) -> str:
+    """Resolve a display name from a history message (mirrors payload._extract_sender_name).
+
+    Checks ``_data.notifyName`` and top-level ``notifyName``; sanitizes the
+    result. Falls back to phone digits (or ``unknown``).
+    """
+    data = msg.get("_data") or {}
+    name = data.get("notifyName") or msg.get("notifyName") or ""
+    name = name.strip()
+    if name:
+        return _sanitize_history_name(name)
+    return sender_id.split("@")[0] if sender_id else "unknown"
+
+
+def register_chat_history_tool(
+    agent: KaiAgent,
+    *,
+    bot: object,
+) -> None:
+    """Register ``get_chat_history``, scoped to the current chat.
+
+    The tool fetches past messages from WAHA's chat-history endpoint so the
+    model can summarize or recap a conversation it wasn't online for. It
+    reads ``chat_id`` from :class:`ToolContext` at call time (set per-turn by
+    :meth:`BaseBot.set_task_context`), so concurrent chats never
+    cross-contaminate. Results live in the agent's scratchpad for the
+    current turn only — they are NOT injected into the trimmed LRU history,
+    so there's no history bloat and no per-message token cost on normal turns.
+
+    Parameters
+    ----------
+    agent:
+        The :class:`KaiAgent` to register the tool on.
+    bot:
+        The :class:`Bot` instance (used to access ``_tool_context``,
+        ``_waha_client``, ``_waha``, and ``_rosters`` at call time).
+    """
+
+    async def get_chat_history(limit: int = 50, offset: int = 0) -> str:
+        """Fetch past messages from this chat's history.
+
+        Use when asked to summarize or recap a conversation, including
+        messages sent before the bot was online. Returns messages
+        formatted as '[SenderName] body', oldest first, one per line.
+
+        Args:
+            limit: Number of messages to fetch (default 50, max 200).
+            offset: Skip this many recent messages to page into older
+                history. 0 = most recent batch; 50 = the next older 50.
+        """
+        tool_context = bot._tool_context  # type: ignore[attr-defined]
+        if tool_context is None:
+            return "Error: no chat context available"
+        limit = max(1, min(int(limit), 200))
+        offset = max(0, int(offset))
+        chat_id = tool_context.current().chat_id
+        if not chat_id:
+            return "Error: no chat context available"
+
+        client: WahaClient | None = bot._waha_client  # type: ignore[attr-defined]
+        should_close = False
+        if client is None:
+            from kai.bots.waha.client import WahaClient as _WahaClient
+
+            client = _WahaClient(bot._waha)  # type: ignore[attr-defined]
+            should_close = True
+        try:
+            messages = await client.get_chat_messages(chat_id, limit=limit, offset=offset)
+        except Exception as exc:
+            logger.warning("get_chat_history fetch failed: %s", exc)
+            return f"Error: could not fetch chat history ({exc})"
+        finally:
+            if should_close:
+                await client.close()
+
+        # WAHA returns newest-first; reverse so the model reads chronologically.
+        roster: dict[str, str] = bot._rosters.get(chat_id, {})  # type: ignore[attr-defined]
+        lines: list[str] = []
+        for m in reversed(messages):
+            body = (m.get("body") or "").strip()
+            if not body:
+                continue
+            if bool(m.get("fromMe")):
+                name = "Kai"
+            else:
+                sender_id = _extract_history_sender_id(m)
+                name = roster.get(sender_id)
+                if not name:
+                    name = _history_sender_name(m, sender_id)
+            lines.append(f"[{name}] {body}")
+        return "\n".join(lines) if lines else "No text messages found."
+
+    agent.register_tool(
+        FunctionTool.from_defaults(
+            fn=get_chat_history,
+            name="get_chat_history",
+            description=(
+                "Fetch past messages from this chat's WhatsApp history "
+                "(including from before the bot was online). Returns "
+                "messages formatted as '[SenderName] body', oldest first. "
+                "Use when asked to summarize or recap the conversation. "
+                "Pass limit (default 50, max 200) and offset (0 = most "
+                "recent) to page through older history. Call multiple "
+                "times with increasing offset for a long recap."
+            ),
+        )
+    )

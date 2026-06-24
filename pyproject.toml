@@ -1,0 +1,68 @@
+[project]
+name = "kai"
+version = "0.0.1"
+description = "CLI wrapper for WAHA WhatsApp HTTP API with LlamaIndex agent"
+authors = [
+    { name = "Malvavisc0", email = "207609879+malvavisc0@users.noreply.github.com" },
+]
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "typer",
+    "fastapi",
+    "uvicorn",
+    "httpx",
+    "llama-index-llms-openai-like",
+    "pydantic",
+    "rich",
+    "pydantic-settings",
+    "pillow",
+    "ddgs",
+    "markdownify",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest",
+    "pytest-asyncio",
+    "ruff",
+]
+epaper = [
+    # Raspberry Pi GPIO/SPI stack. These only build and install on Linux
+    # (and in practice on the Pi itself), so they are gated behind platform
+    # markers to keep `uv sync --extra epaper` from failing on dev machines/CI.
+    "RPi.GPIO ; sys_platform == 'linux' and platform_machine in 'armv6l armv7l aarch64'",
+    "spidev ; sys_platform == 'linux' and platform_machine in 'armv6l armv7l aarch64'",
+    "gpiozero ; sys_platform == 'linux'",
+    "lgpio ; sys_platform == 'linux'",
+    "pigpio ; sys_platform == 'linux'",
+]
+
+[project.scripts]
+kai = "kai.cli:app"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/kai"]
+
+[tool.ruff]
+line-length = 100
+src = ["src"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "N", "W", "UP"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests", "src"]
+asyncio_mode = "auto"
+
+[dependency-groups]
+dev = [
+    "pytest",
+    "pytest-asyncio",
+    "respx",
+    "ruff",
+]
