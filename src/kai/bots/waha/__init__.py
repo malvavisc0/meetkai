@@ -284,6 +284,13 @@ class Bot(BaseBot):
         if self._waha.hmac_key:
             console.print("  hmac     [dim]configured[/dim]")
 
+        from kai.agent.tools.hardware import epaper_available
+
+        if epaper_available():
+            console.print("  epaper   [green]detected[/green]  [dim]waveshare epd2in13_V2[/dim]")
+        else:
+            console.print("  epaper   [dim]not detected[/dim]")
+
         if not self._waha.hmac_key and self._waha.webhook_host not in (
             "127.0.0.1",
             "localhost",

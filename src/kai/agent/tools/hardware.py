@@ -187,7 +187,7 @@ def render_to_epaper(ascii_art: str, title: str = "") -> str:
         return f"Error: failed to save PNG ({exc})"
 
 
-def _epaper_available() -> bool:
+def epaper_available() -> bool:
     try:
         import RPi.GPIO  # noqa: F401
         import spidev  # noqa: F401
@@ -195,3 +195,7 @@ def _epaper_available() -> bool:
         return False
 
     return _import_waveshare_epd() is not None
+
+
+def _epaper_available() -> bool:
+    return epaper_available()

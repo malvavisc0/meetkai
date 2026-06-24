@@ -8,7 +8,11 @@ from typing import Any
 from llama_index.core.tools import FunctionTool
 
 from kai.agent.tools.calculator import calculate
-from kai.agent.tools.hardware import _epaper_available, get_hardware_info, render_to_epaper
+from kai.agent.tools.hardware import (
+    epaper_available,
+    get_hardware_info,
+    render_to_epaper,
+)
 from kai.agent.tools.time import get_current_datetime, get_weather
 from kai.agent.tools.web import _get_webpage_content, _web_search
 
@@ -86,7 +90,7 @@ def get_tools() -> list[FunctionTool]:
         ),
     ]
 
-    if _epaper_available():
+    if epaper_available():
         specs.append(
             (
                 render_to_epaper,
