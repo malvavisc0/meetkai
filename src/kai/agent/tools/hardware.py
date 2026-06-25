@@ -237,15 +237,15 @@ def render_image_to_epaper(image_bytes: bytes, title: str = "") -> str:
         return f"Error: failed to open image ({exc})"
 
     title_h = _EPD_TITLE_HEIGHT if title else 0
-    max_w, max_h = _EPD_WIDTH, _EPD_HEIGHT - title_h
-    side = min(max_w, max_h)
+    avail_w, avail_h = _EPD_WIDTH, _EPD_HEIGHT - title_h
+    side = min(avail_w, int(avail_h * 0.85))
     img = img.resize((side, side), Image.Resampling.LANCZOS)
 
     img_1bit = img.convert("1", dither=Image.Dither.FLOYDSTEINBERG)
 
     canvas = Image.new("1", (_EPD_WIDTH, _EPD_HEIGHT), 255)
-    x_off = (_EPD_WIDTH - side) // 2
-    y_off = title_h + (max_h - side) // 2
+    x_off = (avail_w - side) // 2
+    y_off = title_h + (avail_h - side) // 2
     canvas.paste(img_1bit, (x_off, y_off))
 
     if title:
