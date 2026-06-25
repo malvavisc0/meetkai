@@ -108,7 +108,7 @@ def get_tools() -> list[FunctionTool]:
                 "(250x122 px, 1-bit black/white). Generates a bitmap from your "
                 "ASCII art and pushes it to the physical screen. Falls back to "
                 "saving a PNG file when hardware is unavailable. Art must fit "
-                "~62 columns x 17 lines. Use monospace characters only. "
+                "~62 columns x 10 lines. Use monospace characters only. "
                 "Generate art thematically inspired by the conversation.",
             )
         )
