@@ -9,18 +9,25 @@ from llama_index.core.tools import FunctionTool
 
 from kai.agent.tools.calculator import calculate
 from kai.agent.tools.hardware import (
-    epaper_available,
-    get_hardware_info,
-    render_to_epaper,
-)
-from kai.agent.tools.hardware import (
     epaper_clear as epaper_clear,
 )
 from kai.agent.tools.hardware import (
     epaper_sleep as epaper_sleep,
 )
 from kai.agent.tools.hardware import (
+    get_hardware_info,
+)
+from kai.agent.tools.hardware import (
     render_image_to_epaper as render_image_to_epaper,
+)
+from kai.agent.tools.hardware import (
+    render_sleep_screen as render_sleep_screen,
+)
+from kai.agent.tools.hardware import (
+    render_vibe_check as render_vibe_check,
+)
+from kai.agent.tools.hardware import (
+    render_wake_screen as render_wake_screen,
 )
 from kai.agent.tools.time import get_current_datetime, get_weather
 from kai.agent.tools.web import _get_webpage_content, _web_search
@@ -99,19 +106,6 @@ def get_tools() -> list[FunctionTool]:
         ),
     ]
 
-    if epaper_available():
-        specs.append(
-            (
-                render_to_epaper,
-                "render_to_epaper",
-                "Render ASCII art to a Waveshare 2.13-inch e-Paper display "
-                "(250x122 px, 1-bit black/white). Generates a bitmap from your "
-                "ASCII art and pushes it to the physical screen. Falls back to "
-                "saving a PNG file when hardware is unavailable. Art must fit "
-                "~62 columns x 10 lines. Use monospace characters only. "
-                "Generate art thematically inspired by the conversation.",
-            )
-        )
     return [
         FunctionTool.from_defaults(
             fn=_logged(name, fn),

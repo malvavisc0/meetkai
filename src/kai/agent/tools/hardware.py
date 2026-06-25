@@ -124,26 +124,56 @@ def get_hardware_info() -> dict[str, str]:
     return info
 
 
+def _load_font(size: int):
+    """Load a font at the given size, falling back to the PIL default."""
+    from PIL import ImageFont
+
+    font_path = _find_monospace_font()
+    if font_path:
+        try:
+            return ImageFont.truetype(font_path, size)
+        except OSError:
+            pass
+    return ImageFont.load_default()
+
+
+def _push_to_epd(canvas) -> str:
+    """Push a 1-bit PIL image (_EPD_WIDTH x _EPD_HEIGHT) to the panel.
+
+    Falls back to saving a PNG if hardware is unavailable or errors.
+    """
+    epd_module = _import_waveshare_epd()
+    if epd_module is not None:
+        try:
+            epd = epd_module.EPD()
+            epd.init()
+            epd.Clear()
+            epd.display(epd.getbuffer(canvas))
+            epd.sleep()
+            return "rendered successfully on e-Paper display"
+        except Exception as exc:
+            logger.warning("e-Paper hardware error: %s; falling back to PNG", exc)
+    else:
+        logger.debug("waveshare_epd not installed; falling back to PNG")
+
+    try:
+        _EPD_OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+        filename = datetime.now(UTC).strftime("%Y%m%d_%H%M%S.png")
+        path = _EPD_OUTPUT_DIR / filename
+        canvas.save(str(path))
+        return f"saved to {path}"
+    except OSError as exc:
+        return f"Error: failed to save PNG ({exc})"
+
+
 def render_to_epaper(ascii_art: str, title: str = "") -> str:
-    from PIL import Image, ImageDraw, ImageFont
+    from PIL import Image, ImageDraw
 
     if not ascii_art or not ascii_art.strip():
         return "Error: ascii_art is empty"
 
-    font_path = _find_monospace_font()
-    try:
-        font = (
-            ImageFont.truetype(font_path, _EPD_FONT_SIZE) if font_path else ImageFont.load_default()
-        )
-    except OSError:
-        font = ImageFont.load_default()
-
-    title_font = font
-    if font_path:
-        try:
-            title_font = ImageFont.truetype(font_path, 10)
-        except OSError:
-            pass
+    font = _load_font(_EPD_FONT_SIZE)
+    title_font = _load_font(10)
 
     image = Image.new("1", (_EPD_WIDTH, _EPD_HEIGHT), 255)
     draw = ImageDraw.Draw(image)
@@ -163,28 +193,7 @@ def render_to_epaper(ascii_art: str, title: str = "") -> str:
         draw.text((2, y_offset), line[:_EPD_MAX_COLS], font=font, fill=0)
         y_offset += _EPD_LINE_HEIGHT
 
-    epd_module = _import_waveshare_epd()
-    if epd_module is not None:
-        try:
-            epd = epd_module.EPD()
-            epd.init()
-            epd.Clear()
-            epd.display(epd.getbuffer(image))
-            epd.sleep()
-            return "rendered successfully on e-Paper display"
-        except Exception as exc:
-            logger.warning("e-Paper hardware error: %s; falling back to PNG", exc)
-    else:
-        logger.debug("waveshare_epd not installed; falling back to PNG")
-
-    try:
-        _EPD_OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
-        filename = datetime.now(UTC).strftime("%Y%m%d_%H%M%S.png")
-        path = _EPD_OUTPUT_DIR / filename
-        image.save(str(path))
-        return f"saved to {path}"
-    except OSError as exc:
-        return f"Error: failed to save PNG ({exc})"
+    return _push_to_epd(image)
 
 
 def epaper_available() -> bool:
@@ -226,7 +235,7 @@ def epaper_sleep() -> str:
 def render_image_to_epaper(image_bytes: bytes, title: str = "") -> str:
     import io
 
-    from PIL import Image, ImageDraw, ImageFont
+    from PIL import Image, ImageDraw
 
     if not image_bytes:
         return "Error: image_bytes is empty"
@@ -249,36 +258,118 @@ def render_image_to_epaper(image_bytes: bytes, title: str = "") -> str:
     canvas.paste(img_1bit, (x_off, y_off))
 
     if title:
-        font_path = _find_monospace_font()
-        if font_path:
-            try:
-                font = ImageFont.truetype(font_path, 10)
-                ImageDraw.Draw(canvas).text((2, 1), title[:20], font=font, fill=0)
-            except OSError:
-                pass
+        font = _load_font(10)
+        ImageDraw.Draw(canvas).text((2, 1), title[:20], font=font, fill=0)
 
-    epd_module = _import_waveshare_epd()
-    if epd_module is not None:
-        try:
-            epd = epd_module.EPD()
-            epd.init()
-            epd.Clear()
-            epd.display(epd.getbuffer(canvas))
-            epd.sleep()
-            return "rendered image successfully on e-Paper display"
-        except Exception as exc:
-            logger.warning("e-Paper hardware error: %s; falling back to PNG", exc)
-    else:
-        logger.debug("waveshare_epd not installed; falling back to PNG")
+    return _push_to_epd(canvas)
 
-    try:
-        _EPD_OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
-        filename = datetime.now(UTC).strftime("%Y%m%d_%H%M%S.png")
-        path = _EPD_OUTPUT_DIR / filename
-        canvas.save(str(path))
-        return f"saved to {path}"
-    except OSError as exc:
-        return f"Error: failed to save PNG ({exc})"
+
+def render_sleep_screen() -> str:
+    """Render a 'do not disturb / sleeping' screen to the e-Paper."""
+
+    from PIL import Image, ImageDraw
+
+    canvas = Image.new("1", (_EPD_WIDTH, _EPD_HEIGHT), 255)
+    draw = ImageDraw.Draw(canvas)
+
+    big_font = _load_font(24)
+    med_font = _load_font(12)
+    small_font = _load_font(10)
+
+    cx, cy, r = 190, 30, 18
+    draw.ellipse((cx - r, cy - r, cx + r, cy + r), fill=0)
+    draw.ellipse((cx - r + 8, cy - r - 2, cx + r + 8, cy + r - 2), fill=255)
+
+    for sx, sy in [(160, 15), (175, 50), (220, 18), (155, 35), (225, 45)]:
+        draw.point((sx, sy), fill=0)
+        draw.point((sx + 1, sy), fill=0)
+
+    draw.text((10, 15), "Z z z . . .", font=big_font, fill=0)
+    draw.text((10, 55), "do not disturb", font=med_font, fill=0)
+    draw.text((10, 72), "i am sleeping", font=med_font, fill=0)
+    draw.text((10, 105), "(come back later)", font=small_font, fill=0)
+
+    return _push_to_epd(canvas)
+
+
+def render_wake_screen() -> str:
+    """Render an 'I'm awake' splash to the e-Paper."""
+    import math
+
+    from PIL import Image, ImageDraw
+
+    canvas = Image.new("1", (_EPD_WIDTH, _EPD_HEIGHT), 255)
+    draw = ImageDraw.Draw(canvas)
+
+    big_font = _load_font(24)
+    med_font = _load_font(12)
+
+    draw.text((40, 30), "I'M AWAKE", font=big_font, fill=0)
+    draw.text((80, 65), "what did i miss?", font=med_font, fill=0)
+
+    sx, sy, sr = 210, 40, 6
+    draw.ellipse((sx - sr, sy - sr, sx + sr, sy + sr), fill=0)
+    for angle in range(0, 360, 45):
+        rad = math.radians(angle)
+        x1 = sx + int((sr + 3) * math.cos(rad))
+        y1 = sy + int((sr + 3) * math.sin(rad))
+        x2 = sx + int((sr + 10) * math.cos(rad))
+        y2 = sy + int((sr + 10) * math.sin(rad))
+        draw.line((x1, y1, x2, y2), fill=0, width=1)
+
+    return _push_to_epd(canvas)
+
+
+def render_vibe_check(score: int, label: str, quote: str) -> str:
+    """Render a vibe meter to the e-Paper.
+
+    Args:
+        score: 0-100 vibe intensity.
+        label: one-word label (CHAOTIC, WHOLESOME, DERANGED, ...).
+        quote: short description of the energy (max ~60 chars).
+    """
+    from PIL import Image, ImageDraw
+
+    canvas = Image.new("1", (_EPD_WIDTH, _EPD_HEIGHT), 255)
+    draw = ImageDraw.Draw(canvas)
+
+    title_font = _load_font(12)
+    big_font = _load_font(24)
+    med_font = _load_font(10)
+    small_font = _load_font(8)
+
+    draw.text((2, 1), "VIBE CHECK", font=title_font, fill=0)
+    draw.line((2, 14, _EPD_WIDTH - 2, 14), fill=0, width=1)
+
+    bar_x, bar_y, bar_w, bar_h = 2, 22, _EPD_WIDTH - 4, 16
+    draw.rectangle((bar_x, bar_y, bar_x + bar_w, bar_y + bar_h), outline=0, width=1)
+    fill_w = int(bar_w * max(0, min(100, score)) / 100)
+    if fill_w > 0:
+        draw.rectangle((bar_x + 1, bar_y + 1, bar_x + fill_w, bar_y + bar_h - 1), fill=0)
+
+    draw.text((2, 44), f"{score}%", font=big_font, fill=0)
+    label_text = label.upper()[:20]
+    label_w = draw.textlength(label_text, font=big_font)
+    draw.text((_EPD_WIDTH - label_w - 2, 44), label_text, font=big_font, fill=0)
+
+    y = 80
+    max_chars = 50
+    words = quote[: max_chars * 2].split()
+    line = ""
+    for word in words:
+        test = f"{line} {word}".strip()
+        if len(test) > max_chars and line:
+            draw.text((2, y), line, font=med_font, fill=0)
+            y += 12
+            line = word
+        else:
+            line = test
+    if line:
+        draw.text((2, y), line, font=med_font, fill=0)
+
+    draw.text((2, 112), "vibe@" + datetime.now(UTC).strftime("%H:%M"), font=small_font, fill=0)
+
+    return _push_to_epd(canvas)
 
 
 def _epaper_available() -> bool:

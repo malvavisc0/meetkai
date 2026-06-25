@@ -110,6 +110,8 @@ class Bot(BaseBot):
         self._stt: STTProvider | None = None
         self._waha_client: WahaClient | None = None
         self._seen_ids: set[str] = set()
+        self._vibe_msg_count = 0
+        self._vibe_interval = 25
 
     def configure(self, agent: KaiAgent, settings: Settings) -> None:
         self._agent = agent
@@ -251,6 +253,85 @@ class Bot(BaseBot):
         if self._server and not self._shutting_down.is_set():
             self._shutting_down.set()
             self._server.should_exit = True
+
+    def _epaper_available(self) -> bool:
+        from kai.agent.tools.hardware import epaper_available
+
+        return epaper_available()
+
+    def _epaper_sleep_screen(self) -> None:
+        if not self._epaper_available():
+            return
+        from kai.agent.tools.hardware import render_sleep_screen
+
+        result = render_sleep_screen()
+        logger.info("epaper sleep screen: %s", result)
+
+    def _epaper_wake_screen(self) -> None:
+        if not self._epaper_available():
+            return
+        from kai.agent.tools.hardware import render_wake_screen
+
+        result = render_wake_screen()
+        logger.info("epaper wake screen: %s", result)
+
+    async def _run_vibe_check(self, chat_id: str) -> None:
+        """Assess the chat's vibe and render it to the e-Paper display."""
+        if not self._epaper_available():
+            return
+        try:
+            messages = self._agent._get_history(chat_id)[-15:]
+            if not messages:
+                return
+
+            transcript = "\n".join(
+                f"{m.role.value if hasattr(m.role, 'value') else m.role}: {m.content}"
+                for m in messages
+                if m.content
+            )
+            if not transcript.strip():
+                return
+
+            prompt = (
+                "You are a vibe analyzer. Read this group chat excerpt and "
+                "rate the energy on a scale of 0-100.\n\n"
+                "Respond in EXACTLY this format, nothing else:\n"
+                "SCORE: <0-100>\n"
+                "LABEL: <one word, caps>\n"
+                "QUOTE: <one sentence describing the vibe, max 60 chars>\n\n"
+                f"Chat excerpt:\n{transcript}"
+            )
+            raw = await self._agent.complete(prompt)
+            score, label, quote = self._parse_vibe_response(raw)
+            if score is None:
+                logger.debug("vibe check: could not parse response: %s", raw[:200])
+                return
+
+            from kai.agent.tools.hardware import render_vibe_check
+
+            result = render_vibe_check(score, label, quote)
+            logger.info("epaper vibe check (%d%% %s): %s", score, label, result)
+        except Exception:
+            logger.debug("vibe check failed", exc_info=True)
+
+    @staticmethod
+    def _parse_vibe_response(raw: str) -> tuple[int | None, str, str]:
+        """Parse 'SCORE: N\\nLABEL: word\\nQUOTE: text' into components."""
+        score: int | None = None
+        label = "UNKNOWN"
+        quote = ""
+        for line in raw.strip().splitlines():
+            low = line.strip().lower()
+            if low.startswith("score:"):
+                try:
+                    score = int(line.split(":", 1)[1].strip())
+                except ValueError:
+                    pass
+            elif low.startswith("label:"):
+                label = line.split(":", 1)[1].strip()
+            elif low.startswith("quote:"):
+                quote = line.split(":", 1)[1].strip()
+        return score, label, quote
 
     async def status(self) -> None:
         waha = WahaSettings()
@@ -468,6 +549,11 @@ class Bot(BaseBot):
             logger.info("Message from %s in %s: %.100s", meta.sender_name, meta.chat_id, text)
             console.print(f"[dim]< {meta.sender_name}[/dim]  {text}")
 
+            self._vibe_msg_count += 1
+            if self._vibe_msg_count >= self._vibe_interval:
+                self._vibe_msg_count = 0
+                asyncio.create_task(self._run_vibe_check(meta.chat_id))
+
             context = MessageContext(
                 sender_name=meta.sender_name,
                 sender_id=meta.sender_id,
@@ -595,6 +681,7 @@ class Bot(BaseBot):
                     await self._send_with_retry(meta.chat_id, ack, mentions or None)
                 except Exception as exc:
                     logger.error("Failed to send sleep ack to %s: %s", meta.chat_id, exc)
+                self._epaper_sleep_screen()
                 return
 
             reply = self._post_process(reply)
@@ -647,6 +734,7 @@ class Bot(BaseBot):
         console.print(f"[green]>[/green]  {reply}")
         await self._send_reply(meta, roster, reply)
         self._mark_replied(meta.chat_id)
+        self._epaper_wake_screen()
 
     async def send_text(self, chat_id: str, text: str) -> None:
         """Send a text message into ``chat_id`` via WAHA (replies, task output, ...)."""
