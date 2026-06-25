@@ -311,11 +311,20 @@ def render_wake_screen() -> str:
 
     big_font = _load_font(24)
     med_font = _load_font(12)
+    small_font = _load_font(10)
 
-    draw.text((40, 30), "I'M AWAKE", font=big_font, fill=0)
-    draw.text((80, 65), "what did i miss?", font=med_font, fill=0)
+    def _centered(text, y, font):
+        w = draw.textlength(text, font=font)
+        draw.text(((_EPD_WIDTH - w) // 2, y), text, font=font, fill=0)
 
-    sx, sy, sr = 210, 40, 6
+    _centered("I'M AWAKE", 28, big_font)
+    _centered("what did i miss?", 62, med_font)
+
+    timestamp = datetime.now(UTC).strftime("%H:%M")
+    _centered(f"woke @ {timestamp}", 100, small_font)
+
+    # Sun icon, top-right corner.
+    sx, sy, sr = 224, 22, 6
     draw.ellipse((sx - sr, sy - sr, sx + sr, sy + sr), fill=0)
     for angle in range(0, 360, 45):
         rad = math.radians(angle)
