@@ -200,6 +200,13 @@ class Bot(BaseBot):
 
         if self._stt:
             await self._stt.start()
+
+        from kai.agent.tools.hardware import epaper_available, epaper_clear
+
+        if epaper_available():
+            logger.info("clearing e-Paper display on boot")
+            epaper_clear()
+
         self._print_startup_config()
 
         try:
@@ -234,6 +241,13 @@ class Bot(BaseBot):
         if self._waha_client:
             await self._waha_client.close()
             self._waha_client = None
+
+        from kai.agent.tools.hardware import epaper_available, epaper_sleep
+
+        if epaper_available():
+            logger.info("putting e-Paper display to sleep")
+            epaper_sleep()
+
         if self._server and not self._shutting_down.is_set():
             self._shutting_down.set()
             self._server.should_exit = True

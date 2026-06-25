@@ -14,6 +14,12 @@ from kai.agent.tools.hardware import (
     render_to_epaper,
 )
 from kai.agent.tools.hardware import (
+    epaper_clear as epaper_clear,
+)
+from kai.agent.tools.hardware import (
+    epaper_sleep as epaper_sleep,
+)
+from kai.agent.tools.hardware import (
     render_image_to_epaper as render_image_to_epaper,
 )
 from kai.agent.tools.time import get_current_datetime, get_weather

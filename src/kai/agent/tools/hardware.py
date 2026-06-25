@@ -7,8 +7,8 @@ from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
-_EPD_WIDTH = 250
-_EPD_HEIGHT = 122
+_EPD_WIDTH = 122
+_EPD_HEIGHT = 250
 _EPD_MAX_COLS = 62
 _EPD_MAX_LINES = 17
 _EPD_FONT_SIZE = 8
@@ -167,8 +167,8 @@ def render_to_epaper(ascii_art: str, title: str = "") -> str:
     if epd_module is not None:
         try:
             epd = epd_module.EPD()
-            epd.init(epd.FULL_UPDATE)
-            epd.Clear(0xFF)
+            epd.init(epd_module.EPD.FULL_UPDATE)
+            epd.Clear()
             epd.display(epd.getbuffer(image))
             epd.sleep()
             return "rendered successfully on e-Paper display"
@@ -195,6 +195,32 @@ def epaper_available() -> bool:
         return False
 
     return _import_waveshare_epd() is not None
+
+
+def epaper_clear() -> str:
+    epd_module = _import_waveshare_epd()
+    if epd_module is None:
+        return "Error: waveshare_epd not available"
+    try:
+        epd = epd_module.EPD()
+        epd.init(epd_module.EPD.FULL_UPDATE)
+        epd.Clear()
+        epd.sleep()
+        return "e-Paper display cleared"
+    except Exception as exc:
+        return f"Error: failed to clear e-Paper display ({exc})"
+
+
+def epaper_sleep() -> str:
+    epd_module = _import_waveshare_epd()
+    if epd_module is None:
+        return "Error: waveshare_epd not available"
+    try:
+        epd = epd_module.EPD()
+        epd.sleep()
+        return "e-Paper display in sleep mode"
+    except Exception as exc:
+        return f"Error: failed to sleep e-Paper display ({exc})"
 
 
 def render_image_to_epaper(image_bytes: bytes, title: str = "") -> str:
@@ -235,8 +261,8 @@ def render_image_to_epaper(image_bytes: bytes, title: str = "") -> str:
     if epd_module is not None:
         try:
             epd = epd_module.EPD()
-            epd.init(epd.FULL_UPDATE)
-            epd.Clear(0xFF)
+            epd.init(epd_module.EPD.FULL_UPDATE)
+            epd.Clear()
             epd.display(epd.getbuffer(canvas))
             epd.sleep()
             return "rendered image successfully on e-Paper display"
