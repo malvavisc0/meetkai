@@ -220,15 +220,23 @@ def epaper_clear() -> str:
         return f"Error: failed to clear e-Paper display ({exc})"
 
 
-def epaper_sleep() -> str:
+def epaper_sleep(show_screen: bool = True) -> str:
+    """Put the panel into low-power sleep, optionally showing a sleep splash first."""
     epd_module = _import_waveshare_epd()
     if epd_module is None:
         return "Error: waveshare_epd not available"
+
+    # Render the sleep splash so the persistent e-paper image reflects the state.
+    if show_screen:
+        render_sleep_screen()  # already inits, displays, and sleeps
+
     try:
         epd = epd_module.EPD()
+        epd.init()  # ensure SPI/GPIO is up before issuing the sleep command
         epd.sleep()
         return "e-Paper display in sleep mode"
     except Exception as exc:
+        logger.warning("failed to sleep e-Paper display: %s", exc)
         return f"Error: failed to sleep e-Paper display ({exc})"
 
 
