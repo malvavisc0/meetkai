@@ -40,9 +40,9 @@ def _import_waveshare_epd():
     if _WAVESHARE_VENDOR_LIB.is_dir() and str(_WAVESHARE_VENDOR_LIB) not in sys.path:
         sys.path.insert(0, str(_WAVESHARE_VENDOR_LIB))
     try:
-        from waveshare_epd import epd2in13_V2
+        from waveshare_epd import epd2in13_V3
 
-        return epd2in13_V2
+        return epd2in13_V3
     except ImportError:
         return None
 
@@ -167,7 +167,7 @@ def render_to_epaper(ascii_art: str, title: str = "") -> str:
     if epd_module is not None:
         try:
             epd = epd_module.EPD()
-            epd.init(epd_module.EPD.FULL_UPDATE)
+            epd.init()
             epd.Clear()
             epd.display(epd.getbuffer(image))
             epd.sleep()
@@ -203,7 +203,7 @@ def epaper_clear() -> str:
         return "Error: waveshare_epd not available"
     try:
         epd = epd_module.EPD()
-        epd.init(epd_module.EPD.FULL_UPDATE)
+        epd.init()
         epd.Clear()
         epd.sleep()
         return "e-Paper display cleared"
@@ -261,7 +261,7 @@ def render_image_to_epaper(image_bytes: bytes, title: str = "") -> str:
     if epd_module is not None:
         try:
             epd = epd_module.EPD()
-            epd.init(epd_module.EPD.FULL_UPDATE)
+            epd.init()
             epd.Clear()
             epd.display(epd.getbuffer(canvas))
             epd.sleep()

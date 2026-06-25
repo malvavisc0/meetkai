@@ -301,7 +301,7 @@ class Bot(BaseBot):
         from kai.agent.tools.hardware import epaper_available
 
         if epaper_available():
-            console.print("  epaper   [green]detected[/green]  [dim]waveshare epd2in13_V2[/dim]")
+            console.print("  epaper   [green]detected[/green]  [dim]waveshare epd2in13_V3[/dim]")
         else:
             console.print("  epaper   [dim]not detected[/dim]")
 
