@@ -439,7 +439,7 @@ def render_vibe_check(score: int, label: str, quote: str) -> str:
     draw = ImageDraw.Draw(canvas)
 
     title_font = _load_font(12)
-    med_font = _load_font(12)
+    med_font = _load_font(16)
 
     _save_last_vibe(score)
 
@@ -469,8 +469,8 @@ def render_vibe_check(score: int, label: str, quote: str) -> str:
     draw.line((col_divider_x, 22, col_divider_x, body_bottom), fill=0, width=1)
 
     quote_x = col_divider_x + 6
-    max_chars = (_EPD_WIDTH - quote_x - 4) // 7
-    _wrap_text(draw, quote, quote_x, 26, med_font, max_chars, line_height=14)
+    max_chars = (_EPD_WIDTH - quote_x - 4) // 9
+    _wrap_text(draw, quote, quote_x, 26, med_font, max_chars, line_height=18)
 
     # --- Vibe meter across the bottom ---
     _draw_vibe_meter(draw, score, y_top=96)
