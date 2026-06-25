@@ -320,6 +320,168 @@ def render_wake_screen() -> str:
     return _push_to_epd(canvas)
 
 
+_BOOT_TIME: datetime | None = None
+
+
+def _vibe_store() -> Path:
+    return _EPD_OUTPUT_DIR.parent / "vibe.json"
+
+
+def _load_last_vibe() -> int | None:
+    try:
+        import json
+
+        data = json.loads(_vibe_store().read_text(encoding="utf-8"))
+        return int(data.get("score"))
+    except (FileNotFoundError, ValueError, TypeError, OSError):
+        return None
+
+
+def _save_last_vibe(score: int) -> None:
+    try:
+        import json
+
+        _vibe_store().parent.mkdir(parents=True, exist_ok=True)
+        _vibe_store().write_text(json.dumps({"score": score}), encoding="utf-8")
+    except OSError:
+        logger.debug("failed to save last vibe score", exc_info=True)
+
+
+def _boot_time() -> str:
+    global _BOOT_TIME
+    if _BOOT_TIME is None:
+        _BOOT_TIME = datetime.now(UTC)
+    elapsed = datetime.now(UTC) - _BOOT_TIME
+    hours, remainder = divmod(int(elapsed.total_seconds()), 3600)
+    minutes = remainder // 60
+    return f"T+{hours:02d}:{minutes:02d}"
+
+
+def _draw_huge_digit(draw, digit: str, x: int, y: int, scale: int = 2):
+    """Draw a single digit using a 5x7 pixel grid, scaled up."""
+    glyphs = {
+        "0": ["01110", "10001", "10011", "10101", "11001", "10001", "01110"],
+        "1": ["00100", "01100", "00100", "00100", "00100", "00100", "01110"],
+        "2": ["01110", "10001", "00001", "00010", "00100", "01000", "11111"],
+        "3": ["11111", "00010", "00100", "00010", "00001", "10001", "01110"],
+        "4": ["00010", "00110", "01010", "10010", "11111", "00010", "00010"],
+        "5": ["11111", "10000", "11110", "00001", "00001", "10001", "01110"],
+        "6": ["00110", "01000", "10000", "11110", "10001", "10001", "01110"],
+        "7": ["11111", "00001", "00010", "00100", "01000", "01000", "01000"],
+        "8": ["01110", "10001", "10001", "01110", "10001", "10001", "01110"],
+        "9": ["01110", "10001", "10001", "01111", "00001", "00010", "01100"],
+    }
+    rows = glyphs.get(digit, [])
+    for ry, row in enumerate(rows):
+        for rx, bit in enumerate(row):
+            if bit == "1":
+                px = x + rx * scale
+                py = y + ry * scale
+                draw.rectangle(
+                    (px, py, px + scale - 1, py + scale - 1),
+                    fill=0,
+                )
+
+
+def _draw_huge_number(draw, number: int, x: int, y: int, scale: int = 2) -> int:
+    """Draw an integer with huge digits. Returns the width used."""
+    s = str(number)
+    w = 0
+    for ch in s:
+        _draw_huge_digit(draw, ch, x + w, y, scale)
+        w += 6 * scale
+    return w
+
+
+def _draw_mood_face(draw, x: int, y: int, score: int, scale: int = 2):
+    """Draw a pixel-art mood face at (x, y) based on score range.
+
+    Uses 8-wide bitmap strings; '#' = black pixel, '.' = transparent.
+    The face, eyes, and mouth change with the vibe score.
+    """
+    if score <= 20:
+        face = [
+            "########",
+            "#......#",
+            "#.XX.XX#",  # dead X eyes
+            "#......#",
+            "#......#",
+            "#.----.#",  # flat mouth
+            "#......#",
+            "########",
+        ]
+    elif score <= 40:
+        face = [
+            "########",
+            "#......#",
+            "#\\..../#",  # concerned slanted eyes
+            "#......#",
+            "#......#",
+            "#.----.#",  # flat mouth
+            "#......#",
+            "########",
+        ]
+    elif score <= 60:
+        face = [
+            "########",
+            "#......#",
+            "#.-..-.#",  # neutral dot eyes
+            "#......#",
+            "#......#",
+            "#.----.#",  # flat mouth
+            "#......#",
+            "########",
+        ]
+    elif score <= 80:
+        face = [
+            "########",
+            "#......#",
+            "#.^..^.#",  # smug raised eyes
+            "#......#",
+            "#......#",
+            "#.~~..,#",  # smirk mouth
+            "#......#",
+            "########",
+        ]
+    else:
+        face = [
+            "########",
+            "#......#",
+            "#.OO.OO#",  # wide deranged eyes
+            "#......#",
+            "#......#",
+            "#.####.#",  # open shouting mouth
+            "#.####.#",
+            "########",
+        ]
+
+    for ry, row in enumerate(face):
+        for rx, ch in enumerate(row):
+            if ch != ".":
+                px = x + rx * scale
+                py = y + ry * scale
+                draw.rectangle(
+                    (px, py, px + scale - 1, py + scale - 1),
+                    fill=0,
+                )
+
+
+def _draw_trend_arrow(draw, x: int, y: int, delta: int, font) -> int:
+    """Draw a trend arrow + delta text. Returns width used."""
+    med_font = _load_font(10)
+    if delta > 0:
+        arrow = "▲"
+    elif delta < 0:
+        arrow = "▼"
+    else:
+        arrow = "▶"
+
+    draw.text((x, y), arrow, font=font, fill=0)
+    delta_text = f"{'+' if delta > 0 else ''}{delta}"
+    draw.text((x + 12, y), delta_text, font=med_font, fill=0)
+    return 30
+
+
 def render_vibe_check(score: int, label: str, quote: str) -> str:
     """Render a vibe meter to the e-Paper.
 
@@ -334,40 +496,53 @@ def render_vibe_check(score: int, label: str, quote: str) -> str:
     draw = ImageDraw.Draw(canvas)
 
     title_font = _load_font(12)
-    big_font = _load_font(24)
+    big_font = _load_font(18)
     med_font = _load_font(10)
     small_font = _load_font(8)
 
+    prev_score = _load_last_vibe()
+    _save_last_vibe(score)
+
     draw.text((2, 1), "VIBE CHECK", font=title_font, fill=0)
+
+    label_text = label.upper()[:20]
+    label_w = draw.textlength(label_text, font=title_font)
+    draw.text((_EPD_WIDTH - label_w - 2, 1), label_text, font=title_font, fill=0)
+
     draw.line((2, 14, _EPD_WIDTH - 2, 14), fill=0, width=1)
 
-    bar_x, bar_y, bar_w, bar_h = 2, 22, _EPD_WIDTH - 4, 16
-    draw.rectangle((bar_x, bar_y, bar_x + bar_w, bar_y + bar_h), outline=0, width=1)
-    fill_w = int(bar_w * max(0, min(100, score)) / 100)
-    if fill_w > 0:
-        draw.rectangle((bar_x + 1, bar_y + 1, bar_x + fill_w, bar_y + bar_h - 1), fill=0)
+    num_w = _draw_huge_number(draw, score, 5, 20, scale=3)
 
-    draw.text((2, 44), f"{score}%", font=big_font, fill=0)
-    label_text = label.upper()[:20]
-    label_w = draw.textlength(label_text, font=big_font)
-    draw.text((_EPD_WIDTH - label_w - 2, 44), label_text, font=big_font, fill=0)
+    if prev_score is not None:
+        delta = score - prev_score
+        _draw_trend_arrow(draw, 5 + num_w + 8, 24, delta, big_font)
+        sub_text = f"from {prev_score}"
+        draw.text((5 + num_w + 8, 44), sub_text, font=small_font, fill=0)
+    else:
+        delta = 0
+        draw.text((5 + num_w + 8, 30), "first check", font=small_font, fill=0)
 
-    y = 80
-    max_chars = 50
+    _draw_mood_face(draw, 5, 80, score, scale=2)
+
+    quote_x = 50
+    quote_y = 82
+    max_chars = 26
     words = quote[: max_chars * 2].split()
     line = ""
     for word in words:
         test = f"{line} {word}".strip()
         if len(test) > max_chars and line:
-            draw.text((2, y), line, font=med_font, fill=0)
-            y += 12
+            draw.text((quote_x, quote_y), line, font=med_font, fill=0)
+            quote_y += 12
             line = word
         else:
             line = test
     if line:
-        draw.text((2, y), line, font=med_font, fill=0)
+        draw.text((quote_x, quote_y), line, font=med_font, fill=0)
 
-    draw.text((2, 112), "vibe@" + datetime.now(UTC).strftime("%H:%M"), font=small_font, fill=0)
+    timestamp = datetime.now(UTC).strftime("%H:%M")
+    footer = f"vibe@{timestamp}  {_boot_time()}"
+    draw.text((2, 112), footer, font=small_font, fill=0)
 
     return _push_to_epd(canvas)
 
