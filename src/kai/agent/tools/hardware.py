@@ -443,31 +443,64 @@ def render_vibe_check(score: int, label: str, quote: str) -> str:
 
     _save_last_vibe(score)
 
+    # --- Header: timestamp left, label as an inverted black chip on the right ---
     timestamp = datetime.now(UTC).strftime("%H:%M")
-    header_left = f"VIBECHECK @ {timestamp}"
-    draw.text((2, 1), header_left, font=title_font, fill=0)
+    draw.text((2, 2), f"VIBECHECK @ {timestamp}", font=title_font, fill=0)
 
     label_text = label.upper()[:20]
     label_w = draw.textlength(label_text, font=title_font)
-    draw.text((_EPD_WIDTH - label_w - 2, 1), label_text, font=title_font, fill=0)
+    chip_pad = 4
+    chip_w = int(label_w) + chip_pad * 2
+    chip_x0 = _EPD_WIDTH - chip_w - 2
+    draw.rounded_rectangle((chip_x0, 0, _EPD_WIDTH - 2, 15), radius=3, fill=0)
+    draw.text((chip_x0 + chip_pad, 2), label_text, font=title_font, fill=255)
 
-    draw.line((2, 16, _EPD_WIDTH - 2, 16), fill=0, width=1)
+    draw.line((2, 17, _EPD_WIDTH - 2, 17), fill=0, width=1)
 
-    # Two columns below the header (y=18 to y=120)
-    face_scale = 4
-    face_w = 8 * face_scale  # 32px
-    col_divider_x = face_w + 12
+    # --- Body: mood face (left) + wrapped quote (right) ---
+    face_scale = 5
+    face_w = 8 * face_scale  # 40px
+    col_divider_x = face_w + 14
+    face_top = 24
 
-    _draw_mood_face(draw, 6, 30, score, scale=face_scale)
+    _draw_mood_face(draw, 6, face_top, score, scale=face_scale)
 
-    draw.line((col_divider_x, 22, col_divider_x, 118), fill=0, width=1)
+    body_bottom = 90
+    draw.line((col_divider_x, 22, col_divider_x, body_bottom), fill=0, width=1)
 
     quote_x = col_divider_x + 6
-    quote_y = 30
     max_chars = (_EPD_WIDTH - quote_x - 4) // 7
-    _wrap_text(draw, quote, quote_x, quote_y, med_font, max_chars, line_height=14)
+    _wrap_text(draw, quote, quote_x, 26, med_font, max_chars, line_height=14)
+
+    # --- Vibe meter across the bottom ---
+    _draw_vibe_meter(draw, score, y_top=96)
 
     return _push_to_epd(canvas)
+
+
+def _draw_vibe_meter(draw, score: int, y_top: int) -> None:
+    """Draw a horizontal vibe gauge: outlined bar with proportional fill + ticks."""
+    score = max(0, min(100, score))
+    x0, x1 = 8, _EPD_WIDTH - 8
+    bar_h = 12
+    y_bot = y_top + bar_h
+
+    # Bar outline.
+    draw.rectangle((x0, y_top, x1, y_bot), outline=0, width=1)
+
+    # Proportional fill (inset by 1px so it sits inside the outline).
+    inner_x0, inner_x1 = x0 + 2, x1 - 2
+    fill_w = int((inner_x1 - inner_x0) * score / 100)
+    if fill_w > 0:
+        draw.rectangle((inner_x0, y_top + 2, inner_x0 + fill_w, y_bot - 2), fill=0)
+
+    # Tick marks below the bar (every 10%).
+    tick_y = y_bot + 2
+    span = x1 - x0
+    for i in range(11):
+        tx = x0 + int(span * i / 10)
+        tick_len = 4 if i % 5 == 0 else 2
+        draw.line((tx, tick_y, tx, tick_y + tick_len), fill=0, width=1)
 
 
 def _epaper_available() -> bool:
