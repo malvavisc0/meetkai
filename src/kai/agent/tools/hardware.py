@@ -227,8 +227,12 @@ def epaper_sleep(show_screen: bool = True) -> str:
         return "Error: waveshare_epd not available"
 
     # Render the sleep splash so the persistent e-paper image reflects the state.
+    # render_sleep_screen() already inits, displays, and sleeps the panel, so when
+    # it runs there is nothing left to do (and re-issuing sleep would hit a
+    # closed SPI descriptor).
     if show_screen:
-        render_sleep_screen()  # already inits, displays, and sleeps
+        render_sleep_screen()
+        return "e-Paper display in sleep mode"
 
     try:
         epd = epd_module.EPD()
