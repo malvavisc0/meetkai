@@ -320,9 +320,6 @@ def render_wake_screen() -> str:
     return _push_to_epd(canvas)
 
 
-_BOOT_TIME: datetime | None = None
-
-
 def _vibe_store() -> Path:
     return _EPD_OUTPUT_DIR.parent / "vibe.json"
 
@@ -345,16 +342,6 @@ def _save_last_vibe(score: int) -> None:
         _vibe_store().write_text(json.dumps({"score": score}), encoding="utf-8")
     except OSError:
         logger.debug("failed to save last vibe score", exc_info=True)
-
-
-def _boot_time() -> str:
-    global _BOOT_TIME
-    if _BOOT_TIME is None:
-        _BOOT_TIME = datetime.now(UTC)
-    elapsed = datetime.now(UTC) - _BOOT_TIME
-    hours, remainder = divmod(int(elapsed.total_seconds()), 3600)
-    minutes = remainder // 60
-    return f"T+{hours:02d}:{minutes:02d}"
 
 
 def _draw_huge_digit(draw, digit: str, x: int, y: int, scale: int = 2):
@@ -541,7 +528,7 @@ def render_vibe_check(score: int, label: str, quote: str) -> str:
         draw.text((quote_x, quote_y), line, font=med_font, fill=0)
 
     timestamp = datetime.now(UTC).strftime("%H:%M")
-    footer = f"vibe@{timestamp}  {_boot_time()}"
+    footer = f"vibe@{timestamp}"
     draw.text((2, 112), footer, font=small_font, fill=0)
 
     return _push_to_epd(canvas)
