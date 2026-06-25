@@ -323,6 +323,11 @@ class Bot(BaseBot):
                 picture_bytes = await client.download_image(picture_url)
             if picture_bytes:
                 render_image_pixelated(picture_bytes, console, width=16)
+                from kai.agent.tools.hardware import epaper_available, render_image_to_epaper
+
+                if epaper_available():
+                    result = render_image_to_epaper(picture_bytes, title=name or "kai")
+                    logger.info("boot epaper render: %s", result)
 
             if name:
                 console.print(f"  [cyan]{name}[/cyan]")

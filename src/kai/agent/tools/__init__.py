@@ -13,6 +13,9 @@ from kai.agent.tools.hardware import (
     get_hardware_info,
     render_to_epaper,
 )
+from kai.agent.tools.hardware import (
+    render_image_to_epaper as render_image_to_epaper,
+)
 from kai.agent.tools.time import get_current_datetime, get_weather
 from kai.agent.tools.web import _get_webpage_content, _web_search
 

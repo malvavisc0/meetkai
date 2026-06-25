@@ -197,5 +197,63 @@ def epaper_available() -> bool:
     return _import_waveshare_epd() is not None
 
 
+def render_image_to_epaper(image_bytes: bytes, title: str = "") -> str:
+    import io
+
+    from PIL import Image, ImageDraw, ImageFont
+
+    if not image_bytes:
+        return "Error: image_bytes is empty"
+
+    try:
+        img = Image.open(io.BytesIO(image_bytes)).convert("L")
+    except Exception as exc:
+        return f"Error: failed to open image ({exc})"
+
+    title_h = _EPD_TITLE_HEIGHT if title else 0
+    max_w, max_h = _EPD_WIDTH, _EPD_HEIGHT - title_h
+    side = min(max_w, max_h)
+    img = img.resize((side, side), Image.Resampling.LANCZOS)
+
+    img_1bit = img.convert("1", dither=Image.Dither.FLOYDSTEINBERG)
+
+    canvas = Image.new("1", (_EPD_WIDTH, _EPD_HEIGHT), 255)
+    x_off = (_EPD_WIDTH - side) // 2
+    y_off = title_h + (max_h - side) // 2
+    canvas.paste(img_1bit, (x_off, y_off))
+
+    if title:
+        font_path = _find_monospace_font()
+        if font_path:
+            try:
+                font = ImageFont.truetype(font_path, 10)
+                ImageDraw.Draw(canvas).text((2, 1), title[:20], font=font, fill=0)
+            except OSError:
+                pass
+
+    epd_module = _import_waveshare_epd()
+    if epd_module is not None:
+        try:
+            epd = epd_module.EPD()
+            epd.init(epd.FULL_UPDATE)
+            epd.Clear(0xFF)
+            epd.display(epd.getbuffer(canvas))
+            epd.sleep()
+            return "rendered image successfully on e-Paper display"
+        except Exception as exc:
+            logger.warning("e-Paper hardware error: %s; falling back to PNG", exc)
+    else:
+        logger.debug("waveshare_epd not installed; falling back to PNG")
+
+    try:
+        _EPD_OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+        filename = datetime.now(UTC).strftime("%Y%m%d_%H%M%S.png")
+        path = _EPD_OUTPUT_DIR / filename
+        canvas.save(str(path))
+        return f"saved to {path}"
+    except OSError as exc:
+        return f"Error: failed to save PNG ({exc})"
+
+
 def _epaper_available() -> bool:
     return epaper_available()
