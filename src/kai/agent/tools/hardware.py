@@ -7,10 +7,10 @@ from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
-_EPD_WIDTH = 122
-_EPD_HEIGHT = 250
+_EPD_WIDTH = 250
+_EPD_HEIGHT = 122
 _EPD_MAX_COLS = 62
-_EPD_MAX_LINES = 17
+_EPD_MAX_LINES = 10
 _EPD_FONT_SIZE = 8
 _EPD_LINE_HEIGHT = 10
 _EPD_TITLE_HEIGHT = 12
