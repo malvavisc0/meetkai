@@ -45,6 +45,25 @@ _EMOJI_CLUSTER_RE = re.compile(
 )
 
 
+# Hallucinated/leaked tool calls occasionally arrive as plain assistant text
+# (the model emits a tool-call block the runtime doesn't parse, so it falls
+# through as content). These artifacts must never be delivered to the chat.
+_TOOL_CALL_LEAK_RE = re.compile(
+    r"</?tool_call>|</?arg_key>|</?arg_value>|<arg(?:_)?key>|<arg(?:_)?value>",
+    re.IGNORECASE,
+)
+
+
+def has_tool_call_leak(reply: str) -> bool:
+    """Return True if ``reply`` contains leaked tool-call markup.
+
+    Detects the structural artifacts of an unparsed tool call (``<tool_call>``,
+    ``<arg_key>``/``<arg_value>`` and their hyphen-less variants). These should
+    never reach WhatsApp, so the caller treats such a reply as silent.
+    """
+    return bool(_TOOL_CALL_LEAK_RE.search(reply or ""))
+
+
 def has_sleep_token(reply: str) -> bool:
     return bool(_SLEEP_RE.search(reply or ""))
 

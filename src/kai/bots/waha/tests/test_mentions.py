@@ -1,4 +1,19 @@
-from kai.bots.waha.mentions import resolve_inbound_mentions, resolve_mentions
+from kai.bots.waha.mentions import (
+    resolve_inbound_mentions,
+    resolve_mentions,
+    strip_mention_markup,
+)
+
+
+class TestStripMentionMarkup:
+    def test_strips_brackets_to_bare_name(self):
+        assert strip_mention_markup("@[German García] buen día") == "German García buen día"
+
+    def test_leaves_plain_text_untouched(self):
+        assert strip_mention_markup("hola que tal") == "hola que tal"
+
+    def test_handles_empty(self):
+        assert strip_mention_markup("") == ""
 
 
 class TestResolveMentionsGroup:

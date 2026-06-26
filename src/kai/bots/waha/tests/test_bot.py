@@ -116,6 +116,59 @@ class TestIsReplyToBot:
         assert bot._is_reply_to_bot(msg) is False
 
 
+class TestLearnBotIdentity:
+    def test_adopts_lid_when_phone_matches(self):
+        bot = _make_bot()
+        bot._bot_ids.add("4917662716239@c.us")
+        bot._learn_bot_identity("4917662716239@c.us", "154868568301592@lid")
+        assert "154868568301592@lid" in bot._bot_ids
+        # The learned LID makes a reply addressed by LID resolve to the bot.
+        assert bot._is_reply_to_bot({"replyTo": {"participant": "154868568301592@lid"}}) is True
+
+    def test_ignores_other_participants(self):
+        bot = _make_bot()
+        bot._bot_ids.add("4917662716239@c.us")
+        bot._learn_bot_identity("99999@c.us", "88888@lid")
+        assert "88888@lid" not in bot._bot_ids
+
+    def test_noop_when_no_known_identity(self):
+        bot = _make_bot()
+        bot._learn_bot_identity("4917662716239@c.us", "154868568301592@lid")
+        assert "154868568301592@lid" not in bot._bot_ids
+
+    def test_handles_missing_lid(self):
+        bot = _make_bot()
+        bot._bot_ids.add("4917662716239@c.us")
+        bot._learn_bot_identity("4917662716239@c.us", None)
+        assert bot._bot_ids == {"4917662716239@c.us"}
+
+
+class TestHasToolCallLeak:
+    def test_detects_tool_call_block(self):
+        from kai.bots.waha.processing import has_tool_call_leak
+
+        leak = (
+            "web_search\n```html\n<arg_key>query</arg_key>\n"
+            "<arg_value>significado</arg_value>\n</tool_call>\n```"
+        )
+        assert has_tool_call_leak(leak) is True
+
+    def test_detects_hyphenless_variant(self):
+        from kai.bots.waha.processing import has_tool_call_leak
+
+        assert has_tool_call_leak("<argkey>query</argkey>") is True
+
+    def test_clean_reply_is_not_a_leak(self):
+        from kai.bots.waha.processing import has_tool_call_leak
+
+        assert has_tool_call_leak("sure, that movie comes out friday") is False
+
+    def test_empty_is_not_a_leak(self):
+        from kai.bots.waha.processing import has_tool_call_leak
+
+        assert has_tool_call_leak("") is False
+
+
 class TestPostProcess:
     def test_strips_bold(self):
         assert _make_bot()._post_process("**hello**") == "hello"

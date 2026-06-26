@@ -107,6 +107,15 @@ def _resolve_name(
     return f"@{digits}", jid
 
 
+def strip_mention_markup(reply: str) -> str:
+    """Remove ``@[Name]`` bracket markup, leaving the bare name.
+
+    Used when outbound mentions are disabled (or in DMs) so the model's
+    ``@[Name]`` tagging syntax never leaks literal brackets into the message.
+    """
+    return _MENTION_BRACKET_RE.sub(r"\1", reply or "")
+
+
 def resolve_mentions(
     reply: str,
     roster: dict[str, str],

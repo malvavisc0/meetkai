@@ -18,12 +18,13 @@ from kai.bots.waha.client import WahaClient
 from kai.bots.waha.config import WahaSettings
 from kai.bots.waha.history import register_chat_history_tool
 from kai.bots.waha.media import MediaAttachment, MediaType, extract_media
-from kai.bots.waha.mentions import resolve_inbound_mentions, resolve_mentions
+from kai.bots.waha.mentions import resolve_inbound_mentions, resolve_mentions, strip_mention_markup
 from kai.bots.waha.payload import GROUP_SUFFIX, parse_message
 from kai.bots.waha.processing import (
     DEFAULT_SLEEP_ACK,
     REPLY_STYLE,
     has_sleep_token,
+    has_tool_call_leak,
     post_process,
     should_organically_participate,
     strip_sleep_token,
@@ -649,6 +650,21 @@ class Bot(BaseBot):
             )
             reply = strip_reasoning_channels(reply)
 
+            # A leaked/unparsed tool call must never reach the chat. Treat it
+            # exactly like a silent turn: observe the user message, send nothing.
+            if has_tool_call_leak(reply):
+                logger.warning("Discarding leaked tool-call reply for %s", meta.chat_id)
+                console.print("[dim]> (dropped tool-call leak)[/dim]")
+                self._mark_skipped(meta.chat_id)
+                if enriched_text.strip():
+                    await self._agent.observe(
+                        enriched_text,
+                        conversation_id=meta.chat_id,
+                        context=context,
+                        images=images or None,
+                    )
+                return
+
             if is_silent_reply(reply):
                 logger.info("Bot chose silence for %s", meta.chat_id)
                 console.print("[dim]> (silent)[/dim]")
@@ -676,7 +692,7 @@ class Bot(BaseBot):
                     )
                     ack, mentions = resolved.text, resolved.mentions
                 else:
-                    mentions = []
+                    ack, mentions = strip_mention_markup(ack), []
                 try:
                     await self._send_with_retry(meta.chat_id, ack, mentions or None)
                 except Exception as exc:
@@ -723,7 +739,7 @@ class Bot(BaseBot):
             allow_silence=True,
         )
         reply = strip_reasoning_channels(reply)
-        if is_silent_reply(reply) or has_sleep_token(reply):
+        if is_silent_reply(reply) or has_sleep_token(reply) or has_tool_call_leak(reply):
             logger.info("Bot stays asleep for %s", meta.chat_id)
             console.print("[dim]> (still sleeping)[/dim]")
             return
@@ -788,7 +804,7 @@ class Bot(BaseBot):
             )
             out_text, mentions = resolved.text, resolved.mentions
         else:
-            out_text, mentions = reply, []
+            out_text, mentions = strip_mention_markup(reply), []
         if mentions:
             logger.info("Mentions applied: %d", len(mentions))
         try:
@@ -822,6 +838,26 @@ class Bot(BaseBot):
         finally:
             if should_close:
                 await client.close()
+
+    def _learn_bot_identity(self, phone_jid: str | None, lid_jid: object) -> None:
+        """Adopt a group's @lid identity for the bot when it can be matched.
+
+        ``phone_jid`` is a participant's @c.us phone JID; ``lid_jid`` is the
+        paired @lid. If the phone JID shares its digit prefix with a known bot
+        identity, both JIDs are added to ``self._bot_ids`` so subsequent
+        mention/reply detection (which matches against ``_bot_ids``) recognizes
+        the bot when it is addressed by @lid.
+        """
+        if not self._bot_ids or not phone_jid:
+            return
+        phone_digits = phone_jid.split("@")[0]
+        if not any(bid.split("@")[0] == phone_digits for bid in self._bot_ids):
+            return
+        if phone_jid not in self._bot_ids:
+            self._bot_ids.add(phone_jid)
+        if isinstance(lid_jid, str) and lid_jid and lid_jid not in self._bot_ids:
+            self._bot_ids.add(lid_jid)
+            logger.info("Learned bot @lid identity from group roster: %s", lid_jid)
 
     def _is_reply_to_bot(self, msg: dict) -> bool:
         reply_to = msg.get("replyTo")
@@ -946,6 +982,13 @@ class Bot(BaseBot):
             pn = entry.get("pn") or entry.get("id") or ""
             if not isinstance(pn, str) or not pn:
                 continue
+            # Learn the bot's own @lid identity for this group. WAHA addresses
+            # the bot by an opaque @lid in many groups, but the bot only knows
+            # its @c.us phone JID from the profile. The participants entry pairs
+            # both (`pn` = phone JID, `id` = @lid), so when an entry's phone JID
+            # matches a known bot id we adopt its @lid too — without this,
+            # mention and reply-to-bot detection silently fail in @lid groups.
+            self._learn_bot_identity(pn, entry.get("id"))
             role = entry.get("role", "participant")
             if role == "left":
                 left_jids.add(pn)
