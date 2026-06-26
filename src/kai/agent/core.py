@@ -469,7 +469,7 @@ class KaiAgent:
             from llama_index.core.llms import ChatMessage, MessageRole
 
             resp = await self._llm.achat(
-                chat_history=[ChatMessage(role=MessageRole.USER, content=prompt)]
+                messages=[ChatMessage(role=MessageRole.USER, content=prompt)]
             )
             content = resp.message.content or ""
             return strip_reasoning_channels(content) if isinstance(content, str) else str(content)
@@ -525,7 +525,7 @@ class KaiAgent:
 
         try:
             final = await self._llm.achat(
-                chat_history=[*messages, *scratchpad],
+                messages=[*messages, *scratchpad],
                 tool_choice="none",
             )
             if final.message.content:
