@@ -14,6 +14,57 @@ import httpx
 logger = logging.getLogger(__name__)
 
 
+# Map common language names (as given via --language) to whisper.cpp language
+# codes. Keys are matched case-insensitively. "auto" / unknown names fall
+# through to whisper's own auto-detection.
+_LANGUAGE_NAME_TO_CODE: dict[str, str] = {
+    "english": "en",
+    "spanish": "es",
+    "french": "fr",
+    "german": "de",
+    "italian": "it",
+    "portuguese": "pt",
+    "dutch": "nl",
+    "russian": "ru",
+    "chinese": "zh",
+    "japanese": "ja",
+    "korean": "ko",
+    "arabic": "ar",
+    "hindi": "hi",
+    "turkish": "tr",
+    "polish": "pl",
+    "ukrainian": "uk",
+    "swedish": "sv",
+    "norwegian": "no",
+    "finnish": "fi",
+    "danish": "da",
+    "czech": "cs",
+    "greek": "el",
+    "hebrew": "he",
+    "romanian": "ro",
+    "hungarian": "hu",
+    "vietnamese": "vi",
+    "thai": "th",
+    "indonesian": "id",
+    "catalan": "ca",
+    "galician": "gl",
+    "basque": "eu",
+}
+
+
+def resolve_whisper_language(language: str) -> str:
+    """Resolve a language name (e.g. "Spanish") to a whisper code (e.g. "es").
+
+    Returns "auto" for empty/auto/unknown input so whisper auto-detects.
+    """
+    if not language:
+        return "auto"
+    lang = language.strip().lower()
+    if lang in ("auto", ""):
+        return "auto"
+    return _LANGUAGE_NAME_TO_CODE.get(lang, "auto")
+
+
 class STTProvider(ABC):
     @abstractmethod
     async def transcribe(self, audio_bytes: bytes, mime_type: str = "") -> str: ...

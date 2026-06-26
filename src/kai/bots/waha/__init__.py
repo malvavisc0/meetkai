@@ -37,7 +37,7 @@ from kai.bots.waha.setup import (
     MediaConfig,
     ParticipationConfig,
 )
-from kai.bots.waha.stt import STTProvider, create_stt_provider
+from kai.bots.waha.stt import STTProvider, create_stt_provider, resolve_whisper_language
 from kai.bots.waha.webhook import create_webhook_app
 from kai.cli import BotStartupError
 from kai.config.filters import should_process_chat_message
@@ -109,6 +109,7 @@ class Bot(BaseBot):
         self._server: uvicorn.Server | None = None
         self._shutting_down = asyncio.Event()
         self._stt: STTProvider | None = None
+        self._stt_language: str = "auto"
         self._waha_client: WahaClient | None = None
         self._seen_ids: set[str] = set()
         self._vibe_msg_count = 0
@@ -129,16 +130,24 @@ class Bot(BaseBot):
         self.setup_task_scheduler(agent, settings)
         register_chat_history_tool(agent, bot=self)
         if self._config.media.voice_enabled:
+            # The whisper language and the chat language are separate settings.
+            # When the user passes --language explicitly, use it for STT too,
+            # unless KAI_WAHA_WHISPER_LANGUAGE was set to something other than
+            # "auto" (its default) — i.e. an explicit whisper override wins.
+            whisper_lang = self._waha.whisper_language
+            if settings.agent_language_explicit and whisper_lang == "auto":
+                whisper_lang = resolve_whisper_language(settings.agent_language)
             self._stt = create_stt_provider(
                 ffmpeg_path=self._waha.ffmpeg_path,
                 whisper_cpp_path=self._waha.whisper_cpp_path,
                 model_path=self._waha.whisper_model_path,
-                language=self._waha.whisper_language,
+                language=whisper_lang,
                 server_mode=self._waha.whisper_server_mode,
                 server_host=self._waha.whisper_server_host,
                 server_port=self._waha.whisper_server_port,
                 server_threads=self._waha.whisper_server_threads,
             )
+            self._stt_language = whisper_lang
 
     def _load_config(self, config_path: Path | None = None) -> BotConfig:
         path = config_path or self.resolve_config_path()
@@ -376,7 +385,7 @@ class Bot(BaseBot):
         console.print(f"  timezone {tz}")
         if self._config.media.voice_enabled and self._stt:
             stt_type = type(self._stt).__name__
-            console.print(f"  stt      {stt_type}  [dim]{self._waha.whisper_language}[/dim]")
+            console.print(f"  stt      {stt_type}  [dim]{self._stt_language}[/dim]")
         if self._waha.hmac_key:
             console.print("  hmac     [dim]configured[/dim]")
 
