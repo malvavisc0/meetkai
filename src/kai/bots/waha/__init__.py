@@ -30,6 +30,7 @@ from kai.bots.waha.processing import (
     should_organically_participate,
     strip_sleep_token,
 )
+from kai.bots.waha.seen_store import SeenStore
 from kai.bots.waha.setup import (
     _DEFAULT_PARTICIPATION_COOLDOWN,
     _DEFAULT_PARTICIPATION_RATE,
@@ -75,12 +76,6 @@ def _build_webhook_url(public_host: str, webhook_path: str) -> str:
     return f"http://{public_host}{webhook_path}"
 
 
-def _bounded_set_add(s: set, value, max_size: int) -> None:
-    if len(s) >= max_size:
-        s.pop()
-    s.add(value)
-
-
 def _bounded_dict_set(d: OrderedDict, key, value, max_size: int) -> None:
     if key in d:
         d.move_to_end(key)
@@ -112,7 +107,7 @@ class Bot(BaseBot):
         self._stt: STTProvider | None = None
         self._stt_language: str = "auto"
         self._waha_client: WahaClient | None = None
-        self._seen_ids: set[str] = set()
+        self._seen_store: SeenStore | None = None
         self._vibe_msg_count = 0
         self._vibe_interval = 25
 
@@ -130,6 +125,7 @@ class Bot(BaseBot):
         agent.set_timezone(self._config.timezone)
         self.setup_task_scheduler(agent, settings)
         register_chat_history_tool(agent, bot=self)
+        self._seen_store = SeenStore(self._seen_store_path(settings), max_size=_SEEN_IDS_MAX)
         if self._config.media.voice_enabled:
             # The whisper language and the chat language are separate settings.
             # When the user passes --language explicitly, use it for STT too,
@@ -487,12 +483,29 @@ class Bot(BaseBot):
         finally:
             await client.close()
 
+    def _seen_store_path(self, settings: Settings) -> Path | None:
+        """Resolve the seen-IDs file path, anchored to the bot dir.
+
+        Mirrors :meth:`BaseBot.setup_task_scheduler`'s path logic so the
+        file lives alongside ``<name>.tasks.json`` (CWD-independent). Returns
+        None when persistence is disabled (``tasks_folder`` unset), in
+        which case :class:`SeenStore` stays in-memory only.
+        """
+        if settings.tasks_folder is None:
+            return None
+        folder = Path(settings.tasks_folder)
+        if not folder.is_absolute():
+            folder = self.bot_dir / folder
+        path = folder / f"{self.name}.seen.json"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        return path
+
     def _is_seen_message(self, message_id: str) -> bool:
-        if not message_id:
+        if not message_id or self._seen_store is None:
             return False
-        if message_id in self._seen_ids:
+        if self._seen_store.is_seen(message_id):
             return True
-        _bounded_set_add(self._seen_ids, message_id, _SEEN_IDS_MAX)
+        self._seen_store.add(message_id)
         return False
 
     def _get_chat_lock(self, chat_id: str) -> asyncio.Lock:

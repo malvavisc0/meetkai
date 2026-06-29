@@ -1579,3 +1579,100 @@ class TestInstagramEnrichment:
         images = agent.chat.call_args.kwargs.get("images")
         assert images is not None
         assert images == imgs
+
+
+class TestSeenStore:
+    def test_load_round_trip(self, tmp_path):
+        from kai.bots.waha.seen_store import SeenStore
+
+        path = tmp_path / "seen.json"
+        s = SeenStore(path, max_size=4)
+        s.add("m1")
+        s.add("m2")
+
+        # A fresh instance loading the same file sees both IDs.
+        s2 = SeenStore(path, max_size=4)
+        assert s2.is_seen("m1")
+        assert s2.is_seen("m2")
+        assert not s2.is_seen("m3")
+
+    def test_evicts_oldest_when_capped(self, tmp_path):
+        from kai.bots.waha.seen_store import SeenStore
+
+        path = tmp_path / "seen.json"
+        s = SeenStore(path, max_size=2)
+        s.add("m1")
+        s.add("m2")
+        s.add("m3")  # evicts m1 (oldest)
+
+        assert not s.is_seen("m1")
+        assert s.is_seen("m2")
+        assert s.is_seen("m3")
+
+        # And the persisted file reflects the eviction.
+        s2 = SeenStore(path, max_size=2)
+        assert not s2.is_seen("m1")
+        assert s2.is_seen("m2")
+        assert s2.is_seen("m3")
+
+    def test_missing_file_starts_empty(self, tmp_path):
+        from kai.bots.waha.seen_store import SeenStore
+
+        s = SeenStore(tmp_path / "nope.json", max_size=4)
+        assert not s.is_seen("anything")
+
+    def test_corrupt_json_logs_and_starts_empty(self, tmp_path, caplog):
+        from kai.bots.waha.seen_store import SeenStore
+
+        path = tmp_path / "seen.json"
+        path.write_text("{not valid json", encoding="utf-8")
+        with caplog.at_level("WARNING"):
+            s = SeenStore(path, max_size=4)
+        assert not s.is_seen("m1")
+        assert any("Failed to load seen IDs" in r.message for r in caplog.records)
+
+    def test_none_path_is_in_memory_only(self):
+        from kai.bots.waha.seen_store import SeenStore
+
+        s = SeenStore(None, max_size=4)
+        s.add("m1")
+        assert s.is_seen("m1")
+        # No file was ever written (path is None); a second instance can't see it.
+        s2 = SeenStore(None, max_size=4)
+        assert not s2.is_seen("m1")
+
+    def test_re_adding_existing_id_is_noop_no_rewrite(self, tmp_path):
+        from kai.bots.waha.seen_store import SeenStore
+
+        path = tmp_path / "seen.json"
+        s = SeenStore(path, max_size=4)
+        s.add("m1")
+        mtime1 = path.stat().st_mtime_ns
+        # Re-adding must not trigger another write.
+        s.add("m1")
+        assert path.stat().st_mtime_ns == mtime1
+
+
+class TestSeenMessagePersistence:
+    """A seen ID on one Bot instance must be seen by a fresh instance."""
+
+    def test_seen_survives_new_bot_instance(self, tmp_path):
+        from kai.bots.waha.seen_store import SeenStore
+
+        path = tmp_path / "waha.seen.json"
+        bot1 = _make_bot()
+        bot1._seen_store = SeenStore(path, max_size=2048)
+        # First sighting: not seen, gets recorded to disk.
+        assert bot1._is_seen_message("msg-abc") is False
+        # Second call on the same instance: seen.
+        assert bot1._is_seen_message("msg-abc") is True
+
+        # A brand-new Bot instance (simulating a restart) loading the same
+        # store file must still see "msg-abc".
+        bot2 = _make_bot()
+        bot2._seen_store = SeenStore(path, max_size=2048)
+        assert bot2._is_seen_message("msg-abc") is True
+
+    def test_empty_message_id_never_seen(self):
+        bot = _make_bot()
+        assert bot._is_seen_message("") is False
