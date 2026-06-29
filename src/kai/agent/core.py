@@ -542,8 +542,15 @@ class KaiAgent:
     def _format_user_message(self, message: str, context: MessageContext | None = None) -> str:
         if context is None:
             return message
-        suffix = " (mentioning you)" if context.is_group and context.mentions_bot else ""
-        return f"[{context.sender_name}{suffix}] {message}"
+        addressed = context.mentions_bot or context.replies_to_bot
+        suffix = " (mentioning you)" if context.is_group and addressed else ""
+        header = f"[{context.sender_name}{suffix}]"
+        # When the message is a multi-line enrichment block (reply-to / links /
+        # voice / image tags stacked above the body), keep the speaker header on
+        # its own line so it doesn't fuse with the first metadata tag.
+        if "\n" in message:
+            return f"{header}\n{message}"
+        return f"{header} {message}"
 
     def _save_from_snapshot(self, snapshot: dict[str, list[ChatMessage]]) -> None:
         if self._history_file is None:

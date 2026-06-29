@@ -12,6 +12,9 @@ from typing import TYPE_CHECKING
 
 from llama_index.core.tools import FunctionTool
 
+from kai.bots.waha.mentions import resolve_inbound_mentions
+from kai.bots.waha.payload import GROUP_SUFFIX
+
 if TYPE_CHECKING:
     from kai.agent.core import KaiAgent
     from kai.bots.waha.client import WahaClient
@@ -120,6 +123,7 @@ def register_chat_history_tool(
 
         # WAHA returns newest-first; reverse so the model reads chronologically.
         roster: dict[str, str] = bot._rosters.get(chat_id, {})  # type: ignore[attr-defined]
+        is_group = GROUP_SUFFIX in chat_id
         lines: list[str] = []
         for m in reversed(messages):
             body = (m.get("body") or "").strip()
@@ -130,8 +134,13 @@ def register_chat_history_tool(
             else:
                 sender_id = _extract_history_sender_id(m)
                 name = roster.get(sender_id)
-                if not name:
+                if name:
+                    name = _sanitize_history_name(name)
+                else:
                     name = _history_sender_name(m, sender_id)
+            # Resolve inbound @<digits> mentions so the recap shows names, not
+            # raw LID/phone digits (mirrors live message enrichment).
+            body = resolve_inbound_mentions(body, roster, is_group=is_group)
             lines.append(f"[{name}] {body}")
         return "\n".join(lines) if lines else "No text messages found."
 

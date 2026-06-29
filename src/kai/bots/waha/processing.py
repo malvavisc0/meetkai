@@ -12,9 +12,8 @@ import re
 import time
 
 REPLY_STYLE = (
-    "\nCRITICAL: Your reply MUST be 1-2 sentences max, under 40 words. "
+    "\nCRITICAL: Your reply MUST be at most 3 sentences and under 40 words. "
     "No exceptions. No personality or goal overrides this limit. "
-    "Do NOT end with an emoji — most replies have zero emoji. "
     "Do NOT end a short reply with a period."
 )
 
@@ -30,19 +29,9 @@ ACTIVE_EXCHANGE_RATE_BOOST = 0.4
 # real content (which clears the sleep state).
 SLEEP_MARKER = "<<sleep>>"
 _SLEEP_RE = re.compile(re.escape(SLEEP_MARKER), re.IGNORECASE)
+SILENT_MARKER = "<<silent>>"
+_SILENT_TOKEN_RE = re.compile(re.escape(SILENT_MARKER), re.IGNORECASE)
 DEFAULT_SLEEP_ACK = "going quiet, ping me if you need me"
-
-_EMOJI_BASE = (
-    "\U0001f600-\U0001f64f\U0001f300-\U0001f5ff\U0001f680-\U0001f6ff"
-    "\U0001f1e0-\U0001f1ff\U00002702-\U000027b0\U0001f900-\U0001f9ff"
-    "\U0001fa00-\U0001fa6f\U0001fa70-\U0001faff\U00002600-\U000026ff"
-)
-
-_EMOJI_CLUSTER_RE = re.compile(
-    rf"[{_EMOJI_BASE}][\U0000fe00-\U0000fe0f]?"
-    rf"(?:\u200d[{_EMOJI_BASE}][\U0000fe00-\U0000fe0f]?)*",
-    flags=re.UNICODE,
-)
 
 
 # Hallucinated/leaked tool calls occasionally arrive as plain assistant text
@@ -52,6 +41,41 @@ _TOOL_CALL_LEAK_RE = re.compile(
     r"</?tool_call>|</?arg_key>|</?arg_value>|<arg(?:_)?key>|<arg(?:_)?value>",
     re.IGNORECASE,
 )
+
+# A replied-to message whose body is a media attachment is delivered by WAHA
+# as a long base64 blob (JPEG `/9j/...`, PNG `iVBOR...`, WebP, audio, …) with no
+# whitespace. Such a blob is useless context for the model and bloats the turn,
+# so it must never be injected into the reply-to tag. A normal text reply is
+# short and almost always contains spaces/punctuation outside the base64 charset.
+_BASE64_MEDIA_RE = re.compile(r"^[A-Za-z0-9+/=\s]{200,}$")
+# Known base64 media magic prefixes (data-url / raw blob). Short-circuiting on
+# these avoids scanning a multi-MB blob end-to-end on the inbound hot path.
+_MEDIA_B64_PREFIXES = (
+    "/9j/",
+    "iVBOR",
+    "UklGR",
+    "RIFF",
+    "AAAA",
+    "GkX",  # JPEG/PNG/WebP/OGG/AVI/WebM
+)
+
+
+def looks_like_base64_media(body: str) -> bool:
+    """Return True if ``body`` looks like an embedded media base64 blob.
+
+    Matches long runs of base64 characters (optionally with whitespace) with no
+    normal prose. A genuine text reply of this length is effectively impossible
+    to be pure base64, so this is a safe filter for reply-to bodies.
+
+    Only the first 4 KiB is scanned: a base64 blob is base64 from the very first
+    character, so a prefix check is sufficient and avoids running an anchored
+    regex over a multi-MB blob on the inbound hot path.
+    """
+    if not body or len(body) < 200:
+        return False
+    if body.startswith(_MEDIA_B64_PREFIXES):
+        return True
+    return bool(_BASE64_MEDIA_RE.match(body[:4096]))
 
 
 def has_tool_call_leak(reply: str) -> bool:
@@ -72,11 +96,24 @@ def strip_sleep_token(reply: str) -> str:
     return _SLEEP_RE.sub("", reply or "").strip()
 
 
+def strip_silent_token(reply: str) -> str:
+    """Remove any ``<<silent>>`` token (case-insensitive) from ``reply``.
+
+    Unlike :func:`has_silent_reply`-style anchored detection, this strips a
+    stray token embedded in real content so the surrounding text still ships.
+    Built from :data:`SILENT_MARKER` so it tracks the constant.
+    """
+    return _SILENT_TOKEN_RE.sub("", reply or "").strip()
+
+
 def post_process(reply: str) -> str:
     """Clean an LLM reply for WhatsApp delivery.
 
-    Strips markdown formatting, excess emojis, hashtags, and trailing
-    periods on short casual replies.
+    Strips markdown formatting, hashtags, list markers, and trailing
+    periods on single-sentence casual replies, collapses the reply into a
+    single natural line (WhatsApp shows one message, not a block), and
+    defensively removes any stray ``<<silent>>``/``<<sleep>>`` tokens. Emojis
+    are preserved exactly as the model produced them.
     """
     from kai.agent.core import strip_reasoning_channels
 
@@ -88,20 +125,30 @@ def post_process(reply: str) -> str:
     text = re.sub(r"^`+\s*", "", text)
     text = re.sub(r"\s*`+$", "", text)
     text = re.sub(r"`([^`\n]+)`", r"\1", text)
+    # Markdown inline formatting → plain text.
+    text = re.sub(r"\[([^\]]+)\]\([^)]+\)", r"\1", text)
     text = re.sub(r"\*\*(.+?)\*\*", r"\1", text)
     text = re.sub(r"\*(.+?)\*", r"\1", text)
     text = re.sub(r"_(.+?)_", r"\1", text)
-    text = re.sub(r"^\s*[-*]\s+", "", text, flags=re.MULTILINE)
+    # List markers (bullets and numbered) — a WhatsApp message is prose, not a
+    # list. Strip the leading marker on each line before collapsing newlines.
+    text = re.sub(r"^\s*(?:[-*]|\d+\.)\s+", "", text, flags=re.MULTILINE)
     text = re.sub(r"#\w+", "", text)
-    clusters = _EMOJI_CLUSTER_RE.findall(text)
-    if len(clusters) > 1:
-        first = clusters[0]
-        cleaned = _EMOJI_CLUSTER_RE.sub("", text).strip()
-        text = f"{cleaned} {first}".strip() if first else cleaned
-    # Casual chat: drop a single trailing period on short replies so they
-    # don't read as stiff/formal. Preserves "?", "!", "..." and multi-sentence
-    # replies that need internal punctuation.
-    if len(text) <= 60 and text.endswith(".") and not text.endswith(("..", "...")):
+    # Collapse to one natural line: the persona is a single short WhatsApp
+    # message, never a multi-paragraph block.
+    text = re.sub(r"\s*\n\s*", " ", text)
+    # Emojis are left exactly as the model produced them — never cut, moved, or
+    # reordered. Touching them can change the intended tone/meaning.
+    # Defensive: a stray control token must never ship to WhatsApp even if the
+    # caller's silence/sleep detection somehow missed it. Built from the shared
+    # SILENT_MARKER/SLEEP_MARKER constants so the patterns can't drift.
+    text = strip_silent_token(text)
+    text = strip_sleep_token(text)
+    # Casual chat: drop a lone trailing period on single-sentence replies so
+    # they don't read as stiff/formal. Single sentence = at most one terminal
+    # punctuation mark (. ? !); ellipsis ("...") doesn't count as a sentence.
+    terminal = sum(text.count(c) for c in ".?!") - text.count("...")
+    if terminal <= 1 and text.endswith(".") and not text.endswith(("..", "...")):
         text = text[:-1].rstrip()
     return text.strip()
 

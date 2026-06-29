@@ -157,6 +157,17 @@ def resolve_mentions(
     return ResolvedReply(text=text, mentions=mentions)
 
 
+def _sanitize_mention_name(name: str) -> str:
+    """Sanitize a roster display name before interpolating into ``@[Name]``.
+
+    Pushnames are fully user-controlled. Without sanitization a name containing
+    ``]`` or newlines breaks out of the ``@[...]`` wrapper and can inject
+    arbitrary text into the prompt context (reply-to quotes, chat-history
+    recaps) — a prompt-injection vector. Mirrors ``payload._sanitize_name``.
+    """
+    return name.replace("[", "").replace("]", "").replace("\n", " ").strip()[:80]
+
+
 def resolve_inbound_mentions(text: str, roster: dict[str, str], is_group: bool) -> str:
     """Rewrite inbound `@<digits>` mentions to `@[Name]` for the model.
 
@@ -186,6 +197,6 @@ def resolve_inbound_mentions(text: str, roster: dict[str, str], is_group: bool) 
         name = digits_to_name.get(digits)
         if name is None:
             return match.group(0)
-        return f"@[{name}]"
+        return f"@[{_sanitize_mention_name(name)}]"
 
     return _INBOUND_MENTION_RE.sub(_replace, text)

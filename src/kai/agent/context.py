@@ -11,6 +11,7 @@ class MessageContext:
     chat_id: str = ""
     is_group: bool = False
     mentions_bot: bool = False
+    replies_to_bot: bool = False
 
 
 @dataclass(frozen=True)

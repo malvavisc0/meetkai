@@ -126,28 +126,28 @@ class TestIsReplyToBot:
 class TestLearnBotIdentity:
     def test_adopts_lid_when_phone_matches(self):
         bot = _make_bot()
-        bot._bot_ids.add("4917662716239@c.us")
-        bot._learn_bot_identity("4917662716239@c.us", "154868568301592@lid")
+        bot._bot_ids.add("4917600000000@c.us")
+        bot._learn_bot_identity("4917600000000@c.us", "154868568301592@lid")
         assert "154868568301592@lid" in bot._bot_ids
         # The learned LID makes a reply addressed by LID resolve to the bot.
         assert bot._is_reply_to_bot({"replyTo": {"participant": "154868568301592@lid"}}) is True
 
     def test_ignores_other_participants(self):
         bot = _make_bot()
-        bot._bot_ids.add("4917662716239@c.us")
+        bot._bot_ids.add("4917600000000@c.us")
         bot._learn_bot_identity("99999@c.us", "88888@lid")
         assert "88888@lid" not in bot._bot_ids
 
     def test_noop_when_no_known_identity(self):
         bot = _make_bot()
-        bot._learn_bot_identity("4917662716239@c.us", "154868568301592@lid")
+        bot._learn_bot_identity("4917600000000@c.us", "154868568301592@lid")
         assert "154868568301592@lid" not in bot._bot_ids
 
     def test_handles_missing_lid(self):
         bot = _make_bot()
-        bot._bot_ids.add("4917662716239@c.us")
-        bot._learn_bot_identity("4917662716239@c.us", None)
-        assert bot._bot_ids == {"4917662716239@c.us"}
+        bot._bot_ids.add("4917600000000@c.us")
+        bot._learn_bot_identity("4917600000000@c.us", None)
+        assert bot._bot_ids == {"4917600000000@c.us"}
 
 
 class TestHasToolCallLeak:
@@ -187,7 +187,8 @@ class TestPostProcess:
         assert _make_bot()._post_process("_hello_") == "hello"
 
     def test_strips_bullet_points(self):
-        assert _make_bot()._post_process("- item one\n- item two") == "item one\nitem two"
+        # List markers are removed and lines collapsed into one prose line.
+        assert _make_bot()._post_process("- item one\n- item two") == "item one item two"
 
     def test_strips_hashtags(self):
         assert _make_bot()._post_process("hello #world #tag") == "hello"
@@ -205,11 +206,11 @@ class TestPostProcess:
         family = "👨\u200d👩\u200d👧"
         assert _make_bot()._post_process(f"nice {family}") == f"nice {family}"
 
-    def test_strips_extra_emojis(self):
+    def test_does_not_cut_or_move_emojis(self):
+        # Emojis are the model's intentional punctuation — never cut, moved, or
+        # reordered, even when there are several.
         result = _make_bot()._post_process("hi 😭😂🔥")
-        assert result.count("😭") == 1
-        assert "😂" not in result
-        assert "🔥" not in result
+        assert result == "hi 😭😂🔥"
 
     def test_no_emoji_preserved(self):
         assert _make_bot()._post_process("hello world") == "hello world"
@@ -217,8 +218,8 @@ class TestPostProcess:
     def test_combined_markdown_and_emojis(self):
         result = _make_bot()._post_process("**hello** 😭😂 world")
         assert "**" not in result
-        assert result.count("😭") == 1
-        assert "😂" not in result
+        # Emojis are preserved as-is (markdown stripped, emojis untouched).
+        assert result == "hello 😭😂 world"
 
     def test_strips_multiple_hashtags(self):
         assert _make_bot()._post_process("#one #two #three done") == "done"
@@ -247,11 +248,14 @@ class TestPostProcess:
     def test_keeps_ellipsis(self):
         assert _make_bot()._post_process("ya veremos...") == "ya veremos..."
 
-    def test_keeps_period_on_long_reply(self):
+    def test_drops_trailing_period_on_single_sentence_even_when_long(self):
+        # The trailing-period rule is sentence-based, not length-based: a
+        # single-sentence reply loses its lone trailing period regardless of
+        # length. (The period is just stiff punctuation in casual chat.)
         long_reply = (
-            "Esta es una respuesta suficientemente larga como para conservar su punto final."
+            "Esta es una respuesta suficientemente larga como para conservar su punto final"
         )
-        assert _make_bot()._post_process(long_reply) == long_reply
+        assert _make_bot()._post_process(long_reply + ".") == long_reply
 
     def test_keeps_period_on_multisentence_short_reply(self):
         # Internal periods are preserved; only a lone trailing period is dropped.
@@ -269,9 +273,31 @@ class TestPostProcess:
         assert _make_bot()._post_process("use `code` here") == "use code here"
 
     def test_strips_backticks_around_silent_marker(self):
-        # A backtick-wrapped <<silent>> reaches _post_process only when silence
-        # detection already failed; still strip so nothing leaks if it does.
-        assert _make_bot()._post_process("`<<silent>>`") == "<<silent>>"
+        # A backtick-wrapped <<silent>> reaching _post_process means silence
+        # detection already missed it; the control token must be stripped so
+        # it never ships to WhatsApp. Backticks go first, then the marker.
+        assert _make_bot()._post_process("`<<silent>>`") == ""
+
+    def test_strips_numbered_list_markers(self):
+        assert _make_bot()._post_process("1. one\n2. two") == "one two"
+
+    def test_collapses_newlines_into_one_line(self):
+        assert _make_bot()._post_process("line one\nline two\nline three") == (
+            "line one line two line three"
+        )
+
+    def test_strips_markdown_links(self):
+        assert _make_bot()._post_process("see [Lisbon weather](https://x.io/lisbon)") == (
+            "see Lisbon weather"
+        )
+
+    def test_strips_stray_silent_token_in_mixed_text(self):
+        # If a silent marker sneaks into a reply with other text, the marker is
+        # removed but the surrounding text is left intact.
+        assert _make_bot()._post_process("low value <<silent>>") == "low value"
+
+    def test_strips_stray_sleep_token_in_mixed_text(self):
+        assert _make_bot()._post_process("night all <<sleep>>") == "night all"
 
 
 class TestLoadConfig:
@@ -1312,8 +1338,8 @@ class TestGroupRosterRefresh:
         client = MagicMock()
         client.get_chat_participants = AsyncMock(
             return_value=[
-                {"id": "4917662716239@c.us", "pn": "4917662716239@c.us", "role": "admin"},
-                {"id": "18096184445@c.us", "pn": "18096184445@c.us", "role": "participant"},
+                {"id": "4917600000000@c.us", "pn": "4917600000000@c.us", "role": "admin"},
+                {"id": "18090000000@c.us", "pn": "18090000000@c.us", "role": "participant"},
             ]
         )
         bot._waha_client = client
@@ -1321,7 +1347,7 @@ class TestGroupRosterRefresh:
         await bot._refresh_group_roster("g@g.us", roster)
 
         assert roster == {"72013750239365@lid": "Juan Palotes"}
-        assert bot._group_admins["g@g.us"] == {"4917662716239@c.us"}
+        assert bot._group_admins["g@g.us"] == {"4917600000000@c.us"}
 
     @pytest.mark.asyncio
     async def test_refresh_respects_ttl(self, monkeypatch):

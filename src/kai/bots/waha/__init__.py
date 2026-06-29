@@ -20,12 +20,13 @@ from kai.bots.waha.history import register_chat_history_tool
 from kai.bots.waha.instagram import extract_instagram_shortcode, fetch_instagram_post
 from kai.bots.waha.media import MediaAttachment, MediaType, extract_media
 from kai.bots.waha.mentions import resolve_inbound_mentions, resolve_mentions, strip_mention_markup
-from kai.bots.waha.payload import GROUP_SUFFIX, parse_message
+from kai.bots.waha.payload import GROUP_SUFFIX, MessageMetadata, _sanitize_name, parse_message
 from kai.bots.waha.processing import (
     DEFAULT_SLEEP_ACK,
     REPLY_STYLE,
     has_sleep_token,
     has_tool_call_leak,
+    looks_like_base64_media,
     post_process,
     should_organically_participate,
     strip_sleep_token,
@@ -75,6 +76,32 @@ def _build_webhook_url(public_host: str, webhook_path: str) -> str:
     if parsed.scheme:
         return f"{parsed.scheme}://{parsed.netloc}{webhook_path}"
     return f"http://{public_host}{webhook_path}"
+
+
+_URL_TRAILING_PUNCT = ".,;:!?\"'"
+_URL_CLOSE_OPEN = {")": "(", "]": "[", "}": "{", ">": "<"}
+
+
+def _strip_unbalanced_trailing_punct(url: str) -> str:
+    """Strip trailing punctuation captured greedily by ``\\S+``.
+
+    Only removes closers that are unbalanced relative to their matching opener
+    in the URL, so a real URL such as
+    ``https://en.wikipedia.org/wiki/Foo_(bar)`` keeps its closing ``)``.
+    """
+    while url:
+        ch = url[-1]
+        if ch in _URL_TRAILING_PUNCT:
+            url = url[:-1]
+            continue
+        if ch in _URL_CLOSE_OPEN:
+            opener = _URL_CLOSE_OPEN[ch]
+            # Strip the closer only while it has no matching opener to its left.
+            if url.count(opener) < url.count(ch):
+                url = url[:-1]
+                continue
+        break
+    return url
 
 
 def _bounded_dict_set(d: OrderedDict, key, value, max_size: int) -> None:
@@ -597,21 +624,22 @@ class Bot(BaseBot):
                 self._vibe_msg_count = 0
                 asyncio.create_task(self._run_vibe_check(meta.chat_id))
 
+            enriched_text = self._enrich_message_text(msg, text)
+
+            replies_to_bot = self._is_reply_to_bot(msg)
             context = MessageContext(
                 sender_name=meta.sender_name,
                 sender_id=meta.sender_id,
                 chat_id=meta.chat_id,
                 is_group=meta.is_group,
                 mentions_bot=meta.mentions_bot,
+                replies_to_bot=replies_to_bot,
             )
 
             self.set_task_context(
                 chat_id=meta.chat_id, owner_id=meta.sender_id, tz_hint=self._config.timezone
             )
 
-            enriched_text = self._enrich_message_text(msg, text)
-
-            replies_to_bot = self._is_reply_to_bot(msg)
             is_sleeping = (
                 self._sleep_store.is_sleeping(meta.chat_id)
                 if self._sleep_store is not None
@@ -648,6 +676,8 @@ class Bot(BaseBot):
                 media_bytes = await self._resolve_media_bytes(media)
                 if media_bytes:
                     images.append(media_bytes)
+                    image_tag = "[image attached]"
+                    enriched_text = f"{image_tag}\n{enriched_text}" if enriched_text else image_tag
                 else:
                     logger.warning("Failed to resolve image media, skipping image")
 
@@ -688,10 +718,22 @@ class Bot(BaseBot):
                     "Nobody addressed you directly. Only reply if you have something "
                     "genuinely worth adding; otherwise use <<silent>>."
                 )
+            elif summoned and not (meta.mentions_bot or replies_to_bot) and meta.is_group:
+                # Summoned by keyword/name-drop rather than a direct @-mention or
+                # reply. A name-drop is only a direct address if clearly aimed at
+                # the bot; otherwise the model should prefer staying quiet.
+                extra_context_parts.append(
+                    "You were summoned because your name was mentioned in the "
+                    "message, not via a direct @-mention or a reply to you. "
+                    "Re-read the message: if it is not clearly aimed at you, "
+                    "reply <<silent>>."
+                )
             extra_context = "\n\n".join(extra_context_parts) or None
 
-            # DMs must never ghost the user; groups may decline via <<silent>>.
-            allow_silence = meta.is_group
+            # DMs and hard direct addresses (mention/reply) must never ghost the
+            # user. A group name-drop is a soft summon — the model may decline.
+            hard_addressed = (not meta.is_group) or meta.mentions_bot or replies_to_bot
+            allow_silence = meta.is_group and not hard_addressed
 
             reply = await self._agent.chat(
                 enriched_text,
@@ -704,32 +746,54 @@ class Bot(BaseBot):
             )
             reply = strip_reasoning_channels(reply)
 
-            # A leaked/unparsed tool call must never reach the chat. Treat it
-            # exactly like a silent turn: observe the user message, send nothing.
+            # A leaked/unparsed tool call must never reach the chat. On a
+            # hard-direct-address turn (DM / @-mention / reply-to-bot) the user
+            # is waiting and must not be ghosted: retry once with a nudge to
+            # emit plain text. On a background turn, treat it as silence.
             if has_tool_call_leak(reply):
-                logger.warning("Discarding leaked tool-call reply for %s", meta.chat_id)
-                console.print("[dim]> (dropped tool-call leak)[/dim]")
-                self._mark_skipped(meta.chat_id)
-                if enriched_text.strip():
-                    await self._agent.observe(
-                        enriched_text,
+                if hard_addressed:
+                    logger.warning(
+                        "Leaked tool-call reply on direct address for %s; retrying",
+                        meta.chat_id,
+                    )
+                    retry = await self._agent.chat(
+                        "",
                         conversation_id=meta.chat_id,
                         context=context,
-                        images=images or None,
+                        extra_system_context=(
+                            "Your previous reply contained raw tool-call "
+                            "markup that can't be sent. Reply now with ONLY a "
+                            "short plain-text WhatsApp message answering the "
+                            "last message — no tool calls, no markup, no "
+                            "tags, no acknowledgement of this instruction."
+                        ),
+                        reply_style=REPLY_STYLE,
+                        allow_silence=False,
                     )
-                return
+                    retry = strip_reasoning_channels(retry)
+                    if retry and not has_tool_call_leak(retry) and not is_silent_reply(retry):
+                        reply = retry
+                    else:
+                        logger.warning(
+                            "Retry still leaked/empty on direct address %s",
+                            meta.chat_id,
+                        )
+                        console.print("[dim]> (no clean reply after retry)[/dim]")
+                        await self._abort_turn(meta, enriched_text, images, context)
+                        return
+                else:
+                    logger.warning("Discarding leaked tool-call reply for %s", meta.chat_id)
+                    console.print("[dim]> (dropped tool-call leak)[/dim]")
+                    await self._abort_turn(meta, enriched_text, images, context)
+                    return
 
             if is_silent_reply(reply):
+                # Only an anchored whole-turn <<silent>> drops the reply. A
+                # stray token mixed into real content is stripped by
+                # _post_process so the surrounding text still ships.
                 logger.info("Bot chose silence for %s", meta.chat_id)
                 console.print("[dim]> (silent)[/dim]")
-                self._mark_skipped(meta.chat_id)
-                if enriched_text.strip():
-                    await self._agent.observe(
-                        enriched_text,
-                        conversation_id=meta.chat_id,
-                        context=context,
-                        images=images or None,
-                    )
+                await self._abort_turn(meta, enriched_text, images, context)
                 return
 
             # The model may decide to go to sleep (in any language/dialect) by
@@ -1003,6 +1067,28 @@ class Bot(BaseBot):
     def _mark_skipped(self, chat_id: str) -> None:
         self._consecutive_replies[chat_id] = 0
 
+    async def _abort_turn(
+        self,
+        meta: MessageMetadata,
+        enriched_text: str,
+        images: list[bytes],
+        context: MessageContext | None,
+    ) -> None:
+        """Drop the current reply: mark skipped, observe the inbound message so
+        the conversation history still reflects it, then end the turn.
+
+        Shared by the tool-call-leak and silence drop paths so their behavior
+        can't drift apart.
+        """
+        self._mark_skipped(meta.chat_id)
+        if enriched_text.strip():
+            await self._agent.observe(
+                enriched_text,
+                conversation_id=meta.chat_id,
+                context=context,
+                images=images or None,
+            )
+
     def _render_tool_call(self, tool_name: str, tool_kwargs: dict, result: str) -> None:
         """Print tool usage to the console, mirroring message rendering."""
         args = ""
@@ -1023,7 +1109,11 @@ class Bot(BaseBot):
         if not is_group or not roster:
             return None
         names = list(roster.values())
-        parts = [f"People in this chat: {', '.join(names[:30])}"]
+        if len(names) > 30:
+            roster_line = f"People in this chat: {', '.join(names[:30])} (+{len(names) - 30} more)"
+        else:
+            roster_line = f"People in this chat: {', '.join(names)}"
+        parts = [roster_line]
         admin_names = [
             roster[jid] for jid in self._group_admins.get(chat_id, set()) if jid in roster
         ]
@@ -1103,19 +1193,43 @@ class Bot(BaseBot):
         reply_to = raw_msg.get("replyTo")
         if reply_to and isinstance(reply_to, dict):
             reply_body = (reply_to.get("body") or "").strip()
-            if reply_body and not reply_body.startswith("/9j/"):
+            # Skip media attachments: WAHA delivers a replied-to image/audio as a
+            # base64 blob (JPEG/PNG/WebP/…) or marks hasMedia. Neither carries
+            # useful text, and a base64 blob would bloat and corrupt the turn.
+            has_media = bool(reply_to.get("hasMedia")) or looks_like_base64_media(reply_body)
+            if reply_body and not has_media:
+                # Resolve inbound @<digits> mentions in the quoted text so the
+                # model sees names, not raw LID/phone digits.
+                reply_body = resolve_inbound_mentions(reply_body, roster, is_group=is_group)
+                # Cap length so a long forwarded quote doesn't flood the turn.
+                if len(reply_body) > 300:
+                    reply_body = reply_body[:300].rstrip() + "…"
                 participant = reply_to.get("participant")
                 if isinstance(participant, dict):
                     reply_sender = participant.get("_serialized", "")
                 else:
                     reply_sender = str(participant) if participant else ""
                 roster = self._rosters.get(raw_msg.get("from", ""), {})
-                reply_name = roster.get(reply_sender) or (
-                    reply_sender.split("@")[0] if reply_sender else "someone"
+                reply_name = _sanitize_name(
+                    roster.get(reply_sender)
+                    or (reply_sender.split("@")[0] if reply_sender else "someone")
                 )
                 parts.append(f"[replying to {reply_name}: {reply_body}]")
 
-        urls = re.findall(r"https?://\S+", text)
+        # Extract shared URLs, stripping trailing punctuation that \S+ greedily
+        # captures (e.g. the ")" in "(https://x.com)"). Instagram URLs are
+        # fetched and tagged separately by _enrich_instagram, so they're excluded
+        # here to avoid duplicating the link in two tags.
+        raw_urls = re.findall(r"https?://\S+", text) or []
+        urls: list[str] = []
+        for u in raw_urls:
+            # Strip trailing punctuation that \S+ greedily captures (e.g. the
+            # ")" in "(https://x.com)"), but only while it's genuinely
+            # unbalanced so a real URL like
+            # https://en.wikipedia.org/wiki/Foo_(bar) keeps its closing paren.
+            u = _strip_unbalanced_trailing_punct(u)
+            if u and "instagram.com" not in u and u not in urls:
+                urls.append(u)
         if urls:
             parts.append(f"[links in message: {', '.join(urls)}]")
 
