@@ -1468,3 +1468,114 @@ class TestMediaRefetch:
 
         # Media was already resolvable from the webhook payload; no re-fetch.
         client.get_message.assert_not_awaited()
+
+
+def _dm_payload(body: str, *, msg_id: str | None = None) -> dict:
+    return {
+        "event": "message",
+        "payload": {
+            "id": msg_id or body,
+            "from": "123@c.us",
+            "body": body,
+            "type": "chat",
+            "_data": {"notifyName": "Friend"},
+        },
+    }
+
+
+class TestInstagramEnrichment:
+    @pytest.mark.asyncio
+    async def test_appends_image_and_tag(self, monkeypatch):
+        bot = _make_bot(BotConfig(trigger_keyword="kai"))
+        agent = MagicMock()
+        agent.chat = AsyncMock(return_value="nice shot")
+        agent.observe = AsyncMock()
+        bot._agent = agent
+
+        monkeypatch.setattr(
+            "kai.bots.waha.fetch_instagram_post",
+            lambda code: ("data", [b"\x89PNG fake"]),
+        )
+
+        await bot._handle_message(
+            _dm_payload("look https://www.instagram.com/p/DZ8w3urCS30/", msg_id="ig1")
+        )
+
+        agent.chat.assert_awaited_once()
+        kwargs = agent.chat.call_args.kwargs
+        images = kwargs.get("images")
+        assert images is not None
+        assert len(images) == 1
+        assert images[0] == b"\x89PNG fake"
+        sent_text = agent.chat.call_args.args[0]
+        assert sent_text.startswith("[instagram post:\n  data]")
+
+    @pytest.mark.asyncio
+    async def test_fetch_failure_degrades_gracefully(self, monkeypatch):
+        bot = _make_bot(BotConfig(trigger_keyword="kai"))
+        agent = MagicMock()
+        agent.chat = AsyncMock(return_value="ok")
+        agent.observe = AsyncMock()
+        bot._agent = agent
+
+        def _boom(_code):
+            raise RuntimeError("instagram down")
+
+        monkeypatch.setattr("kai.bots.waha.fetch_instagram_post", _boom)
+
+        body = "hey https://www.instagram.com/reel/ABC123_/"
+        await bot._handle_message(_dm_payload(body, msg_id="ig2"))
+
+        agent.chat.assert_awaited_once()
+        kwargs = agent.chat.call_args.kwargs
+        assert kwargs.get("images") in (None, [], b"")
+        # The original text reaches the agent untouched (no IG tag prepended).
+        sent_text = agent.chat.call_args.args[0]
+        assert "[instagram post:" not in sent_text
+        assert "hey https://www.instagram.com/reel/ABC123_/" in sent_text
+
+    @pytest.mark.asyncio
+    async def test_no_ig_url_does_not_fetch(self, monkeypatch):
+        bot = _make_bot(BotConfig(trigger_keyword="kai"))
+        agent = MagicMock()
+        agent.chat = AsyncMock(return_value="hi")
+        agent.observe = AsyncMock()
+        bot._agent = agent
+
+        called = False
+
+        def _should_not_run(_code):
+            nonlocal called
+            called = True
+            return ("data", [b"x"])
+
+        monkeypatch.setattr("kai.bots.waha.fetch_instagram_post", _should_not_run)
+
+        await bot._handle_message(_dm_payload("just chatting", msg_id="ig3"))
+
+        assert called is False
+        agent.chat.assert_awaited_once()
+        assert agent.chat.call_args.kwargs.get("images") in (None, [])
+
+    @pytest.mark.asyncio
+    async def test_multi_image_carousel_appends_all(self, monkeypatch):
+        bot = _make_bot(BotConfig(trigger_keyword="kai"))
+        agent = MagicMock()
+        agent.chat = AsyncMock(return_value="cool carousel")
+        agent.observe = AsyncMock()
+        bot._agent = agent
+
+        imgs = [b"\x89PNG one", b"\x89PNG two", b"\x89PNG three"]
+        monkeypatch.setattr(
+            "kai.bots.waha.fetch_instagram_post",
+            lambda code: ("carousel data", imgs),
+        )
+
+        await bot._handle_message(
+            _dm_payload("https://www.instagram.com/p/MULTI123/", msg_id="ig4")
+        )
+
+        agent.chat.assert_awaited_once()
+        images = agent.chat.call_args.kwargs.get("images")
+        assert images is not None
+        assert images == imgs

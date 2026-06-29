@@ -17,6 +17,7 @@ from kai.bots.base import BaseBot
 from kai.bots.waha.client import WahaClient
 from kai.bots.waha.config import WahaSettings
 from kai.bots.waha.history import register_chat_history_tool
+from kai.bots.waha.instagram import extract_instagram_shortcode, fetch_instagram_post
 from kai.bots.waha.media import MediaAttachment, MediaType, extract_media
 from kai.bots.waha.mentions import resolve_inbound_mentions, resolve_mentions, strip_mention_markup
 from kai.bots.waha.payload import GROUP_SUFFIX, parse_message
@@ -182,6 +183,7 @@ class Bot(BaseBot):
             media=MediaConfig(
                 image_enabled=bool(data.get("media", {}).get("image_enabled", True)),
                 voice_enabled=bool(data.get("media", {}).get("voice_enabled", True)),
+                instagram_enabled=bool(data.get("media", {}).get("instagram_enabled", True)),
                 max_size_mb=int(data.get("media", {}).get("max_size_mb", 10)),
             ),
             participation=ParticipationConfig(
@@ -634,6 +636,14 @@ class Bot(BaseBot):
                 elif not media_bytes:
                     logger.warning("Failed to resolve voice media")
 
+            ig = await self._enrich_instagram(text)
+            if ig is not None:
+                ig_text, ig_images = ig
+                images.extend(ig_images)
+                if ig_text:
+                    tag = f"[instagram post:\n  {ig_text}]"
+                    enriched_text = f"{tag}\n{enriched_text}" if enriched_text else tag
+
             per_chat_prompt = self._build_per_chat_prompt(meta.chat_id, meta.is_group, roster)
             extra_context_parts: list[str] = []
             if per_chat_prompt:
@@ -847,6 +857,35 @@ class Bot(BaseBot):
         finally:
             if should_close:
                 await client.close()
+
+    async def _enrich_instagram(self, text: str) -> tuple[str | None, list[bytes]] | None:
+        """If text contains an IG post URL, return (post_data, image_bytes_list).
+
+        Mirrors the voice-note enrichment: a tagged text block for the agent
+        plus image bytes for the vision channel. Returns None when there's
+        nothing to enrich or curl_cffi is unavailable, so the message still
+        reaches the agent untouched.
+        """
+        if not getattr(self._config.media, "instagram_enabled", True):
+            return None
+        shortcode = extract_instagram_shortcode(text)
+        if shortcode is None:
+            return None
+        try:
+            import curl_cffi  # noqa: F401 — probe availability
+        except ImportError:
+            logger.warning("curl_cffi not installed; skipping IG enrichment")
+            return None
+        try:
+            # curl_cffi is synchronous and network-bound; keep the event loop
+            # free so concurrent chats aren't blocked.
+            data_text, image_bytes_list = await asyncio.to_thread(fetch_instagram_post, shortcode)
+        except Exception as exc:
+            logger.warning("IG fetch failed for shortcode %s: %s", shortcode, exc)
+            return None
+        if not data_text and not image_bytes_list:
+            return None
+        return data_text, image_bytes_list
 
     def _learn_bot_identity(self, phone_jid: str | None, lid_jid: object) -> None:
         """Adopt a group's @lid identity for the bot when it can be matched.

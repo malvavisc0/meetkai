@@ -15,6 +15,7 @@ _DEFAULT_PARTICIPATION_STREAK_MAX = 2
 class MediaConfig:
     image_enabled: bool = True
     voice_enabled: bool = True
+    instagram_enabled: bool = True
     max_size_mb: int = 10
 
 

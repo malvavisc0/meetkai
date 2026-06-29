@@ -19,6 +19,8 @@ dependencies = [
     "pillow",
     "ddgs",
     "markdownify",
+    "curl-cffi",
+    "beautifulsoup4",
 ]
 
 [project.optional-dependencies]
