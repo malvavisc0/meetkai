@@ -12,7 +12,7 @@ import re
 import time
 
 REPLY_STYLE = (
-    "\nCRITICAL: Your reply MUST be at most 3 sentences and under 40 words. "
+    "\nCRITICAL: Your reply MUST be at most 3 sentences and under 60 words. "
     "No exceptions. No personality or goal overrides this limit. "
     "Do NOT end a short reply with a period."
 )
