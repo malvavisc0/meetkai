@@ -6,10 +6,17 @@ import pytest
 
 from kai.bots.waha import Bot, BotConfig, ParticipationConfig, _build_webhook_url
 from kai.bots.waha.history import register_chat_history_tool
+from kai.bots.waha.seen_store import SeenStore
+from kai.bots.waha.sleep_store import SleepStore
 
 
 def _make_bot(config: BotConfig | None = None, bot_dir: Path | None = None) -> Bot:
-    return Bot(bot_dir=bot_dir or Path("."), config=config or BotConfig())
+    bot = Bot(bot_dir=bot_dir or Path("."), config=config or BotConfig())
+    # In-memory stores so tests don't need configure() / a data dir; mirrors
+    # the in-process behavior of the former dict[str, bool] / set[str].
+    bot._seen_store = SeenStore(None, max_size=2048)
+    bot._sleep_store = SleepStore(None)
+    return bot
 
 
 class TestShouldRespond:
@@ -884,7 +891,7 @@ class TestSleepToken:
 
         await bot._handle_message(_group_payload("kai go to sleep"))
 
-        assert bot._sleeping.get("group@g.us") is True
+        assert bot._sleep_store.is_sleeping("group@g.us") is True
         bot._send_with_retry.assert_awaited_once()
         sent = bot._send_with_retry.call_args.args[1]
         assert "<<sleep>>" not in sent
@@ -901,14 +908,14 @@ class TestSleepToken:
 
         await bot._handle_message(_group_payload("kai go to sleep"))
 
-        assert bot._sleeping.get("group@g.us") is True
+        assert bot._sleep_store.is_sleeping("group@g.us") is True
         sent = bot._send_with_retry.call_args.args[1]
         assert sent == "going quiet, ping me if you need me"
 
     @pytest.mark.asyncio
     async def test_sleeping_bot_observes_non_addressed_without_llm(self):
         bot = _make_bot(BotConfig(trigger_keyword="kai"))
-        bot._sleeping["group@g.us"] = True
+        bot._sleep_store.set("group@g.us", True)
         agent = MagicMock()
         agent.chat = AsyncMock(return_value="should not happen")
         agent.observe = AsyncMock()
@@ -919,12 +926,12 @@ class TestSleepToken:
 
         agent.chat.assert_not_awaited()
         agent.observe.assert_awaited()
-        assert bot._sleeping.get("group@g.us") is True
+        assert bot._sleep_store.is_sleeping("group@g.us") is True
 
     @pytest.mark.asyncio
     async def test_sleeping_bot_wakes_on_mention_with_real_reply(self):
         bot = _make_bot(BotConfig(trigger_keyword="kai"))
-        bot._sleeping["group@g.us"] = True
+        bot._sleep_store.set("group@g.us", True)
         bot._send_with_retry = AsyncMock()
         bot._bot_ids.add("bot@c.us")
         agent = MagicMock()
@@ -936,7 +943,7 @@ class TestSleepToken:
         payload["payload"]["_data"]["mentionedJidList"] = ["bot@c.us"]
         await bot._handle_message(payload)
 
-        assert bot._sleeping.get("group@g.us") is False
+        assert bot._sleep_store.is_sleeping("group@g.us") is False
         agent.chat.assert_awaited_once()
         sent = bot._send_with_retry.call_args.args[1]
         assert sent == "hey, I'm back"
@@ -944,7 +951,7 @@ class TestSleepToken:
     @pytest.mark.asyncio
     async def test_sleeping_bot_stays_asleep_on_silent_reply(self):
         bot = _make_bot(BotConfig(trigger_keyword="kai"))
-        bot._sleeping["group@g.us"] = True
+        bot._sleep_store.set("group@g.us", True)
         bot._bot_ids.add("bot@c.us")
         bot._send_with_retry = AsyncMock()
         agent = MagicMock()
@@ -956,13 +963,13 @@ class TestSleepToken:
         payload["payload"]["_data"]["mentionedJidList"] = ["bot@c.us"]
         await bot._handle_message(payload)
 
-        assert bot._sleeping.get("group@g.us") is True
+        assert bot._sleep_store.is_sleeping("group@g.us") is True
         bot._send_with_retry.assert_not_awaited()
 
     @pytest.mark.asyncio
     async def test_sleeping_dm_wakes_bot(self):
         bot = _make_bot(BotConfig(trigger_keyword="kai"))
-        bot._sleeping["123@c.us"] = True
+        bot._sleep_store.set("123@c.us", True)
         bot._send_with_retry = AsyncMock()
         agent = MagicMock()
         agent.chat = AsyncMock(return_value="hi again")
@@ -981,7 +988,7 @@ class TestSleepToken:
         }
         await bot._handle_message(payload)
 
-        assert bot._sleeping.get("123@c.us") is False
+        assert bot._sleep_store.is_sleeping("123@c.us") is False
         bot._send_with_retry.assert_awaited_once()
 
 
@@ -1676,3 +1683,97 @@ class TestSeenMessagePersistence:
     def test_empty_message_id_never_seen(self):
         bot = _make_bot()
         assert bot._is_seen_message("") is False
+
+
+class TestSleepStore:
+    def test_load_round_trip(self, tmp_path):
+        path = tmp_path / "sleep.json"
+        s = SleepStore(path)
+        s.set("chat1@g.us", True)
+        s.set("chat2@g.us", True)
+
+        # A fresh instance loading the same file sees both asleep.
+        s2 = SleepStore(path)
+        assert s2.is_sleeping("chat1@g.us")
+        assert s2.is_sleeping("chat2@g.us")
+        assert not s2.is_sleeping("chat3@g.us")
+
+    def test_set_false_clears_and_persists(self, tmp_path):
+        path = tmp_path / "sleep.json"
+        s = SleepStore(path)
+        s.set("chat1@g.us", True)
+        s.set("chat1@g.us", False)
+
+        assert not s.is_sleeping("chat1@g.us")
+        # And persisted as awake (absent from the file).
+        s2 = SleepStore(path)
+        assert not s2.is_sleeping("chat1@g.us")
+
+    def test_missing_file_starts_empty(self, tmp_path):
+        s = SleepStore(tmp_path / "nope.json")
+        assert not s.is_sleeping("anything")
+
+    def test_corrupt_json_logs_and_starts_empty(self, tmp_path, caplog):
+        path = tmp_path / "sleep.json"
+        path.write_text("{not valid json", encoding="utf-8")
+        with caplog.at_level("WARNING"):
+            s = SleepStore(path)
+        assert not s.is_sleeping("chat1@g.us")
+        assert any("Failed to load sleep state" in r.message for r in caplog.records)
+
+    def test_none_path_is_in_memory_only(self):
+        s = SleepStore(None)
+        s.set("chat1@g.us", True)
+        assert s.is_sleeping("chat1@g.us")
+        # A second in-memory instance can't see it (no file written).
+        s2 = SleepStore(None)
+        assert not s2.is_sleeping("chat1@g.us")
+
+    def test_idempotent_set_is_noop_no_rewrite(self, tmp_path):
+        path = tmp_path / "sleep.json"
+        s = SleepStore(path)
+        s.set("chat1@g.us", True)
+        mtime1 = path.stat().st_mtime_ns
+        # Setting the same state again must not trigger another write.
+        s.set("chat1@g.us", True)
+        assert path.stat().st_mtime_ns == mtime1
+        # Nor clearing an already-awake chat.
+        s.set("chat2@g.us", False)
+        assert path.stat().st_mtime_ns == mtime1
+
+    def test_all_returns_copy(self):
+        s = SleepStore(None)
+        s.set("a@g.us", True)
+        s.set("b@g.us", True)
+        snapshot = s.all()
+        assert snapshot == {"a@g.us", "b@g.us"}
+        # Mutating the returned set must not affect the store.
+        snapshot.add("c@g.us")
+        assert not s.is_sleeping("c@g.us")
+
+
+class TestSleepPersistence:
+    """Sleep state on one Bot instance must be seen by a fresh instance."""
+
+    def test_sleep_survives_new_bot_instance(self, tmp_path):
+        path = tmp_path / "waha.sleep.json"
+        bot1 = _make_bot()
+        bot1._sleep_store = SleepStore(path)
+        bot1._sleep_store.set("group@g.us", True)
+
+        # A brand-new Bot instance (simulating a restart) loading the same
+        # store file must still see the chat as asleep.
+        bot2 = _make_bot()
+        bot2._sleep_store = SleepStore(path)
+        assert bot2._sleep_store.is_sleeping("group@g.us") is True
+
+    def test_wake_survives_new_bot_instance(self, tmp_path):
+        path = tmp_path / "waha.sleep.json"
+        bot1 = _make_bot()
+        bot1._sleep_store = SleepStore(path)
+        bot1._sleep_store.set("group@g.us", True)
+        bot1._sleep_store.set("group@g.us", False)
+
+        bot2 = _make_bot()
+        bot2._sleep_store = SleepStore(path)
+        assert bot2._sleep_store.is_sleeping("group@g.us") is False

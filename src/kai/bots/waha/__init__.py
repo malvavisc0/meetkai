@@ -39,6 +39,7 @@ from kai.bots.waha.setup import (
     MediaConfig,
     ParticipationConfig,
 )
+from kai.bots.waha.sleep_store import SleepStore
 from kai.bots.waha.stt import STTProvider, create_stt_provider, resolve_whisper_language
 from kai.bots.waha.webhook import create_webhook_app
 from kai.cli import BotStartupError
@@ -99,7 +100,7 @@ class Bot(BaseBot):
         self._roster_refreshed_at: dict[str, float] = {}
         self._group_admins: dict[str, set[str]] = {}
         self._chat_locks: OrderedDict[str, asyncio.Lock] = OrderedDict()
-        self._sleeping: dict[str, bool] = {}
+        self._sleep_store: SleepStore | None = None
         self._last_reply_at: dict[str, float] = {}
         self._consecutive_replies: dict[str, int] = {}
         self._server: uvicorn.Server | None = None
@@ -126,6 +127,7 @@ class Bot(BaseBot):
         self.setup_task_scheduler(agent, settings)
         register_chat_history_tool(agent, bot=self)
         self._seen_store = SeenStore(self._seen_store_path(settings), max_size=_SEEN_IDS_MAX)
+        self._sleep_store = SleepStore(self._sleep_store_path(settings))
         if self._config.media.voice_enabled:
             # The whisper language and the chat language are separate settings.
             # When the user passes --language explicitly, use it for STT too,
@@ -500,6 +502,21 @@ class Bot(BaseBot):
         path.parent.mkdir(parents=True, exist_ok=True)
         return path
 
+    def _sleep_store_path(self, settings: Settings) -> Path | None:
+        """Resolve the sleep-state file path, anchored to the bot dir.
+
+        Same convention as :meth:`_seen_store_path`; writes to
+        ``<name>.sleep.json`` alongside the other per-bot state files.
+        """
+        if settings.tasks_folder is None:
+            return None
+        folder = Path(settings.tasks_folder)
+        if not folder.is_absolute():
+            folder = self.bot_dir / folder
+        path = folder / f"{self.name}.sleep.json"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        return path
+
     def _is_seen_message(self, message_id: str) -> bool:
         if not message_id or self._seen_store is None:
             return False
@@ -594,7 +611,11 @@ class Bot(BaseBot):
             enriched_text = self._enrich_message_text(msg, text)
 
             replies_to_bot = self._is_reply_to_bot(msg)
-            is_sleeping = self._sleeping.get(meta.chat_id, False)
+            is_sleeping = (
+                self._sleep_store.is_sleeping(meta.chat_id)
+                if self._sleep_store is not None
+                else False
+            )
 
             # --- Sleep mode ---
             if is_sleeping:
@@ -716,7 +737,7 @@ class Bot(BaseBot):
             if has_sleep_token(reply):
                 ack = strip_sleep_token(reply) or DEFAULT_SLEEP_ACK
                 ack = self._post_process(ack)
-                self._sleeping[meta.chat_id] = True
+                self._sleep_store.set(meta.chat_id, True)
                 console.print(f"[green]>[/green]  {ack}  [dim](going to sleep)[/dim]")
                 if self._config.mentions_enabled:
                     resolved = resolve_mentions(
@@ -776,7 +797,7 @@ class Bot(BaseBot):
             console.print("[dim]> (still sleeping)[/dim]")
             return
         # Waking up: clear sleep and deliver the reply.
-        self._sleeping[meta.chat_id] = False
+        self._sleep_store.set(meta.chat_id, False)
         console.print("[dim]> (woke up)[/dim]")
         reply = self._post_process(reply)
         console.print(f"[green]>[/green]  {reply}")
