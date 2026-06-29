@@ -1659,30 +1659,58 @@ class TestSeenStore:
         s.add("m1")
         assert path.stat().st_mtime_ns == mtime1
 
+    async def test_add_async_persists_offloaded(self, tmp_path):
+        from kai.bots.waha.seen_store import SeenStore
+
+        path = tmp_path / "seen.json"
+        s = SeenStore(path, max_size=4)
+        await s.add_async("m1")
+        # In-memory update is immediate; the write was offloaded but awaited.
+        assert s.is_seen("m1")
+        s2 = SeenStore(path, max_size=4)
+        assert s2.is_seen("m1")
+
+    async def test_add_async_existing_id_is_noop(self, tmp_path):
+        from kai.bots.waha.seen_store import SeenStore
+
+        path = tmp_path / "seen.json"
+        s = SeenStore(path, max_size=4)
+        await s.add_async("m1")
+        mtime1 = path.stat().st_mtime_ns
+        await s.add_async("m1")
+        assert path.stat().st_mtime_ns == mtime1
+
+    async def test_add_async_none_path_in_memory_only(self):
+        from kai.bots.waha.seen_store import SeenStore
+
+        s = SeenStore(None, max_size=4)
+        await s.add_async("m1")
+        assert s.is_seen("m1")
+
 
 class TestSeenMessagePersistence:
     """A seen ID on one Bot instance must be seen by a fresh instance."""
 
-    def test_seen_survives_new_bot_instance(self, tmp_path):
+    async def test_seen_survives_new_bot_instance(self, tmp_path):
         from kai.bots.waha.seen_store import SeenStore
 
         path = tmp_path / "waha.seen.json"
         bot1 = _make_bot()
         bot1._seen_store = SeenStore(path, max_size=2048)
         # First sighting: not seen, gets recorded to disk.
-        assert bot1._is_seen_message("msg-abc") is False
+        assert await bot1._is_seen_message("msg-abc") is False
         # Second call on the same instance: seen.
-        assert bot1._is_seen_message("msg-abc") is True
+        assert await bot1._is_seen_message("msg-abc") is True
 
         # A brand-new Bot instance (simulating a restart) loading the same
         # store file must still see "msg-abc".
         bot2 = _make_bot()
         bot2._seen_store = SeenStore(path, max_size=2048)
-        assert bot2._is_seen_message("msg-abc") is True
+        assert await bot2._is_seen_message("msg-abc") is True
 
-    def test_empty_message_id_never_seen(self):
+    async def test_empty_message_id_never_seen(self):
         bot = _make_bot()
-        assert bot._is_seen_message("") is False
+        assert await bot._is_seen_message("") is False
 
 
 class TestSleepStore:

@@ -517,12 +517,13 @@ class Bot(BaseBot):
         path.parent.mkdir(parents=True, exist_ok=True)
         return path
 
-    def _is_seen_message(self, message_id: str) -> bool:
+    async def _is_seen_message(self, message_id: str) -> bool:
         if not message_id or self._seen_store is None:
             return False
         if self._seen_store.is_seen(message_id):
             return True
-        self._seen_store.add(message_id)
+        # New message: record it, offloading the disk write off the event loop.
+        await self._seen_store.add_async(message_id)
         return False
 
     def _get_chat_lock(self, chat_id: str) -> asyncio.Lock:
@@ -537,7 +538,7 @@ class Bot(BaseBot):
     async def _handle_message(self, payload: dict) -> None:
         msg = payload.get("payload", {})
         message_id = msg.get("id") or msg.get("_data", {}).get("id") or ""
-        if self._is_seen_message(str(message_id)):
+        if await self._is_seen_message(str(message_id)):
             logger.debug("Ignoring duplicate message: %s", message_id)
             return
 
