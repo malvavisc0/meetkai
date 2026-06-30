@@ -1112,7 +1112,7 @@ class Bot(BaseBot):
         if len(preview) > 80:
             preview = preview[:77] + "..."
         suffix = f"[dim] \u2192 {preview}[/dim]" if preview else ""
-        console.print(f"[dim]> \U0001f527 {tool_name}{args}[/dim]" + suffix)
+        console.print(f"[dim]> \U0001f527 {tool_name}{args}[/dim]" + suffix, highlight=False)
 
     def _build_per_chat_prompt(
         self, chat_id: str, is_group: bool, roster: dict[str, str]
