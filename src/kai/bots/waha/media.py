@@ -31,18 +31,42 @@ class MediaAttachment:
     filename: str
 
 
+def _infer_media_type(msg: dict, mime_type: str) -> MediaType:
+    """Resolve the :class:`MediaType` for a WAHA message.
+
+    The top-level ``type`` field is frequently ``None`` in WAHA REST/webhook
+    payloads (the API spec marks it optional and the runtime often omits it).
+    The real type lives in ``_data.type`` (e.g. ``image``/``ptt``/``audio``)
+    or is derivable from the nested ``media.mimetype``. We check all three
+    sources so media is never silently dropped just because ``type`` was null.
+    """
+    msg_type = msg.get("type") or ""
+    if msg_type:
+        mapped = _TYPE_MAP.get(msg_type)
+        if mapped:
+            return mapped
+
+    data = msg.get("_data")
+    if isinstance(data, dict):
+        data_type = data.get("type") or ""
+        if data_type:
+            mapped = _TYPE_MAP.get(data_type)
+            if mapped:
+                return mapped
+
+    if mime_type:
+        if mime_type.startswith("image/"):
+            return MediaType.IMAGE
+        if mime_type.startswith("audio/"):
+            # ptt voice notes and regular audio are both transcribable; the
+            # handler treats VOICE/AUDIO identically, so map all audio here.
+            return MediaType.VOICE
+    return MediaType.UNKNOWN
+
+
 def extract_media(msg: dict) -> MediaAttachment | None:
-    msg_type = msg.get("type", "")
-    media_type = _TYPE_MAP.get(msg_type, MediaType.UNKNOWN)
-
-    if media_type is MediaType.UNKNOWN:
-        return None
-
-    mime_type = msg.get("mimetype", "")
-    filename = msg.get("filename", "")
-
-    data_field = msg.get("data")
-    media_url = msg.get("mediaUrl")
+    mime_type = msg.get("mimetype") or ""
+    filename = msg.get("filename") or ""
 
     # WAHA's REST API (and sometimes webhooks) deliver media as a nested
     # ``media`` dict with a ``url`` key pointing at /api/files/...  This form
@@ -54,12 +78,19 @@ def extract_media(msg: dict) -> MediaAttachment | None:
             mime_type = media_obj["mimetype"]
         if not filename and media_obj.get("filename"):
             filename = media_obj["filename"]
+    else:
+        media_url = msg.get("mediaUrl")
 
+    media_type = _infer_media_type(msg, mime_type)
+    if media_type is MediaType.UNKNOWN:
+        return None
+
+    data_field = msg.get("data")
     if data_field and isinstance(data_field, str):
         try:
             decoded = base64.b64decode(data_field)
         except Exception:
-            logger.warning("Failed to decode inline base64 media (type=%s)", msg_type)
+            logger.warning("Failed to decode inline base64 media (type=%s)", media_type)
             return None
         return MediaAttachment(
             type=media_type,

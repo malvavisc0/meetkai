@@ -193,24 +193,25 @@ class TestPostProcess:
     def test_strips_hashtags(self):
         assert _make_bot()._post_process("hello #world #tag") == "hello"
 
-    def test_keeps_single_emoji(self):
-        assert _make_bot()._post_process("hello 😭") == "hello 😭"
+    def test_strips_single_emoji(self):
+        # Emojis are stripped post-hoc: the prompt's default is "no emoji", and
+        # small models over-use them. A reply is always plain prose.
+        assert _make_bot()._post_process("hello 😭") == "hello"
 
-    def test_keeps_single_variation_selector_emoji(self):
-        # "❤️" is U+2764 + U+FE0F: one emoji, two codepoints. It must not be
-        # mistaken for two emojis nor truncated to a bare "❤".
-        assert _make_bot()._post_process("ok ❤️") == "ok ❤️"
+    def test_strips_variation_selector_emoji(self):
+        # "❤️" is U+2764 + U+FE0F: both the symbol and its variation selector
+        # are removed, leaving no leftover codepoints.
+        assert _make_bot()._post_process("ok ❤️") == "ok"
 
-    def test_keeps_single_zwj_emoji(self):
-        # ZWJ family emoji is a single grapheme cluster.
+    def test_strips_zwj_emoji(self):
+        # ZWJ family emoji is a single grapheme cluster — pictographs and the
+        # joiner are all removed.
         family = "👨\u200d👩\u200d👧"
-        assert _make_bot()._post_process(f"nice {family}") == f"nice {family}"
+        assert _make_bot()._post_process(f"nice {family}") == "nice"
 
-    def test_does_not_cut_or_move_emojis(self):
-        # Emojis are the model's intentional punctuation — never cut, moved, or
-        # reordered, even when there are several.
-        result = _make_bot()._post_process("hi 😭😂🔥")
-        assert result == "hi 😭😂🔥"
+    def test_strips_all_emojis(self):
+        # Multiple emojis collapse to plain text with no doubled spaces.
+        assert _make_bot()._post_process("hi 😭😂🔥") == "hi"
 
     def test_no_emoji_preserved(self):
         assert _make_bot()._post_process("hello world") == "hello world"
@@ -218,8 +219,8 @@ class TestPostProcess:
     def test_combined_markdown_and_emojis(self):
         result = _make_bot()._post_process("**hello** 😭😂 world")
         assert "**" not in result
-        # Emojis are preserved as-is (markdown stripped, emojis untouched).
-        assert result == "hello 😭😂 world"
+        # Markdown stripped and emojis removed — plain prose only.
+        assert result == "hello world"
 
     def test_strips_multiple_hashtags(self):
         assert _make_bot()._post_process("#one #two #three done") == "done"

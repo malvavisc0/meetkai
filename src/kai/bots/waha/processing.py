@@ -42,6 +42,34 @@ _TOOL_CALL_LEAK_RE = re.compile(
     re.IGNORECASE,
 )
 
+# Emoji over-use is the #1 way the bot reads as a bot. The prompt already
+# mandates "default to NO emoji", but small models (gemma) ignore that and
+# stack emojis on almost every reply. Strip them all post-hoc so a reply is
+# always plain prose — matching the documented "a plain reply is always
+# better" default. Covers pictographs, dingbats, flags (regional indicators),
+# and the modern supplementary emoji blocks.
+_EMOJI_RE = re.compile(
+    "["
+    "\U0001f600-\U0001f64f"
+    "\U0001f300-\U0001f5ff"
+    "\U0001f680-\U0001f6ff"
+    "\U0001f700-\U0001f77f"
+    "\U0001f780-\U0001f7ff"
+    "\U0001f800-\U0001f8ff"
+    "\U0001f900-\U0001f9ff"
+    "\U0001fa00-\U0001fa6f"
+    "\U0001fa70-\U0001faff"
+    "\U0001f1e0-\U0001f1ff"
+    "\U00002600-\U000026ff"
+    "\U00002700-\U000027bf"
+    "\U00002b00-\U00002bff"
+    "\U0000fe0f"
+    "\u200d"
+    "]",
+    flags=re.UNICODE,
+)
+
+
 # A replied-to message whose body is a media attachment is delivered by WAHA
 # as a long base64 blob (JPEG `/9j/...`, PNG `iVBOR...`, WebP, audio, …) with no
 # whitespace. Such a blob is useless context for the model and bloats the turn,
@@ -137,8 +165,12 @@ def post_process(reply: str) -> str:
     # Collapse to one natural line: the persona is a single short WhatsApp
     # message, never a multi-paragraph block.
     text = re.sub(r"\s*\n\s*", " ", text)
-    # Emojis are left exactly as the model produced them — never cut, moved, or
-    # reordered. Touching them can change the intended tone/meaning.
+    # Strip every emoji — the prompt's default is no emoji, and small models
+    # over-use them. Done after line-collapse so emoji-only spacing doesn't
+    # leave doubled spaces. Also drop the variation selector (FE0F) and tidy
+    # any whitespace the removals opened up.
+    text = _EMOJI_RE.sub(" ", text)
+    text = re.sub(r"\s{2,}", " ", text)
     # Defensive: a stray control token must never ship to WhatsApp even if the
     # caller's silence/sleep detection somehow missed it. Built from the shared
     # SILENT_MARKER/SLEEP_MARKER constants so the patterns can't drift.

@@ -626,6 +626,33 @@ class Bot(BaseBot):
 
             enriched_text = self._enrich_message_text(msg, text)
 
+            # Voice/audio notes are transcribed on EVERY message — not just turns
+            # where Kai replies — so the spoken content is captured into
+            # conversation history regardless of whether the bot responds. A
+            # background voice note with an empty body would otherwise be
+            # observed as nothing, losing what was said. Only run when STT
+            # (whisper) is available; otherwise the raw caption/body is kept.
+            if (
+                media
+                and media.type in (MediaType.VOICE, MediaType.AUDIO)
+                and self._config.media.voice_enabled
+                and self._stt
+            ):
+                media_bytes = await self._resolve_media_bytes(media)
+                if media_bytes:
+                    transcription = await self._stt.transcribe(
+                        media_bytes, mime_type=media.mime_type
+                    )
+                    if transcription:
+                        voice_tag = f"[voice note: {transcription}]"
+                        enriched_text = (
+                            f"{voice_tag}\n{enriched_text}" if enriched_text else voice_tag
+                        )
+                    else:
+                        logger.warning("Voice transcription returned empty")
+                else:
+                    logger.warning("Failed to resolve voice media")
+
             replies_to_bot = self._is_reply_to_bot(msg)
             context = MessageContext(
                 sender_name=meta.sender_name,
@@ -681,25 +708,9 @@ class Bot(BaseBot):
                 else:
                     logger.warning("Failed to resolve image media, skipping image")
 
-            if (
-                media
-                and media.type in (MediaType.VOICE, MediaType.AUDIO)
-                and self._config.media.voice_enabled
-            ):
-                media_bytes = await self._resolve_media_bytes(media)
-                if media_bytes and self._stt:
-                    transcription = await self._stt.transcribe(
-                        media_bytes, mime_type=media.mime_type
-                    )
-                    if transcription:
-                        voice_tag = f"[voice note: {transcription}]"
-                        enriched_text = (
-                            f"{voice_tag}\n{enriched_text}" if enriched_text else voice_tag
-                        )
-                    else:
-                        logger.warning("Voice transcription returned empty")
-                elif not media_bytes:
-                    logger.warning("Failed to resolve voice media")
+            # Voice/audio transcription already happened above (before the
+            # summon decision) so background notes are captured into history;
+            # nothing to do here on the reply path.
 
             ig = await self._enrich_instagram(text)
             if ig is not None:
