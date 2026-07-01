@@ -1615,6 +1615,102 @@ class TestInstagramEnrichment:
         assert images == imgs
 
 
+class TestYouTubeEnrichment:
+    @pytest.mark.asyncio
+    async def test_appends_transcript_tag(self, monkeypatch):
+        bot = _make_bot(BotConfig(trigger_keyword="kai"))
+        agent = MagicMock()
+        agent.chat = AsyncMock(return_value="nice summary")
+        agent.observe = AsyncMock()
+        bot._agent = agent
+
+        monkeypatch.setattr(
+            "kai.bots.waha.fetch_youtube_transcript",
+            lambda vid: {
+                "video_id": vid,
+                "language": "English",
+                "transcript_text": "hello world transcript",
+                "url": f"https://www.youtube.com/watch?v={vid}",
+            },
+        )
+
+        await bot._handle_message(
+            _dm_payload("check this https://www.youtube.com/watch?v=G2IWYXxO324", msg_id="yt1")
+        )
+
+        agent.chat.assert_awaited_once()
+        sent_text = agent.chat.call_args.args[0]
+        assert sent_text.startswith("[youtube transcript:")
+        assert "hello world transcript" in sent_text
+        # No images for youtube.
+        assert agent.chat.call_args.kwargs.get("images") in (None, [])
+
+    @pytest.mark.asyncio
+    async def test_fetch_failure_degrades_gracefully(self, monkeypatch):
+        bot = _make_bot(BotConfig(trigger_keyword="kai"))
+        agent = MagicMock()
+        agent.chat = AsyncMock(return_value="ok")
+        agent.observe = AsyncMock()
+        bot._agent = agent
+
+        def _boom(_vid):
+            raise RuntimeError("youtube down")
+
+        monkeypatch.setattr("kai.bots.waha.fetch_youtube_transcript", _boom)
+
+        body = "hey https://youtu.be/9LLZBVTid4I"
+        await bot._handle_message(_dm_payload(body, msg_id="yt2"))
+
+        agent.chat.assert_awaited_once()
+        sent_text = agent.chat.call_args.args[0]
+        assert "[youtube transcript:" not in sent_text
+        assert "hey https://youtu.be/9LLZBVTid4I" in sent_text
+
+    @pytest.mark.asyncio
+    async def test_no_yt_url_does_not_fetch(self, monkeypatch):
+        bot = _make_bot(BotConfig(trigger_keyword="kai"))
+        agent = MagicMock()
+        agent.chat = AsyncMock(return_value="hi")
+        agent.observe = AsyncMock()
+        bot._agent = agent
+
+        called = False
+
+        def _should_not_run(_vid):
+            nonlocal called
+            called = True
+            return {"transcript_text": "x"}
+
+        monkeypatch.setattr("kai.bots.waha.fetch_youtube_transcript", _should_not_run)
+
+        await bot._handle_message(_dm_payload("just chatting", msg_id="yt3"))
+
+        assert called is False
+        agent.chat.assert_awaited_once()
+        sent_text = agent.chat.call_args.args[0]
+        assert "[youtube transcript:" not in sent_text
+
+    @pytest.mark.asyncio
+    async def test_error_result_no_tag(self, monkeypatch):
+        bot = _make_bot(BotConfig(trigger_keyword="kai"))
+        agent = MagicMock()
+        agent.chat = AsyncMock(return_value="ok")
+        agent.observe = AsyncMock()
+        bot._agent = agent
+
+        monkeypatch.setattr(
+            "kai.bots.waha.fetch_youtube_transcript",
+            lambda vid: {"video_id": vid, "error": "No captions"},
+        )
+
+        body = "https://www.youtube.com/shorts/ABCDEFGHIJK"
+        await bot._handle_message(_dm_payload(body, msg_id="yt4"))
+
+        agent.chat.assert_awaited_once()
+        sent_text = agent.chat.call_args.args[0]
+        assert "[youtube transcript:" not in sent_text
+
+
 class TestSeenStore:
     def test_load_round_trip(self, tmp_path):
         from kai.bots.waha.seen_store import SeenStore

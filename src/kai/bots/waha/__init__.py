@@ -43,6 +43,7 @@ from kai.bots.waha.setup import (
 from kai.bots.waha.sleep_store import SleepStore
 from kai.bots.waha.stt import STTProvider, create_stt_provider, resolve_whisper_language
 from kai.bots.waha.webhook import create_webhook_app
+from kai.bots.waha.youtube import extract_youtube_video_id, fetch_youtube_transcript
 from kai.cli import BotStartupError
 from kai.config.filters import should_process_chat_message
 from kai.config.prompts import load_system_prompt
@@ -720,6 +721,11 @@ class Bot(BaseBot):
                     tag = f"[instagram post:\n  {ig_text}]"
                     enriched_text = f"{tag}\n{enriched_text}" if enriched_text else tag
 
+            yt = await self._enrich_youtube(text)
+            if yt:
+                tag = f"[youtube transcript:\n  {yt}]"
+                enriched_text = f"{tag}\n{enriched_text}" if enriched_text else tag
+
             per_chat_prompt = self._build_per_chat_prompt(meta.chat_id, meta.is_group, roster)
             extra_context_parts: list[str] = []
             if per_chat_prompt:
@@ -997,6 +1003,33 @@ class Bot(BaseBot):
             return None
         return data_text, image_bytes_list
 
+    async def _enrich_youtube(self, text: str) -> str | None:
+        """If text contains a YouTube URL, return a transcript summary string.
+
+        Mirrors ``_enrich_instagram``: fetches the transcript off-thread and
+        returns a tagged text block for the agent (no images). Returns None
+        when there's nothing to enrich or the fetch failed, so the message
+        still reaches the agent untouched.
+        """
+        video_id = extract_youtube_video_id(text)
+        if video_id is None:
+            return None
+        try:
+            result = await asyncio.to_thread(fetch_youtube_transcript, video_id)
+        except Exception as exc:
+            logger.warning("YouTube fetch failed for %s: %s", video_id, exc)
+            return None
+        if result.get("error") or not result.get("transcript_text"):
+            return None
+        lines = [
+            f"title-language: {result.get('language', 'unknown')}",
+            f"video_id: {video_id}",
+            f"url: {result.get('url', f'https://www.youtube.com/watch?v={video_id}')}",
+            "transcript:",
+            result["transcript_text"],
+        ]
+        return "\n  ".join(lines)
+
     def _learn_bot_identity(self, phone_jid: str | None, lid_jid: object) -> None:
         """Adopt a group's @lid identity for the bot when it can be matched.
 
@@ -1239,7 +1272,13 @@ class Bot(BaseBot):
             # unbalanced so a real URL like
             # https://en.wikipedia.org/wiki/Foo_(bar) keeps its closing paren.
             u = _strip_unbalanced_trailing_punct(u)
-            if u and "instagram.com" not in u and u not in urls:
+            if (
+                u
+                and "instagram.com" not in u
+                and "youtube.com" not in u
+                and "youtu.be" not in u
+                and u not in urls
+            ):
                 urls.append(u)
         if urls:
             parts.append(f"[links in message: {', '.join(urls)}]")
