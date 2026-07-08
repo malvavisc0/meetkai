@@ -22,7 +22,7 @@
     {% endif %}
 
     {# --- Status summary card --- #}
-    <div class="card health status-strip">
+    <div class="card health status-strip{% if any_processing %} status-strip--reading{% endif %}">
       {% if any_processing %}
         <span class="badge badge--warn">KAI IS READING THIS DOCUMENT…</span>
         <span class="field__help">This page updates itself when KAI finishes.</span>

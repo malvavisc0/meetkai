@@ -1,22 +1,29 @@
 {% extends "base.html" %}
 {% block content %}
 <div class="page stack">
-  <header class="page-header">
-    <p class="page-eyebrow">Conversation history</p>
-    <h1 class="page-title">History — {{ dep.bot_type }}</h1>
-    <p class="page-subtitle">{{ history|length }} conversation(s), {{ total }} message(s) total.</p>
+  <header class="page-header page-header--split">
+    <div class="page-header__copy">
+      <p class="page-eyebrow">Conversation history</p>
+      <h1 class="page-title">History — {{ dep.bot_type }}</h1>
+      <p class="page-subtitle">{{ history|length }} conversation(s), {{ total }} message(s) total. Latest first.</p>
+    </div>
+    <div class="page-header__action">
+      <a href="/deployments/{{ dep.id }}" class="button">Back</a>
+    </div>
   </header>
 
   {% if history %}
     {% for chat_id, messages in history.items() %}
       <div class="card">
         <h3 class="card__title"><span class="mono">{{ chat_id }}</span> <small class="muted">({{ messages|length }})</small></h3>
-        <div class="log-panel">
+        <div class="msg-list">
           {% for m in messages %}
-          <div class="log-panel__line">
-            {% if m.ts %}<span class="log-panel__meta mono">{{ m.ts }}</span><br>{% endif %}
-            <b class="mono">{% if m.role == "assistant" %}kai{% else %}{{ m.role }}{% endif %}&gt;</b>
-            <span class="log-panel__content">{{ m.content }}</span>
+          <div class="msg-list__item msg-list__item--{{ m.role }}">
+            <div class="msg-list__header">
+              <span class="msg-list__role">{% if m.role == "assistant" %}kai{% else %}{{ m.role }}{% endif %}</span>
+              {% if m.ts %}<span class="msg-list__ts mono">{{ m.ts }}</span>{% endif %}
+            </div>
+            <div class="msg-list__content">{{ m.content }}</div>
           </div>
           {% endfor %}
         </div>

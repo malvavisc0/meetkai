@@ -275,8 +275,8 @@ async def deployment_history(
 
     # Sort conversations by their latest message timestamp (newest first),
     # falling back to chat_id for legacy timestamp-less buckets so the page
-    # is deterministic. Within each bucket messages keep file order
-    # (chronological), with timestamps formatted for display.
+    # is deterministic. Within each bucket messages are reversed so the
+    # latest message appears at the top — no scrolling to the bottom.
     def _conv_sort_key(item: tuple[str, list[dict]]) -> tuple[int, str]:
         chat_id, msgs = item
         last_ts = ""
@@ -291,7 +291,7 @@ async def deployment_history(
 
     history: dict[str, list[dict]] = {}
     for chat_id, msgs in sorted(history_raw.items(), key=_conv_sort_key, reverse=True):
-        history[chat_id] = [{**m, "ts": _fmt_ts(m.get("ts"))} for m in msgs]
+        history[chat_id] = [{**m, "ts": _fmt_ts(m.get("ts"))} for m in reversed(msgs)]
 
     return templates.TemplateResponse(
         request,

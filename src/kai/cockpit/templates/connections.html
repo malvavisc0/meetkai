@@ -9,7 +9,7 @@
 
   {% if conn and conn.status == "connected" %}
     {# --- Connected state --- #}
-    <div class="card status-card">
+    <div class="card status-card status-card--running">
       <dl class="def-grid">
         <dt>WhatsApp</dt>
         <dd><span class="badge badge--live">CONNECTED</span></dd>
@@ -33,7 +33,7 @@
   {% elif conn and conn.status == "connecting" %}
     {# --- Connecting state (meta refresh retained) --- #}
     <meta http-equiv="refresh" content="3">
-    <div class="card status-card">
+    <div class="card status-card status-card--warn">
       <dl class="def-grid">
         <dt>WhatsApp</dt>
         <dd><span class="badge badge--warn">CONNECTING</span></dd>
@@ -54,7 +54,7 @@
 
   {% else %}
     {# --- Disconnected state --- #}
-    <div class="card status-card">
+    <div class="card status-card status-card--stopped">
       <dl class="def-grid">
         <dt>WhatsApp</dt>
         <dd><span class="badge badge--muted">NOT CONNECTED</span></dd>

@@ -35,9 +35,9 @@ BOT_TYPES: dict[str, BotType] = {
         ],
         required_settings=["language"],
         description=(
-            "WhatsApp bot via WAHA. Replies in chats and groups, "
-            "handles voice notes, images, and video, and can proactively "
-            "participate in conversations."
+            "WhatsApp Bot. Replies in chats and groups and can proactively "
+            "participate in conversations. Media and voice capabilities "
+            "depend on the enabled feature flags."
         ),
         default_goal=(
             "Be warm, useful, and concise. Answer what you can from what you "

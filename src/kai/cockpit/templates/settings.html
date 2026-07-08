@@ -1,24 +1,28 @@
 {% extends "base.html" %}
 {% block content %}
 <div class="page stack">
-  <header class="page-header">
-    <p class="page-eyebrow">Deployment settings</p>
-    <h1 class="page-title">{{ dep.bot_type }}</h1>
-    <p class="page-subtitle">Configure the bot. Changes apply on next start.</p>
+  <header class="page-header page-header--split">
+    <div class="page-header__copy">
+      <p class="page-eyebrow">Deployment settings</p>
+      <h1 class="page-title">{{ dep.bot_type }}</h1>
+      <p class="page-subtitle">Configure the bot. Changes apply on next start.</p>
+    </div>
+    <div class="page-header__action">
+      <a href="/deployments/{{ dep.id }}" class="button">Back</a>
+    </div>
   </header>
 
-  {# --- Parameters card (every field, flat, none merged) --- #}
-  <div class="card">
-    <h3 class="card__title">Parameters</h3>
-    <form method="post" action="/deployments/{{ dep.id }}/settings" class="stack">
-
+  <form method="post" action="/deployments/{{ dep.id }}/settings" class="stack">
+    {# --- Identity & voice --- #}
+    <div class="card">
+      <p class="card__eyebrow">Identity</p>
+      <h3 class="card__title">Bot identity &amp; voice</h3>
       <div class="field">
         <label class="field__label" for="goal">Goal</label>
         <textarea id="goal" name="goal" rows="3" required data-autosize>{{ dep.goal }}</textarea>
         <p class="field__help">Applies on next start. Edit to nudge what KAI does.</p>
       </div>
-
-      <div class="field">
+      <div class="field field--narrow">
         <label class="field__label" for="language">Language</label>
         <input id="language" type="text" name="language" value="{{ dep.language }}" required>
         <p class="field__help">Defaults to your account language — change it any time.</p>
@@ -32,7 +36,16 @@
         </select>
         <p class="field__help">Picked from the language. Used when KAI sends voice notes.</p>
       </div>
+      <div class="field field--narrow">
+        <label class="field__label" for="timezone">Timezone</label>
+        <input id="timezone" type="text" name="timezone" value="{{ dep.settings.get('timezone', '') or '' }}">
+      </div>
+    </div>
 
+    {# --- Triggers & filters --- #}
+    <div class="card">
+      <p class="card__eyebrow">Triggers</p>
+      <h3 class="card__title">When the bot replies</h3>
       <div class="field">
         <label class="field__label" for="trigger_keyword">Trigger keyword</label>
         <input id="trigger_keyword" type="text" name="trigger_keyword" value="{{ dep.settings.get('trigger_keyword', '') }}">
@@ -44,7 +57,6 @@
         </label>
         <p class="field__help">KAI also replies whenever this keyword appears in a message.</p>
       </div>
-
       <div class="field">
         <label class="field__label" for="whitelist">Whitelist (chat ids, one per line)</label>
         <textarea id="whitelist" name="whitelist" rows="3" data-autosize>{{ dep.settings.get('whitelist', [])|join('\n') }}</textarea>
@@ -54,20 +66,26 @@
         <textarea id="blacklist" name="blacklist" rows="3" data-autosize>{{ dep.settings.get('blacklist', [])|join('\n') }}</textarea>
         <p class="field__help">If a chat id is on both lists, the blacklist wins.</p>
       </div>
+    </div>
 
-      <div class="field">
-        <label class="field__label">Capabilities</label>
-        {% for flag in feature_flags %}
-          <label class="checkbox-row">
-            <input type="checkbox" name="feature_{{ flag }}" value="true" {% if dep.feature_flags.get(flag, true) %}checked{% endif %}>
-            {{ capability_labels.get(flag, flag) }}
-          </label>
-        {% endfor %}
-      </div>
+    {# --- Capabilities --- #}
+    <div class="card">
+      <p class="card__eyebrow">Capabilities</p>
+      <h3 class="card__title">Media &amp; processing</h3>
+      {% for flag in feature_flags %}
+        <label class="checkbox-row">
+          <input type="checkbox" name="feature_{{ flag }}" value="true" {% if dep.feature_flags.get(flag, true) %}checked{% endif %}>
+          {{ capability_labels.get(flag, flag) }}
+        </label>
+      {% endfor %}
+    </div>
 
+    {# --- Participation --- #}
+    <div class="card">
+      <p class="card__eyebrow">Participation</p>
+      <h3 class="card__title">Unprompted replies</h3>
+      {% set part = dep.settings.get('participation', {}) %}
       <div class="field">
-        <label class="field__label">Participation</label>
-        {% set part = dep.settings.get('participation', {}) %}
         <label class="checkbox-row">
           <input type="checkbox" name="participation_enabled" value="true" {% if part.get('enabled', true) %}checked{% endif %}>
           Let KAI reply on its own sometimes (participation)
@@ -85,19 +103,15 @@
         <label class="field__label" for="participation_streak_max">Max replies in a row</label>
         <input id="participation_streak_max" type="number" name="participation_streak_max" value="{{ part.get('streak_max', 2) }}" step="1">
       </div>
+    </div>
 
-      <div class="field field--narrow">
-        <label class="field__label" for="timezone">Timezone</label>
-        <input id="timezone" type="text" name="timezone" value="{{ dep.settings.get('timezone', '') or '' }}">
-      </div>
-
-      <div class="cluster">
-        <button type="submit" class="button button--primary">Save</button>
-        <a href="/deployments/{{ dep.id }}" class="button">Cancel</a>
-      </div>
-      <p class="field__help">* required. Changes apply on next start.</p>
-    </form>
-  </div>
+    {# --- Actions --- #}
+    <div class="cluster">
+      <button type="submit" class="button button--primary">Save changes</button>
+      <a href="/deployments/{{ dep.id }}" class="button">Cancel</a>
+    </div>
+    <p class="field__help">* required. Changes apply on next start.</p>
+  </form>
 
   {# --- Danger zone --- #}
   <div class="card card--danger mt-2xl">
