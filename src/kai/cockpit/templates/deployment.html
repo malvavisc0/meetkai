@@ -162,7 +162,7 @@
       <p class="muted">Start the bot to send it a message.</p>
     {% else %}
       {% if reply %}
-        <div class="log-panel">
+        <div class="log-panel chat-reply">
           <div class="log-panel__line">
             <b class="mono">kai&gt;</b>
             <span class="log-panel__content">{{ reply }}</span>
@@ -178,9 +178,6 @@
         <div class="cluster chat-form__actions">
           <button type="submit" class="button button--primary"><span class="icon">{% include "icons/send.svg" %}</span> Send</button>
         </div>
-      </form>
-      <form method="post" action="/deployments/{{ dep.id }}/chat/clear" class="chat-clear-form" data-confirm="Clear this chat history?">
-        <button type="submit" class="button button--danger"><span class="icon">{% include "icons/trash-2.svg" %}</span> Clear history</button>
       </form>
     {% endif %}
   </div>
