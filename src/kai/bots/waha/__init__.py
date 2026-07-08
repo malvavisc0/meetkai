@@ -1225,8 +1225,20 @@ class Bot(BaseBot):
         '(same rules as send_to_group/send_dm) and "text" = the words to '
         "synthesize (plain prose, short). Use this when the instruction "
         "explicitly asks for a voice note.\n"
-        "- To reply to the operator (answer a question, confirm a steering "
-        'directive), set action to "console" and put your reply in "text".\n'
+        "- To reply to the operator ONLY (answer a question the operator "
+        "asked you directly, confirm a steering directive), set action to "
+        '"console" and put your reply in "text". The console reply goes to '
+        "the operator's chat interface, NOT to any WhatsApp chat — the "
+        "people in WhatsApp never see it.\n"
+        "CRITICAL: when the instruction tells you to answer, reply, speak, "
+        "or respond 'inside' / 'in' / 'to' a specific chat (e.g. 'answer "
+        "inside 123@g.us', 'reply to the group', 'tell them'), you MUST use "
+        "send_to_group or send_dm with that chat as the target — NEVER "
+        "console. console is only for when the operator themselves is asking "
+        "you a question and wants the answer back in this chat, not "
+        "delivered to WhatsApp. If the instruction mentions a chat JID and "
+        "asks you to say something there, the answer is always a send "
+        "action, not console.\n"
         "If the instruction is a steering directive and you have the "
         "set_goal tool, call it to permanize the goal."
     )
@@ -1291,7 +1303,11 @@ class Bot(BaseBot):
                 tools=tools,
                 extra_system_context=op_context,
                 images=images or None,
-                reply_style=REPLY_STYLE,
+                # No REPLY_STYLE on operator turns: the operator's instruction
+                # controls what to say and how long it should be. A blanket
+                # brevity constraint would truncate detailed answers (business
+                # analyses, web search recaps) the operator explicitly asked for.
+                reply_style=None,
                 # ``send_to_group``/``send_dm``/``send_voice_note`` text is
                 # addressed to the *target* chat, not the operator — don't
                 # record it as an assistant reply in the operator's own history

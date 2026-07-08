@@ -15,18 +15,10 @@ import re
 import time
 
 REPLY_STYLE = (
-    "\nCRITICAL: Your reply MUST be at most 3 sentences and under 40 words. "
-    "No exceptions. No personality or goal overrides this limit. "
+    "\nKeep replies tight and WhatsApp-natural: at most 6 sentences and "
+    "under 150 words. No personality or goal overrides this. "
     "Do NOT end a short reply with a period."
 )
-
-# Hard word cap, kept in sync with REPLY_STYLE and the prompt's VOICE & STYLE
-# table + OUTPUT VALIDATION checklist. The prompt asks for 40 words in three
-# places; this enforces it at the code level so a model that ignores the
-# instruction still delivers a WhatsApp-tight message. We count on whitespace
-# (matching how a person reads a message), and cut at the last word boundary
-# that fits, appending an ellipsis only when we actually had to cut.
-REPLY_MAX_WORDS = 40
 
 # When the bot's last turn was a reply (an active back-and-forth), relax the
 # cooldown and boost the offer rate so a quick human follow-up isn't silenced.
@@ -140,27 +132,12 @@ def post_process(reply: str) -> str:
     terminal = sum(text.count(c) for c in ".?!") - text.count("...")
     if terminal <= 1 and text.endswith(".") and not text.endswith(("..", "...")):
         text = text[:-1].rstrip()
-    # Enforce the hard word cap. Done last so the trailing-period rule and
-    # whitespace tidy-ups apply first; we cut at the last whole word that
-    # keeps us under the limit rather than mid-word, and only append "..."
-    # when something was actually dropped.
-    text = _enforce_word_cap(text, REPLY_MAX_WORDS)
+    # No hard word cap: the REPLY_STYLE prompt already asks for brevity in
+    # casual chat, and operator-instructed sends (business analysis, web
+    # search recaps, etc.) must not be silently truncated mid-thought. A
+    # code-level cut with "..." was discarding substantive content the user
+    # explicitly asked for.
     return text.strip()
-
-
-def _enforce_word_cap(text: str, max_words: int) -> str:
-    """Trim ``text`` to at most ``max_words`` whitespace-separated tokens.
-
-    Cutting at a word boundary keeps each token intact; an ellipsis is added
-    only when the original was longer than the cap. Empty/whitespace-only
-    input is returned unchanged.
-    """
-    if not text:
-        return text
-    words = text.split()
-    if len(words) <= max_words:
-        return text
-    return " ".join(words[:max_words]).rstrip() + "..."
 
 
 def should_organically_participate(

@@ -732,19 +732,22 @@ class KaiAgent:
             # conversation even if the actual send later fails.
             delegated = is_delegated_action is not None and is_delegated_action(action)
 
-            # A turn that produced no reply text for *this* conversation
-            # (e.g. a ``silent`` action, or a delegated send) stores nothing
-            # here — mirroring the old early-return on ``<<silent>>``. The
-            # bot records the inbound message itself via ``observe()`` when
-            # it wants the context preserved regardless of the action taken.
-            # A reply turn records the user message (unless suppressed) and
-            # the assistant reply.
-            if reply_text and not delegated:
+            # The inbound user message is recorded independently of the
+            # assistant reply when the turn produced *something* — either a
+            # reply for this conversation, or a delegated send (whose text
+            # goes to a different chat but whose inbound instruction must
+            # still be visible in this conversation's history). A bare
+            # ``silent`` turn (empty reply, not delegated) stores nothing
+            # here: the bot's own ``_abort_turn``/``observe()`` path records
+            # the inbound separately, so storing it here too would duplicate.
+            save_assistant = bool(reply_text) and not delegated
+            save_user = store_user_message and (bool(reply_text) or delegated)
+            if save_user or save_assistant:
                 async with self._save_lock:
                     history = self._get_history(conversation_id)
                     key = self._history_key(conversation_id)
                     ts_list = self._timestamps.setdefault(key, [])
-                    if store_user_message:
+                    if save_user:
                         history.append(
                             ChatMessage(
                                 role=MessageRole.USER,
@@ -752,8 +755,9 @@ class KaiAgent:
                             )
                         )
                         ts_list.append(self._now_ts())
-                    history.append(ChatMessage(role=MessageRole.ASSISTANT, content=reply_text))
-                    ts_list.append(self._now_ts())
+                    if save_assistant:
+                        history.append(ChatMessage(role=MessageRole.ASSISTANT, content=reply_text))
+                        ts_list.append(self._now_ts())
                     self._trim_history(conversation_id)
                 self._mark_dirty()
             await asyncio.to_thread(self._save_goal)

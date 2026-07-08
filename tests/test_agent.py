@@ -421,6 +421,31 @@ class TestKaiAgentChat:
         # An empty reply stores nothing (mirrors the old silent early-return).
         assert len(agent._get_history()) == 0
 
+    @pytest.mark.asyncio
+    async def test_chat_delegated_action_stores_user_message_only(self, settings):
+        # Regression: an operator turn whose action is delegated (e.g.
+        # send_to_group / send_voice_note) must still persist the operator's
+        # inbound instruction in the operator history bucket — the assistant
+        # reply text is recorded in the *target* chat by the bot's dispatch,
+        # not here. Previously the entire history block was skipped when the
+        # action was delegated, losing the operator's message.
+        agent = KaiAgent(settings=settings, goal_manager=GoalManager())
+        agent._llm = _mock_llm("hola mundo")
+
+        result = await agent.chat(
+            "send a message to the group saying hello",
+            output_cls=_TestAction,
+            conversation_id="operator",
+            is_delegated_action=lambda a: a.action == "reply",
+        )
+
+        assert result.action.text == "hola mundo"
+        history = agent._get_history("operator")
+        # User message IS stored (the operator's instruction).
+        assert any(m.role == MessageRole.USER for m in history)
+        # Assistant reply is NOT stored here (delegated to target chat).
+        assert not any(m.role == MessageRole.ASSISTANT for m in history)
+
     def test_build_llm_disables_thinking_by_default(self, settings):
         agent = KaiAgent(settings=settings, goal_manager=GoalManager())
         llm = agent._build_llm()
