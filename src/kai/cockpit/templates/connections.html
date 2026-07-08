@@ -1,32 +1,68 @@
 {% extends "base.html" %}
 {% block content %}
-<div style="padding: 16px;">
-  <a href="/">&lt; back</a>
-  <h2>connections</h2>
-
-  <h3>WhatsApp</h3>
-  <p>status: <b>{{ conn.status if conn else "not configured" }}</b></p>
+<div class="page stack">
+  <header class="page-header">
+    <p class="page-eyebrow">Channel status</p>
+    <h1 class="page-title">Connections</h1>
+    <p class="page-subtitle">WhatsApp is the live channel KAI uses to reply in chats and groups.</p>
+  </header>
 
   {% if conn and conn.status == "connected" %}
-    <p>session: {{ conn.config.get('waha_session', '?') }}</p>
-    <form method="post" action="/connections/whatsapp/disconnect">
-      <button type="submit">disconnect</button>
-    </form>
+    {# --- Connected state --- #}
+    <div class="card status-card">
+      <dl class="def-grid">
+        <dt>WhatsApp</dt>
+        <dd><span class="badge badge--live">CONNECTED</span></dd>
+        {% if conn.config.get('waha_session') %}
+          <dt>Number</dt>
+          <dd><span class="mono">{{ conn.config.get('waha_session', '?') }}</span></dd>
+        {% endif %}
+        <dt>Connected since</dt>
+        <dd><span class="mono">{{ conn.updated_at }}</span></dd>
+      </dl>
+    </div>
+    <div class="cluster">
+      <form method="post" action="/connections/whatsapp/refresh">
+        <button type="submit" class="button button--primary"><span class="icon">{% include "icons/rotate-cw.svg" %}</span> Refresh</button>
+      </form>
+      <form method="post" action="/connections/whatsapp/disconnect" data-confirm="Disconnect WhatsApp?">
+        <button type="submit" class="button">Disconnect</button>
+      </form>
+    </div>
+
   {% elif conn and conn.status == "connecting" %}
+    {# --- Connecting state (meta refresh retained) --- #}
     <meta http-equiv="refresh" content="3">
+    <div class="card status-card">
+      <dl class="def-grid">
+        <dt>WhatsApp</dt>
+        <dd><span class="badge badge--warn">CONNECTING</span></dd>
+      </dl>
+      <p class="field__help">Waiting for WhatsApp — scan the QR and this page updates itself when it connects.</p>
+    </div>
+
     {% if qr_url %}
-      <p>scan this QR code:</p>
-      <img src="{{ qr_url }}" alt="QR code" style="max-width: 300px;"><br><br>
+      <div class="card card--center qr-panel">
+        <img src="{{ qr_url }}" alt="QR code" class="img-constrained">
+      </div>
+      <p class="field__help text-center">Scan with WhatsApp — this page updates itself when the scan succeeds.</p>
     {% endif %}
-    <form method="post" action="/connections/whatsapp/refresh">
-      <button type="submit">refresh</button>
-    </form>
+
     <form method="post" action="/connections/whatsapp/disconnect">
-      <button type="submit">cancel</button>
+      <button type="submit" class="button">Cancel</button>
     </form>
+
   {% else %}
+    {# --- Disconnected state --- #}
+    <div class="card status-card">
+      <dl class="def-grid">
+        <dt>WhatsApp</dt>
+        <dd><span class="badge badge--muted">NOT CONNECTED</span></dd>
+      </dl>
+      <p class="field__help">Connect WhatsApp before starting a deployment that should answer real conversations.</p>
+    </div>
     <form method="post" action="/connections/whatsapp/connect">
-      <button type="submit">connect WhatsApp</button>
+      <button type="submit" class="button button--primary"><span class="icon">{% include "icons/plus.svg" %}</span> Connect WhatsApp</button>
     </form>
   {% endif %}
 </div>

@@ -99,7 +99,8 @@ async def deploy_new_get(
             "user": user,
             "step": "config",
             "bot_type": bot_type,
-            "goal": "",
+            "bt": bt,
+            "goal": bt.default_goal,
             "language": user.language,
             "voice": voice,
             "voices": ALL_VOICES,
@@ -110,7 +111,7 @@ async def deploy_new_get(
 @router.post("/deployments/new")
 async def deploy_new_post(
     request: Request,
-    bot_type: str = "waha",
+    bot_type: str = Form("waha"),
     goal: str = Form(...),
     language: str = Form(...),
     voice: str = Form(""),
@@ -192,7 +193,9 @@ async def deployment_detail(
                 pass
 
     flash = request.session.pop("flash", None)
-    needs_restart = bool(request.session.pop("needs_restart", False)) and dep.status == "running"
+    # needs_restart is now a persisted column (survives reloads/new tabs),
+    # not a session flash — see DeploymentsService.edit()/start()/stop().
+    needs_restart = bool(dep.needs_restart) and dep.status == "running"
 
     latest_messages = svc.latest_messages(dep)
     latest_display = [
@@ -462,7 +465,6 @@ async def deployment_settings(
         return RedirectResponse(f"/deployments/{dep_id}", status_code=302)
 
     if dep.status == "running":
-        request.session["needs_restart"] = True
         request.session["flash"] = "Settings saved. Restart to apply."
     else:
         request.session["flash"] = "Settings saved."

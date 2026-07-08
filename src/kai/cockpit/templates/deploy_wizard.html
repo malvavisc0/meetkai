@@ -1,29 +1,47 @@
 {% extends "base.html" %}
 {% block content %}
-<div style="padding: 16px;">
-  <a href="/">&lt; back</a>
-  <h2>New {{ bot_type }} Deployment</h2>
+<div class="page page--narrow stack">
+  <a href="/" class="muted">&lt; back</a>
+  <h1 class="page-title">Create deployment</h1>
 
-  <form method="post">
-    <label>Bot goal *</label><br>
-    <textarea name="goal" rows="4" cols="60" required>{{ goal or "" }}</textarea><br><br>
+  <div class="card">
+    <strong>{{ bt.name }}</strong>
+    {% if bt.description %}
+      <p class="muted mt-2xs">{{ bt.description }}</p>
+    {% endif %}
+  </div>
 
-    <label>Language *</label><br>
-    <input type="text" name="language" value="{{ language }}" required>
-    <small>(default: Operator language: {{ user.language }})</small><br><br>
+  <form method="post" class="card stack">
+    <input type="hidden" name="bot_type" value="{{ bot_type }}">
 
-    <label>Voice</label><br>
-    <select name="voice">
-      {% for v in voices %}
-        <option value="{{ v }}" {% if v == voice %}selected{% endif %}>{{ v }}</option>
-      {% endfor %}
-    </select>
-    <small>(picked from the language; editable)</small><br><br>
+    <div class="field">
+      <label class="field__label" for="goal">What should this bot do?</label>
+      <textarea id="goal" name="goal" rows="4" required data-autosize>{{ goal or "" }}</textarea>
+      <p class="field__help">A working starting point is filled in — edit it so it fits your situation, or leave it. KAI follows whatever you write here.</p>
+    </div>
 
-    <button type="submit">Create deployment</button>
+    <div class="field">
+      <label class="field__label" for="language">Language</label>
+      <input id="language" type="text" name="language" value="{{ language }}" required>
+      <p class="field__help">Defaults to your account language — change it any time.</p>
+    </div>
+    <div class="field field--narrow">
+      <label class="field__label" for="voice">Voice</label>
+      <select id="voice" name="voice">
+        {% for v in voices %}
+          <option value="{{ v }}" {% if v == voice %}selected{% endif %}>{{ v }}</option>
+        {% endfor %}
+      </select>
+      <p class="field__help">Picked from the language. Used when KAI sends voice notes.</p>
+    </div>
+
+    <div>
+      <button type="submit" class="button button--primary"><span class="icon">{% include "icons/plus.svg" %}</span> Create deployment</button>
+    </div>
+    <p class="field__help">KAI will be ready to start as soon as you connect WhatsApp.</p>
   </form>
   {% if error %}
-    <p style="color: red;">{{ error }}</p>
+    <p class="text-danger">{{ error }}</p>
   {% endif %}
 </div>
 {% endblock %}

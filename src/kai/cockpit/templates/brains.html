@@ -1,94 +1,153 @@
 {% extends "base.html" %}
 {% block content %}
-<div style="padding: 16px;">
-  <a href="/">&lt; back</a>
-  <h2>Brain</h2>
+<div class="page stack">
+  <header class="page-header">
+    <p class="page-eyebrow">Shared memory</p>
+    <h1 class="page-title">Brain</h1>
+    <p class="page-subtitle">Teach KAI facts, documents, websites, and notes that bots can use in conversations.</p>
+  </header>
 
   {% if not brain %}
-    <p>Create a Brain to give bots shared memory from documents, notes,
-       and websites.</p>
-    <form method="post" action="/brain/create">
-      <button type="submit">Create Brain</button>
-    </form>
+    <div class="card empty-state empty-state--hero">
+      <span class="icon icon--lg empty-state__icon">{% include "icons/file-text.svg" %}</span>
+      <p>No Brain yet.</p>
+      <p class="empty-state__hint">Create a Brain to give bots shared memory from documents, notes, and websites.</p>
+      <form method="post" action="/brain/create">
+        <button type="submit" class="button button--primary"><span class="icon">{% include "icons/plus.svg" %}</span> Create Brain</button>
+      </form>
+    </div>
   {% else %}
     {% if any_processing %}
       <meta http-equiv="refresh" content="3">
     {% endif %}
 
-    <p>Brain status: <b>{{ brain.status }}</b></p>
+    {# --- Status summary card --- #}
+    <div class="card health status-strip">
+      {% if any_processing %}
+        <span class="badge badge--warn">KAI IS READING THIS DOCUMENT…</span>
+        <span class="field__help">This page updates itself when KAI finishes.</span>
+      {% else %}
+        <span class="badge badge--live">READY</span>
+        {% if docs %}
+          <span class="field__help">{{ docs|length }} document{{ '' if docs|length == 1 else 's' }} indexed</span>
+        {% endif %}
+        <span class="field__help">Last updated <span class="mono">{{ brain.updated_at }}</span></span>
+      {% endif %}
+    </div>
 
-    <h3>When should bots use the Brain?</h3>
-    <form method="post" action="/brain/instruction">
-      <p>
-        <textarea name="instruction" rows="6" cols="60"
-          placeholder="One topic per line, e.g.:&#10;product pricing&#10;setup steps&#10;refund policy">{{ brain.config.get('instruction', '') }}</textarea>
-      </p>
-      <label>
-        <input type="checkbox" name="mandatory" value="true"
-          {% if brain.config.get('mandatory') %}checked{% endif %}>
-        Always use the Brain for these topics
-      </label><br><br>
-      <button type="submit">Save instructions</button>
-    </form>
+    {# --- Teach cards --- #}
+    <div class="teach-grid">
+      {# Instruction #}
+      <div class="card teach-card">
+        <p class="card__eyebrow">Instruction</p>
+        <h3 class="card__title">Tell KAI something</h3>
+        <form method="post" action="/brain/instruction" class="stack">
+          <div class="field">
+            <label class="sr-only" for="instruction">Tell KAI something</label>
+            <textarea id="instruction" name="instruction" rows="4" data-autosize
+              placeholder="One topic per line, e.g.:&#10;product pricing&#10;setup steps&#10;refund policy">{{ brain.config.get('instruction', '') }}</textarea>
+          </div>
+          <label class="checkbox-row">
+            <input type="checkbox" name="mandatory" value="true"
+              {% if brain.config.get('mandatory') %}checked{% endif %}>
+            Always use the Brain for these topics
+          </label>
+          <div><button type="submit" class="button">Add instruction</button></div>
+        </form>
+      </div>
+      {# Upload #}
+      <div class="card teach-card">
+        <p class="card__eyebrow">File</p>
+        <h3 class="card__title">Upload a document</h3>
+        <p class="field__help">and KAI will remember it.</p>
+        <form method="post" action="/brain/upload" enctype="multipart/form-data" class="stack">
+          <div class="field">
+            <label class="sr-only" for="file">Document to upload</label>
+            <input id="file" type="file" name="file" required>
+          </div>
+          <div><button type="submit" class="button">Upload</button></div>
+        </form>
+        <p class="field__help">Supports txt, md, docx, text-based pdf, and more. 100MB max.</p>
+      </div>
+      {# Website #}
+      <div class="card teach-card">
+        <p class="card__eyebrow">Website</p>
+        <h3 class="card__title">Add a website</h3>
+        <form method="post" action="/brain/ingest-url" class="stack">
+          <div class="field">
+            <label class="sr-only" for="url">Website URL</label>
+            <input id="url" type="url" name="url" placeholder="https://example.com/docs" required>
+            <p class="field__help">KAI will read it and remember.</p>
+          </div>
+          <div><button type="submit" class="button">Add website</button></div>
+        </form>
+      </div>
+      {# Text #}
+      <div class="card teach-card">
+        <p class="card__eyebrow">Text</p>
+        <h3 class="card__title">Paste text</h3>
+        <form method="post" action="/brain/ingest-text" class="stack">
+          <div class="field">
+            <label class="sr-only" for="text_name">Name</label>
+            <input id="text_name" type="text" name="name" placeholder="Name (e.g. Onboarding notes)" required>
+          </div>
+          <div class="field">
+            <label class="sr-only" for="text">Text</label>
+            <textarea id="text" name="text" rows="4" data-autosize placeholder="Paste notes or reference text..." required></textarea>
+          </div>
+          <div><button type="submit" class="button">Add text</button></div>
+        </form>
+      </div>
+    </div>
 
-    <h3>Upload a document</h3>
-    <form method="post" action="/brain/upload" enctype="multipart/form-data">
-      <input type="file" name="file" required>
-      <button type="submit">Upload document</button>
-      <div><small>Supports txt, md, docx, text-based pdf, and more. 100MB max.</small></div>
-    </form>
+    {# --- Documents table --- #}
+    <div class="card">
+      <h3 class="card__title">Documents</h3>
+      {% if docs_error %}
+        <p class="text-danger">Could not load documents: {{ docs_error }}</p>
+      {% elif not docs %}
+        <div class="empty-state">
+          <span class="icon icon--lg empty-state__icon">{% include "icons/file-text.svg" %}</span>
+          <p class="empty-state__hint">No documents yet — add one and KAI will start using it in conversations automatically.</p>
+        </div>
+      {% else %}
+        <table class="table table--responsive">
+          <thead>
+            <tr>
+              <th>Document</th>
+              <th>Status</th>
+              <th>Added</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for doc in docs %}
+            <tr>
+              <td data-label="Document">{{ doc.file_path or doc.id }}</td>
+              <td data-label="Status">
+                {% if not doc.is_terminal %}
+                  <span class="badge badge--warn">READING…</span>
+                {% elif doc.status == 'failed' %}
+                  <span class="badge badge--danger">FAILED</span>
+                {% else %}
+                  <span class="badge badge--live">READY</span>
+                {% endif %}
+              </td>
+              <td data-label="Added"><span class="mono">{{ doc.updated_at }}</span></td>
+              <td data-label="">
+                <form method="post" action="/brain/documents/delete" data-confirm="Delete this document?">
+                  <input type="hidden" name="doc_id" value="{{ doc.id }}">
+                  <button type="submit" class="button button--danger"><span class="icon">{% include "icons/trash-2.svg" %}</span></button>
+                </form>
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      {% endif %}
+    </div>
 
-    <h3>Add a website</h3>
-    <form method="post" action="/brain/ingest-url">
-      <input type="url" name="url" placeholder="https://example.com/docs" size="50" required>
-      <button type="submit">Add website</button>
-      <div><small>KAI saves the page text as bot memory.</small></div>
-    </form>
-
-    <h3>Add text</h3>
-    <form method="post" action="/brain/ingest-text">
-      <p>
-        <label>Name: <input type="text" name="name" placeholder="Onboarding notes" size="40" required></label>
-      </p>
-      <p>
-        <textarea name="text" rows="6" cols="60" placeholder="Paste notes or reference text..." required></textarea>
-      </p>
-      <button type="submit">Add text</button>
-    </form>
-
-    <h3>Documents</h3>
-    {% if docs_error %}
-      <p style="color: #c00;">Could not load documents: {{ docs_error }}</p>
-    {% elif not docs %}
-      <p><i>No documents yet.</i></p>
-    {% else %}
-      <table border="1" cellpadding="4" cellspacing="0">
-        <tr>
-          <th>Name</th>
-          <th>Status</th>
-          <th>Sections</th>
-          <th>Updated</th>
-          <th></th>
-        </tr>
-        {% for doc in docs %}
-        <tr>
-          <td>{{ doc.file_path or doc.id }}</td>
-          <td>{{ doc.status }}{% if doc.status == 'failed' %} \u26a0{% endif %}</td>
-          <td>{{ doc.chunks_count if doc.chunks_count is not none else '-' }}</td>
-          <td>{{ doc.updated_at }}</td>
-          <td>
-            <form method="post" action="/brain/documents/delete" style="display:inline;">
-              <input type="hidden" name="doc_id" value="{{ doc.id }}">
-              <button type="submit">Delete</button>
-            </form>
-          </td>
-        </tr>
-        {% endfor %}
-      </table>
-    {% endif %}
-
-    <p><i>Bots use the Brain during chat once a deployment is running. This
-       page is for adding and managing bot memory.</i></p>
+    <p class="muted"><i>Bots use the Brain during chat once a deployment is running. This page is for adding and managing bot memory.</i></p>
   {% endif %}
 </div>
 {% endblock %}

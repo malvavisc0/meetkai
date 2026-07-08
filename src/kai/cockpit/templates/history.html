@@ -1,25 +1,30 @@
 {% extends "base.html" %}
 {% block content %}
-<div style="padding: 16px;">
-  <a href="/deployments/{{ dep.id }}">&lt; back</a>
-  <h2>{{ dep.bot_type }} message history ({{ dep_user.email }})</h2>
-  <p>{{ history|length }} conversation(s), {{ total }} message(s) total.</p>
+<div class="page stack">
+  <a href="/deployments/{{ dep.id }}" class="muted">&lt; back</a>
+  <h1 class="page-title">History — {{ dep.bot_type }}</h1>
+  <p class="muted">{{ history|length }} conversation(s), {{ total }} message(s) total.</p>
 
   {% if history %}
     {% for chat_id, messages in history.items() %}
-      <h3>{{ chat_id }} <small>({{ messages|length }})</small></h3>
-      <div style="border: 1px solid #ccc; padding: 8px; margin-bottom: 12px; max-height: 400px; overflow-y: auto;">
-        {% for m in messages %}
-          <div style="margin-bottom: 6px;">
-            {% if m.ts %}<small style="color: #888;">{{ m.ts }}</small><br>{% endif %}
-            <b>{% if m.role == "assistant" %}kai{% else %}{{ m.role }}{% endif %}&gt;</b>
-            <span style="white-space: pre-wrap;">{{ m.content }}</span>
+      <div class="card">
+        <h3 class="card__title"><span class="mono">{{ chat_id }}</span> <small class="muted">({{ messages|length }})</small></h3>
+        <div class="log-panel">
+          {% for m in messages %}
+          <div class="log-panel__line">
+            {% if m.ts %}<span class="log-panel__meta mono">{{ m.ts }}</span><br>{% endif %}
+            <b class="mono">{% if m.role == "assistant" %}kai{% else %}{{ m.role }}{% endif %}&gt;</b>
+            <span class="log-panel__content">{{ m.content }}</span>
           </div>
-        {% endfor %}
+          {% endfor %}
+        </div>
       </div>
     {% endfor %}
   {% else %}
-    <p><i>No history yet.</i></p>
+    <div class="card empty-state">
+      <span class="icon icon--lg empty-state__icon">{% include "icons/message-circle.svg" %}</span>
+      <p class="empty-state__hint">No history yet.</p>
+    </div>
   {% endif %}
 </div>
 {% endblock %}

@@ -72,7 +72,7 @@ class TestBrainsPage:
         client.post("/brain/create", follow_redirects=False)
         r = client.get("/brain")
         assert r.status_code == 200
-        assert "Brain status" in r.text
+        assert "READY" in r.text  # brain exists → status summary badge
 
 
 class TestBrainsCreate:
@@ -290,7 +290,7 @@ class TestBrainsDocumentsList:
 
         r = client.get("/brain")
         assert "handbook.pdf" in r.text
-        assert "processed" in r.text
+        assert "READY" in r.text  # terminal doc renders the ready badge, not raw status
 
     def test_shows_error_when_lightrag_unreachable(self, client, db, bob, fake_lightrag_client):
         _login(client, db, bob)

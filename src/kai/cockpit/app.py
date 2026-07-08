@@ -7,6 +7,7 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI
+from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from starlette.middleware.sessions import SessionMiddleware
 
@@ -80,6 +81,15 @@ def create_app() -> FastAPI:
     app = FastAPI(title="kai cockpit", lifespan=_lifespan)
 
     app.add_middleware(SessionMiddleware, secret_key=get_cockpit_secret())
+
+    # Serve self-hosted CSS, icons, and fonts. The cockpit is intentionally
+    # a no-JavaScript server-rendered app — all static assets are vendored
+    # locally (no runtime third-party CDN/fonts request).
+    app.mount(
+        "/static",
+        StaticFiles(directory=Path(__file__).parent / "static"),
+        name="static",
+    )
 
     create_all()
 

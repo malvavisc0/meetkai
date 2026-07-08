@@ -1,24 +1,34 @@
 {% extends "base.html" %}
 {% block content %}
-<div style="padding: 16px;">
-  <a href="/deployments/{{ dep.id }}">&lt; back</a>
-  <h2>{{ dep.bot_type }} chat ({{ dep_user.email }})</h2>
+<div class="page page--narrow stack">
+  <a href="/deployments/{{ dep.id }}" class="muted">&lt; back</a>
+  <h1 class="page-title">Chat — {{ dep.bot_type }}</h1>
 
   {% if reply %}
-    <div style="padding: 8px; border: 1px solid #ccc; margin-bottom: 8px;">
-      <b>bot&gt;</b> {{ reply }}
+    <div class="log-panel">
+      <div class="log-panel__line">
+        <b class="mono">kai&gt;</b>
+        <span class="log-panel__content">{{ reply }}</span>
+      </div>
     </div>
   {% endif %}
 
-  <form method="post">
-    <label>Operator message:</label><br>
-    <textarea name="message" rows="4" cols="60" required></textarea><br><br>
-    <label><input type="checkbox" name="persist" value="true"> Allow lasting changes</label><br><br>
-    <button type="submit">Send</button>
+  <form method="post" class="card stack">
+    <div class="field">
+      <label class="sr-only" for="message">Operator message</label>
+      <textarea id="message" name="message" rows="4" required data-autosize
+        placeholder="Try a message KAI might get from a real user…"></textarea>
+    </div>
+    <label class="checkbox-row">
+      <input type="checkbox" name="persist" value="true"> Allow lasting changes
+    </label>
+    <div class="cluster">
+      <button type="submit" class="button button--primary"><span class="icon">{% include "icons/send.svg" %}</span> Send</button>
+    </div>
   </form>
 
-  <form method="post" action="/deployments/{{ dep.id }}/chat/clear">
-    <button type="submit">Clear history</button>
+  <form method="post" action="/deployments/{{ dep.id }}/chat/clear" data-confirm="Clear this chat history?">
+    <button type="submit" class="button button--danger"><span class="icon">{% include "icons/trash-2.svg" %}</span> Clear history</button>
   </form>
 </div>
 {% endblock %}

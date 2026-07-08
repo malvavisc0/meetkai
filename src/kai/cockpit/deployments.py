@@ -53,13 +53,7 @@ class DeploymentStartupError(Exception):
 
 
 def _instance_id(bot_type: str, email: str) -> str:
-    """Compute the per-bot instance namespace the spawned process uses.
-
-    Matches ``kai start --user <email>``, which sets ``bot.instance`` to
-    ``{bot_type}-{email}``. The cockpit must use the SAME stem when writing
-    the bot's external config file, otherwise ``BaseBot.resolve_config_path``
-    (which probes ``<configs_dir>/<instance_id>.json``) won't find it.
-    """
+    """Compute the per-bot instance namespace the spawned process uses."""
     return f"{bot_type}-{email}"
 
 
@@ -125,8 +119,6 @@ class DeploymentsService:
             return resp.json()
         except (httpx.HTTPError, json.JSONDecodeError) as exc:
             return {"ok": False, "error": str(exc)}
-
-    # --- CRUD ---
 
     def get(self, deployment_id: int) -> Deployment | None:
         return self.db.query(Deployment).filter(Deployment.id == deployment_id).first()
@@ -252,6 +244,15 @@ class DeploymentsService:
             # pass ``language`` explicitly.
             deployment.language = deployment.settings.get("language", deployment.language)
 
+        # A settings/goal/language/voice/feature-flags edit while the bot is
+        # running leaves the live process with stale in-memory config (the
+        # config file is written to disk immediately below). Flag it so the
+        # detail page and dashboard can show a durable "restart to apply"
+        # badge that survives reloads — the prior session-flash signal was
+        # lost on reload/new tab. Cleared on the next start()/stop().
+        if deployment.status == "running":
+            deployment.needs_restart = True
+
         deployment.updated_at = now_iso()
         self.db.commit()
 
@@ -261,8 +262,6 @@ class DeploymentsService:
             logger.warning("Failed to write config for deployment %s", deployment.id, exc_info=True)
 
         return deployment
-
-    # --- Lifecycle ---
 
     def start(self, deployment: Deployment) -> None:
         """Start a deployment: check connection, write config, spawn subprocess."""
@@ -341,12 +340,6 @@ class DeploymentsService:
             "KAI_CONFIGS_DIR": "data/configs/cockpit",
         }
         if brain_conn is not None:
-            # KAI_BRAIN_BASE_URL / KAI_BRAIN_LIGHTRAG_API_KEY /
-            # KAI_BRAIN_CRAWLER_URL / KAI_BRAIN_CRAWL4AI_TOKEN are shared
-            # across all users (one lightrag + one crawl4ai container) and
-            # already present in ``os.environ`` via ``**os.environ`` above
-            # (set on the cockpit process itself, e.g. from .env). Only the
-            # per-user fields are overridden here from the Connection row.
             env["KAI_BRAIN_WORKSPACE"] = brain_conn.config.get("workspace", "default")
             env["KAI_BRAIN_INSTRUCTION"] = brain_conn.config.get("instruction", "")
             env["KAI_BRAIN_MANDATORY"] = "true" if brain_conn.config.get("mandatory") else "false"
@@ -433,6 +426,7 @@ class DeploymentsService:
         deployment.run_id = run_id
         deployment.status = "running"
         deployment.desired_state = "running"
+        deployment.needs_restart = False
         deployment.updated_at = now_iso()
         self.db.commit()
 
@@ -441,6 +435,7 @@ class DeploymentsService:
         if not deployment.run_id:
             deployment.status = "stopped"
             deployment.desired_state = "stopped"
+            deployment.needs_restart = False
             deployment.updated_at = now_iso()
             self.db.commit()
             return
@@ -472,6 +467,7 @@ class DeploymentsService:
         deployment.run_id = None
         deployment.status = "stopped"
         deployment.desired_state = "stopped"
+        deployment.needs_restart = False
         deployment.updated_at = now_iso()
         self.db.commit()
 
@@ -500,8 +496,6 @@ class DeploymentsService:
 
         self.db.delete(deployment)
         self.db.commit()
-
-    # --- Live status ---
 
     def run_started_at(self, deployment: Deployment) -> str | None:
         """The run record's ``started_at`` ISO timestamp, or None if not running."""
@@ -546,8 +540,6 @@ class DeploymentsService:
             return {"ok": False, "error": "bot is not running"}
 
         return self._call_bot(record, "POST", "/clear")
-
-    # --- History ---
 
     def history(self, deployment: Deployment) -> dict[str, list[dict]]:
         """Load the per-bot history file and return ``{chat_id: [messages]}``.

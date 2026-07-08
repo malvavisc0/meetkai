@@ -14,6 +14,7 @@ class BotType:
     settings: list[str]
     required_settings: list[str] = field(default_factory=list)
     description: str = ""
+    default_goal: str = ""
 
 
 BOT_TYPES: dict[str, BotType] = {
@@ -37,6 +38,10 @@ BOT_TYPES: dict[str, BotType] = {
             "WhatsApp bot via WAHA. Replies in chats and groups, "
             "handles voice notes, images, and video, and can proactively "
             "participate in conversations."
+        ),
+        default_goal=(
+            "Be warm, useful, and concise. Answer what you can from what you "
+            "know, ask before guessing, and only reply when you add value."
         ),
     ),
 }

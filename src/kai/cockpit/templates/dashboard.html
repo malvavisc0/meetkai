@@ -1,40 +1,99 @@
 {% extends "base.html" %}
 {% block content %}
-<div style="padding: 16px;">
-  <h2>Deployments</h2>
+<div class="page stack">
+  <header class="page-header">
+    <p class="page-eyebrow">Operator console</p>
+    <h1 class="page-title">Deployments</h1>
+    <p class="page-subtitle">See what is running, what needs attention, and create the next bot from one focused place.</p>
+  </header>
+
+  {# Health summary: status badges only, never the action accent.
+     All-neutral-or-live is the restful default — load the page, see no red, leave. #}
+  <div class="card health status-strip">
+    {% if whatsapp_connected %}
+      <span class="badge badge--live">WhatsApp connected</span>
+    {% else %}
+      <span class="badge badge--warn">WhatsApp not connected</span>
+    {% endif %}
+    {% if running > 0 %}
+      <span class="badge badge--live">{{ running }} bot{{ '' if running == 1 else 's' }} running</span>
+    {% else %}
+      <span class="badge badge--muted">0 bots running</span>
+    {% endif %}
+    {% if stopped > 0 %}
+      <span class="badge badge--muted">{{ stopped }} stopped</span>
+    {% else %}
+      <span class="badge badge--muted">0 stopped</span>
+    {% endif %}
+    {% if attention_reasons %}
+      <span class="badge badge--danger">{{ attention_reasons|length }} need{{ 's' if attention_reasons|length == 1 else '' }} attention</span>
+    {% else %}
+      <span class="badge badge--muted">0 need attention</span>
+    {% endif %}
+  </div>
+
   {% if deployments %}
-    <table border="1" cellpadding="4" cellspacing="0">
-      <tr>
-        <th>Bot type</th><th>Status</th><th>Goal</th><th>Language</th>
-      </tr>
-      {% for dep in deployments %}
-      <tr>
-        <td><a href="/deployments/{{ dep.id }}">{{ dep.bot_type }}</a></td>
-        <td>{{ dep.status }}</td>
-        <td>{{ dep.goal[:40] }}{% if dep.goal|length > 40 %}...{% endif %}</td>
-        <td>{{ dep.language }}</td>
-      </tr>
-      {% endfor %}
-    </table>
+    <div class="card">
+      <table class="table table--responsive">
+        <thead>
+          <tr>
+            <th>Bot type</th>
+            <th>Status</th>
+            <th>Updated</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for dep in deployments %}
+          <tr class="table__row--clickable" onclick="window.location='/deployments/{{ dep.id }}'">
+            <td data-label="Bot type">{{ dep.bot_type }}</td>
+            <td data-label="Status">
+              {% if attention_reasons.get(dep.id) %}
+                <span class="badge badge--danger">ATTENTION</span>
+                <span class="muted block text-sm">{{ attention_reasons[dep.id] }}</span>
+              {% elif dep.status == "running" %}
+                <span class="badge badge--live">RUN</span>
+              {% else %}
+                <span class="badge badge--muted">STOPPED</span>
+              {% endif %}
+            </td>
+            <td data-label="Updated"><span class="mono">{{ dep.updated_at[:10] if dep.updated_at else '' }}</span></td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
   {% else %}
-    <p>No deployments yet.</p>
+    <div class="card empty-state empty-state--hero">
+      <span class="icon icon--lg empty-state__icon">{% include "icons/inbox.svg" %}</span>
+      <p>No deployments yet.</p>
+      <p class="empty-state__hint">Pick a bot type below and KAI will handle the setup.</p>
+    </div>
   {% endif %}
 
   {% if available_types %}
-    <h2>New Deployment</h2>
-    <p>Choose a bot type to deploy.</p>
-    <form method="get" action="/deployments/new">
-      {% for bt in available_types %}
-        <label>
-          <input type="radio" name="bot_type" value="{{ bt.name }}" {% if loop.first %}checked{% endif %}>
-          <b>{{ bt.name }}</b>
-          {% if bt.description %}<span style="color: #555;"> — {{ bt.description }}</span>{% endif %}
-        </label><br>
-      {% endfor %}
-      <button type="submit">Create deployment</button>
-    </form>
+    <div id="new-deployment" class="card stack">
+      <h3 class="card__title">New deployment</h3>
+      <form method="get" action="/deployments/new" class="stack">
+        <div class="choice-list">
+        {% for bt in available_types %}
+          <label class="choice-card">
+            <input type="radio" name="bot_type" value="{{ bt.name }}" {% if loop.first %}checked{% endif %}>
+            <span>
+              <strong>{{ bt.name }}</strong>
+              {% if bt.description %}<span class="muted"> — {{ bt.description }}</span>{% endif %}
+            </span>
+          </label>
+        {% endfor %}
+        </div>
+        <div>
+          <button type="submit" class="button button--primary">
+            <span class="icon">{% include "icons/plus.svg" %}</span> Create deployment
+          </button>
+        </div>
+      </form>
+    </div>
   {% else %}
-    <p><i>All bot types are currently active.</i></p>
+    <p class="muted"><i>All bot types are currently active.</i></p>
   {% endif %}
 </div>
 {% endblock %}

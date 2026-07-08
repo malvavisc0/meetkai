@@ -119,13 +119,11 @@ services:
     container_name: crawl4ai
     hostname: crawl4ai
     restart: unless-stopped
-    shm_size: "1g"
+    shm_size: "2g"
     expose:
       - 11235
     environment:
       CRAWL4AI_API_TOKEN: ${KAI_BRAIN_CRAWL4AI_TOKEN}
-    volumes:
-      - ./data/crawl4ai:/data
 
   cockpit:
     build: .
@@ -133,10 +131,10 @@ services:
     # This hostname is what WAHA (on the same docker network) uses to call
     # back into each spawned bot's webhook listener — see
     # KAI_WAHA_WEBHOOK_PUBLIC_HOST below. `kai start` subprocesses spawned
-    # by the cockpit (DeploymentsService.start()) run *inside this same
-    # container*, so their webhook servers are reachable at this hostname
-    # too. Do NOT run `kai start waha` from the host — it would bind
-    # outside this docker network and WAHA could never reach its webhook.
+    # by the cockpit run *inside this same container*, so their webhook 
+    # servers are reachable at this hostname too. Do NOT run `kai start waha`
+    # from the host — it would bind outside this docker network and WAHA 
+    # could never reach its webhook.
     hostname: cockpit
     restart: unless-stopped
     # `kai` resolves to the console script installed in the image venv

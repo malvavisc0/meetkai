@@ -1,19 +1,30 @@
 <!DOCTYPE html>
-<html>
-<head><title>KAI cockpit</title></head>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>KAI cockpit</title>
+  <link rel="stylesheet" href="/static/cockpit.css">
+</head>
 <body>
-  <div style="padding: 8px; border-bottom: 1px solid #ccc;">
-    <strong>KAI cockpit</strong>
+  <nav class="topbar">
+    <span class="topbar__brand">KAI cockpit</span>
     {% if user %}
-      &nbsp; Operator: {{ user.email }} &nbsp;
-      <a href="/connections">connections</a> &nbsp;
-      <a href="/brain">brain</a> &nbsp;
-      <a href="/logout">logout</a>
+      <span class="topbar__nav">
+        <a href="/">dashboard</a>
+        <a href="/brain">brain</a>
+        <a href="/connections">connections</a>
+      </span>
+      <span class="topbar__user">
+        {{ user.email }}
+        <a href="/logout">logout</a>
+      </span>
     {% endif %}
-  </div>
+  </nav>
   {% if flash %}
-    <div style="padding: 8px; background: #ff9; border-bottom: 1px solid #cc0;">{{ flash }}</div>
+    <div class="flash">{{ flash }}</div>
   {% endif %}
   {% block content %}{% endblock %}
+  <script src="/static/cockpit.js"></script>
 </body>
 </html>

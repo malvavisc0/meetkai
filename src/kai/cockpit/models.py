@@ -4,7 +4,7 @@ SQLAlchemy 2.0 declarative (Mapped / mapped_column). No relationships in v1
 — all joins are explicit via foreign keys.
 """
 
-from sqlalchemy import JSON, ForeignKey, Integer, String, UniqueConstraint
+from sqlalchemy import JSON, Boolean, ForeignKey, Integer, String, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
 from kai.cockpit.db import Base
@@ -48,6 +48,12 @@ class Deployment(Base):
     language: Mapped[str] = mapped_column(String, nullable=False)
     feature_flags: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
     settings: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
+    # True when settings were edited while the bot was running, so the live
+    # process has stale config in memory and a restart is needed to apply
+    # the on-disk config. Set in DeploymentsService.edit() when running,
+    # cleared in start()/stop(). Persists across reloads/sessions (unlike
+    # the prior session-flash signal, which was lost on reload).
+    needs_restart: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     created_at: Mapped[str] = mapped_column(String, nullable=False)
     updated_at: Mapped[str] = mapped_column(String, nullable=False)
 
