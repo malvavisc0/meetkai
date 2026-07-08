@@ -1,10 +1,11 @@
-"""Dashboard route: / (list deployments + bot picker)."""
+"""Dashboard route: /dashboard (list deployments + bot picker) + / placeholder."""
 
 from fastapi import APIRouter, Depends, Request
+from fastapi.responses import RedirectResponse
 from sqlalchemy.orm import Session
 
 from kai.cockpit.app import templates
-from kai.cockpit.auth import require_user
+from kai.cockpit.auth import get_current_user, require_user
 from kai.cockpit.bots import BOT_TYPES
 from kai.cockpit.brains import BrainsService
 from kai.cockpit.connections import ConnectionsService
@@ -42,7 +43,7 @@ def _attention_reason(
     return None
 
 
-@router.get("/")
+@router.get("/dashboard")
 async def dashboard(
     request: Request,
     user: User = Depends(require_user),
@@ -83,3 +84,18 @@ async def dashboard(
             "flash": flash,
         },
     )
+
+
+@router.get("/")
+async def index(
+    request: Request,
+    user: User | None = Depends(get_current_user),
+):
+    """Placeholder landing page.
+
+    Authenticated users are redirected to /dashboard; anonymous users see a
+    simple landing page with a link to log in.
+    """
+    if user:
+        return RedirectResponse("/dashboard", status_code=302)
+    return templates.TemplateResponse(request, "index.html", {"user": None})

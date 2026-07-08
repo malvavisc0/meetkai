@@ -24,7 +24,7 @@ router = APIRouter()
 
 ALL_VOICES = sorted(set(LANGUAGE_VOICE_MAP.values()))
 
-_HOME_REDIRECT = RedirectResponse("/", status_code=302)
+_HOME_REDIRECT = RedirectResponse("/dashboard", status_code=302)
 
 
 def _get_deployment(
@@ -84,7 +84,7 @@ async def deploy_new_get(
 ):
     bt = BOT_TYPES.get(bot_type)
     if bt is None:
-        return RedirectResponse("/", status_code=302)
+        return RedirectResponse("/dashboard", status_code=302)
 
     dep_svc = DeploymentsService(db)
     existing = dep_svc.get_for_user_and_type(user.id, bot_type)
@@ -417,7 +417,7 @@ async def deployment_delete(
     svc, dep = result
     svc.delete(dep)
     request.session["flash"] = "Deployment deleted."
-    return RedirectResponse("/", status_code=302)
+    return RedirectResponse("/dashboard", status_code=302)
 
 
 # --- Settings ---

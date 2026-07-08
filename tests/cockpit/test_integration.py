@@ -44,7 +44,7 @@ def _login(client, db, bob):
     tokens.create_login_request(db, bob.id)
     provider = MagicLinkProvider(db)
     token = provider.initiate_login(bob.id)
-    resp = client.get(f"/auth/magic?token={token.token}", follow_redirects=False)
+    resp = client.get(f"/login/auth?token={token.token}", follow_redirects=False)
     assert resp.status_code == 302
     return client
 
@@ -62,9 +62,9 @@ class TestFullDeploymentFlow:
         MEDIA_READY.clear()
 
     def test_end_to_end(self, client, db, bob, fake_waha_client, monkeypatch, tmp_path):
-        # 5. GET / -> dashboard (no deployments)
+        # 5. GET /dashboard -> dashboard (no deployments)
         _login(client, db, bob)
-        r = client.get("/")
+        r = client.get("/dashboard")
         assert r.status_code == 200
         assert "waha" in r.text.lower() or "deployment" in r.text.lower()
 
@@ -201,7 +201,7 @@ class TestFullDeploymentFlow:
             follow_redirects=False,
         )
         assert r.status_code == 302
-        assert r.headers["location"] == "/"
+        assert r.headers["location"] == "/dashboard"
         assert dep_svc.get(dep.id) is None
 
 

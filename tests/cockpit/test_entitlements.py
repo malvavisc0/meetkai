@@ -55,7 +55,7 @@ def _login(client, db, bob):
     tokens.create_login_request(db, bob.id)
     provider = MagicLinkProvider(db)
     token = provider.initiate_login(bob.id)
-    resp = client.get(f"/auth/magic?token={token.token}", follow_redirects=False)
+    resp = client.get(f"/login/auth?token={token.token}", follow_redirects=False)
     assert resp.status_code == 302
     return client
 

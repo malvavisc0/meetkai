@@ -1,4 +1,3 @@
-import os
 from datetime import UTC, datetime
 
 import typer
@@ -34,21 +33,6 @@ cockpit_request_app = typer.Typer(
     help="List, create, and approve magic-link login requests (admin only).",
 )
 cockpit_app.add_typer(cockpit_request_app, name="request")
-
-
-def _magic_link_url(token: str) -> str:
-    """Build the magic-link URL for a minted token.
-
-    Prefers KAI_COCKPIT_PUBLIC_URL (a full base like
-    ``https://kai.example.com``) so Docker/proxied deployments emit links
-    that actually reach the cockpit. Falls back to KAI_COCKPIT_HOST:PORT.
-    """
-    public_url = os.environ.get("KAI_COCKPIT_PUBLIC_URL", "").rstrip("/")
-    if public_url:
-        return f"{public_url}/auth/magic?token={token}"
-    host = os.environ.get("KAI_COCKPIT_HOST", "127.0.0.1")
-    port = os.environ.get("KAI_COCKPIT_PORT", "8080")
-    return f"http://{host}:{port}/auth/magic?token={token}"
 
 
 @cockpit_app.command("serve")
@@ -294,6 +278,7 @@ def cockpit_request_approve(
 ):
     """Approve a pending login request and mint a magic link token."""
     from kai.cockpit.auth_backends import MagicLinkProvider
+    from kai.cockpit.cli_helpers import build_magic_link_url
     from kai.cockpit.db import SessionLocal, create_all
     from kai.cockpit.mailer import send_magic_link
     from kai.cockpit.models import User
@@ -316,7 +301,7 @@ def cockpit_request_approve(
             err_line(str(exc))
             raise typer.Exit(1) from exc
 
-        magic_url = _magic_link_url(token.token)
+        magic_url = build_magic_link_url(token.token)
         send_magic_link(email, magic_url)
         console.print(f"{GL_OK} [{OK}]token minted[/{OK}]  {email}")
     finally:
