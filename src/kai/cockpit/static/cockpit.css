@@ -19,44 +19,55 @@
   }
 
   @font-face {
-    font-family: "Archivo Black";
-    src: url("/static/fonts/archivoblack.woff2") format("woff2");
+    font-family: "IBM Plex Mono";
+    src: url("/static/fonts/ibmplexmono-400.woff2") format("woff2");
     font-weight: 400;
     font-style: normal;
     font-display: swap;
   }
 
+  @font-face {
+    font-family: "IBM Plex Mono";
+    src: url("/static/fonts/ibmplexmono-600.woff2") format("woff2");
+    font-weight: 600;
+    font-style: normal;
+    font-display: swap;
+  }
+
   :root {
-    /* Color */
-    --color-ink: #1e1e2e;
-    --color-muted: #6f6a78;
-    --color-border: #d8c79d;
-    --color-border-strong: #1e1e2e;
-    --color-page: #faf8f2;
-    --color-surface: #fffaf0;
-    --color-surface-alt: #efe2c2;
+    /* Color — "Paper Terminal": crisp Plex Mono on clean paper, with the */
+    /* dark topbar/log panel kept as KAI's terminal signature. */
+    --color-ink: #111827;
+    --color-muted: #6b7280;
+    --color-tertiary: #059669;
+    --color-border: #e3e5e8;
+    --color-border-strong: #111827;
+    --color-page: #f9fafb;
+    --color-surface: #ffffff;
+    --color-surface-alt: #f3f4f6;
     --color-panel: #0b0d10;
     --color-panel-text: #f4ead2;
-    --color-action: #f4c430;
-    --color-action-text: #1e1e2e;
-    --color-status-live: #357a38;
-    --color-status-live-bg: #e5f2dc;
-    --color-warn: #8a6410;
-    --color-warn-bg: #f4c43033;
-    --color-danger: #e82127;
-    --color-danger-bg: #fde8e9;
+    --color-action: var(--color-tertiary);
+    --color-action-text: #ffffff;
+    --color-status-live: #059669;
+    --color-status-live-bg: #ecfdf5;
+    --color-warn: #b45309;
+    --color-warn-bg: #fef3c7;
+    --color-danger: #dc2626;
+    --color-danger-bg: #fee2e2;
     /* Table row divider on white — border alone is ~1.3:1, invisible. */
-    --color-divider: color-mix(in srgb, var(--color-border-strong) 25%, transparent);
+    --color-divider: color-mix(in srgb, var(--color-border-strong) 15%, transparent);
 
-    /* Type */
-    --font-ui: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-    --font-display: "Archivo Black", Inter, system-ui, sans-serif;
+    /* Type — IBM Plex Mono everywhere for UI text; VT323 survives only as */
+    /* a nostalgic terminal accent in the log panel and status badges. */
+    --font-ui: "IBM Plex Mono", "SFMono-Regular", Menlo, Consolas, monospace;
+    --font-display: "IBM Plex Mono", "SFMono-Regular", Menlo, Consolas, monospace;
     --font-mono: "VT323", "SFMono-Regular", Consolas, monospace;
     --text-xs: 0.75rem;
     --text-sm: 0.875rem;
-    --text-md: 1rem;
+    --text-md: 0.95rem;
     --text-lg: 1.25rem;
-    --text-xl: clamp(1.75rem, 4vw, 3rem);
+    --text-xl: clamp(1.75rem, 4vw, 3.5rem);
 
     /* Spacing */
     --space-3xs: 2px;
@@ -70,10 +81,17 @@
     --space-3xl: 64px;
 
     /* Radius */
-    --radius-input: 4px;
+    --radius-sm: 3px;
+    --radius-md: 5px;
+    --radius-lg: 8px;
+    --radius-input: var(--radius-sm);
+
+    /* Shadow */
+    --shadow-card: 0 4px 6px -1px rgba(17, 24, 39, 0.06), 0 1px 2px -1px rgba(17, 24, 39, 0.04);
 
     /* Transition */
     --transition-fast: 120ms ease;
+    --transition-lift: 160ms ease;
   }
 }
 
@@ -180,16 +198,18 @@
     align-items: center;
     gap: var(--space-lg);
     background: var(--color-panel);
-    color: var(--color-panel-text);
+    color: #e5e7eb;
     padding: var(--space-sm) var(--space-lg);
-    border-bottom: 1px solid var(--color-border-strong);
+    border-bottom: 3px solid var(--color-tertiary);
   }
 
   .topbar__brand {
     font-family: var(--font-display);
+    font-weight: 600;
     text-transform: uppercase;
     letter-spacing: 0.1em;
     font-size: var(--text-sm);
+    color: var(--color-tertiary);
   }
 
   .topbar__nav {
@@ -200,7 +220,8 @@
 
   .topbar__nav a {
     font-family: var(--font-display);
-    color: var(--color-panel-text);
+    font-weight: 600;
+    color: #e5e7eb;
     text-decoration: none;
     font-size: var(--text-sm);
   }
@@ -212,13 +233,14 @@
 
   .topbar__user {
     margin-left: auto;
-    color: var(--color-muted);
+    color: #9ca3af;
     font-size: var(--text-sm);
   }
 
   .topbar__user a {
     font-family: var(--font-display);
-    color: var(--color-panel-text);
+    font-weight: 600;
+    color: #e5e7eb;
     text-decoration: none;
     margin-left: var(--space-sm);
   }
@@ -257,9 +279,9 @@
 
   .page-title {
     font-family: var(--font-display);
-    font-weight: 700;
+    font-weight: 600;
     font-size: 1.75rem;
-    letter-spacing: -0.03em;
+    letter-spacing: -0.02em;
     margin: 0;
   }
 
@@ -272,6 +294,7 @@
   .page-eyebrow {
     margin: 0;
     font-family: var(--font-display);
+    font-weight: 600;
     color: var(--color-muted);
     font-size: var(--text-xs);
     letter-spacing: 0.12em;
@@ -309,6 +332,7 @@
     .table--responsive tr {
       display: block;
       border: 1px solid var(--color-border);
+      border-radius: var(--radius-md);
       margin-bottom: var(--space-sm);
       padding: var(--space-sm);
     }
@@ -338,10 +362,11 @@
 /* Components                                                         */
 /* ------------------------------------------------------------------ */
 @layer components {
-  /* --- Cards (Pixel frame + Tesla spacing) --- */
+  /* --- Cards (paper surface, soft shadow, rounded) --- */
   .card {
     background: var(--color-surface);
-    border: 1px solid var(--color-border);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-card);
     padding: var(--space-lg);
   }
 
@@ -354,13 +379,22 @@
   }
 
   .card--danger {
-    border-color: var(--color-danger);
+    box-shadow: none;
+    border: 1px solid var(--color-danger);
   }
 
   .card--clickable {
     cursor: pointer;
     padding: var(--space-sm) var(--space-md);
     display: block;
+    transition: var(--transition-lift);
+    transition-property: box-shadow, transform;
+  }
+
+  .card--clickable:hover,
+  .card--clickable:focus-visible {
+    box-shadow: 0 8px 12px -3px rgba(17, 24, 39, 0.1), 0 2px 4px -2px rgba(17, 24, 39, 0.06);
+    transform: translateY(-1px);
   }
 
   .card--center {
@@ -369,7 +403,7 @@
 
   .card__title {
     font-family: var(--font-display);
-    font-weight: 700;
+    font-weight: 600;
     letter-spacing: -0.02em;
     margin: 0 0 var(--space-sm);
   }
@@ -377,6 +411,7 @@
   .card__eyebrow {
     margin: 0 0 var(--space-2xs);
     font-family: var(--font-display);
+    font-weight: 600;
     color: var(--color-muted);
     font-size: var(--text-xs);
     letter-spacing: 0.12em;
@@ -386,7 +421,7 @@
   .status-card,
   .status-strip,
   .teach-card {
-    border-top: 3px solid var(--color-border-strong);
+    border-left: 3px solid var(--color-tertiary);
   }
 
   /* --- Definition grid (status rows) --- */
@@ -397,7 +432,7 @@
   }
 
   .def-grid dt {
-    font-weight: 700;
+    font-weight: 600;
     color: var(--color-ink);
   }
 
@@ -405,15 +440,18 @@
     margin: 0;
   }
 
-  /* --- Tables (Pixel-framed surface blocks) --- */
+  /* --- Tables (paper surface blocks) --- */
   .table {
     background: var(--color-surface);
     border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    overflow: hidden;
   }
 
   .table th {
     border-bottom: 1px solid var(--color-divider);
     font-family: var(--font-display);
+    font-weight: 600;
     font-size: var(--text-sm);
     letter-spacing: 0.04em;
   }
@@ -431,14 +469,16 @@
     cursor: pointer;
   }
 
-  /* --- Buttons (Tesla hierarchy, single calm accent) --- */
+  /* --- Buttons (single calm accent, rounded) --- */
   .button {
     display: inline-flex;
     align-items: center;
     gap: var(--space-2xs);
     border: 1px solid var(--color-border-strong);
-    padding: 0.65rem 1rem;
+    border-radius: var(--radius-md);
+    padding: 0.75rem 1.25rem;
     font-family: var(--font-display);
+    font-weight: 600;
     font-size: var(--text-sm);
     letter-spacing: -0.01em;
     background: var(--color-surface);
@@ -467,17 +507,17 @@
   }
 
   .button--primary {
-    background: var(--color-action);
+    background: var(--color-tertiary);
     color: var(--color-action-text);
-    border-color: var(--color-action);
+    border-color: var(--color-tertiary);
   }
 
   .button--primary:hover {
-    background: color-mix(in srgb, var(--color-action) 88%, var(--color-surface));
+    background: color-mix(in srgb, var(--color-tertiary) 88%, var(--color-surface));
   }
 
   .button--primary:active {
-    background: color-mix(in srgb, var(--color-action) 84%, var(--color-ink));
+    background: color-mix(in srgb, var(--color-tertiary) 84%, var(--color-ink));
   }
 
   .button--danger {
@@ -496,14 +536,15 @@
   }
 
   /* --- Badges (status only — never clickable, never on buttons) --- */
+  /* Kept on VT323 as a small nostalgic terminal accent. */
   .badge {
     display: inline-flex;
     align-items: center;
     gap: 0.3em;
-    padding: 0.15rem 0.5rem;
+    padding: 0.15rem 0.6rem;
     border-radius: 999px;
     font-family: var(--font-mono);
-    font-size: var(--text-xs);
+    font-size: 1rem;
     text-transform: uppercase;
     letter-spacing: 0.08em;
     font-weight: 600;
@@ -561,11 +602,13 @@
     height: 20px;
   }
 
-  /* --- Log panel (the one dark surface — Skate) --- */
+  /* --- Log panel (the one dark surface, VT323 keeps its terminal feel) --- */
   .log-panel {
     background: var(--color-panel);
     color: var(--color-panel-text);
-    border: 1px solid var(--color-border-strong);
+    font-family: var(--font-mono);
+    font-size: 1.05rem;
+    border-radius: var(--radius-md);
     padding: var(--space-md);
     overflow: auto;
     max-height: 400px;
@@ -651,6 +694,7 @@
   .checkbox-row,
   .choice-card strong {
     font-family: var(--font-display);
+    font-weight: 600;
     letter-spacing: -0.01em;
   }
 
@@ -712,13 +756,14 @@
     margin: 0;
     padding: var(--space-md);
     border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
     background: var(--color-surface);
     cursor: pointer;
   }
 
   .choice-card:hover,
   .choice-card:focus-within {
-    border-color: var(--color-border-strong);
+    border-color: var(--color-tertiary);
     background: var(--color-surface-alt);
   }
 
@@ -754,10 +799,13 @@
 
   .display {
     font-family: var(--font-display);
+    font-weight: 600;
   }
 
   .display-title {
     font-family: var(--font-display);
+    font-weight: 600;
+    letter-spacing: -0.02em;
     font-size: var(--text-xl);
     margin: 0;
   }
