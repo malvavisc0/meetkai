@@ -64,10 +64,11 @@
           <dt>Capabilities</dt>
           <dd>
             {% for k, v in status.capabilities.items() %}
+              {% set label = k|replace("_", " ") %}
               {% if v %}
-                <span class="badge badge--live">{{ k }}</span>
+                <span class="badge badge--live">{{ label }}</span>
               {% else %}
-                <span class="badge badge--muted">{{ k }}</span>
+                <span class="badge badge--muted">{{ label }}</span>
               {% endif %}
             {% endfor %}
           </dd>

@@ -205,6 +205,15 @@ def _repair_json(text: str) -> str | None:
     return candidate
 
 
+# Control (non-delivery) actions that base-class recovery must never rewrite
+# into a deliverable turn. Recovering ``silent`` on a no-silent turn, for
+# example, would ghost the user and bypass the bot's error-retry safety net.
+# These names mirror the canonical waha vocabulary cited in ``ActionResult``'s
+# docstring; a bot whose dispatch can degrade them safely is unaffected because
+# recovery is opt-in (only fires for actions disallowed by this turn's schema).
+_CONTROL_ACTIONS: frozenset[str] = frozenset({"silent", "sleep", "console"})
+
+
 def _action_values(output_cls: type[ActionResult]) -> frozenset[str]:
     """Extract the allowed ``action`` enum values from a bot's ``output_cls``.
 
@@ -1000,6 +1009,14 @@ class KaiAgent:
         2. ``key: value`` line parser — for models that emit
            ``action: send_to_group\\ntext: hello`` instead of JSON.
         3. JSON repair — patches missing quotes/braces on partial JSON.
+        4. Base-class recovery — if the payload is well-formed but the bot's
+           constrained ``action`` Literal rejects the value the model chose
+           (e.g. the user insisted on a voice note while TTS is offline, so
+           ``send_voice_note`` is not in this turn's schema), validate against
+           the unconstrained ``ActionResult`` base and let the bot's dispatch
+           degrade gracefully. The waha bot's ``send_voice_note`` path already
+           falls back to a text delivery when voice synthesis is unavailable,
+           so this turns a hard crash into a delivered message.
         """
         # 1. Standard JSON extraction
         try:
@@ -1025,6 +1042,49 @@ class KaiAgent:
                 return output_cls.model_validate_json(repaired)
             except Exception:
                 pass
+
+        # 4. Base-class recovery for a well-formed payload whose ``action``
+        #    value is outside this turn's constrained vocabulary. Scoped to
+        #    *delivery* actions — ones carrying a message the bot can still
+        #    deliver (possibly via a fallback, e.g. waha's send_voice_note
+        #    falls back to text when TTS is offline). Control actions
+        #    (silent / sleep / console) are deliberately excluded: recovering
+        #    ``silent`` on a no-silent turn would ghost the user and bypass
+        #    the bot's error-retry safety net, which is worse than the
+        #    original crash. A payload that fails for any other reason
+        #    (missing/ill-typed fields, or an allowed action that still
+        #    fails validation) continues to raise so genuinely malformed
+        #    output is not silently accepted.
+        control_actions = frozenset({"silent", "sleep", "console"})
+        allowed = _action_values(output_cls)
+        payload: dict[str, Any] | None = None
+        if repaired:
+            try:
+                payload = json.loads(repaired)
+            except Exception:
+                payload = None
+        if payload is None and kv:
+            payload = kv
+        if (
+            isinstance(payload, dict)
+            and "action" in payload
+            and allowed
+            and str(payload["action"]) not in allowed
+        ):
+            try:
+                base = ActionResult.model_validate(payload)
+            except Exception:
+                base = None
+            if base is not None and base.action not in control_actions and bool(base.text):
+                logger.warning(
+                    "Structured output: action %r is not in the %s "
+                    "vocabulary for this turn; recovering via base "
+                    "ActionResult so dispatch can degrade gracefully "
+                    "(e.g. voice->text fallback).",
+                    base.action,
+                    output_cls.__name__,
+                )
+                return base
 
         raise ValueError(f"Could not parse structured output from: {text[:200]!r}")
 

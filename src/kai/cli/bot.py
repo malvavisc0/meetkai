@@ -209,8 +209,8 @@ def _render_status(data: dict, *, uptime: int | None = None) -> None:
     if caps:
         flags = []
         flag_map = [
-            ("voice_to_text", "voice-to-text"),
-            ("text_to_voice", "text-to-voice"),
+            ("voice_to_text", "voice to text"),
+            ("text_to_voice", "text to voice"),
             ("vision", "vision"),
             ("instagram", "instagram"),
         ]

@@ -26,6 +26,20 @@ class _TestAction(ActionResult):
     text: str | None = None
 
 
+# Mirrors waha's WahaNoVoiceAction: a vocabulary that deliberately excludes
+# ``send_voice_note`` (the TTS-offline case). Used to exercise the parser's
+# base-class recovery when the model emits a disallowed-but-deliverable action.
+_NO_VOICE_ACTIONS = Literal["reply", "silent", "sleep", "send_dm", "send_to_group"]
+
+
+class _TestNoVoiceAction(ActionResult):
+    """Action vocabulary excluding send_voice_note (TTS-offline analogue)."""
+
+    action: _NO_VOICE_ACTIONS  # type: ignore[assignment]
+    text: str | None = None
+    target: str | None = None
+
+
 def _mock_llm(reply_content: str | None = "ok", *, action: _TEST_ACTIONS = "reply"):
     """Create a mock LLM that returns a simple text reply (no tool calls).
 
@@ -1318,6 +1332,124 @@ class TestStructuredPredictionContract:
         assert result.error is None
         assert result.action.action == "reply"
         assert result.action.text == "hi"
+
+    @respx.mock
+    @pytest.mark.asyncio
+    async def test_disallowed_action_recovers_via_fallback(self, settings):
+        # Regression for the waha TTS-offline crash: the operator asked for a
+        # voice note, but ``send_voice_note`` is not in this turn's schema
+        # (TTS offline). The model obeyed the user and emitted it anyway. The
+        # parser must not crash with a generic "Agent chat error" — it should
+        # recover via the base ActionResult so the bot's dispatch can degrade
+        # (waha's send_voice_note path falls back to text delivery).
+        agent = KaiAgent(settings=settings, goal_manager=GoalManager())
+        agent._llm = self._real_llm()
+
+        fenced = (
+            "```json\n"
+            '{"action": "send_voice_note", "text": "wow esto es muy '
+            'interesante", "target": "120360000000000000@g.us"}\n```'
+        )
+        respx.post(url__regex=r".*").mock(
+            side_effect=[
+                Response(200, json=self._chat_completion(None)),
+                Response(200, json=self._chat_completion(fenced)),
+                # Retry after the correction prompt also emits send_voice_note
+                # (clean JSON this time) — the user insisted, so the model
+                # keeps the disallowed action. Recovery must still kick in.
+                Response(
+                    200,
+                    json=self._chat_completion(
+                        json.dumps(
+                            {
+                                "action": "send_voice_note",
+                                "text": "wow esto es muy interesante",
+                                "target": "120360000000000000@g.us",
+                            }
+                        )
+                    ),
+                ),
+            ]
+        )
+
+        result = await agent.chat(
+            "send a voice note to 120360000000000000@g.us saying wow this is "
+            "very interesting but in spanish",
+            output_cls=_TestNoVoiceAction,
+            tools=[],
+        )
+
+        # No crash: the turn resolves to the recovered action, preserving the
+        # text and target the model produced so dispatch can deliver them.
+        assert result.error is None
+        assert result.action.action == "send_voice_note"
+        assert result.action.text == "wow esto es muy interesante"
+        assert result.action.target == "120360000000000000@g.us"
+
+    def test_parse_structured_text_recovers_disallowed_action(self):
+        # Direct unit test of the parser recovery path: a clean JSON payload
+        # whose ``action`` is outside the constrained vocabulary validates
+        # against the base ActionResult and is returned unchanged.
+        from llama_index.core.output_parsers.pydantic import PydanticOutputParser
+
+        parser = PydanticOutputParser(output_cls=_TestNoVoiceAction)
+        payload = json.dumps(
+            {
+                "action": "send_voice_note",
+                "text": "hola",
+                "target": "g@g.us",
+            }
+        )
+
+        action = KaiAgent._parse_structured_text(payload, _TestNoVoiceAction, parser)
+
+        assert action.action == "send_voice_note"
+        assert action.text == "hola"
+        assert action.target == "g@g.us"
+
+    def test_parse_structured_text_still_raises_on_malformed(self):
+        # Recovery is scoped to a well-formed payload with a disallowed
+        # ``action`` value. Genuinely malformed output (no action field, or
+        # an action that IS allowed but other fields are broken) must still
+        # raise so silent corruption never reaches dispatch.
+        from llama_index.core.output_parsers.pydantic import PydanticOutputParser
+
+        parser = PydanticOutputParser(output_cls=_TestNoVoiceAction)
+        # No JSON object at all.
+        with pytest.raises(ValueError):
+            KaiAgent._parse_structured_text("just some prose", _TestNoVoiceAction, parser)
+        # JSON object missing the action key.
+        with pytest.raises(ValueError):
+            KaiAgent._parse_structured_text(json.dumps({"text": "hi"}), _TestNoVoiceAction, parser)
+
+    def test_parse_structured_text_does_not_recover_control_action(self):
+        # A no-silent turn excludes ``silent`` from its vocabulary. If the
+        # model emits ``silent`` anyway, recovery must NOT kick in: returning
+        # silent would ghost the user on a turn designed to forbid silence
+        # and bypass the bot's error-retry safety net. The parse must raise
+        # so the bot's error path (retry-nudge on direct address) runs.
+        from typing import Literal as _Literal
+
+        from llama_index.core.output_parsers.pydantic import PydanticOutputParser
+
+        class _TestNoSilentAction(ActionResult):
+            action: _Literal["reply", "sleep", "send_dm", "send_to_group"]  # type: ignore[assignment]
+            text: str | None = None
+
+        parser = PydanticOutputParser(output_cls=_TestNoSilentAction)
+        # silent with no text (the normal case) -> raises.
+        with pytest.raises(ValueError):
+            KaiAgent._parse_structured_text(
+                json.dumps({"action": "silent"}), _TestNoSilentAction, parser
+            )
+        # silent WITH text (contradictory) -> still raises; the control-action
+        # guard must dominate the "has text" heuristic.
+        with pytest.raises(ValueError):
+            KaiAgent._parse_structured_text(
+                json.dumps({"action": "silent", "text": "ghost me"}),
+                _TestNoSilentAction,
+                parser,
+            )
 
 
 class TestVideoBlockShim:
