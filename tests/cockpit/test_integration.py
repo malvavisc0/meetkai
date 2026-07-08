@@ -168,7 +168,7 @@ class TestFullDeploymentFlow:
             f"/deployments/{dep.id}/chat", data={"message": "hello"}, follow_redirects=False
         )
         assert r.status_code == 302
-        r2 = client.get(f"/deployments/{dep.id}/chat")
+        r2 = client.get(f"/deployments/{dep.id}")
         assert "sure thing" in r2.text
 
         # 13. POST /deployments/{id}/settings -> save settings

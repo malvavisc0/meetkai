@@ -104,7 +104,7 @@ class TestEntitlementGate:
     ):
         """The settings form must not show flags the user can't enable."""
         _login(client, db, bob)
-        r = client.get(f"/deployments/{dep.id}")
+        r = client.get(f"/deployments/{dep.id}/settings")
         assert r.status_code == 200
         # bob is entitled to image only (among the waha flags).
         body = r.text
