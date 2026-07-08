@@ -420,7 +420,8 @@
 
   .status-card,
   .status-strip,
-  .teach-card {
+  .teach-card,
+  .source-card {
     border-left: 3px solid var(--color-tertiary);
   }
 
@@ -730,16 +731,90 @@
     }
   }
 
-  /* --- Teach cards (Brain) grid --- */
-  .teach-grid {
+  /* --- Brain teach workspace --- */
+  .brain-ingest {
     display: grid;
-    grid-template-columns: 1fr 1fr;
     gap: var(--space-md);
+    align-items: start;
   }
 
   .teach-card {
     display: grid;
     align-content: start;
+  }
+
+  .teach-card--primary {
+    padding: var(--space-lg);
+  }
+
+  .teach-card--primary textarea {
+    min-height: 150px;
+  }
+
+  .source-card {
+    padding: 0;
+    overflow: hidden;
+  }
+
+  .source-card__header {
+    padding: var(--space-lg) var(--space-lg) var(--space-md);
+  }
+
+  .source-list {
+    display: grid;
+    border-top: 1px solid var(--color-border);
+  }
+
+  .source-item {
+    display: grid;
+    gap: var(--space-sm);
+    padding: var(--space-md) var(--space-lg);
+    border-bottom: 1px solid var(--color-border);
+  }
+
+  .source-item:last-child {
+    border-bottom: none;
+  }
+
+  .source-item__copy {
+    display: grid;
+    gap: var(--space-3xs);
+  }
+
+  .source-item__copy strong {
+    font-family: var(--font-display);
+    font-weight: 600;
+    letter-spacing: -0.01em;
+  }
+
+  .source-item__copy span {
+    color: var(--color-muted);
+    font-size: var(--text-sm);
+  }
+
+  .source-item__controls {
+    display: grid;
+    gap: var(--space-sm);
+    align-items: start;
+  }
+
+  .source-item:not(.source-item--text) .source-item__controls {
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+  }
+
+  .source-item__controls input[type="text"],
+  .source-item__controls input[type="url"],
+  .source-item__controls textarea {
+    width: 100%;
+  }
+
+  .source-item__controls .button {
+    justify-self: start;
+  }
+
+  .source-item--text textarea {
+    min-height: 112px;
   }
 
   /* --- Selectable choices --- */
@@ -779,7 +854,13 @@
   }
 
   @media (max-width: 640px) {
-    .teach-grid {
+    .teach-card--primary,
+    .source-card__header,
+    .source-item {
+      padding-inline: var(--space-md);
+    }
+
+    .source-item:not(.source-item--text) .source-item__controls {
       grid-template-columns: 1fr;
     }
   }

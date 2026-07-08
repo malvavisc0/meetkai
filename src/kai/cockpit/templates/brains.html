@@ -2,9 +2,9 @@
 {% block content %}
 <div class="page stack">
   <header class="page-header">
-    <p class="page-eyebrow">Shared memory</p>
+    <p class="page-eyebrow">Enhanced memory</p>
     <h1 class="page-title">Brain</h1>
-    <p class="page-subtitle">Teach KAI facts, documents, websites, and notes that bots can use.</p>
+    <p class="page-subtitle">Knowledge Base bots search before answering questions.</p>
   </header>
 
   {% if not brain %}
@@ -35,71 +35,6 @@
       {% endif %}
     </div>
 
-    {# --- Teach cards --- #}
-    <div class="teach-grid">
-      {# Instruction #}
-      <div class="card teach-card">
-        <p class="card__eyebrow">Instruction</p>
-        <h3 class="card__title">Tell KAI something</h3>
-        <form method="post" action="/brain/instruction" class="stack">
-          <div class="field">
-            <label class="sr-only" for="instruction">Tell KAI something</label>
-            <textarea id="instruction" name="instruction" rows="4" data-autosize
-              placeholder="One topic per line, e.g.:&#10;product pricing&#10;setup steps&#10;refund policy">{{ brain.config.get('instruction', '') }}</textarea>
-          </div>
-          <label class="checkbox-row">
-            <input type="checkbox" name="mandatory" value="true"
-              {% if brain.config.get('mandatory') %}checked{% endif %}>
-            Always use the Brain for these topics
-          </label>
-          <div><button type="submit" class="button">Add instruction</button></div>
-        </form>
-      </div>
-      {# Upload #}
-      <div class="card teach-card">
-        <p class="card__eyebrow">File</p>
-        <h3 class="card__title">Upload a document</h3>
-        <p class="field__help">and KAI will remember it.</p>
-        <form method="post" action="/brain/upload" enctype="multipart/form-data" class="stack">
-          <div class="field">
-            <label class="sr-only" for="file">Document to upload</label>
-            <input id="file" type="file" name="file" required>
-          </div>
-          <div><button type="submit" class="button">Upload</button></div>
-        </form>
-        <p class="field__help">Supports txt, md, docx, text-based pdf, and more. 100MB max.</p>
-      </div>
-      {# Website #}
-      <div class="card teach-card">
-        <p class="card__eyebrow">Website</p>
-        <h3 class="card__title">Add a website</h3>
-        <form method="post" action="/brain/ingest-url" class="stack">
-          <div class="field">
-            <label class="sr-only" for="url">Website URL</label>
-            <input id="url" type="url" name="url" placeholder="https://example.com/docs" required>
-            <p class="field__help">KAI will read it and remember.</p>
-          </div>
-          <div><button type="submit" class="button">Add website</button></div>
-        </form>
-      </div>
-      {# Text #}
-      <div class="card teach-card">
-        <p class="card__eyebrow">Text</p>
-        <h3 class="card__title">Paste text</h3>
-        <form method="post" action="/brain/ingest-text" class="stack">
-          <div class="field">
-            <label class="sr-only" for="text_name">Name</label>
-            <input id="text_name" type="text" name="name" placeholder="Name (e.g. Onboarding notes)" required>
-          </div>
-          <div class="field">
-            <label class="sr-only" for="text">Text</label>
-            <textarea id="text" name="text" rows="4" data-autosize placeholder="Paste notes or reference text..." required></textarea>
-          </div>
-          <div><button type="submit" class="button">Add text</button></div>
-        </form>
-      </div>
-    </div>
-
     {# --- Documents table --- #}
     <div class="card">
       <h3 class="card__title">Documents</h3>
@@ -108,7 +43,7 @@
       {% elif not docs %}
         <div class="empty-state">
           <span class="icon icon--lg empty-state__icon">{% include "icons/file-text.svg" %}</span>
-          <p class="empty-state__hint">No documents yet — add one and KAI will start using it in conversations automatically.</p>
+          <p class="empty-state__hint">No knowledge sources yet — add documents, websites, or notes below so bots can ground answers in your material.</p>
         </div>
       {% else %}
         <table class="table table--responsive">
@@ -147,7 +82,75 @@
       {% endif %}
     </div>
 
-    <p class="muted"><i>Bots use the Brain during chat once a deployment is running. This page is for adding and managing bot memory.</i></p>
+    {# --- Teach workspace --- #}
+    <div class="brain-ingest">
+      <div class="card teach-card teach-card--primary">
+        <p class="card__eyebrow">Usage rules</p>
+        <h3 class="card__title">Tell bots when to use the Brain</h3>
+        <p class="field__help">These are rules not facts. They tell running bots when to search the Brain before answering. Add one trigger or rule per line.</p>
+        <form method="post" action="/brain/instruction" class="stack">
+          <div class="field">
+            <label class="sr-only" for="instruction">Brain usage rules</label>
+            <textarea id="instruction" name="instruction" rows="4" data-autosize
+              placeholder="Examples:&#10;When someone asks about Product X&#10;Questions about pricing, setup, refunds, guarantees, or policies&#10;If the answer depends on uploaded documents or current company information">{{ brain.config.get('instruction', '') }}</textarea>
+          </div>
+          <label class="checkbox-row">
+            <input type="checkbox" name="mandatory" value="true"
+              {% if brain.config.get('mandatory') %}checked{% endif %}>
+            Require Brain lookup before factual answers
+          </label>
+          <div><button type="submit" class="button">Save usage rules</button></div>
+        </form>
+      </div>
+
+      <div class="card source-card">
+        <div class="source-card__header">
+          <p class="card__eyebrow">Sources</p>
+          <h3 class="card__title">Add reference material</h3>
+          <p class="field__help">Add the facts, documents, links, and notes the Brain should use as its source of truth.</p>
+        </div>
+
+        <div class="source-list">
+          <form method="post" action="/brain/upload" enctype="multipart/form-data" class="source-item">
+            <div class="source-item__copy">
+              <strong>Upload a document</strong>
+              <span>Product docs, policies, manuals, PDFs, markdown, and other text files. 100MB max.</span>
+            </div>
+            <div class="source-item__controls">
+              <label class="sr-only" for="file">Document to upload</label>
+              <input id="file" type="file" name="file" required>
+              <button type="submit" class="button">Upload</button>
+            </div>
+          </form>
+
+          <form method="post" action="/brain/ingest-url" class="source-item">
+            <div class="source-item__copy">
+              <strong>Add a website</strong>
+              <span>Import public documentation or support pages into the Brain.</span>
+            </div>
+            <div class="source-item__controls">
+              <label class="sr-only" for="url">Website URL</label>
+              <input id="url" type="url" name="url" placeholder="https://example.com/docs" required>
+              <button type="submit" class="button">Add website</button>
+            </div>
+          </form>
+
+          <form method="post" action="/brain/ingest-text" class="source-item source-item--text">
+            <div class="source-item__copy">
+              <strong>Paste text</strong>
+              <span>Add short knowledge directly, such as product notes, policies, or support guidance.</span>
+            </div>
+            <div class="source-item__controls">
+              <label class="sr-only" for="text_name">Name</label>
+              <input id="text_name" type="text" name="name" placeholder="Name (e.g. Onboarding notes)" required>
+              <label class="sr-only" for="text">Text</label>
+              <textarea id="text" name="text" rows="4" data-autosize placeholder="Paste notes or reference text..." required></textarea>
+              <button type="submit" class="button">Add text</button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
   {% endif %}
 </div>
 {% endblock %}
