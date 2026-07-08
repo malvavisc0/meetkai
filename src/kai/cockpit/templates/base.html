@@ -1,0 +1,19 @@
+<!DOCTYPE html>
+<html>
+<head><title>KAI cockpit</title></head>
+<body>
+  <div style="padding: 8px; border-bottom: 1px solid #ccc;">
+    <strong>KAI cockpit</strong>
+    {% if user %}
+      &nbsp; Operator: {{ user.email }} &nbsp;
+      <a href="/connections">connections</a> &nbsp;
+      <a href="/brain">brain</a> &nbsp;
+      <a href="/logout">logout</a>
+    {% endif %}
+  </div>
+  {% if flash %}
+    <div style="padding: 8px; background: #ff9; border-bottom: 1px solid #cc0;">{{ flash }}</div>
+  {% endif %}
+  {% block content %}{% endblock %}
+</body>
+</html>

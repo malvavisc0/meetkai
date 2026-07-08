@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+{% block content %}
+<div style="padding: 16px;">
+  <a href="/deployments/{{ dep.id }}">&lt; back</a>
+  <h2>{{ dep.bot_type }} chat ({{ dep_user.email }})</h2>
+
+  {% if reply %}
+    <div style="padding: 8px; border: 1px solid #ccc; margin-bottom: 8px;">
+      <b>bot&gt;</b> {{ reply }}
+    </div>
+  {% endif %}
+
+  <form method="post">
+    <label>Operator message:</label><br>
+    <textarea name="message" rows="4" cols="60" required></textarea><br><br>
+    <label><input type="checkbox" name="persist" value="true"> Allow lasting changes</label><br><br>
+    <button type="submit">Send</button>
+  </form>
+
+  <form method="post" action="/deployments/{{ dep.id }}/chat/clear">
+    <button type="submit">Clear history</button>
+  </form>
+</div>
+{% endblock %}

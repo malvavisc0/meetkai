@@ -1,0 +1,149 @@
+{% extends "base.html" %}
+{% block content %}
+<div style="padding: 16px;">
+  <a href="/">&lt; back</a>
+  <h2>{{ dep.bot_type }} ({{ dep_user.email }}) — {{ dep.status }}</h2>
+
+  {% if status %}
+    <h3>Status</h3>
+    <table border="0" cellpadding="2">
+      {% if status.session %}
+        <tr><td><b>session</b></td><td>{{ status.session.name }} {{ status.session.status }}</td></tr>
+      {% endif %}
+      {% if status.account %}
+        <tr><td><b>account</b></td><td>{{ status.account.name }} {{ status.account.id }}</td></tr>
+      {% endif %}
+      {% if uptime_str %}
+        <tr><td><b>uptime</b></td><td>{{ uptime_str }} ({{ uptime_s }}s)</td></tr>
+      {% endif %}
+      {% if status.sleep %}
+        <tr><td><b>sleep</b></td><td>{{ status.sleep.count }} chat(s) asleep</td></tr>
+      {% endif %}
+      {% if status.tasks %}
+        <tr><td><b>tasks</b></td><td>{{ status.tasks.pending }} pending, {{ status.tasks.recurring }} recurring</td></tr>
+      {% endif %}
+      {% if status.capabilities %}
+        <tr><td><b>capabilities</b></td>
+          <td>
+            {% for k, v in status.capabilities.items() %}
+              {% if v %}<span style="color:green;">{{ k }}</span> {% else %}<span style="color:gray;">{{ k }}</span> {% endif %}
+            {% endfor %}
+          </td>
+        </tr>
+      {% endif %}
+    </table>
+  {% else %}
+    <p><i>Status is unavailable. The bot may be stopped.</i></p>
+  {% endif %}
+
+  <h3>Controls</h3>
+  {% if dep.status != "running" %}
+    {% if whatsapp_connected %}
+      <form method="post" action="/deployments/{{ dep.id }}/start" style="display:inline;">
+        <button type="submit">Start</button>
+      </form>
+    {% else %}
+      <p style="color: #960;">
+        Connect WhatsApp before starting this deployment.
+      </p>
+      <a href="/connections">
+        <button type="button">Connect WhatsApp</button>
+      </a>
+    {% endif %}
+  {% endif %}
+  {% if dep.status == "running" %}
+    <form method="post" action="/deployments/{{ dep.id }}/stop" style="display:inline;">
+      <button type="submit">Stop</button>
+    </form>
+    <form method="post" action="/deployments/{{ dep.id }}/sleep" style="display:inline;">
+      <input type="text" name="chat_id" placeholder="chat ID">
+      <button type="submit">Sleep</button>
+    </form>
+    <form method="post" action="/deployments/{{ dep.id }}/wake" style="display:inline;">
+      <input type="text" name="chat_id" placeholder="chat ID">
+      <button type="submit">Wake</button>
+    </form>
+    <a href="/deployments/{{ dep.id }}/chat">Open bot chat</a>
+  {% endif %}
+
+  <h3>Recent interactions</h3>
+  {% if latest_messages %}
+    <div style="border: 1px solid #ccc; padding: 8px; margin-bottom: 8px; max-height: 300px; overflow-y: auto;">
+      {% for m in latest_messages %}
+        <div style="margin-bottom: 6px;">
+          <small style="color: #888;">{{ m.chat_id }}{% if m.ts %} &middot; {{ m.ts }}{% endif %}</small><br>
+          <b>{% if m.role == "assistant" %}kai{% else %}{{ m.role }}{% endif %}&gt;</b>
+          <span style="white-space: pre-wrap;">{{ m.content }}</span>
+        </div>
+      {% endfor %}
+    </div>
+  {% else %}
+    <p><i>No recent interactions yet.</i></p>
+  {% endif %}
+  <a href="/deployments/{{ dep.id }}/history">View full message history</a>
+
+  <h3>Settings</h3>
+  <form method="post" action="/deployments/{{ dep.id }}/settings">
+    <label>Bot goal * (applies on next start)</label><br>
+    <textarea name="goal" rows="3" cols="60" required>{{ dep.goal }}</textarea><br><br>
+
+    <label>Language *</label>
+    <input type="text" name="language" value="{{ dep.language }}" required><br><br>
+
+    <label>Voice</label>
+    <select name="voice">
+      {% for v in voices %}
+        <option value="{{ v }}" {% if v == dep.voice %}selected{% endif %}>{{ v }}</option>
+      {% endfor %}
+    </select><br><br>
+
+    <label>Trigger keyword</label>
+    <input type="text" name="trigger_keyword" value="{{ dep.settings.get('trigger_keyword', '') }}"><br><br>
+
+    <label>Timezone</label>
+    <input type="text" name="timezone" value="{{ dep.settings.get('timezone', '') or '' }}"><br><br>
+
+    <label><input type="checkbox" name="mentions_enabled" value="true" {% if dep.settings.get('mentions_enabled', true) %}checked{% endif %}> Respond to mentions</label><br><br>
+
+    <label>Allowed chats (one per line)</label><br>
+    <textarea name="whitelist" rows="3" cols="40">{{ dep.settings.get('whitelist', [])|join('\n') }}</textarea><br><br>
+
+    <label>Blocked chats (one per line)</label><br>
+    <textarea name="blacklist" rows="3" cols="40">{{ dep.settings.get('blacklist', [])|join('\n') }}</textarea><br><br>
+
+    <b>Features</b><br>
+    {% for flag in feature_flags %}
+      <label><input type="checkbox" name="feature_{{ flag }}" value="true" {% if dep.feature_flags.get(flag, true) %}checked{% endif %}> {{ flag }}</label><br>
+    {% endfor %}
+    <br>
+
+    <b>Participation</b><br>
+    {% set part = dep.settings.get('participation', {}) %}
+    <label><input type="checkbox" name="participation_enabled" value="true" {% if part.get('enabled', true) %}checked{% endif %}> Allow proactive replies</label><br>
+    <label>Reply chance</label> <input type="number" name="participation_rate" value="{{ part.get('rate', 0.15) }}" step="0.01"><br>
+    <label>Cooldown (seconds)</label> <input type="number" name="participation_cooldown" value="{{ part.get('cooldown_seconds', 90) }}" step="1"><br>
+    <label>Max consecutive replies</label> <input type="number" name="participation_streak_max" value="{{ part.get('streak_max', 2) }}" step="1"><br><br>
+
+    <button type="submit">Save</button>
+    <a href="/deployments/{{ dep.id }}">Cancel</a>
+    <small>* required. Changes apply on next start.</small>
+  </form>
+
+  {% if dep.status == "running" and needs_restart %}
+    <p><b>Restart to apply changes.</b></p>
+    <form method="post" action="/deployments/{{ dep.id }}/restart">
+      <button type="submit">Restart</button>
+    </form>
+  {% endif %}
+
+  <h3 style="color: #900;">Danger zone</h3>
+  <form method="post" action="/deployments/{{ dep.id }}/delete">
+    <label style="color: #900;">
+      <input type="checkbox" name="confirm_delete" value="true" required>
+      I understand this stops the bot (if running) and removes the deployment.
+      WhatsApp stays connected — reconnecting is not needed to redeploy.
+    </label><br><br>
+    <button type="submit" style="color: #900;">Delete deployment</button>
+  </form>
+</div>
+{% endblock %}

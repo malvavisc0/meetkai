@@ -1,0 +1,164 @@
+"""Brain routes: /brain — create the workspace, edit the operator instruction,
+upload/paste/crawl documents, list + delete them.
+"""
+
+from fastapi import APIRouter, Depends, File, Form, Request, UploadFile
+from fastapi.responses import RedirectResponse
+from sqlalchemy.orm import Session
+
+from kai.cockpit.app import templates
+from kai.cockpit.auth import require_user
+from kai.cockpit.brains import BrainsService
+from kai.cockpit.db import get_db
+from kai.cockpit.models import User
+
+router = APIRouter()
+
+
+@router.get("/brain")
+async def brains_page(
+    request: Request,
+    user: User = Depends(require_user),
+    db: Session = Depends(get_db),
+):
+    svc = BrainsService(db)
+    brain = svc.get_brain(user)
+    docs = []
+    docs_error = None
+    if brain is not None:
+        try:
+            docs = await svc.list_docs(user)
+        except Exception as exc:
+            docs_error = str(exc)
+    any_processing = any(not d.is_terminal for d in docs)
+    flash = request.session.pop("flash", None)
+    return templates.TemplateResponse(
+        request,
+        "brains.html",
+        {
+            "user": user,
+            "brain": brain,
+            "docs": docs,
+            "docs_error": docs_error,
+            "any_processing": any_processing,
+            "flash": flash,
+        },
+    )
+
+
+@router.post("/brain/create")
+async def brains_create(
+    request: Request,
+    user: User = Depends(require_user),
+    db: Session = Depends(get_db),
+):
+    svc = BrainsService(db)
+    try:
+        svc.create_brain(user)
+        request.session["flash"] = "Brain created."
+    except Exception as exc:
+        request.session["flash"] = f"Could not create Brain: {exc}"
+    return RedirectResponse("/brain", status_code=302)
+
+
+@router.post("/brain/instruction")
+async def brains_update_instruction(
+    request: Request,
+    instruction: str = Form(""),
+    mandatory: str = Form(""),
+    user: User = Depends(require_user),
+    db: Session = Depends(get_db),
+):
+    svc = BrainsService(db)
+    try:
+        svc.update_instruction(user, instruction=instruction, mandatory=mandatory == "true")
+        request.session["flash"] = "Brain instructions saved."
+    except ValueError as exc:
+        request.session["flash"] = str(exc)
+    except Exception as exc:
+        request.session["flash"] = f"Could not save instructions: {exc}"
+    return RedirectResponse("/brain", status_code=302)
+
+
+@router.post("/brain/upload")
+async def brains_upload(
+    request: Request,
+    file: UploadFile = File(...),
+    user: User = Depends(require_user),
+    db: Session = Depends(get_db),
+):
+    svc = BrainsService(db)
+    try:
+        if not file.filename:
+            raise ValueError("No file selected.")
+        await svc.ingest_file(user, filename=file.filename, file=file.file)
+        request.session["flash"] = f"Uploaded {file.filename}. KAI is adding it to the Brain."
+    except ValueError as exc:
+        request.session["flash"] = str(exc)
+    except Exception as exc:
+        request.session["flash"] = f"Upload failed: {exc}"
+    return RedirectResponse("/brain", status_code=302)
+
+
+@router.post("/brain/ingest-url")
+async def brains_ingest_url(
+    request: Request,
+    url: str = Form(...),
+    user: User = Depends(require_user),
+    db: Session = Depends(get_db),
+):
+    svc = BrainsService(db)
+    url = url.strip()
+    try:
+        if not url:
+            raise ValueError("URL is required.")
+        result = await svc.ingest_url(user, url=url)
+        request.session["flash"] = f"Added {url}. KAI is saving it to the Brain. ({result.message})"
+    except ValueError as exc:
+        request.session["flash"] = str(exc)
+    except Exception as exc:
+        request.session["flash"] = f"Could not add website: {exc}"
+    return RedirectResponse("/brain", status_code=302)
+
+
+@router.post("/brain/ingest-text")
+async def brains_ingest_text(
+    request: Request,
+    name: str = Form(...),
+    text: str = Form(...),
+    user: User = Depends(require_user),
+    db: Session = Depends(get_db),
+):
+    svc = BrainsService(db)
+    name = name.strip()
+    text = text.strip()
+    try:
+        if not name:
+            raise ValueError("Name is required for pasted text.")
+        if not text:
+            raise ValueError("Text is required.")
+        await svc.ingest_text(user, name=name, text=text)
+        request.session["flash"] = f"Added {name}. KAI is saving it to the Brain."
+    except ValueError as exc:
+        request.session["flash"] = str(exc)
+    except Exception as exc:
+        request.session["flash"] = f"Could not add text: {exc}"
+    return RedirectResponse("/brain", status_code=302)
+
+
+@router.post("/brain/documents/delete")
+async def brains_delete_document(
+    request: Request,
+    doc_id: str = Form(...),
+    user: User = Depends(require_user),
+    db: Session = Depends(get_db),
+):
+    svc = BrainsService(db)
+    try:
+        await svc.delete_doc(user, doc_id=doc_id)
+        request.session["flash"] = "Document deleted."
+    except ValueError as exc:
+        request.session["flash"] = str(exc)
+    except Exception as exc:
+        request.session["flash"] = f"Could not delete document: {exc}"
+    return RedirectResponse("/brain", status_code=302)

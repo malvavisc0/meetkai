@@ -1,0 +1,13 @@
+{
+   "editor.wordWrap":"on",
+   "python.terminal.useEnvFile":true,
+   "files.exclude":{
+      "**/__pycache__":true,
+      "**/.cache":true,
+      "**/.pytest_cache":true,
+      "**/.ruff_cache":true,
+      "**/.venv":true,
+      "**/*.egg-info":true,
+      "**/dist":true
+   }
+}

@@ -1,0 +1,469 @@
+"""Deployment routes: wizard, detail, lifecycle, settings."""
+
+from __future__ import annotations
+
+from datetime import UTC, datetime
+
+from fastapi import APIRouter, Depends, Form, Request
+from fastapi.responses import RedirectResponse
+from sqlalchemy.orm import Session
+
+from kai.cockpit.app import templates
+from kai.cockpit.auth import require_user
+from kai.cockpit.bots import BOT_TYPES, LANGUAGE_VOICE_MAP, auto_pick_voice
+from kai.cockpit.connections import ConnectionsService
+from kai.cockpit.db import get_db
+from kai.cockpit.deployments import (
+    ConnectionRequiredError,
+    DeploymentsService,
+    DeploymentStartupError,
+)
+from kai.cockpit.models import Deployment, User
+
+router = APIRouter()
+
+ALL_VOICES = sorted(set(LANGUAGE_VOICE_MAP.values()))
+
+_HOME_REDIRECT = RedirectResponse("/", status_code=302)
+
+
+def _get_deployment(
+    svc: DeploymentsService, dep_id: int, user: User
+) -> tuple[DeploymentsService, Deployment] | RedirectResponse:
+    """Fetch a deployment and verify ownership; return redirect on failure."""
+    dep = svc.get(dep_id)
+    if not dep or dep.user_id != user.id:
+        return _HOME_REDIRECT
+    return svc, dep
+
+
+def _uptime_str(seconds: int) -> str:
+    days, rem = divmod(seconds, 86400)
+    hours, rem = divmod(rem, 3600)
+    minutes, secs = divmod(rem, 60)
+    if days:
+        return f"{days}d {hours}h {minutes}m"
+    if hours:
+        return f"{hours}h {minutes}m"
+    if minutes:
+        return f"{minutes}m {secs}s"
+    return f"{secs}s"
+
+
+def _fmt_ts(ts: str | None) -> str:
+    """Render an ISO-8601 timestamp for display in the server's local timezone.
+
+    Messages are stored as UTC-aware ISO strings (see
+    ``KaiAgent._now_ts()``), which is the right way to persist them — but
+    displaying that raw UTC value labeled "UTC" is misleading for a
+    human reading the cockpit from the server's timezone (``TZ`` env var,
+    e.g. ``Europe/Berlin``). Convert to the server's local tz for display.
+    """
+    if not ts:
+        return ""
+    try:
+        parsed = datetime.fromisoformat(ts)
+        if parsed.tzinfo is None:
+            parsed = parsed.replace(tzinfo=UTC)
+        local = parsed.astimezone()
+        tz_label = local.strftime("%Z") or "local"
+        return local.strftime(f"%Y-%m-%d %H:%M:%S {tz_label}")
+    except ValueError:
+        return ts
+
+
+# --- Deploy wizard ---
+
+
+@router.get("/deployments/new")
+async def deploy_new_get(
+    request: Request,
+    bot_type: str = "waha",
+    user: User = Depends(require_user),
+    db: Session = Depends(get_db),
+):
+    bt = BOT_TYPES.get(bot_type)
+    if bt is None:
+        return RedirectResponse("/", status_code=302)
+
+    dep_svc = DeploymentsService(db)
+    existing = dep_svc.get_for_user_and_type(user.id, bot_type)
+    if existing:
+        return RedirectResponse(f"/deployments/{existing.id}", status_code=302)
+
+    voice = auto_pick_voice(user.language)
+    return templates.TemplateResponse(
+        request,
+        "deploy_wizard.html",
+        {
+            "user": user,
+            "step": "config",
+            "bot_type": bot_type,
+            "goal": "",
+            "language": user.language,
+            "voice": voice,
+            "voices": ALL_VOICES,
+        },
+    )
+
+
+@router.post("/deployments/new")
+async def deploy_new_post(
+    request: Request,
+    bot_type: str = "waha",
+    goal: str = Form(...),
+    language: str = Form(...),
+    voice: str = Form(""),
+    user: User = Depends(require_user),
+    db: Session = Depends(get_db),
+):
+    svc = DeploymentsService(db)
+    try:
+        dep = svc.create(user, bot_type, goal, language, voice or None)
+    except ValueError as exc:
+        return templates.TemplateResponse(
+            request,
+            "deploy_wizard.html",
+            {
+                "user": user,
+                "step": "config",
+                "bot_type": bot_type,
+                "goal": goal,
+                "language": language,
+                "voice": voice,
+                "voices": ALL_VOICES,
+                "error": str(exc),
+            },
+        )
+
+    # Deployment created — go straight to its detail page. The detail page
+    # already gates the start button on WhatsApp being connected (showing a
+    # "connect WhatsApp" action instead), so the intermediate "ready" step
+    # is redundant.
+    request.session["flash"] = "Deployment created."
+    return RedirectResponse(f"/deployments/{dep.id}", status_code=302)
+
+
+# --- Deployment detail ---
+
+
+@router.get("/deployments/{dep_id}")
+async def deployment_detail(
+    request: Request,
+    dep_id: int,
+    user: User = Depends(require_user),
+    db: Session = Depends(get_db),
+):
+    svc = DeploymentsService(db)
+    result = _get_deployment(svc, dep_id, user)
+    if isinstance(result, RedirectResponse):
+        return result
+    svc, dep = result
+
+    bt = BOT_TYPES.get(dep.bot_type)
+    # Only render feature flags the user is entitled to (truthy in their
+    # feature_flags) — the form must not show a flag the user cannot enable.
+    entitlements = {k for k, v in (user.feature_flags or {}).items() if v}
+    feature_flags = [f for f in (bt.feature_flags if bt else []) if f in entitlements]
+
+    # A waha deployment cannot start until the user's WhatsApp Connection is
+    # "connected" — the start button must be hidden (and a connect-whatsapp
+    # action shown instead) when that precondition isn't met, so the operator
+    # is never offered a start that deployments.start() will refuse anyway.
+    conn_svc = ConnectionsService(db)
+    whatsapp = conn_svc.get_whatsapp(user)
+    whatsapp_connected = bool(whatsapp and whatsapp.status == "connected")
+
+    status_data = None
+    uptime_str = None
+    uptime_s = None
+    if dep.status == "running":
+        status_data = svc.fetch_status(dep)
+        started_at = svc.run_started_at(dep)
+        if started_at:
+            try:
+                started = datetime.fromisoformat(started_at)
+                if started.tzinfo is None:
+                    started = started.replace(tzinfo=UTC)
+                delta = int((datetime.now(UTC) - started).total_seconds())
+                uptime_s = max(0, delta)
+                uptime_str = _uptime_str(uptime_s)
+            except (ValueError, TypeError):
+                pass
+
+    flash = request.session.pop("flash", None)
+    needs_restart = bool(request.session.pop("needs_restart", False)) and dep.status == "running"
+
+    latest_messages = svc.latest_messages(dep)
+    latest_display = [
+        {
+            "role": m["role"],
+            "content": m["content"],
+            "chat_id": m.get("chat_id", ""),
+            "ts": _fmt_ts(m.get("ts")),
+        }
+        for m in latest_messages
+    ]
+
+    return templates.TemplateResponse(
+        request,
+        "deployment.html",
+        {
+            "user": user,
+            "dep": dep,
+            "dep_user": user,
+            "status": status_data,
+            "uptime_str": uptime_str,
+            "uptime_s": uptime_s,
+            "voices": ALL_VOICES,
+            "feature_flags": feature_flags,
+            "needs_restart": needs_restart,
+            "whatsapp_connected": whatsapp_connected,
+            "latest_messages": latest_display,
+            "flash": flash,
+        },
+    )
+
+
+# --- History ---
+
+
+@router.get("/deployments/{dep_id}/history")
+async def deployment_history(
+    request: Request,
+    dep_id: int,
+    user: User = Depends(require_user),
+    db: Session = Depends(get_db),
+):
+    svc = DeploymentsService(db)
+    result = _get_deployment(svc, dep_id, user)
+    if isinstance(result, RedirectResponse):
+        return result
+    svc, dep = result
+
+    history_raw = svc.history(dep)
+    total = sum(len(msgs) for msgs in history_raw.values())
+
+    # Sort conversations by their latest message timestamp (newest first),
+    # falling back to chat_id for legacy timestamp-less buckets so the page
+    # is deterministic. Within each bucket messages keep file order
+    # (chronological), with timestamps formatted for display.
+    def _conv_sort_key(item: tuple[str, list[dict]]) -> tuple[int, str]:
+        chat_id, msgs = item
+        last_ts = ""
+        for m in reversed(msgs):
+            ts = m.get("ts")
+            if ts:
+                last_ts = ts
+                break
+        # Timestamps sort lexicographically as ISO-8601 UTC; empty (legacy)
+        # buckets sort last.
+        return (1 if last_ts else 0, last_ts or chat_id)
+
+    history: dict[str, list[dict]] = {}
+    for chat_id, msgs in sorted(history_raw.items(), key=_conv_sort_key, reverse=True):
+        history[chat_id] = [{**m, "ts": _fmt_ts(m.get("ts"))} for m in msgs]
+
+    return templates.TemplateResponse(
+        request,
+        "history.html",
+        {
+            "user": user,
+            "dep": dep,
+            "dep_user": user,
+            "history": history,
+            "total": total,
+        },
+    )
+
+
+# --- Lifecycle ---
+
+
+@router.post("/deployments/{dep_id}/start")
+async def deployment_start(
+    request: Request,
+    dep_id: int,
+    user: User = Depends(require_user),
+    db: Session = Depends(get_db),
+):
+    svc = DeploymentsService(db)
+    result = _get_deployment(svc, dep_id, user)
+    if isinstance(result, RedirectResponse):
+        return result
+    svc, dep = result
+    try:
+        svc.start(dep)
+    except ConnectionRequiredError:
+        request.session["flash"] = "Connect WhatsApp first before starting."
+        return RedirectResponse("/connections", status_code=302)
+    except DeploymentStartupError as exc:
+        request.session["flash"] = f"Could not start deployment: {exc}"
+    return RedirectResponse(f"/deployments/{dep_id}", status_code=302)
+
+
+@router.post("/deployments/{dep_id}/stop")
+async def deployment_stop(
+    dep_id: int,
+    user: User = Depends(require_user),
+    db: Session = Depends(get_db),
+):
+    svc = DeploymentsService(db)
+    result = _get_deployment(svc, dep_id, user)
+    if isinstance(result, RedirectResponse):
+        return result
+    svc, dep = result
+    svc.stop(dep)
+    return RedirectResponse(f"/deployments/{dep_id}", status_code=302)
+
+
+@router.post("/deployments/{dep_id}/sleep")
+async def deployment_sleep(
+    dep_id: int,
+    chat_id: str = Form(...),
+    user: User = Depends(require_user),
+    db: Session = Depends(get_db),
+):
+    svc = DeploymentsService(db)
+    result = _get_deployment(svc, dep_id, user)
+    if isinstance(result, RedirectResponse):
+        return result
+    svc, dep = result
+    svc.sleep_chat(dep, chat_id)
+    return RedirectResponse(f"/deployments/{dep_id}", status_code=302)
+
+
+@router.post("/deployments/{dep_id}/wake")
+async def deployment_wake(
+    dep_id: int,
+    chat_id: str = Form(...),
+    user: User = Depends(require_user),
+    db: Session = Depends(get_db),
+):
+    svc = DeploymentsService(db)
+    result = _get_deployment(svc, dep_id, user)
+    if isinstance(result, RedirectResponse):
+        return result
+    svc, dep = result
+    svc.wake_chat(dep, chat_id)
+    return RedirectResponse(f"/deployments/{dep_id}", status_code=302)
+
+
+@router.post("/deployments/{dep_id}/restart")
+async def deployment_restart(
+    request: Request,
+    dep_id: int,
+    user: User = Depends(require_user),
+    db: Session = Depends(get_db),
+):
+    svc = DeploymentsService(db)
+    result = _get_deployment(svc, dep_id, user)
+    if isinstance(result, RedirectResponse):
+        return result
+    svc, dep = result
+    try:
+        svc.stop(dep)
+        svc.start(dep)
+    except (ConnectionRequiredError, DeploymentStartupError) as exc:
+        request.session["flash"] = f"restart failed: {exc}"
+    except Exception as exc:
+        # stop() can raise (e.g. ProcessLookupError from a recycled PID);
+        # surface it rather than letting it propagate as an unhandled 500.
+        request.session["flash"] = f"restart failed: {exc}"
+    return RedirectResponse(f"/deployments/{dep_id}", status_code=302)
+
+
+@router.post("/deployments/{dep_id}/delete")
+async def deployment_delete(
+    request: Request,
+    dep_id: int,
+    user: User = Depends(require_user),
+    db: Session = Depends(get_db),
+):
+    """Delete a deployment. WhatsApp connection is left intact."""
+    svc = DeploymentsService(db)
+    result = _get_deployment(svc, dep_id, user)
+    if isinstance(result, RedirectResponse):
+        return result
+    svc, dep = result
+    svc.delete(dep)
+    request.session["flash"] = "Deployment deleted."
+    return RedirectResponse("/", status_code=302)
+
+
+# --- Settings ---
+
+
+@router.post("/deployments/{dep_id}/settings")
+async def deployment_settings(
+    request: Request,
+    dep_id: int,
+    goal: str = Form(...),
+    language: str = Form(...),
+    voice: str = Form(""),
+    trigger_keyword: str = Form(""),
+    timezone: str = Form(""),
+    mentions_enabled: str = Form(""),
+    whitelist: str = Form(""),
+    blacklist: str = Form(""),
+    participation_enabled: str = Form(""),
+    participation_rate: float = Form(0.15),
+    participation_cooldown: float = Form(90),
+    participation_streak_max: int = Form(2),
+    user: User = Depends(require_user),
+    db: Session = Depends(get_db),
+):
+    svc = DeploymentsService(db)
+    result = _get_deployment(svc, dep_id, user)
+    if isinstance(result, RedirectResponse):
+        return result
+    svc, dep = result
+
+    bt = BOT_TYPES.get(dep.bot_type)
+    # A deployment may only enable a feature flag the user is entitled to.
+    # The form renders only entitled flags, but a direct POST can spoof any
+    # checkbox name — so we clamp server-side: an unentitled flag forced on
+    # is silently dropped (rather than 403) to avoid leaking entitlement
+    # state to a probing attacker. An entitlement is a flag whose value is
+    # truthy in the user's feature_flags dict.
+    entitlements = {k for k, v in (user.feature_flags or {}).items() if v}
+    form_fields = dict(await request.form())
+    feature_flags = {}
+    if bt:
+        for flag in bt.feature_flags:
+            requested = f"feature_{flag}" in form_fields
+            feature_flags[flag] = bool(requested and flag in entitlements)
+
+    settings_update = {
+        "trigger_keyword": trigger_keyword,
+        "timezone": timezone or None,
+        "mentions_enabled": mentions_enabled == "true",
+        "whitelist": [line.strip() for line in whitelist.splitlines() if line.strip()],
+        "blacklist": [line.strip() for line in blacklist.splitlines() if line.strip()],
+        "participation": {
+            "enabled": participation_enabled == "true",
+            "rate": participation_rate,
+            "cooldown_seconds": participation_cooldown,
+            "streak_max": participation_streak_max,
+        },
+    }
+
+    try:
+        svc.edit(
+            dep,
+            goal=goal,
+            language=language,
+            voice=voice or dep.voice,
+            feature_flags=feature_flags,
+            settings=settings_update,
+        )
+    except ValueError as exc:
+        request.session["flash"] = str(exc)
+        return RedirectResponse(f"/deployments/{dep_id}", status_code=302)
+
+    if dep.status == "running":
+        request.session["needs_restart"] = True
+        request.session["flash"] = "Settings saved. Restart to apply."
+    else:
+        request.session["flash"] = "Settings saved."
+    return RedirectResponse(f"/deployments/{dep_id}", status_code=302)

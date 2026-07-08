@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+{% block content %}
+<div style="padding: 16px;">
+  <a href="/deployments/{{ dep.id }}">&lt; back</a>
+  <h2>{{ dep.bot_type }} message history ({{ dep_user.email }})</h2>
+  <p>{{ history|length }} conversation(s), {{ total }} message(s) total.</p>
+
+  {% if history %}
+    {% for chat_id, messages in history.items() %}
+      <h3>{{ chat_id }} <small>({{ messages|length }})</small></h3>
+      <div style="border: 1px solid #ccc; padding: 8px; margin-bottom: 12px; max-height: 400px; overflow-y: auto;">
+        {% for m in messages %}
+          <div style="margin-bottom: 6px;">
+            {% if m.ts %}<small style="color: #888;">{{ m.ts }}</small><br>{% endif %}
+            <b>{% if m.role == "assistant" %}kai{% else %}{{ m.role }}{% endif %}&gt;</b>
+            <span style="white-space: pre-wrap;">{{ m.content }}</span>
+          </div>
+        {% endfor %}
+      </div>
+    {% endfor %}
+  {% else %}
+    <p><i>No history yet.</i></p>
+  {% endif %}
+</div>
+{% endblock %}

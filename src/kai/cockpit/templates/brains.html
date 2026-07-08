@@ -1,0 +1,94 @@
+{% extends "base.html" %}
+{% block content %}
+<div style="padding: 16px;">
+  <a href="/">&lt; back</a>
+  <h2>Brain</h2>
+
+  {% if not brain %}
+    <p>Create a Brain to give bots shared memory from documents, notes,
+       and websites.</p>
+    <form method="post" action="/brain/create">
+      <button type="submit">Create Brain</button>
+    </form>
+  {% else %}
+    {% if any_processing %}
+      <meta http-equiv="refresh" content="3">
+    {% endif %}
+
+    <p>Brain status: <b>{{ brain.status }}</b></p>
+
+    <h3>When should bots use the Brain?</h3>
+    <form method="post" action="/brain/instruction">
+      <p>
+        <textarea name="instruction" rows="6" cols="60"
+          placeholder="One topic per line, e.g.:&#10;product pricing&#10;setup steps&#10;refund policy">{{ brain.config.get('instruction', '') }}</textarea>
+      </p>
+      <label>
+        <input type="checkbox" name="mandatory" value="true"
+          {% if brain.config.get('mandatory') %}checked{% endif %}>
+        Always use the Brain for these topics
+      </label><br><br>
+      <button type="submit">Save instructions</button>
+    </form>
+
+    <h3>Upload a document</h3>
+    <form method="post" action="/brain/upload" enctype="multipart/form-data">
+      <input type="file" name="file" required>
+      <button type="submit">Upload document</button>
+      <div><small>Supports txt, md, docx, text-based pdf, and more. 100MB max.</small></div>
+    </form>
+
+    <h3>Add a website</h3>
+    <form method="post" action="/brain/ingest-url">
+      <input type="url" name="url" placeholder="https://example.com/docs" size="50" required>
+      <button type="submit">Add website</button>
+      <div><small>KAI saves the page text as bot memory.</small></div>
+    </form>
+
+    <h3>Add text</h3>
+    <form method="post" action="/brain/ingest-text">
+      <p>
+        <label>Name: <input type="text" name="name" placeholder="Onboarding notes" size="40" required></label>
+      </p>
+      <p>
+        <textarea name="text" rows="6" cols="60" placeholder="Paste notes or reference text..." required></textarea>
+      </p>
+      <button type="submit">Add text</button>
+    </form>
+
+    <h3>Documents</h3>
+    {% if docs_error %}
+      <p style="color: #c00;">Could not load documents: {{ docs_error }}</p>
+    {% elif not docs %}
+      <p><i>No documents yet.</i></p>
+    {% else %}
+      <table border="1" cellpadding="4" cellspacing="0">
+        <tr>
+          <th>Name</th>
+          <th>Status</th>
+          <th>Sections</th>
+          <th>Updated</th>
+          <th></th>
+        </tr>
+        {% for doc in docs %}
+        <tr>
+          <td>{{ doc.file_path or doc.id }}</td>
+          <td>{{ doc.status }}{% if doc.status == 'failed' %} \u26a0{% endif %}</td>
+          <td>{{ doc.chunks_count if doc.chunks_count is not none else '-' }}</td>
+          <td>{{ doc.updated_at }}</td>
+          <td>
+            <form method="post" action="/brain/documents/delete" style="display:inline;">
+              <input type="hidden" name="doc_id" value="{{ doc.id }}">
+              <button type="submit">Delete</button>
+            </form>
+          </td>
+        </tr>
+        {% endfor %}
+      </table>
+    {% endif %}
+
+    <p><i>Bots use the Brain during chat once a deployment is running. This
+       page is for adding and managing bot memory.</i></p>
+  {% endif %}
+</div>
+{% endblock %}

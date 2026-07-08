@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+{% block content %}
+<div style="padding: 16px;">
+  <h2>Operator login</h2>
+  {% if requested %}
+    <p>An access request has been sent. Ask an admin to approve it.</p>
+  {% else %}
+    <form method="post">
+      <label>Email:</label><br>
+      <input type="text" name="email" required><br><br>
+      <button type="submit">Send magic link</button>
+    </form>
+  {% endif %}
+  {% if error %}
+    <p style="color: red;">{{ error }}</p>
+  {% endif %}
+</div>
+{% endblock %}

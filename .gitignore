@@ -1,0 +1,32 @@
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+dist/
+build/
+.eggs/
+*.egg
+.venv/
+.env
+.env.*
+*.log
+.ruff_cache/
+.pytest_cache/
+.mypy_cache/
+*.run.json
+.coverage
+# All runtime data (cockpit.db, bot state, logs, configs, redis dumps,
+# waha sessions) lives under data/ and must NEVER be tracked. Docker
+# creates data/{redis,waha} via volume mounts and data/kai/* via the
+# entrypoint; code mkdir's as needed. Only the top-level .gitkeep is kept
+# so the directory itself survives a fresh clone for bare-metal dev.
+/data/*
+!/data/.gitkeep
+vendor/ffmpeg/
+vendor/whisper.cpp/
+vendor/waveshare/
+vendor/kokoro/
+models/whisper/
+models/kokoro/
+scripts/test_media/*.webp
+scripts/test_media/*.oga

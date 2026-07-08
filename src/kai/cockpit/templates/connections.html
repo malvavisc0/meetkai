@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+{% block content %}
+<div style="padding: 16px;">
+  <a href="/">&lt; back</a>
+  <h2>connections</h2>
+
+  <h3>WhatsApp</h3>
+  <p>status: <b>{{ conn.status if conn else "not configured" }}</b></p>
+
+  {% if conn and conn.status == "connected" %}
+    <p>session: {{ conn.config.get('waha_session', '?') }}</p>
+    <form method="post" action="/connections/whatsapp/disconnect">
+      <button type="submit">disconnect</button>
+    </form>
+  {% elif conn and conn.status == "connecting" %}
+    <meta http-equiv="refresh" content="3">
+    {% if qr_url %}
+      <p>scan this QR code:</p>
+      <img src="{{ qr_url }}" alt="QR code" style="max-width: 300px;"><br><br>
+    {% endif %}
+    <form method="post" action="/connections/whatsapp/refresh">
+      <button type="submit">refresh</button>
+    </form>
+    <form method="post" action="/connections/whatsapp/disconnect">
+      <button type="submit">cancel</button>
+    </form>
+  {% else %}
+    <form method="post" action="/connections/whatsapp/connect">
+      <button type="submit">connect WhatsApp</button>
+    </form>
+  {% endif %}
+</div>
+{% endblock %}

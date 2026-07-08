@@ -1,0 +1,187 @@
+services:
+  redis:
+    image: redis
+    container_name: redis
+    hostname: redis
+    restart: unless-stopped
+    volumes:
+      - ./data/redis:/data
+
+  waha:
+    image: devlikeapro/waha
+    container_name: waha
+    hostname: waha
+    restart: unless-stopped
+    expose:
+      - 3000
+    environment:
+      TZ: ${TZ}
+      REDIS_URL: ${REDIS_URL}
+      WAHA_API_KEY: ${WAHA_API_KEY}
+      WAHA_API_KEY_PLAIN: ${WAHA_API_KEY}
+      WAHA_DASHBOARD_USERNAME: ${WAHA_DASHBOARD_USERNAME}
+      WAHA_DASHBOARD_PASSWORD: ${WAHA_DASHBOARD_PASSWORD}
+      WHATSAPP_SWAGGER_USERNAME: ${WHATSAPP_SWAGGER_USERNAME}
+      WHATSAPP_SWAGGER_PASSWORD: ${WHATSAPP_SWAGGER_PASSWORD}
+      WAHA_DASHBOARD_ENABLED: ${WAHA_DASHBOARD_ENABLED}
+      WHATSAPP_SWAGGER_ENABLED: ${WHATSAPP_SWAGGER_ENABLED}
+      WHATSAPP_DEFAULT_ENGINE: ${WHATSAPP_DEFAULT_ENGINE}
+      WAHA_NAMESPACE: ${WAHA_NAMESPACE}
+      WAHA_BASE_URL: ${WAHA_BASE_URL}
+      WAHA_LOG_FORMAT: ${WAHA_LOG_FORMAT}
+      WAHA_LOG_LEVEL: ${WAHA_LOG_LEVEL}
+      WAHA_PRINT_QR: ${WAHA_PRINT_QR}
+      WAHA_MEDIA_STORAGE: ${WAHA_MEDIA_STORAGE}
+      WHATSAPP_FILES_LIFETIME: ${WHATSAPP_FILES_LIFETIME}
+      WHATSAPP_FILES_FOLDER: ${WHATSAPP_FILES_FOLDER}
+      WHATSAPP_API_SCHEMA: ${WHATSAPP_API_SCHEMA}
+      WHATSAPP_API_HOSTNAME: ${WHATSAPP_API_HOSTNAME}
+      WHATSAPP_API_PORT: ${WHATSAPP_API_PORT}
+      WAHA_APPS_ENABLED: ${WAHA_APPS_ENABLED}
+    volumes:
+      - ./data/waha:/app/.sessions
+    depends_on:
+      - redis
+
+  # SMTP catch-all for dev — enabled by default so magic-link emails have
+  # somewhere to land without touching a real relay. Web UI at :8025.
+  mailpit:
+    image: axllent/mailpit
+    container_name: mailpit
+    hostname: mailpit
+    restart: unless-stopped
+    expose:
+      - 1025
+    ports:
+      - "8025:8025"
+
+  # Brain: one shared LightRAG container for ALL users/Brains. Per-user
+  # isolation is via LightRAG's --workspace/WORKSPACE mechanism (kai names
+  # them kai-v001-<sanitized-email>), NOT separate containers. kai talks to
+  # it purely outbound over HTTP (no inbound webhook, unlike WAHA). LLM +
+  # embedding + rerank all go through OpenRouter with a single key. The
+  # embedding model + EMBEDDING_DIM are pinned at first document upload for
+  # the container's lifetime — do not change after documents exist without
+  # clearing ./data/lightrag_storage first.
+  lightrag:
+    image: ghcr.io/hkuds/lightrag:v1.5.4
+    container_name: lightrag
+    hostname: lightrag
+    restart: unless-stopped
+    expose:
+      - 9621
+    environment:
+      HOST: 0.0.0.0
+      PORT: "9621"
+      # Auth: kai authenticates with X-API-Key = KAI_BRAIN_LIGHTRAG_API_KEY.
+      # /api/* (Ollama emulation) removed from the whitelist since unused —
+      # leaving it open would be an unauthenticated RAG backdoor.
+      LIGHTRAG_API_KEY: ${KAI_BRAIN_LIGHTRAG_API_KEY}
+      WHITELIST_PATHS: /health
+      # Concurrency knobs (server-global, not per-workspace).
+      WORKERS: 2
+      MAX_PARALLEL_INSERT: 3
+      MAX_ASYNC_LLM: 4
+      MAX_ASYNC_RERANK: 4
+      # LLM (indexing: entity/relation extraction + summaries; query: answers)
+      LLM_BINDING: openai
+      LLM_BINDING_HOST: ${LIGHTRAG_LLM_BINDING_HOST}
+      LLM_BINDING_API_KEY: ${OPENROUTER_API_KEY}
+      LLM_MODEL: ${LIGHTRAG_LLM_MODEL}
+      # Embedding — pinned at first upload (EMBEDDING_DIM=2560 verified
+      # empirically against perplexity/pplx-embed-v1-4b via OpenRouter).
+      EMBEDDING_BINDING: openai
+      EMBEDDING_BINDING_HOST: ${LIGHTRAG_EMBEDDING_BINDING_HOST}
+      EMBEDDING_BINDING_API_KEY: ${OPENROUTER_API_KEY}
+      EMBEDDING_MODEL: ${LIGHTRAG_EMBEDDING_MODEL}
+      EMBEDDING_DIM: 2560
+      # Rerank (query-time only; cheap to change later, no re-index needed)
+      RERANK_BINDING: cohere
+      RERANK_BINDING_HOST: ${LIGHTRAG_RERANK_BINDING_HOST}
+      RERANK_BINDING_API_KEY: ${OPENROUTER_API_KEY}
+      RERANK_MODEL: ${LIGHTRAG_RERANK_MODEL}
+      # Document processing defaults
+      SUMMARY_LANGUAGE: English
+      ENTITY_EXTRACTION_USE_JSON: true
+      VLM_PROCESS_ENABLE: false
+    volumes:
+      - ./data/lightrag/storage:/app/rag_storage
+      - ./data/lightrag/inputs:/app/inputs
+
+  # Brain: crawl4ai — one shared headless-browser crawler for website ingest.
+  # Used strictly in non-LLM markdown mode (POST /md with f=fit/raw); the
+  # Brain ingest path never sets f=llm, so no OPENAI_API_KEY/LLM env is set
+  # on this container. kai's Crawl4aiClient authenticates with the bearer
+  # token below (KAI_BRAIN_CRAWL4AI_TOKEN). shm_size is required for
+  # headless Chromium stability.
+  crawl4ai:
+    image: unclecode/crawl4ai:latest
+    container_name: crawl4ai
+    hostname: crawl4ai
+    restart: unless-stopped
+    shm_size: "1g"
+    expose:
+      - 11235
+    environment:
+      CRAWL4AI_API_TOKEN: ${KAI_BRAIN_CRAWL4AI_TOKEN}
+    volumes:
+      - ./data/crawl4ai:/data
+
+  cockpit:
+    build: .
+    container_name: cockpit
+    # This hostname is what WAHA (on the same docker network) uses to call
+    # back into each spawned bot's webhook listener — see
+    # KAI_WAHA_WEBHOOK_PUBLIC_HOST below. `kai start` subprocesses spawned
+    # by the cockpit (DeploymentsService.start()) run *inside this same
+    # container*, so their webhook servers are reachable at this hostname
+    # too. Do NOT run `kai start waha` from the host — it would bind
+    # outside this docker network and WAHA could never reach its webhook.
+    hostname: cockpit
+    restart: unless-stopped
+    # `kai` resolves to the console script installed in the image venv
+    # (PATH set via Dockerfile). No `uv run` wrapper — the package is
+    # already installed, so wrapping would only add per-spawn re-resolution
+    # overhead. The entrypoint.sh ensures /app/data (and its configs/cockpit
+    # subdir) exist before the server starts.
+    command: kai cockpit serve --host 0.0.0.0 --port 8080
+    ports:
+      - "8080:8080"
+    volumes:
+      # All kai state lives under one data root: cockpit.db, per-bot
+      # task/sleep/seen/history files, and the cockpit-managed bot config
+      # files (data/configs/cockpit/<dep>.json, pointed at by
+      # KAI_CONFIGS_DIR). No separate configs/ volume.
+      - ./data/kai:/app/data
+      # `kai vendors install <name>` (src/kai/vendors/manager.py) resolves
+      # the project root to /app and writes binaries/venvs to /app/vendor/
+      # and models to /app/models/ — mount these so installed vendors
+      # survive container recreation/image rebuilds instead of being lost.
+      - ./data/vendor:/app/vendor
+      - ./data/models:/app/models
+    env_file: .env
+    environment:
+      TZ: ${TZ}
+      KAI_COCKPIT_DB: sqlite:///data/cockpit.db
+      KAI_COCKPIT_SECRET: ${KAI_COCKPIT_SECRET}
+      # Cockpit-managed bot configs live inside the data volume (no separate
+      # configs/ mount): /app/data/configs/cockpit/<dep>.json.
+      KAI_CONFIGS_DIR: data/configs/cockpit
+      # Public base URL the cockpit uses when minting magic-link emails. For
+      # local dev this is the host-mapped port; in production set it to the
+      # real public hostname (e.g. https://eu.kai.example.com).
+      KAI_COCKPIT_PUBLIC_URL: ${KAI_COCKPIT_PUBLIC_URL:-http://localhost:8080}
+      # In-network service name, not a host IP/public address — WAHA and
+      # the cockpit share this compose network.
+      KAI_WAHA_URL: http://waha:3000
+      KAI_WAHA_API_KEY: ${WAHA_API_KEY}
+      KAI_WAHA_HMAC_KEY: ${KAI_WAHA_HMAC_KEY}
+      KAI_WAHA_WEBHOOK_PUBLIC_HOST: cockpit
+      KAI_COCKPIT_WEBHOOK_PORT_RANGE: ${KAI_COCKPIT_WEBHOOK_PORT_RANGE}
+      KAI_SMTP_HOST: mailpit
+      KAI_SMTP_PORT: 1025
+      KAI_SMTP_FROM: kai@localhost
+      # KAI_LLM_* / KAI_AGENT_* come from env_file: .env
+    depends_on:
+      - waha
+      - mailpit

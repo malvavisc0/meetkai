@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+{% block content %}
+<div style="padding: 16px;">
+  <a href="/">&lt; back</a>
+  <h2>New {{ bot_type }} Deployment</h2>
+
+  <form method="post">
+    <label>Bot goal *</label><br>
+    <textarea name="goal" rows="4" cols="60" required>{{ goal or "" }}</textarea><br><br>
+
+    <label>Language *</label><br>
+    <input type="text" name="language" value="{{ language }}" required>
+    <small>(default: Operator language: {{ user.language }})</small><br><br>
+
+    <label>Voice</label><br>
+    <select name="voice">
+      {% for v in voices %}
+        <option value="{{ v }}" {% if v == voice %}selected{% endif %}>{{ v }}</option>
+      {% endfor %}
+    </select>
+    <small>(picked from the language; editable)</small><br><br>
+
+    <button type="submit">Create deployment</button>
+  </form>
+  {% if error %}
+    <p style="color: red;">{{ error }}</p>
+  {% endif %}
+</div>
+{% endblock %}

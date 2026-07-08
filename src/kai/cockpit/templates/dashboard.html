@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+{% block content %}
+<div style="padding: 16px;">
+  <h2>Deployments</h2>
+  {% if deployments %}
+    <table border="1" cellpadding="4" cellspacing="0">
+      <tr>
+        <th>Bot type</th><th>Status</th><th>Goal</th><th>Language</th>
+      </tr>
+      {% for dep in deployments %}
+      <tr>
+        <td><a href="/deployments/{{ dep.id }}">{{ dep.bot_type }}</a></td>
+        <td>{{ dep.status }}</td>
+        <td>{{ dep.goal[:40] }}{% if dep.goal|length > 40 %}...{% endif %}</td>
+        <td>{{ dep.language }}</td>
+      </tr>
+      {% endfor %}
+    </table>
+  {% else %}
+    <p>No deployments yet.</p>
+  {% endif %}
+
+  {% if available_types %}
+    <h2>New Deployment</h2>
+    <p>Choose a bot type to deploy.</p>
+    <form method="get" action="/deployments/new">
+      {% for bt in available_types %}
+        <label>
+          <input type="radio" name="bot_type" value="{{ bt.name }}" {% if loop.first %}checked{% endif %}>
+          <b>{{ bt.name }}</b>
+          {% if bt.description %}<span style="color: #555;"> — {{ bt.description }}</span>{% endif %}
+        </label><br>
+      {% endfor %}
+      <button type="submit">Create deployment</button>
+    </form>
+  {% else %}
+    <p><i>All bot types are currently active.</i></p>
+  {% endif %}
+</div>
+{% endblock %}
