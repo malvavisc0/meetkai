@@ -14,7 +14,6 @@ import signal
 import subprocess
 import threading
 import time
-from datetime import UTC, datetime
 from pathlib import Path
 
 import httpx
@@ -547,8 +546,8 @@ class DeploymentsService:
         Each message is ``{"role": str, "content": str, "ts": str | None}``.
         The ``ts`` field is the ISO-8601 UTC timestamp recorded when the
         message was stored; older history files (pre-timestamp) have
-        ``None`` and are ordered last by :meth:`latest_messages`. Returns
-        ``{}`` when the file is missing or unreadable. The history file is
+        ``None``. Returns ``{}`` when the file is missing or unreadable.
+        The history file is
         written atomically by the bot process (a ``.tmp`` replace), so
         reading it from the cockpit is safe.
 
@@ -601,36 +600,12 @@ class DeploymentsService:
             result[chat_id] = normalized
         return result
 
-    def latest_messages(self, deployment: Deployment, limit: int = 5) -> list[dict]:
-        """Return the most recent ``limit`` messages across all conversations.
-
-        Ordering is by stored timestamp (newest last); messages without a
-        timestamp (legacy history) are treated as oldest. Each returned item
-        adds a ``chat_id`` field alongside ``role``/``content``/``ts``.
-        """
+    def interaction_summary(self, deployment: Deployment) -> tuple[int, int]:
+        """Return ``(conversation_count, message_count)`` for the deployment."""
         history = self.history(deployment)
-        if not history:
-            return []
-
-        flattened: list[dict] = []
-        for chat_id, msgs in history.items():
-            for m in msgs:
-                flattened.append({**m, "chat_id": chat_id})
-
-        def _sort_key(item: dict) -> datetime:
-            ts = item.get("ts")
-            if ts:
-                try:
-                    parsed = datetime.fromisoformat(ts)
-                    if parsed.tzinfo is None:
-                        parsed = parsed.replace(tzinfo=UTC)
-                    return parsed
-                except ValueError:
-                    pass
-            return datetime.min.replace(tzinfo=UTC)
-
-        flattened.sort(key=_sort_key)
-        return flattened[-limit:]
+        conversation_count = len(history)
+        message_count = sum(len(msgs) for msgs in history.values())
+        return conversation_count, message_count
 
     def _sleep_toggle(self, deployment: Deployment, chat_id: str, action: str) -> dict:
         record = self._resolve_run(deployment)

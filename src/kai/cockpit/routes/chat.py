@@ -1,10 +1,14 @@
-"""Chat routes: /deployments/{id}/chat."""
+"""Chat send/clear actions for a deployment.
+
+The chat UI itself lives on the deployment detail page
+(``GET /deployments/{id}``, see ``routes/deployments.py``) — this module only
+handles the POST actions it submits to.
+"""
 
 from fastapi import APIRouter, Depends, Form, Request
 from fastapi.responses import RedirectResponse
 from sqlalchemy.orm import Session
 
-from kai.cockpit.app import templates
 from kai.cockpit.auth import require_user
 from kai.cockpit.db import get_db
 from kai.cockpit.deployments import DeploymentsService
@@ -24,38 +28,11 @@ def _get_deployment(
     return svc, dep
 
 
-@router.get("/deployments/{dep_id}/chat")
-async def chat_page(
-    request: Request,
-    dep_id: int,
-    user: User = Depends(require_user),
-    db: Session = Depends(get_db),
-):
-    svc = DeploymentsService(db)
-    result = _get_deployment(svc, dep_id, user)
-    if isinstance(result, RedirectResponse):
-        return result
-    svc, dep = result
-
-    reply = request.session.pop("chat_reply", None)
-    return templates.TemplateResponse(
-        request,
-        "chat.html",
-        {
-            "user": user,
-            "dep": dep,
-            "dep_user": user,
-            "reply": reply,
-        },
-    )
-
-
 @router.post("/deployments/{dep_id}/chat")
 async def chat_send(
     request: Request,
     dep_id: int,
     message: str = Form(...),
-    persist: str = Form(""),
     user: User = Depends(require_user),
     db: Session = Depends(get_db),
 ):
@@ -65,10 +42,14 @@ async def chat_send(
         return result
     svc, dep = result
 
-    result_dict = svc.send_message(dep, message, persist=persist == "true")
+    # persist=False always: a permanent goal change (the only thing this
+    # flag gates, see Bot._operator_tools) should only ever happen through
+    # the explicit Goal field on the Settings page, never as a side effect
+    # of a casual test message here.
+    result_dict = svc.send_message(dep, message, persist=False)
     reply = result_dict.get("reply", "(no reply)")
     request.session["chat_reply"] = reply
-    return RedirectResponse(f"/deployments/{dep_id}/chat", status_code=302)
+    return RedirectResponse(f"/deployments/{dep_id}", status_code=302)
 
 
 @router.post("/deployments/{dep_id}/chat/clear")
@@ -84,4 +65,4 @@ async def chat_clear(
     svc, dep = result
 
     svc.clear_history(dep)
-    return RedirectResponse(f"/deployments/{dep_id}/chat", status_code=302)
+    return RedirectResponse(f"/deployments/{dep_id}", status_code=302)

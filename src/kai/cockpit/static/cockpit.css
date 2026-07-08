@@ -296,7 +296,7 @@
     flex-wrap: wrap;
     gap: var(--space-md);
     justify-content: space-between;
-    align-items: start;
+    align-items: end;
     max-width: none;
   }
 
@@ -821,6 +821,22 @@
 
   .field--narrow input {
     max-width: 320px;
+  }
+
+  .chat-form {
+    gap: var(--space-sm);
+  }
+
+  .chat-form .field {
+    margin-bottom: 0;
+  }
+
+  .chat-form__actions {
+    margin-top: 0;
+  }
+
+  .chat-clear-form {
+    margin-top: var(--space-lg);
   }
 
   .checkbox-row {

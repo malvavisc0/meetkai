@@ -59,3 +59,19 @@ LANGUAGE_VOICE_MAP: dict[str, str] = {
 def auto_pick_voice(language: str) -> str:
     """Return the default kokoro voice for a language, or af_heart as fallback."""
     return LANGUAGE_VOICE_MAP.get(language, "af_heart")
+
+
+# Single source of truth for capability display names, shared by the
+# Runtime overview badges (deployment.html, keyed by the bot's /status
+# capability names) and the Parameters checkboxes (settings.html, keyed by
+# BotType.feature_flags names) — one dict covering both vocabularies so the
+# two pages can never show different wording for the same capability.
+CAPABILITY_LABELS: dict[str, str] = {
+    "vision": "Vision",
+    "image": "Vision",
+    "video": "Video",
+    "voice_to_text": "Speech to text",
+    "stt": "Speech to text",
+    "text_to_voice": "Text to speech",
+    "tts": "Text to speech",
+}

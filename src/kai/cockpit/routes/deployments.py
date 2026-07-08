@@ -10,7 +10,7 @@ from sqlalchemy.orm import Session
 
 from kai.cockpit.app import templates
 from kai.cockpit.auth import require_user
-from kai.cockpit.bots import BOT_TYPES, LANGUAGE_VOICE_MAP, auto_pick_voice
+from kai.cockpit.bots import BOT_TYPES, CAPABILITY_LABELS, LANGUAGE_VOICE_MAP, auto_pick_voice
 from kai.cockpit.connections import ConnectionsService
 from kai.cockpit.db import get_db
 from kai.cockpit.deployments import (
@@ -161,12 +161,6 @@ async def deployment_detail(
         return result
     svc, dep = result
 
-    bt = BOT_TYPES.get(dep.bot_type)
-    # Only render feature flags the user is entitled to (truthy in their
-    # feature_flags) — the form must not show a flag the user cannot enable.
-    entitlements = {k for k, v in (user.feature_flags or {}).items() if v}
-    feature_flags = [f for f in (bt.feature_flags if bt else []) if f in entitlements]
-
     # A waha deployment cannot start until the user's WhatsApp Connection is
     # "connected" — the start button must be hidden (and a connect-whatsapp
     # action shown instead) when that precondition isn't met, so the operator
@@ -197,16 +191,8 @@ async def deployment_detail(
     # not a session flash — see DeploymentsService.edit()/start()/stop().
     needs_restart = bool(dep.needs_restart) and dep.status == "running"
 
-    latest_messages = svc.latest_messages(dep)
-    latest_display = [
-        {
-            "role": m["role"],
-            "content": m["content"],
-            "chat_id": m.get("chat_id", ""),
-            "ts": _fmt_ts(m.get("ts")),
-        }
-        for m in latest_messages
-    ]
+    conversation_count, message_count = svc.interaction_summary(dep)
+    reply = request.session.pop("chat_reply", None)
 
     return templates.TemplateResponse(
         request,
@@ -218,11 +204,51 @@ async def deployment_detail(
             "status": status_data,
             "uptime_str": uptime_str,
             "uptime_s": uptime_s,
-            "voices": ALL_VOICES,
-            "feature_flags": feature_flags,
             "needs_restart": needs_restart,
             "whatsapp_connected": whatsapp_connected,
-            "latest_messages": latest_display,
+            "conversation_count": conversation_count,
+            "message_count": message_count,
+            "capability_labels": CAPABILITY_LABELS,
+            "reply": reply,
+            "flash": flash,
+        },
+    )
+
+
+# --- Settings ---
+
+
+@router.get("/deployments/{dep_id}/settings")
+async def deployment_settings_page(
+    request: Request,
+    dep_id: int,
+    user: User = Depends(require_user),
+    db: Session = Depends(get_db),
+):
+    svc = DeploymentsService(db)
+    result = _get_deployment(svc, dep_id, user)
+    if isinstance(result, RedirectResponse):
+        return result
+    svc, dep = result
+
+    bt = BOT_TYPES.get(dep.bot_type)
+    # Only render feature flags the user is entitled to (truthy in their
+    # feature_flags) — the form must not show a flag the user cannot enable.
+    entitlements = {k for k, v in (user.feature_flags or {}).items() if v}
+    feature_flags = [f for f in (bt.feature_flags if bt else []) if f in entitlements]
+
+    flash = request.session.pop("flash", None)
+
+    return templates.TemplateResponse(
+        request,
+        "settings.html",
+        {
+            "user": user,
+            "dep": dep,
+            "dep_user": user,
+            "voices": ALL_VOICES,
+            "feature_flags": feature_flags,
+            "capability_labels": CAPABILITY_LABELS,
             "flash": flash,
         },
     )
@@ -462,10 +488,10 @@ async def deployment_settings(
         )
     except ValueError as exc:
         request.session["flash"] = str(exc)
-        return RedirectResponse(f"/deployments/{dep_id}", status_code=302)
+        return RedirectResponse(f"/deployments/{dep_id}/settings", status_code=302)
 
     if dep.status == "running":
         request.session["flash"] = "Settings saved. Restart to apply."
     else:
         request.session["flash"] = "Settings saved."
-    return RedirectResponse(f"/deployments/{dep_id}", status_code=302)
+    return RedirectResponse(f"/deployments/{dep_id}/settings", status_code=302)

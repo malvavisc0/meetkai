@@ -1,28 +1,14 @@
 {% extends "base.html" %}
 {% block content %}
-{# Single source of truth for capability display names — covers both the
-   bot's /status capability keys (vision, video, voice_to_text, text_to_voice)
-   and the deployment's feature-flag keys (image, video, stt, tts), so the
-   Runtime overview badges and the Parameters checkboxes below can never show
-   different wording for the same capability. #}
-{% set capability_labels = {
-  "vision": "Vision",
-  "image": "Vision",
-  "video": "Video",
-  "voice_to_text": "Speech to text",
-  "stt": "Speech to text",
-  "text_to_voice": "Text to speech",
-  "tts": "Text to speech",
-} %}
 <div class="page stack">
   <header class="page-header page-header--split">
     <div class="page-header__copy">
       <p class="page-eyebrow">Deployment</p>
       <h1 class="page-title">{{ dep.bot_type }}</h1>
-      <p class="page-subtitle">Control the bot, inspect it, and adjust its behavior.</p>
+      <p class="page-subtitle">Chat with the bot, check its status, and control it.</p>
     </div>
     <div class="page-header__action">
-      <a href="/deployments/{{ dep.id }}/chat" class="button button--primary"><span class="icon">{% include "icons/message-circle.svg" %}</span> Chat with Bot</a>
+      <a href="/deployments/{{ dep.id }}/settings" class="button">Settings</a>
     </div>
   </header>
 
@@ -85,6 +71,13 @@
           {% endfor %}
         </dd>
       {% endif %}
+
+      <dt>Interactions</dt>
+      <dd>
+        {{ conversation_count }} conversation{{ '' if conversation_count == 1 else 's' }},
+        {{ message_count }} message{{ '' if message_count == 1 else 's' }} total
+        &middot; <a href="/deployments/{{ dep.id }}/history">View full message history</a>
+      </dd>
     </dl>
     {% if dep.status == "running" %}
       <form method="post" action="/deployments/{{ dep.id }}/stop">
@@ -161,132 +154,35 @@
     </div>
   {% endif %}
 
-  {# --- Recent interactions (dark log panel) --- #}
-  <div class="card">
-    <h3 class="card__title">Recent interactions</h3>
-    {% if latest_messages %}
-      <div class="log-panel">
-        {% for m in latest_messages %}
-        <div class="log-panel__line">
-          <span class="log-panel__meta mono">{{ m.chat_id }}{% if m.ts %} &middot; {{ m.ts }}{% endif %}</span><br>
-          <b class="mono">{% if m.role == "assistant" %}kai{% else %}{{ m.role }}{% endif %}&gt;</b>
-          <span class="log-panel__content">{{ m.content }}</span>
-        </div>
-        {% endfor %}
-      </div>
+  {# --- Chat --- #}
+  <div class="card chat-card">
+    <h3 class="card__title">Chat with the Bot</h3>
+    <p class="muted">Send a test message as a user would and review KAI's reply.</p>
+    {% if not dep.status == "running" %}
+      <p class="muted">Start the bot to send it a message.</p>
     {% else %}
-      <div class="empty-state">
-        <span class="icon icon--lg empty-state__icon">{% include "icons/message-circle.svg" %}</span>
-        <p class="empty-state__hint">KAI will start replying as soon as the bot is running and someone messages it.</p>
-      </div>
+      {% if reply %}
+        <div class="log-panel">
+          <div class="log-panel__line">
+            <b class="mono">kai&gt;</b>
+            <span class="log-panel__content">{{ reply }}</span>
+          </div>
+        </div>
+      {% endif %}
+      <form method="post" action="/deployments/{{ dep.id }}/chat" class="stack chat-form">
+        <div class="field">
+          <label class="sr-only" for="message">Message</label>
+          <textarea id="message" name="message" rows="3" required data-autosize
+            placeholder="Try a message KAI might get from a real user…"></textarea>
+        </div>
+        <div class="cluster chat-form__actions">
+          <button type="submit" class="button button--primary"><span class="icon">{% include "icons/send.svg" %}</span> Send</button>
+        </div>
+      </form>
+      <form method="post" action="/deployments/{{ dep.id }}/chat/clear" class="chat-clear-form" data-confirm="Clear this chat history?">
+        <button type="submit" class="button button--danger"><span class="icon">{% include "icons/trash-2.svg" %}</span> Clear history</button>
+      </form>
     {% endif %}
-    <p><a href="/deployments/{{ dep.id }}/history">View full message history</a></p>
-  </div>
-
-  {# --- Parameters card (every field, flat, none merged) --- #}
-  <div class="card">
-    <h3 class="card__title">Parameters</h3>
-    <form method="post" action="/deployments/{{ dep.id }}/settings" class="stack">
-
-      <div class="field">
-        <label class="field__label" for="goal">Goal</label>
-        <textarea id="goal" name="goal" rows="3" required data-autosize>{{ dep.goal }}</textarea>
-        <p class="field__help">Applies on next start. Edit to nudge what KAI does.</p>
-      </div>
-
-      <div class="field">
-        <label class="field__label" for="language">Language</label>
-        <input id="language" type="text" name="language" value="{{ dep.language }}" required>
-        <p class="field__help">Defaults to your account language — change it any time.</p>
-      </div>
-      <div class="field field--narrow">
-        <label class="field__label" for="voice">Voice</label>
-        <select id="voice" name="voice">
-          {% for v in voices %}
-            <option value="{{ v }}" {% if v == dep.voice %}selected{% endif %}>{{ v }}</option>
-          {% endfor %}
-        </select>
-        <p class="field__help">Picked from the language. Used when KAI sends voice notes.</p>
-      </div>
-
-      <div class="field">
-        <label class="field__label" for="trigger_keyword">Trigger keyword</label>
-        <input id="trigger_keyword" type="text" name="trigger_keyword" value="{{ dep.settings.get('trigger_keyword', '') }}">
-      </div>
-      <div class="field">
-        <label class="checkbox-row">
-          <input type="checkbox" name="mentions_enabled" value="true" {% if dep.settings.get('mentions_enabled', true) %}checked{% endif %}>
-          Reply when mentioned or replied to
-        </label>
-        <p class="field__help">KAI also replies whenever this keyword appears in a message.</p>
-      </div>
-
-      <div class="field">
-        <label class="field__label" for="whitelist">Whitelist (chat ids, one per line)</label>
-        <textarea id="whitelist" name="whitelist" rows="3" data-autosize>{{ dep.settings.get('whitelist', [])|join('\n') }}</textarea>
-      </div>
-      <div class="field">
-        <label class="field__label" for="blacklist">Blacklist (chat ids, one per line)</label>
-        <textarea id="blacklist" name="blacklist" rows="3" data-autosize>{{ dep.settings.get('blacklist', [])|join('\n') }}</textarea>
-        <p class="field__help">If a chat id is on both lists, the blacklist wins.</p>
-      </div>
-
-      <div class="field">
-        <label class="field__label">Capabilities</label>
-        {% for flag in feature_flags %}
-          <label class="checkbox-row">
-            <input type="checkbox" name="feature_{{ flag }}" value="true" {% if dep.feature_flags.get(flag, true) %}checked{% endif %}>
-            {{ capability_labels.get(flag, flag) }}
-          </label>
-        {% endfor %}
-      </div>
-
-      <div class="field">
-        <label class="field__label">Participation</label>
-        {% set part = dep.settings.get('participation', {}) %}
-        <label class="checkbox-row">
-          <input type="checkbox" name="participation_enabled" value="true" {% if part.get('enabled', true) %}checked{% endif %}>
-          Let KAI reply on its own sometimes (participation)
-        </label>
-      </div>
-      <div class="field field--narrow">
-        <label class="field__label" for="participation_rate">Reply rate (0–1)</label>
-        <input id="participation_rate" type="number" name="participation_rate" value="{{ part.get('rate', 0.15) }}" step="0.01">
-      </div>
-      <div class="field field--narrow">
-        <label class="field__label" for="participation_cooldown">Cooldown between replies (seconds)</label>
-        <input id="participation_cooldown" type="number" name="participation_cooldown" value="{{ part.get('cooldown_seconds', 90) }}" step="1">
-      </div>
-      <div class="field field--narrow">
-        <label class="field__label" for="participation_streak_max">Max replies in a row</label>
-        <input id="participation_streak_max" type="number" name="participation_streak_max" value="{{ part.get('streak_max', 2) }}" step="1">
-      </div>
-
-      <div class="field field--narrow">
-        <label class="field__label" for="timezone">Timezone</label>
-        <input id="timezone" type="text" name="timezone" value="{{ dep.settings.get('timezone', '') or '' }}">
-      </div>
-
-      <div class="cluster">
-        <button type="submit" class="button button--primary">Save</button>
-        <a href="/deployments/{{ dep.id }}" class="button">Cancel</a>
-      </div>
-      <p class="field__help">* required. Changes apply on next start.</p>
-    </form>
-  </div>
-
-  {# --- Danger zone --- #}
-  <div class="card card--danger mt-2xl">
-    <h3 class="card__title text-danger">Danger zone</h3>
-    <p><strong>Delete deployment</strong></p>
-    <p class="muted">This removes the bot config. WhatsApp stays connected — you're not starting over, just retiring this bot.</p>
-    <form method="post" action="/deployments/{{ dep.id }}/delete" data-confirm="Delete this deployment? This stops the bot (if running) and removes the config.">
-      <label class="checkbox-row text-danger mb-md">
-        <input type="checkbox" name="confirm_delete" value="true" required>
-        I understand this stops the bot (if running) and removes the deployment.
-      </label>
-      <button type="submit" class="button button--danger"><span class="icon">{% include "icons/trash-2.svg" %}</span> Delete deployment</button>
-    </form>
   </div>
 </div>
 {% endblock %}
