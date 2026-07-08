@@ -1,11 +1,15 @@
 {% extends "base.html" %}
 {% block content %}
-<div class="page page--narrow stack">
-  <a href="/" class="muted">&lt; back</a>
-  <h1 class="page-title">Create deployment</h1>
+<div class="page stack">
+  <header class="page-header">
+    <p class="page-eyebrow">New deployment</p>
+    <h1 class="page-title">Create deployment</h1>
+    <p class="page-subtitle">Confirm the starting goal and KAI will be ready to run as soon as WhatsApp is connected.</p>
+  </header>
 
-  <div class="card">
-    <strong>{{ bt.name }}</strong>
+  <div class="card status-card">
+    <p class="card__eyebrow">Bot type</p>
+    <h3 class="card__title">{{ bt.name }}</h3>
     {% if bt.description %}
       <p class="muted mt-2xs">{{ bt.description }}</p>
     {% endif %}

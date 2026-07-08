@@ -1,11 +1,14 @@
 {% extends "base.html" %}
 {% block content %}
 <div class="page stack">
-  <a href="/" class="muted">&lt; back</a>
-  <h1 class="page-title">{{ dep.bot_type }}</h1>
+  <header class="page-header">
+    <p class="page-eyebrow">Deployment</p>
+    <h1 class="page-title">{{ dep.bot_type }}</h1>
+    <p class="page-subtitle">Control this bot, inspect live status, and tune how KAI behaves in conversations.</p>
+  </header>
 
   {# --- Summary card --- #}
-  <div class="card">
+  <div class="card status-card">
     <dl class="def-grid">
       <dt>Bot type</dt>
       <dd>{{ dep.bot_type }}</dd>

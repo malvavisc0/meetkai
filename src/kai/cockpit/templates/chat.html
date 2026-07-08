@@ -1,8 +1,11 @@
 {% extends "base.html" %}
 {% block content %}
-<div class="page page--narrow stack">
-  <a href="/deployments/{{ dep.id }}" class="muted">&lt; back</a>
-  <h1 class="page-title">Chat — {{ dep.bot_type }}</h1>
+<div class="page stack">
+  <header class="page-header">
+    <p class="page-eyebrow">Test chat</p>
+    <h1 class="page-title">Chat — {{ dep.bot_type }}</h1>
+    <p class="page-subtitle">Control the bot or ask question from here.</p>
+  </header>
 
   {% if reply %}
     <div class="log-panel">
@@ -13,7 +16,7 @@
     </div>
   {% endif %}
 
-  <form method="post" class="card stack">
+  <form method="post" class="card status-card stack">
     <div class="field">
       <label class="sr-only" for="message">Operator message</label>
       <textarea id="message" name="message" rows="4" required data-autosize

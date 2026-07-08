@@ -1,9 +1,11 @@
 {% extends "base.html" %}
 {% block content %}
 <div class="page stack">
-  <a href="/deployments/{{ dep.id }}" class="muted">&lt; back</a>
-  <h1 class="page-title">History — {{ dep.bot_type }}</h1>
-  <p class="muted">{{ history|length }} conversation(s), {{ total }} message(s) total.</p>
+  <header class="page-header">
+    <p class="page-eyebrow">Conversation history</p>
+    <h1 class="page-title">History — {{ dep.bot_type }}</h1>
+    <p class="page-subtitle">{{ history|length }} conversation(s), {{ total }} message(s) total.</p>
+  </header>
 
   {% if history %}
     {% for chat_id, messages in history.items() %}
