@@ -8,7 +8,16 @@
   </header>
 
   {# --- Summary card --- #}
-  <div class="card status-card">
+  {% if dep.status == 'running' and (needs_restart or not status) %}
+    {% set status_class = 'status-card--attention' %}
+  {% elif dep.status == 'running' %}
+    {% set status_class = 'status-card--running' %}
+  {% elif dep.status == 'needs_connect' %}
+    {% set status_class = 'status-card--warn' %}
+  {% else %}
+    {% set status_class = 'status-card--stopped' %}
+  {% endif %}
+  <div class="card status-card deployment-status-card {{ status_class }}">
     <dl class="def-grid">
       <dt>Bot type</dt>
       <dd>{{ dep.bot_type }}</dd>

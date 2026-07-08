@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 from kai.cockpit.app import templates
 from kai.cockpit.auth import require_user
 from kai.cockpit.bots import BOT_TYPES
+from kai.cockpit.brains import BrainsService
 from kai.cockpit.connections import ConnectionsService
 from kai.cockpit.db import get_db
 from kai.cockpit.deployments import DeploymentsService
@@ -55,6 +56,7 @@ async def dashboard(
     conn_svc = ConnectionsService(db)
     whatsapp = conn_svc.get_whatsapp(user)
     whatsapp_connected = bool(whatsapp and whatsapp.status == "connected")
+    brain_initialized = BrainsService(db).get_brain(user) is not None
 
     running = sum(1 for d in deployments if d.status == "running")
     stopped = sum(1 for d in deployments if d.status == "stopped")
@@ -72,7 +74,9 @@ async def dashboard(
             "user": user,
             "deployments": deployments,
             "available_types": available_types,
+            "bot_types": BOT_TYPES,
             "whatsapp_connected": whatsapp_connected,
+            "brain_initialized": brain_initialized,
             "running": running,
             "stopped": stopped,
             "attention_reasons": attention_reasons,

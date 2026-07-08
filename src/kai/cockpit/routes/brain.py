@@ -34,7 +34,7 @@ async def brains_page(
     flash = request.session.pop("flash", None)
     return templates.TemplateResponse(
         request,
-        "brains.html",
+        "brain.html",
         {
             "user": user,
             "brain": brain,

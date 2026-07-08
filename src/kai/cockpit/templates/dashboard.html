@@ -4,16 +4,21 @@
   <header class="page-header">
     <p class="page-eyebrow">Operator console</p>
     <h1 class="page-title">Deployments</h1>
-    <p class="page-subtitle">See what is running, what needs attention, and create the next bot.</p>
+    <p class="page-subtitle">Monitor live bots and spot anything that needs attention.</p>
   </header>
 
   {# Health summary: status badges only, never the action accent.
      All-neutral-or-live is the restful default — load the page, see no red, leave. #}
-  <div class="card health status-strip">
+  <div class="card health status-strip dashboard-health">
     {% if whatsapp_connected %}
       <span class="badge badge--live">WhatsApp connected</span>
     {% else %}
       <span class="badge badge--warn">WhatsApp not connected</span>
+    {% endif %}
+    {% if brain_initialized %}
+      <span class="badge badge--live">Brain initialized</span>
+    {% else %}
+      <span class="badge badge--warn">Brain not initialized</span>
     {% endif %}
     {% if running > 0 %}
       <span class="badge badge--live">{{ running }} bot{{ '' if running == 1 else 's' }} running</span>
@@ -33,34 +38,33 @@
   </div>
 
   {% if deployments %}
-    <div class="card">
-      <table class="table table--responsive">
-        <thead>
-          <tr>
-            <th>Bot type</th>
-            <th>Status</th>
-            <th>Updated</th>
-          </tr>
-        </thead>
-        <tbody>
-          {% for dep in deployments %}
-          <tr class="table__row--clickable" onclick="window.location='/deployments/{{ dep.id }}'">
-            <td data-label="Bot type">{{ dep.bot_type }}</td>
-            <td data-label="Status">
+    <div class="deployment-list">
+      {% for dep in deployments %}
+        {% set bot_type = bot_types.get(dep.bot_type) %}
+        <a class="card deployment-card{% if attention_reasons.get(dep.id) %} deployment-card--attention{% elif dep.status == 'running' %} deployment-card--running{% else %} deployment-card--stopped{% endif %}" href="/deployments/{{ dep.id }}">
+          <div class="deployment-card__main">
+            <div class="deployment-card__title">
+              <h3 class="card__title">{{ dep.bot_type }}</h3>
               {% if attention_reasons.get(dep.id) %}
-                <span class="badge badge--danger">ATTENTION</span>
-                <span class="muted block text-sm">{{ attention_reasons[dep.id] }}</span>
+                <span class="badge badge--danger">Attention</span>
               {% elif dep.status == "running" %}
-                <span class="badge badge--live">RUN</span>
+                <span class="badge badge--live">Running</span>
               {% else %}
-                <span class="badge badge--muted">STOPPED</span>
+                <span class="badge badge--muted">Stopped</span>
               {% endif %}
-            </td>
-            <td data-label="Updated"><span class="mono">{{ dep.updated_at[:10] if dep.updated_at else '' }}</span></td>
-          </tr>
-          {% endfor %}
-        </tbody>
-      </table>
+            </div>
+            {% if attention_reasons.get(dep.id) %}
+              <p class="deployment-card__alert">{{ attention_reasons[dep.id] }}</p>
+            {% elif bot_type and bot_type.description %}
+              <p class="field__help">{{ bot_type.description }}</p>
+            {% else %}
+              <p class="field__help">Configured bot deployment.</p>
+            {% endif %}
+          </div>
+
+          <span class="button deployment-card__action">Open deployment</span>
+        </a>
+      {% endfor %}
     </div>
   {% else %}
     <div class="card empty-state empty-state--hero">
@@ -92,8 +96,6 @@
         </div>
       </form>
     </div>
-  {% else %}
-    <p class="muted"><i>All bot types are currently active.</i></p>
   {% endif %}
 </div>
 {% endblock %}
