@@ -291,6 +291,32 @@
     max-width: 760px;
   }
 
+  .page-header--split {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-md);
+    justify-content: space-between;
+    align-items: start;
+    max-width: none;
+  }
+
+  .page-header--split .page-header__copy {
+    display: grid;
+    gap: var(--space-2xs);
+    max-width: 760px;
+  }
+
+  .page-header--split .page-header__action {
+    flex-shrink: 0;
+  }
+
+  @media (max-width: 640px) {
+    .page-header--split .page-header__action .button {
+      width: 100%;
+      justify-content: center;
+    }
+  }
+
   .page-eyebrow {
     margin: 0;
     font-family: var(--font-display);
@@ -457,6 +483,87 @@
     margin: 0;
   }
 
+  .status-card__row {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    align-items: start;
+    gap: var(--space-md);
+  }
+
+  .status-card__row .def-grid {
+    flex: 1 1 auto;
+  }
+
+  /* --- Sub-cards inside a card (Sleep mode's two actions) --- */
+  .subcard-grid {
+    display: grid;
+    gap: var(--space-md);
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  }
+
+  .subcard {
+    display: grid;
+    gap: var(--space-xs);
+    padding: var(--space-md);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    background: var(--color-surface-alt);
+  }
+
+  .subcard__title {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2xs);
+    font-family: var(--font-display);
+    font-weight: 600;
+    font-size: var(--text-sm);
+    letter-spacing: -0.01em;
+    margin: 0;
+  }
+
+  .subcard form {
+    display: flex;
+    gap: var(--space-xs);
+  }
+
+  .subcard input[type="text"] {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+
+  .sleep-list {
+    display: grid;
+    gap: var(--space-2xs);
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    max-height: 220px;
+    overflow-y: auto;
+  }
+
+  .sleep-list__item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-sm);
+    padding: var(--space-2xs) var(--space-xs);
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-sm);
+  }
+
+  .sleep-list__id {
+    font-size: var(--text-sm);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .sleep-list__item form {
+    flex-shrink: 0;
+  }
+
   /* --- Tables (paper surface blocks) --- */
   .table {
     background: var(--color-surface);
@@ -547,9 +654,24 @@
     background: var(--color-danger-bg);
   }
 
+  .button--warn {
+    border-color: var(--color-warn);
+    color: var(--color-warn);
+    background: var(--color-surface);
+  }
+
+  .button--warn:hover {
+    background: var(--color-warn-bg);
+  }
+
   .button--block {
     width: 100%;
     justify-content: center;
+  }
+
+  .button--sm {
+    padding: 0.35rem 0.75rem;
+    font-size: var(--text-xs);
   }
 
   /* --- Badges (status only — never clickable, never on buttons) --- */

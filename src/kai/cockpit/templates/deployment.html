@@ -1,13 +1,32 @@
 {% extends "base.html" %}
 {% block content %}
+{# Single source of truth for capability display names — covers both the
+   bot's /status capability keys (vision, video, voice_to_text, text_to_voice)
+   and the deployment's feature-flag keys (image, video, stt, tts), so the
+   Runtime overview badges and the Parameters checkboxes below can never show
+   different wording for the same capability. #}
+{% set capability_labels = {
+  "vision": "Vision",
+  "image": "Vision",
+  "video": "Video",
+  "voice_to_text": "Speech to text",
+  "stt": "Speech to text",
+  "text_to_voice": "Text to speech",
+  "tts": "Text to speech",
+} %}
 <div class="page stack">
-  <header class="page-header">
-    <p class="page-eyebrow">Deployment</p>
-    <h1 class="page-title">{{ dep.bot_type }}</h1>
-    <p class="page-subtitle">Control the bot, inspect it, and adjust its behavior.</p>
+  <header class="page-header page-header--split">
+    <div class="page-header__copy">
+      <p class="page-eyebrow">Deployment</p>
+      <h1 class="page-title">{{ dep.bot_type }}</h1>
+      <p class="page-subtitle">Control the bot, inspect it, and adjust its behavior.</p>
+    </div>
+    <div class="page-header__action">
+      <a href="/deployments/{{ dep.id }}/chat" class="button button--primary"><span class="icon">{% include "icons/message-circle.svg" %}</span> Chat with Bot</a>
+    </div>
   </header>
 
-  {# --- Summary card --- #}
+  {# --- Runtime overview --- #}
   {% if dep.status == 'running' and (needs_restart or not status) %}
     {% set status_class = 'status-card--attention' %}
   {% elif dep.status == 'running' %}
@@ -18,11 +37,9 @@
     {% set status_class = 'status-card--stopped' %}
   {% endif %}
   <div class="card status-card deployment-status-card {{ status_class }}">
+    <p class="card__eyebrow">Runtime overview</p>
+    <div class="status-card__row">
     <dl class="def-grid">
-      <dt>Bot type</dt>
-      <dd>{{ dep.bot_type }}</dd>
-      <dt>Operator</dt>
-      <dd>{{ dep_user.email }}</dd>
       <dt>Status</dt>
       <dd>
         {% if dep.status == "running" %}
@@ -34,59 +51,48 @@
         {% endif %}
         {% if dep.status == "running" and needs_restart %}
           <span class="badge badge--warn">RESTART NEEDED — settings changed since last start</span>
+        {% elif dep.status == "running" and not status %}
+          <span class="badge badge--danger">NOT RESPONDING</span>
         {% endif %}
       </dd>
-    </dl>
-  </div>
+      {% if dep.run_id %}
+        <dt>Run ID</dt>
+        <dd><span class="mono">{{ dep.run_id }}</span></dd>
+      {% endif %}
+      
+      {% if status and status.account %}
+        <dt>Account</dt>
+        <dd>{{ status.account.name }} <span class="mono">{{ status.account.id }}</span></dd>
+      {% endif %}
 
-  {# --- Status definition grid --- #}
-  {% if status %}
-    <div class="card">
-      <dl class="def-grid">
-        <dt>Desired state</dt>
-        <dd>{{ dep.desired_state }}</dd>
-        <dt>Live status</dt>
+      {% if status and status.tasks %}
+        <dt>Tasks</dt>
+        <dd>{{ status.tasks.pending }} pending, {{ status.tasks.recurring }} recurring</dd>
+      {% endif %}
+
+      {% if status and status.capabilities %}
+        <dt>Capabilities</dt>
         <dd>
-          {% if status.session %}{{ status.session.status }}{% else %}—{% endif %}
-        </dd>
-        {% if uptime_str %}
-          <dt>Last started</dt>
-          <dd><span class="mono">{{ uptime_str }}</span> ({{ uptime_s }}s)</dd>
-        {% endif %}
-        {% if dep.run_id %}
-          <dt>Session id</dt>
-          <dd><span class="mono">{{ dep.run_id }}</span></dd>
-        {% endif %}
-        {% if status.account %}
-          <dt>Account</dt>
-          <dd>{{ status.account.name }} <span class="mono">{{ status.account.id }}</span></dd>
-        {% endif %}
-        {% if status.sleep %}
-          <dt>Sleep</dt>
-          <dd>{{ status.sleep.count }} chat(s) asleep</dd>
-        {% endif %}
-        {% if status.tasks %}
-          <dt>Tasks</dt>
-          <dd>{{ status.tasks.pending }} pending, {{ status.tasks.recurring }} recurring</dd>
-        {% endif %}
-        {% if status.capabilities %}
-          <dt>Capabilities</dt>
-          <dd>
-            {% for k, v in status.capabilities.items() %}
-              {% set label = k|replace("_", " ") %}
+          {% for k, v in status.capabilities.items() %}
+            {% if k in capability_labels %}
+              {% set label = capability_labels[k] %}
               {% if v %}
                 <span class="badge badge--live">{{ label }}</span>
               {% else %}
                 <span class="badge badge--muted">{{ label }}</span>
               {% endif %}
-            {% endfor %}
-          </dd>
-        {% endif %}
-      </dl>
+            {% endif %}
+          {% endfor %}
+        </dd>
+      {% endif %}
+    </dl>
+    {% if dep.status == "running" %}
+      <form method="post" action="/deployments/{{ dep.id }}/stop">
+        <button type="submit" class="button button--warn"><span class="icon">{% include "icons/square.svg" %}</span> Stop</button>
+      </form>
+    {% endif %}
     </div>
-  {% else %}
-    <p class="muted"><i>Status is unavailable. The bot may be stopped.</i></p>
-  {% endif %}
+  </div>
 
   {# --- Controls cluster --- #}
   <div class="cluster">
@@ -100,23 +106,51 @@
         <a href="/connections" class="button">Connect WhatsApp</a>
       {% endif %}
     {% endif %}
-    {% if dep.status == "running" %}
-      <form method="post" action="/deployments/{{ dep.id }}/stop">
-        <button type="submit" class="button"><span class="icon">{% include "icons/square.svg" %}</span> Stop</button>
-      </form>
-      <form method="post" action="/deployments/{{ dep.id }}/sleep" class="cluster">
-        <label class="sr-only" for="sleep_chat_id">Chat ID</label>
-        <input id="sleep_chat_id" type="text" name="chat_id" placeholder="chat ID">
-        <button type="submit" class="button"><span class="icon">{% include "icons/moon.svg" %}</span> Sleep</button>
-      </form>
-      <form method="post" action="/deployments/{{ dep.id }}/wake" class="cluster">
-        <label class="sr-only" for="wake_chat_id">Chat ID</label>
-        <input id="wake_chat_id" type="text" name="chat_id" placeholder="chat ID">
-        <button type="submit" class="button"><span class="icon">{% include "icons/sun.svg" %}</span> Wake</button>
-      </form>
-    {% endif %}
-    <a href="/deployments/{{ dep.id }}/chat" class="button">Open bot chat</a>
   </div>
+
+  {% if dep.status == "running" %}
+    {% set sleeping_chats = (status.sleep.sleeping if status and status.sleep else []) %}
+    <div class="card">
+      <p class="card__eyebrow">Sleep mode</p>
+      <h3 class="card__title">Per-chat sleep</h3>
+      <p class="muted">
+        {% if sleeping_chats %}
+          {{ sleeping_chats|length }} chat{{ '' if sleeping_chats|length == 1 else 's' }} currently asleep.
+        {% else %}
+          No chats asleep right now.
+        {% endif %}
+        Put a chat to sleep to pause KAI's replies there, or wake one up below.
+      </p>
+      <div class="subcard-grid">
+        <div class="subcard">
+          <p class="subcard__title"><span class="icon">{% include "icons/moon.svg" %}</span> Put a chat to sleep</p>
+          <form method="post" action="/deployments/{{ dep.id }}/sleep">
+            <label class="sr-only" for="sleep_chat_id">Chat ID</label>
+            <input id="sleep_chat_id" type="text" name="chat_id" placeholder="chat ID">
+            <button type="submit" class="button">Sleep</button>
+          </form>
+        </div>
+        <div class="subcard">
+          <p class="subcard__title"><span class="icon">{% include "icons/sun.svg" %}</span> Sleeping chats</p>
+          {% if sleeping_chats %}
+            <ul class="sleep-list">
+              {% for chat_id in sleeping_chats %}
+                <li class="sleep-list__item">
+                  <span class="mono sleep-list__id">{{ chat_id }}</span>
+                  <form method="post" action="/deployments/{{ dep.id }}/wake">
+                    <input type="hidden" name="chat_id" value="{{ chat_id }}">
+                    <button type="submit" class="button button--sm">Wake</button>
+                  </form>
+                </li>
+              {% endfor %}
+            </ul>
+          {% else %}
+            <p class="muted text-sm mb-0">No chats are asleep.</p>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+  {% endif %}
 
   {% if dep.status == "running" and needs_restart %}
     <div class="card cluster">
@@ -149,9 +183,9 @@
     <p><a href="/deployments/{{ dep.id }}/history">View full message history</a></p>
   </div>
 
-  {# --- Settings card (every field, flat, none merged) --- #}
+  {# --- Parameters card (every field, flat, none merged) --- #}
   <div class="card">
-    <h3 class="card__title">Settings</h3>
+    <h3 class="card__title">Parameters</h3>
     <form method="post" action="/deployments/{{ dep.id }}/settings" class="stack">
 
       <div class="field">
@@ -202,7 +236,7 @@
         {% for flag in feature_flags %}
           <label class="checkbox-row">
             <input type="checkbox" name="feature_{{ flag }}" value="true" {% if dep.feature_flags.get(flag, true) %}checked{% endif %}>
-            {{ flag }}
+            {{ capability_labels.get(flag, flag) }}
           </label>
         {% endfor %}
       </div>

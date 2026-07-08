@@ -422,7 +422,6 @@ class Bot(BaseBot):
         return {
             "enabled": self._sleep_store is not None,
             "sleeping": sorted(sleeping),
-            "count": len(sleeping),
         }
 
     async def _tasks_state(self) -> dict:
@@ -859,6 +858,28 @@ class Bot(BaseBot):
                     )
                 self._mark_skipped(meta.chat_id)
                 logger.debug("Not responding to group message: %.80s", text)
+                return
+
+            # A response is expected (summoned or organic). If the inbound
+            # media matches a capability this deployment has turned off,
+            # decline with a canned reply instead of spending an LLM call on
+            # content we can't actually process (no transcript/vision bytes
+            # were ever attached above when the flag is off). The turn is
+            # still recorded via ``agent.observe`` so conversation history
+            # isn't silently missing the user's message (mirrors the
+            # not-summoned/not-organic skip path above).
+            unsupported_reason = self._unsupported_media_reason(media)
+            if unsupported_reason:
+                if enriched_text.strip():
+                    await agent.observe(
+                        enriched_text,
+                        conversation_id=meta.chat_id,
+                        context=context,
+                        images=images or None,
+                        videos=videos or None,
+                    )
+                await self._send_reply(meta, roster, unsupported_reason)
+                self._mark_skipped(meta.chat_id)
                 return
 
             if media and media.type == MediaType.IMAGE and self._config.media.image_enabled:
@@ -1583,6 +1604,39 @@ class Bot(BaseBot):
         except Exception as exc:
             logger.error("Failed to send reply to %s: %s", meta.chat_id, exc)
             console.print(f"[red]send failed: {meta.chat_id}: {exc}[/red]")
+
+    def _unsupported_media_reason(self, media: MediaAttachment | None) -> str | None:
+        """Canned decline text when inbound *media* matches a disabled capability.
+
+        Called only on turns where a reply is already expected (summoned or
+        organic). Lets the bot decline gracefully without spending an
+        LLM/vision/STT API call on content this deployment has turned off —
+        the corresponding enrichment block earlier in ``_handle_message``
+        never attaches bytes or a tag for the media when its flag is off, so
+        without this the model would otherwise be asked to react to an
+        attachment it was never shown. Returns ``None`` when the media is
+        missing or its capability is enabled.
+        """
+        if media is None:
+            return None
+        if media.type in (MediaType.VOICE, MediaType.AUDIO) and not (
+            self._config.media.stt_enabled and self._stt
+        ):
+            return (
+                "Voice notes aren't supported on this bot right now — "
+                "could you send that as text instead?"
+            )
+        if media.type == MediaType.IMAGE and not self._config.media.image_enabled:
+            return (
+                "Images aren't supported on this bot right now — "
+                "could you describe it in text instead?"
+            )
+        if media.type == MediaType.VIDEO and not self._config.media.video_enabled:
+            return (
+                "Videos aren't supported on this bot right now — "
+                "could you describe it in text instead?"
+            )
+        return None
 
     def _tts_capability_note(self) -> str:
         """Per-turn context steering the agent off ``send_voice_note`` when TTS is offline.
