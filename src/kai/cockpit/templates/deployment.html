@@ -158,8 +158,8 @@
   <div class="card chat-card">
     <h3 class="card__title">Chat with the Bot</h3>
     <p class="muted">Send a test message as a user would and review KAI's reply.</p>
-    {% if not dep.status == "running" %}
-      <p class="muted">Start the bot to send it a message.</p>
+    {% if dep.status != "running" or not status %}
+      <p class="muted">{% if dep.status != "running" %}Start the bot to send it a message.{% else %}The bot is not responding yet.{% endif %}</p>
     {% else %}
       {% if reply %}
         <div class="log-panel chat-reply">
