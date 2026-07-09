@@ -4,7 +4,7 @@
   <header class="page-header">
     <p class="page-eyebrow">Channel status</p>
     <h1 class="page-title">Connections</h1>
-    <p class="page-subtitle">Connect channels so Bots can reach people where they are.</p>
+    <p class="page-subtitle">Connect channels so bots can reach people where they are.</p>
   </header>
 
   {% if conn and conn.status == "connected" %}
@@ -12,7 +12,7 @@
     <div class="card status-card status-card--running">
       <dl class="def-grid">
         <dt>WhatsApp</dt>
-        <dd><span class="badge badge--live">CONNECTED</span></dd>
+        <dd><span class="badge badge--live">Connected</span></dd>
         {% if conn.config.get('waha_session') %}
           <dt>Session</dt>
           <dd><span class="mono">{{ conn.config.get('waha_session', '?') }}</span></dd>
@@ -36,7 +36,7 @@
     <div class="card status-card status-card--warn">
       <dl class="def-grid">
         <dt>WhatsApp</dt>
-        <dd><span class="badge badge--warn">CONNECTING</span></dd>
+        <dd><span class="badge badge--warn">Connecting</span></dd>
       </dl>
       <p class="field__help">Waiting for WhatsApp — scan the QR and this page updates itself when it connects.</p>
     </div>
@@ -57,7 +57,7 @@
     <div class="card status-card status-card--stopped">
       <dl class="def-grid">
         <dt>WhatsApp</dt>
-        <dd><span class="badge badge--muted">NOT CONNECTED</span></dd>
+        <dd><span class="badge badge--muted">Not connected</span></dd>
       </dl>
       <p class="field__help">Connect WhatsApp before starting a deployment that should answer real conversations.</p>
     </div>

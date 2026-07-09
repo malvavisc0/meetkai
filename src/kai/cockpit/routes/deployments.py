@@ -28,6 +28,7 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 ALL_VOICES = sorted(set(LANGUAGE_VOICE_MAP.values()))
+ALL_LANGUAGES = sorted(LANGUAGE_VOICE_MAP.keys())
 
 _HOME_REDIRECT = RedirectResponse("/dashboard", status_code=302)
 
@@ -109,6 +110,7 @@ async def deploy_new_get(
             "language": user.language,
             "voice": voice,
             "voices": ALL_VOICES,
+            "languages": ALL_LANGUAGES,
         },
     )
 
@@ -134,10 +136,12 @@ async def deploy_new_post(
                 "user": user,
                 "step": "config",
                 "bot_type": bot_type,
+                "bt": BOT_TYPES.get(bot_type),
                 "goal": goal,
                 "language": language,
                 "voice": voice,
                 "voices": ALL_VOICES,
+                "languages": ALL_LANGUAGES,
                 "error": str(exc),
             },
         )

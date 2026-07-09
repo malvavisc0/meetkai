@@ -18,12 +18,12 @@
       <p class="card__eyebrow">Identity</p>
       <h3 class="card__title">Bot identity &amp; voice</h3>
       <div class="field">
-        <label class="field__label" for="goal">Goal</label>
+        <label class="field__label" for="goal">Goal *</label>
         <textarea id="goal" name="goal" rows="3" required data-autosize>{{ dep.goal }}</textarea>
         <p class="field__help">Applies on next start. Edit to nudge what KAI does.</p>
       </div>
       <div class="field field--narrow">
-        <label class="field__label" for="language">Language</label>
+        <label class="field__label" for="language">Language *</label>
         <input id="language" type="text" name="language" value="{{ dep.language }}" required>
         <p class="field__help">Defaults to your account language — change it any time.</p>
       </div>
@@ -64,24 +64,30 @@
       <p class="card__eyebrow">Chats</p>
       <h3 class="card__title">Whitelist &amp; blacklist</h3>
 
-      <div class="field">
-        <input type="search" id="chat_search" placeholder="Search by name or chat id" autocomplete="off">
-      </div>
+      <div class="chat-picker-layout">
+        <div class="chat-picker-layout__list">
+          <div class="field">
+            <input type="search" id="chat_search" placeholder="Search by name or chat id" autocomplete="off">
+          </div>
 
-      <div class="chat-picker" data-chat-picker data-dep-id="{{ dep.id }}">
-        {# rows rendered by JS from /deployments/{id}/chats.json #}
-      </div>
+          <div class="chat-picker" data-chat-picker data-dep-id="{{ dep.id }}">
+            {# rows rendered by JS from /deployments/{id}/chats.json #}
+          </div>
 
-      <button type="button" class="button button--sm mt-lg" id="chat_load_more">Load more chats</button>
+          <button type="button" class="button button--sm" id="chat_load_more">Load more chats</button>
+        </div>
 
-      <div class="field mt-lg">
-        <label class="field__label" for="whitelist">Whitelist (chat ids, one per line)</label>
-        <textarea id="whitelist" name="whitelist" rows="3" data-autosize>{{ dep.settings.get('whitelist', [])|join('\n') }}</textarea>
-      </div>
-      <div class="field">
-        <label class="field__label" for="blacklist">Blacklist (chat ids, one per line)</label>
-        <textarea id="blacklist" name="blacklist" rows="3" data-autosize>{{ dep.settings.get('blacklist', [])|join('\n') }}</textarea>
-        <p class="field__help">If a chat id is on both lists, the blacklist wins.</p>
+        <div class="chat-picker-layout__lists">
+          <div class="field">
+            <label class="field__label" for="whitelist">Whitelist (chat ids, one per line)</label>
+            <textarea id="whitelist" name="whitelist" rows="6" data-autosize>{{ dep.settings.get('whitelist', [])|join('\n') }}</textarea>
+          </div>
+          <div class="field">
+            <label class="field__label" for="blacklist">Blacklist (chat ids, one per line)</label>
+            <textarea id="blacklist" name="blacklist" rows="6" data-autosize>{{ dep.settings.get('blacklist', [])|join('\n') }}</textarea>
+            <p class="field__help">If a chat id is on both lists, the blacklist wins.</p>
+          </div>
+        </div>
       </div>
     </div>
 

@@ -44,6 +44,7 @@
         <a class="card deployment-card{% if attention_reasons.get(dep.id) %} deployment-card--attention{% elif dep.status == 'running' %} deployment-card--running{% else %} deployment-card--stopped{% endif %}" href="/deployments/{{ dep.id }}">
           <div class="deployment-card__main">
             <div class="deployment-card__title">
+              <span class="status-dot{% if attention_reasons.get(dep.id) %} status-dot--attention{% elif dep.status == 'running' %} status-dot--running{% else %} status-dot--stopped{% endif %}"></span>
               <h3 class="card__title">{{ dep.bot_type }}</h3>
               {% if attention_reasons.get(dep.id) %}
                 <span class="badge badge--danger">Attention</span>
@@ -90,9 +91,7 @@
         {% endfor %}
         </div>
         <div>
-          <button type="submit" class="button button--primary">
-            <span class="icon">{% include "icons/plus.svg" %}</span> Create deployment
-          </button>
+          <button type="submit" class="button button--primary">Continue</button>
         </div>
       </form>
     </div>

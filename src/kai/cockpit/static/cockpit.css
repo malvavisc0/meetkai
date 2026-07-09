@@ -11,9 +11,10 @@
 /* ------------------------------------------------------------------ */
 @layer tokens {
   @font-face {
-    font-family: "VT323";
-    src: url("/static/fonts/vt323.woff2") format("woff2");
-    font-weight: 400;
+    font-family: "Inter";
+    src: url("/static/fonts/inter-variable.woff2") format("woff2-variations"),
+         url("/static/fonts/inter-variable.woff2") format("woff2");
+    font-weight: 400 700;
     font-style: normal;
     font-display: swap;
   }
@@ -35,39 +36,59 @@
   }
 
   :root {
-    /* Color — "Paper Terminal": crisp Plex Mono on clean paper, with the */
-    /* dark topbar/log panel kept as KAI's terminal signature. */
-    --color-ink: #111827;
-    --color-muted: #6b7280;
-    --color-tertiary: #059669;
-    --color-border: #e3e5e8;
-    --color-border-strong: #111827;
-    --color-page: #f9fafb;
-    --color-surface: #ffffff;
-    --color-surface-alt: #f3f4f6;
-    --color-panel: #0b0d10;
-    --color-panel-text: #f4ead2;
-    --color-action: var(--color-tertiary);
+    /* Color — a single neutral, high-contrast surface system with one */
+    /* intentional accent (green) reserved for active/positive states. */
+    --color-ink: #0d1117;                    /* headings, primary text */
+    --color-ink-secondary: #3f4653;          /* body text */
+    --color-muted: #6b7280;                  /* meta, secondary labels */
+    --color-subtle: #94a0b0;                 /* placeholders, disabled text */
+
+    --color-border: #e5e7eb;                 /* default 1px borders */
+    --color-border-strong: #d3d7de;          /* emphasized borders, dividers */
+
+    --color-page: #fafafa;                   /* app background */
+    --color-surface: #ffffff;                /* card / panel surface */
+    --color-surface-alt: #f5f6f8;            /* nested surface (subcards, rows) */
+    --color-surface-hover: #f2f3f5;
+
+    --color-panel: #0a0c10;                  /* dark topbar / log panel */
+    --color-panel-text: #e7e9ec;
+    --color-panel-border: #1c2029;
+
+    /* Accent — green, reserved for "active/positive" signal only */
+    --color-accent-50: #ecfdf5;
+    --color-accent-100: #d1fae5;
+    --color-accent-500: #10b981;
+    --color-accent-600: #059669;
+    --color-accent-700: #047857;
+    --color-tertiary: var(--color-accent-600);
+    --color-action: var(--color-accent-600);
     --color-action-text: #ffffff;
-    --color-status-live: #059669;
-    --color-status-live-bg: #ecfdf5;
+    --color-status-live: var(--color-accent-600);
+    --color-status-live-bg: var(--color-accent-50);
+
     --color-warn: #b45309;
     --color-warn-bg: #fef3c7;
     --color-danger: #dc2626;
-    --color-danger-bg: #fee2e2;
-    /* Table row divider on white — border alone is ~1.3:1, invisible. */
-    --color-divider: color-mix(in srgb, var(--color-border-strong) 15%, transparent);
+    --color-danger-bg: #fef2f2;
 
-    /* Type — IBM Plex Mono everywhere for UI text; VT323 survives only as */
-    /* a nostalgic terminal accent in the log panel and status badges. */
-    --font-ui: "IBM Plex Mono", "SFMono-Regular", Menlo, Consolas, monospace;
-    --font-display: "IBM Plex Mono", "SFMono-Regular", Menlo, Consolas, monospace;
-    --font-mono: "VT323", "SFMono-Regular", Consolas, monospace;
-    --text-xs: 0.75rem;
-    --text-sm: 0.875rem;
-    --text-md: 0.95rem;
-    --text-lg: 1.25rem;
-    --text-xl: clamp(1.75rem, 4vw, 3.5rem);
+    /* Table row divider on white — border alone is ~1.3:1, invisible. */
+    --color-divider: color-mix(in srgb, var(--color-border-strong) 60%, transparent);
+
+    /* Type — one neo-grotesque sans for all UI text; monospace is reserved */
+    /* strictly for code, IDs, ports and raw log/terminal output. */
+    --font-ui: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    --font-display: var(--font-ui);
+    --font-mono: "IBM Plex Mono", "SFMono-Regular", Menlo, Consolas, monospace;
+
+    /* Type scale — strict, limited steps */
+    --text-xs: 0.75rem;    /* 12px — micro labels, eyebrows */
+    --text-sm: 0.8125rem;  /* 13px — meta, buttons, table headers */
+    --text-base: 0.9375rem;/* 15px — default body */
+    --text-md: 1rem;       /* 16px — emphasized body */
+    --text-lg: 1.0625rem;  /* 17px — card titles */
+    --text-xl: 1.5rem;     /* 24px — page titles */
+    --text-2xl: clamp(1.75rem, 3vw, 2.25rem); /* hero/display */
 
     /* Spacing */
     --space-3xs: 2px;
@@ -81,17 +102,21 @@
     --space-3xl: 64px;
 
     /* Radius */
-    --radius-sm: 3px;
-    --radius-md: 5px;
-    --radius-lg: 8px;
+    --radius-sm: 4px;
+    --radius-md: 6px;
+    --radius-lg: 10px;
     --radius-input: var(--radius-sm);
 
-    /* Shadow */
-    --shadow-card: 0 4px 6px -1px rgba(17, 24, 39, 0.06), 0 1px 2px -1px rgba(17, 24, 39, 0.04);
+    /* Shadow — crisp, shallow; depth comes from the border first */
+    --shadow-xs: 0 1px 2px 0 rgba(13, 17, 23, 0.04);
+    --shadow-sm: 0 1px 2px 0 rgba(13, 17, 23, 0.03), 0 1px 6px -2px rgba(13, 17, 23, 0.06);
+    --shadow-md: 0 4px 10px -4px rgba(13, 17, 23, 0.1), 0 2px 4px -2px rgba(13, 17, 23, 0.05);
+    --shadow-card: var(--shadow-sm);
+    --shadow-focus-accent: 0 0 0 3px color-mix(in srgb, var(--color-accent-600) 22%, transparent);
 
     /* Transition */
     --transition-fast: 120ms ease;
-    --transition-lift: 160ms ease;
+    --transition-lift: 160ms cubic-bezier(0.2, 0.7, 0.3, 1);
   }
 }
 
@@ -108,10 +133,13 @@
   body {
     margin: 0;
     font-family: var(--font-ui);
-    font-size: var(--text-md);
+    font-size: var(--text-base);
     line-height: 1.55;
+    letter-spacing: -0.006em;
     background: var(--color-page);
-    color: var(--color-ink);
+    color: var(--color-ink-secondary);
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
   }
 
   a {
@@ -121,6 +149,9 @@
 
   h1, h2, h3 {
     line-height: 1.3;
+    color: var(--color-ink);
+    font-weight: 600;
+    letter-spacing: -0.02em;
   }
 
   input,
@@ -140,8 +171,9 @@
   }
 
   :focus-visible {
-    outline: 2px solid var(--color-action);
+    outline: 2px solid var(--color-accent-600);
     outline-offset: 2px;
+    border-radius: var(--radius-sm);
   }
 
   label {
@@ -157,11 +189,13 @@
   select {
     border: 1px solid var(--color-border);
     border-radius: var(--radius-input);
-    padding: 0.4rem 0.5rem;
+    padding: 0.5rem 0.65rem;
+    font-size: var(--text-base);
     background: var(--color-surface);
     color: var(--color-ink);
     -webkit-appearance: none;
     appearance: none;
+    box-shadow: var(--shadow-xs);
   }
 
   input[type="text"]:hover,
@@ -179,7 +213,9 @@
   input[type="search"]:focus,
   textarea:focus,
   select:focus {
-    border-color: var(--color-action);
+    border-color: var(--color-accent-600);
+    box-shadow: var(--shadow-focus-accent);
+    outline: none;
   }
 
   /* Safari/Chrome add a native search-input "×" clear icon and extra inset
@@ -217,16 +253,28 @@
     background: var(--color-panel);
     color: #e5e7eb;
     padding: var(--space-sm) var(--space-lg);
-    border-bottom: 3px solid var(--color-tertiary);
+    border-bottom: 1px solid var(--color-panel-border);
   }
 
   .topbar__brand {
     font-family: var(--font-display);
     font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 0.1em;
+    letter-spacing: -0.01em;
     font-size: var(--text-sm);
-    color: var(--color-tertiary);
+    color: #f4f5f7;
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-2xs);
+  }
+
+  .topbar__brand::before {
+    content: "";
+    display: inline-block;
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--color-accent-500);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-accent-500) 30%, transparent);
   }
 
   .topbar__nav {
@@ -297,8 +345,9 @@
   .page-title {
     font-family: var(--font-display);
     font-weight: 600;
-    font-size: 1.75rem;
+    font-size: var(--text-xl);
     letter-spacing: -0.02em;
+    color: var(--color-ink);
     margin: 0;
   }
 
@@ -340,13 +389,14 @@
     font-weight: 600;
     color: var(--color-muted);
     font-size: var(--text-xs);
-    letter-spacing: 0.12em;
+    letter-spacing: 0.06em;
     text-transform: uppercase;
   }
 
   .page-subtitle {
     margin: 0;
     color: var(--color-muted);
+    font-size: var(--text-base);
     max-width: 60ch;
   }
 
@@ -405,9 +455,10 @@
 /* Components                                                         */
 /* ------------------------------------------------------------------ */
 @layer components {
-  /* --- Cards (paper surface, soft shadow, rounded) --- */
+  /* --- Cards: crisp 1px border + shallow shadow, no heavy drop shadows --- */
   .card {
     background: var(--color-surface);
+    border: 1px solid var(--color-border);
     border-radius: var(--radius-lg);
     box-shadow: var(--shadow-card);
     padding: var(--space-lg);
@@ -423,7 +474,7 @@
 
   .card--danger {
     box-shadow: none;
-    border: 1px solid var(--color-danger);
+    border-color: var(--color-danger);
   }
 
   .card--clickable {
@@ -431,12 +482,13 @@
     padding: var(--space-sm) var(--space-md);
     display: block;
     transition: var(--transition-lift);
-    transition-property: box-shadow, transform;
+    transition-property: box-shadow, transform, border-color;
   }
 
   .card--clickable:hover,
   .card--clickable:focus-visible {
-    box-shadow: 0 8px 12px -3px rgba(17, 24, 39, 0.1), 0 2px 4px -2px rgba(17, 24, 39, 0.06);
+    border-color: var(--color-border-strong);
+    box-shadow: var(--shadow-md);
     transform: translateY(-1px);
   }
 
@@ -447,7 +499,9 @@
   .card__title {
     font-family: var(--font-display);
     font-weight: 600;
-    letter-spacing: -0.02em;
+    font-size: var(--text-lg);
+    letter-spacing: -0.01em;
+    color: var(--color-ink);
     margin: 0 0 var(--space-sm);
   }
 
@@ -457,29 +511,53 @@
     font-weight: 600;
     color: var(--color-muted);
     font-size: var(--text-xs);
-    letter-spacing: 0.12em;
+    letter-spacing: 0.06em;
     text-transform: uppercase;
+  }
+
+  /* --- Status indicator dot: replaces the colored-left-border pattern. */
+  /* A small glowing dot reads faster at a glance and keeps card edges */
+  /* neutral, matching the rest of the surface system. */
+  .status-dot {
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    flex-shrink: 0;
+    vertical-align: middle;
+    margin-bottom: 2px;
+    background: var(--color-border-strong);
+  }
+
+  .status-dot--running {
+    background: var(--color-accent-600);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-accent-600) 18%, transparent);
+  }
+
+  .status-dot--attention {
+    background: var(--color-danger);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-danger) 16%, transparent);
+  }
+
+  .status-dot--warn {
+    background: var(--color-warn);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-warn) 16%, transparent);
+  }
+
+  .status-dot--stopped {
+    background: var(--color-subtle);
   }
 
   .status-card,
   .status-strip {
-    border-left: 3px solid var(--color-tertiary);
+    border: 1px solid var(--color-border);
   }
 
-  .status-card--running {
-    border-left-color: var(--color-tertiary);
-  }
-
-  .status-card--attention {
-    border-left-color: var(--color-danger);
-  }
-
-  .status-card--warn {
-    border-left-color: var(--color-warn);
-  }
-
+  .status-card--running,
+  .status-card--attention,
+  .status-card--warn,
   .status-card--stopped {
-    border-left-color: var(--color-border);
+    border-color: var(--color-border);
   }
 
   /* --- Definition grid (status rows) --- */
@@ -608,74 +686,90 @@
     cursor: pointer;
   }
 
-  /* --- Buttons (single calm accent, rounded) --- */
+  /* --- Buttons: premium weight via layered shadow + crisp border, not --- */
+  /* just a flat outline. Primary carries the accent; secondary reads as */
+  /* a real surface control (subtle border + shadow + hover elevation). */
   .button {
     display: inline-flex;
     align-items: center;
     gap: var(--space-2xs);
     border: 1px solid var(--color-border-strong);
     border-radius: var(--radius-md);
-    padding: 0.75rem 1.25rem;
+    padding: 0.5rem 0.9rem;
     font-family: var(--font-display);
-    font-weight: 600;
+    font-weight: 500;
     font-size: var(--text-sm);
-    letter-spacing: -0.01em;
+    letter-spacing: -0.005em;
     background: var(--color-surface);
     color: var(--color-ink);
+    box-shadow: var(--shadow-xs);
     text-decoration: none;
     cursor: pointer;
+    transition: var(--transition-fast);
+    transition-property: background-color, border-color, color, box-shadow, transform;
   }
 
   .button:hover {
-    background: var(--color-page);
+    background: var(--color-surface-hover);
+    border-color: var(--color-ink);
+    box-shadow: var(--shadow-sm);
   }
 
   .button:active {
-    background: color-mix(in srgb, var(--color-page) 88%, var(--color-ink));
+    transform: translateY(1px);
+    box-shadow: none;
+    background: color-mix(in srgb, var(--color-surface-hover) 88%, var(--color-ink));
   }
 
   .button:disabled {
-    color: var(--color-muted);
+    color: var(--color-subtle);
     border-color: var(--color-border);
-    border-style: dashed;
+    background: var(--color-surface-alt);
+    box-shadow: none;
     cursor: not-allowed;
   }
 
   .button:disabled:hover {
-    background: var(--color-surface);
+    background: var(--color-surface-alt);
   }
 
   .button--primary {
-    background: var(--color-tertiary);
+    background: var(--color-accent-600);
     color: var(--color-action-text);
-    border-color: var(--color-tertiary);
+    border-color: var(--color-accent-600);
+    box-shadow: 0 1px 2px rgba(4, 120, 87, 0.15), inset 0 1px 0 rgba(255, 255, 255, 0.08);
   }
 
   .button--primary:hover {
-    background: color-mix(in srgb, var(--color-tertiary) 88%, var(--color-surface));
+    background: var(--color-accent-700);
+    border-color: var(--color-accent-700);
+    box-shadow: var(--shadow-sm), 0 0 0 3px color-mix(in srgb, var(--color-accent-600) 16%, transparent);
   }
 
   .button--primary:active {
-    background: color-mix(in srgb, var(--color-tertiary) 84%, var(--color-ink));
+    background: color-mix(in srgb, var(--color-accent-700) 92%, black);
+    box-shadow: none;
   }
 
   .button--danger {
-    border-color: var(--color-danger);
+    border-color: var(--color-border);
     color: var(--color-danger);
     background: var(--color-surface);
   }
 
   .button--danger:hover {
+    border-color: var(--color-danger);
     background: var(--color-danger-bg);
   }
 
   .button--warn {
-    border-color: var(--color-warn);
+    border-color: var(--color-border);
     color: var(--color-warn);
     background: var(--color-surface);
   }
 
   .button--warn:hover {
+    border-color: var(--color-warn);
     background: var(--color-warn-bg);
   }
 
@@ -685,17 +779,42 @@
   }
 
   .button--sm {
-    padding: 0.35rem 0.75rem;
+    padding: 0.3rem 0.65rem;
     font-size: var(--text-xs);
   }
 
   /* --- Chat picker (whitelist/blacklist picker on Settings) --- */
+  .chat-picker-layout {
+    display: grid;
+    grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr);
+    gap: var(--space-xl);
+    align-items: start;
+  }
+
+  .chat-picker-layout__list {
+    display: grid;
+    gap: var(--space-sm);
+    align-content: start;
+  }
+
+  .chat-picker-layout__lists {
+    display: grid;
+    gap: var(--space-md);
+    align-content: start;
+  }
+
+  @media (max-width: 760px) {
+    .chat-picker-layout {
+      grid-template-columns: 1fr;
+    }
+  }
+
   .chat-picker {
     display: flex;
     flex-direction: column;
     border: 1px solid var(--color-border);
     border-radius: var(--radius-md);
-    max-height: 320px;
+    max-height: 420px;
     overflow-y: auto;
   }
 
@@ -750,34 +869,34 @@
     font-size: var(--text-sm);
   }
 
-  /* --- Badges (status only — never clickable, never on buttons) --- */
-  /* Kept on VT323 as a small nostalgic terminal accent. */
+  /* --- Badges: compact status pills — dot + normal-case label, never --- */
+  /* uppercase monospace. Status only; never used as a clickable control. */
   .badge {
     display: inline-flex;
     align-items: center;
-    gap: 0.3em;
-    padding: 0.15rem 0.6rem;
-    border-radius: 999px;
-    font-family: var(--font-mono);
-    font-size: 1rem;
-    text-transform: uppercase;
-    letter-spacing: 0.08em;
-    font-weight: 600;
+    gap: 0.4em;
+    padding: 0.2rem 0.55rem 0.2rem 0.45rem;
+    border-radius: var(--radius-sm);
+    font-family: var(--font-ui);
+    font-size: var(--text-xs);
+    letter-spacing: 0;
+    font-weight: 500;
+    line-height: 1.4;
     white-space: nowrap;
   }
 
   .badge::before {
     content: "";
     display: inline-block;
-    width: 8px;
-    height: 8px;
+    width: 6px;
+    height: 6px;
     border-radius: 50%;
     background: currentColor;
     flex-shrink: 0;
   }
 
   .badge--live {
-    color: var(--color-status-live);
+    color: var(--color-accent-700);
     background: var(--color-status-live-bg);
   }
 
@@ -793,8 +912,7 @@
 
   .badge--muted {
     color: var(--color-muted);
-    background: var(--color-page);
-    border: 1px solid var(--color-border);
+    background: var(--color-surface-alt);
   }
 
   /* --- Icons (Lucide, currentColor) --- */
@@ -817,12 +935,14 @@
     height: 20px;
   }
 
-  /* --- Log panel (the one dark surface, VT323 keeps its terminal feel) --- */
+  /* --- Log panel (dark surface for raw log/terminal output) --- */
   .log-panel {
     background: var(--color-panel);
     color: var(--color-panel-text);
     font-family: var(--font-mono);
-    font-size: 1.05rem;
+    font-size: var(--text-sm);
+    line-height: 1.6;
+    border: 1px solid var(--color-panel-border);
     border-radius: var(--radius-md);
     padding: var(--space-md);
     overflow: auto;
@@ -870,13 +990,14 @@
   .msg-list__role {
     font-family: var(--font-display);
     font-weight: 600;
-    font-size: var(--text-sm);
+    font-size: var(--text-xs);
     text-transform: uppercase;
     letter-spacing: 0.04em;
+    color: var(--color-muted);
   }
 
   .msg-list__item--assistant .msg-list__role {
-    color: var(--color-tertiary);
+    color: var(--color-accent-700);
   }
 
   .msg-list__ts {
@@ -1027,11 +1148,13 @@
   }
 
   .status-strip--reading {
-    border-left-color: var(--color-warn);
+    border-color: color-mix(in srgb, var(--color-warn) 45%, var(--color-border));
+    background: var(--color-warn-bg);
   }
 
   .dashboard-health {
-    border-left: 0;
+    background: var(--color-surface-alt);
+    box-shadow: none;
   }
 
   @media (max-width: 640px) {
@@ -1072,26 +1195,21 @@
     align-items: center;
     color: inherit;
     text-decoration: none;
-    border-left: 3px solid var(--color-border);
+    border: 1px solid var(--color-border);
     transition: var(--transition-lift);
-    transition-property: box-shadow, transform;
+    transition-property: box-shadow, transform, border-color;
   }
 
-  .deployment-card--running {
-    border-left-color: var(--color-tertiary);
-  }
-
-  .deployment-card--attention {
-    border-left-color: var(--color-danger);
-  }
-
+  .deployment-card--running,
+  .deployment-card--attention,
   .deployment-card--stopped {
-    border-left-color: var(--color-border);
+    border-color: var(--color-border);
   }
 
   .deployment-card:hover,
   .deployment-card:focus-visible {
-    box-shadow: 0 8px 12px -3px rgba(17, 24, 39, 0.1), 0 2px 4px -2px rgba(17, 24, 39, 0.06);
+    border-color: var(--color-border-strong);
+    box-shadow: var(--shadow-md);
     transform: translateY(-1px);
   }
 

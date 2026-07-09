@@ -15,30 +15,34 @@
   {# --- Runtime overview --- #}
   {% if dep.status == 'running' and (needs_restart or not status) %}
     {% set status_class = 'status-card--attention' %}
+    {% set dot_class = 'status-dot--attention' %}
   {% elif dep.status == 'running' %}
     {% set status_class = 'status-card--running' %}
+    {% set dot_class = 'status-dot--running' %}
   {% elif dep.status == 'needs_connect' %}
     {% set status_class = 'status-card--warn' %}
+    {% set dot_class = 'status-dot--warn' %}
   {% else %}
     {% set status_class = 'status-card--stopped' %}
+    {% set dot_class = 'status-dot--stopped' %}
   {% endif %}
   <div class="card status-card deployment-status-card {{ status_class }}">
-    <p class="card__eyebrow">Runtime overview</p>
+    <p class="card__eyebrow"><span class="status-dot {{ dot_class }}"></span> Runtime overview</p>
     <div class="status-card__row">
     <dl class="def-grid">
       <dt>Status</dt>
       <dd>
         {% if dep.status == "running" %}
-          <span class="badge badge--live">RUNNING</span>
+          <span class="badge badge--live">Running</span>
         {% elif dep.status == "needs_connect" %}
-          <span class="badge badge--warn">NEEDS CONNECT</span>
+          <span class="badge badge--warn">Not connected</span>
         {% else %}
-          <span class="badge badge--muted">STOPPED</span>
+          <span class="badge badge--muted">Stopped</span>
         {% endif %}
         {% if dep.status == "running" and needs_restart %}
-          <span class="badge badge--warn">RESTART NEEDED — settings changed since last start</span>
+          <span class="badge badge--warn">Restart needed — settings changed since last start</span>
         {% elif dep.status == "running" and not status %}
-          <span class="badge badge--danger">NOT RESPONDING</span>
+          <span class="badge badge--danger">Not responding</span>
         {% endif %}
       </dd>
       {% if dep.run_id %}
@@ -157,7 +161,7 @@
   {# --- Chat --- #}
   {% if dep.status == "running" and status %}
   <div class="card chat-card">
-    <h3 class="card__title">Chat with the Bot</h3>
+    <h3 class="card__title">Chat with the bot</h3>
     <p class="muted">Send a test message as a user would and review KAI's reply.</p>
     {% if reply %}
       <div class="log-panel chat-reply">

@@ -3,14 +3,18 @@
 <div class="page stack">
   <header class="page-header page-header--split">
     <div class="page-header__copy">
-      <p class="page-eyebrow">New deployment</p>
+      <p class="page-eyebrow">Deployments</p>
       <h1 class="page-title">Create deployment</h1>
-      <p class="page-subtitle">Confirm the starting goal and KAI will be ready to run as soon as WhatsApp is connected.</p>
+      <p class="page-subtitle">Confirm the starting goal for this bot. You can adjust everything else later.</p>
     </div>
     <div class="page-header__action">
       <a href="/dashboard" class="button">Back</a>
     </div>
   </header>
+
+  {% if error %}
+    <p class="card card--danger text-danger"><strong>Could not create deployment:</strong> {{ error }}</p>
+  {% endif %}
 
   <div class="card">
     <p class="card__eyebrow">Bot type</p>
@@ -31,9 +35,16 @@
       <p class="field__help">A working starting point is filled in — edit it so it fits your situation, or leave it. KAI follows whatever you write here.</p>
     </div>
 
-    <div class="field">
+    <div class="field field--narrow">
       <label class="field__label" for="language">Language</label>
-      <input id="language" type="text" name="language" value="{{ language }}" required>
+      <select id="language" name="language">
+        {% if language and language not in languages %}
+          <option value="{{ language }}" selected>{{ language }}</option>
+        {% endif %}
+        {% for l in languages %}
+          <option value="{{ l }}" {% if l == language %}selected{% endif %}>{{ l }}</option>
+        {% endfor %}
+      </select>
       <p class="field__help">Defaults to your account language — change it any time.</p>
     </div>
     <div class="field field--narrow">
@@ -52,8 +63,5 @@
     </div>
     <p class="field__help">KAI will be ready to start as soon as you connect WhatsApp.</p>
   </form>
-  {% if error %}
-    <p class="text-danger">{{ error }}</p>
-  {% endif %}
 </div>
 {% endblock %}

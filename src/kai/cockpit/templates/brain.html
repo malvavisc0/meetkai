@@ -4,7 +4,7 @@
   <header class="page-header">
     <p class="page-eyebrow">Enhanced memory</p>
     <h1 class="page-title">Brain</h1>
-    <p class="page-subtitle">Knowledge Base bots search before answering questions.</p>
+    <p class="page-subtitle">The shared knowledge bots search before answering questions.</p>
   </header>
 
   {% if not brain %}
@@ -24,10 +24,10 @@
     {# --- Status summary card --- #}
     <div class="card health status-strip{% if any_processing %} status-strip--reading{% endif %}">
       {% if any_processing %}
-        <span class="badge badge--warn">KAI IS READING THIS DOCUMENT…</span>
+        <span class="badge badge--warn">Reading this document…</span>
         <span class="field__help">This page updates itself when KAI finishes.</span>
       {% else %}
-        <span class="badge badge--live">READY</span>
+        <span class="badge badge--live">Ready</span>
         {% if docs %}
           <span class="field__help">{{ docs|length }} document{{ '' if docs|length == 1 else 's' }} indexed</span>
         {% endif %}
@@ -61,11 +61,11 @@
               <td data-label="Document">{{ doc.file_path or doc.id }}</td>
               <td data-label="Status">
                 {% if not doc.is_terminal %}
-                  <span class="badge badge--warn">READING…</span>
+                  <span class="badge badge--warn">Reading…</span>
                 {% elif doc.status == 'failed' %}
-                  <span class="badge badge--danger">FAILED</span>
+                  <span class="badge badge--danger">Failed</span>
                 {% else %}
-                  <span class="badge badge--live">READY</span>
+                  <span class="badge badge--live">Ready</span>
                 {% endif %}
               </td>
               <td data-label="Added"><span class="mono">{{ doc.updated_at }}</span></td>
@@ -87,7 +87,7 @@
       <div class="card teach-card teach-card--primary">
         <p class="card__eyebrow">Usage rules</p>
         <h3 class="card__title">Tell bots when to use the Brain</h3>
-        <p class="field__help">These are rules not facts. They tell running bots when to search the Brain before answering. Add one trigger or rule per line.</p>
+        <p class="field__help">These are rules, not facts. They tell running bots when to search the Brain before answering. Add one trigger or rule per line.</p>
         <form method="post" action="/brain/instruction" class="stack">
           <div class="field">
             <label class="sr-only" for="instruction">Brain usage rules</label>

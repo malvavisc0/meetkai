@@ -15,9 +15,9 @@
       {% for svc in service_health %}
         <div class="health-grid__row">
           {% if svc.ok %}
-            <span class="badge badge--live">HEALTHY</span>
+            <span class="badge badge--live">Healthy</span>
           {% else %}
-            <span class="badge badge--danger" title="{{ svc.detail }}">DOWN</span>
+            <span class="badge badge--danger" title="{{ svc.detail }}">Down</span>
           {% endif %}
           <span>{{ svc.label }}</span>
         </div>
