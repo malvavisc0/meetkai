@@ -93,13 +93,24 @@ def create_app() -> FastAPI:
 
     create_all()
 
-    from kai.cockpit.routes import auth, brain, chat, connections, dashboard, deployments
+    from kai.cockpit.routes import (
+        auth,
+        brain,
+        chat,
+        connections,
+        dashboard,
+        dependencies,
+        deployments,
+        health,
+    )
 
     app.include_router(auth.router)
     app.include_router(dashboard.router)
+    app.include_router(dependencies.router)
     app.include_router(deployments.router)
     app.include_router(connections.router)
     app.include_router(brain.router)
     app.include_router(chat.router)
+    app.include_router(health.router)
 
     return app

@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="page stack">
+  <header class="page-header">
+    <p class="page-eyebrow">Infrastructure</p>
+    <h1 class="page-title">Dependencies</h1>
+    <p class="page-subtitle">Live health probes for every service the bots depend on.</p>
+  </header>
+
+  {% set healthy = service_health | selectattr("ok") | list %}
+  <div class="card health-card">
+    <p class="card__eyebrow">Service health</p>
+    <h3 class="card__title">{{ healthy|length }} of {{ service_health|length }} healthy</h3>
+    <div class="health-grid">
+      {% for svc in service_health %}
+        <div class="health-grid__row">
+          {% if svc.ok %}
+            <span class="badge badge--live">HEALTHY</span>
+          {% else %}
+            <span class="badge badge--danger" title="{{ svc.detail }}">DOWN</span>
+          {% endif %}
+          <span>{{ svc.label }}</span>
+        </div>
+      {% endfor %}
+    </div>
+  </div>
+</div>
+{% endblock %}

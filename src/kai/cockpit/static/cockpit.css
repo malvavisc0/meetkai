@@ -961,6 +961,25 @@
     }
   }
 
+  /* --- Service health card (dependencies page) --- */
+  .health-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: var(--space-sm) var(--space-lg);
+  }
+
+  .health-grid__row {
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+  }
+
+  @media (max-width: 640px) {
+    .health-grid {
+      grid-template-columns: 1fr;
+    }
+  }
+
   /* --- Dashboard deployment cards --- */
   .deployment-list {
     display: grid;

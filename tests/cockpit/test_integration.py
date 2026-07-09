@@ -153,7 +153,10 @@ class TestFullDeploymentFlow:
         monkeypatch.setattr(
             dep_mod.DeploymentsService,
             "fetch_status",
-            lambda self, d: {"session": {"status": "WORKING"}},
+            lambda self, d: {
+                "session": {"status": "WORKING"},
+                "sleep": {"enabled": True, "sleeping": []},
+            },
         )
         r = client.get(f"/deployments/{dep.id}")
         assert r.status_code == 200
