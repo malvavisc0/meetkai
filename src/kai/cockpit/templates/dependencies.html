@@ -10,7 +10,6 @@
   {% set healthy = service_health | selectattr("ok") | list %}
   <div class="card health-card">
     <p class="card__eyebrow">Service health</p>
-    <h3 class="card__title">{{ healthy|length }} of {{ service_health|length }} healthy</h3>
     <div class="health-grid">
       {% for svc in service_health %}
         <div class="health-grid__row">
