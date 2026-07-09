@@ -57,7 +57,24 @@
         </label>
         <p class="field__help">KAI also replies whenever this keyword appears in a message.</p>
       </div>
+    </div>
+
+    {# --- Chats (whitelist/blacklist picker) --- #}
+    <div class="card">
+      <p class="card__eyebrow">Chats</p>
+      <h3 class="card__title">Whitelist &amp; blacklist</h3>
+
       <div class="field">
+        <input type="search" id="chat_search" placeholder="Search by name or chat id" autocomplete="off">
+      </div>
+
+      <div class="chat-picker" data-chat-picker data-dep-id="{{ dep.id }}">
+        {# rows rendered by JS from /deployments/{id}/chats.json #}
+      </div>
+
+      <button type="button" class="button button--sm mt-lg" id="chat_load_more">Load more chats</button>
+
+      <div class="field mt-lg">
         <label class="field__label" for="whitelist">Whitelist (chat ids, one per line)</label>
         <textarea id="whitelist" name="whitelist" rows="3" data-autosize>{{ dep.settings.get('whitelist', [])|join('\n') }}</textarea>
       </div>

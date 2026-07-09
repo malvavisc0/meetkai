@@ -152,6 +152,7 @@
   input[type="text"],
   input[type="url"],
   input[type="number"],
+  input[type="search"],
   textarea,
   select {
     border: 1px solid var(--color-border);
@@ -159,11 +160,14 @@
     padding: 0.4rem 0.5rem;
     background: var(--color-surface);
     color: var(--color-ink);
+    -webkit-appearance: none;
+    appearance: none;
   }
 
   input[type="text"]:hover,
   input[type="url"]:hover,
   input[type="number"]:hover,
+  input[type="search"]:hover,
   textarea:hover,
   select:hover {
     border-color: var(--color-border-strong);
@@ -172,9 +176,22 @@
   input[type="text"]:focus,
   input[type="url"]:focus,
   input[type="number"]:focus,
+  input[type="search"]:focus,
   textarea:focus,
   select:focus {
     border-color: var(--color-action);
+  }
+
+  /* Safari/Chrome add a native search-input "×" clear icon and extra inset
+     padding that don't match the rest of the form controls; the appearance
+     reset above removes the native chrome, this removes the leftover
+     decoration hooks. */
+  input[type="search"]::-webkit-search-decoration,
+  input[type="search"]::-webkit-search-cancel-button,
+  input[type="search"]::-webkit-search-results-button,
+  input[type="search"]::-webkit-search-results-decoration {
+    -webkit-appearance: none;
+    appearance: none;
   }
 
   table {
@@ -672,6 +689,67 @@
     font-size: var(--text-xs);
   }
 
+  /* --- Chat picker (whitelist/blacklist picker on Settings) --- */
+  .chat-picker {
+    display: flex;
+    flex-direction: column;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    max-height: 320px;
+    overflow-y: auto;
+  }
+
+  .chat-picker__row {
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+    padding: var(--space-sm) var(--space-md);
+    border-bottom: 1px solid var(--color-border);
+  }
+
+  .chat-picker__row:last-child {
+    border-bottom: none;
+  }
+
+  .chat-picker__avatar {
+    flex-shrink: 0;
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--color-surface-alt);
+    font-family: var(--font-display);
+    font-weight: 600;
+    font-size: var(--text-xs);
+  }
+
+  .chat-picker__copy {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    min-width: 0;
+  }
+
+  .chat-picker__copy span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .chat-picker__actions {
+    display: flex;
+    gap: var(--space-2xs);
+    flex-shrink: 0;
+  }
+
+  .chat-picker__loading {
+    padding: var(--space-sm) var(--space-md);
+    color: var(--color-muted);
+    font-size: var(--text-sm);
+  }
+
   /* --- Badges (status only — never clickable, never on buttons) --- */
   /* Kept on VT323 as a small nostalgic terminal accent. */
   .badge {
@@ -860,6 +938,7 @@
   .field input[type="text"],
   .field input[type="url"],
   .field input[type="number"],
+  .field input[type="search"],
   .field textarea,
   .field select {
     width: 100%;

@@ -271,6 +271,58 @@ class TestGetChatMessages:
             await client.get_chat_messages("g@g.us")
 
 
+class TestGetChatsOverview:
+    @respx.mock
+    @pytest.mark.asyncio
+    async def test_fetches_overview(self, client):
+        respx.get("/api/default/chats/overview").mock(
+            return_value=Response(
+                200,
+                json=[
+                    {"id": "120363@g.us", "name": "Kai Group", "picture": None},
+                    {"id": "591123@c.us", "name": "Maria", "picture": None},
+                ],
+            )
+        )
+        result = await client.get_chats_overview(limit=20, offset=0)
+        assert len(result) == 2
+        assert result[0]["id"] == "120363@g.us"
+        assert result[1]["name"] == "Maria"
+
+    @respx.mock
+    @pytest.mark.asyncio
+    async def test_sends_query_params(self, client):
+        route = respx.get("/api/default/chats/overview").mock(return_value=Response(200, json=[]))
+        await client.get_chats_overview(limit=50, offset=100)
+        params = route.calls[0].request.url.params
+        assert params["limit"] == "50"
+        assert params["offset"] == "100"
+        assert params["merge"] == "true"
+
+    @respx.mock
+    @pytest.mark.asyncio
+    async def test_defaults_merge_true(self, client):
+        route = respx.get("/api/default/chats/overview").mock(return_value=Response(200, json=[]))
+        await client.get_chats_overview()
+        assert route.calls[0].request.url.params["merge"] == "true"
+
+    @respx.mock
+    @pytest.mark.asyncio
+    async def test_returns_empty_list_on_non_list_response(self, client):
+        respx.get("/api/default/chats/overview").mock(
+            return_value=Response(200, json={"unexpected": True})
+        )
+        result = await client.get_chats_overview()
+        assert result == []
+
+    @respx.mock
+    @pytest.mark.asyncio
+    async def test_raises_on_error(self, client):
+        respx.get("/api/default/chats/overview").mock(return_value=Response(500))
+        with pytest.raises(Exception):
+            await client.get_chats_overview()
+
+
 class TestGetProfile:
     @respx.mock
     @pytest.mark.asyncio

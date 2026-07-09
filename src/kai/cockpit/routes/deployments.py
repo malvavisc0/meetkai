@@ -2,12 +2,15 @@
 
 from __future__ import annotations
 
+import logging
 from datetime import UTC, datetime
 
-from fastapi import APIRouter, Depends, Form, Request
-from fastapi.responses import RedirectResponse
+from fastapi import APIRouter, Depends, Form, Query, Request
+from fastapi.responses import JSONResponse, RedirectResponse
 from sqlalchemy.orm import Session
 
+from kai.bots.waha.client import WahaClient
+from kai.bots.waha.config import get_waha_settings
 from kai.cockpit.app import templates
 from kai.cockpit.auth import require_user
 from kai.cockpit.bots import BOT_TYPES, CAPABILITY_LABELS, LANGUAGE_VOICE_MAP, auto_pick_voice
@@ -19,6 +22,8 @@ from kai.cockpit.deployments import (
     DeploymentStartupError,
 )
 from kai.cockpit.models import Deployment, User
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -252,6 +257,77 @@ async def deployment_settings_page(
             "flash": flash,
         },
     )
+
+
+# --- Chat picker (whitelist/blacklist helper) ---
+
+
+def _avatar_initial(name: str | None, chat_id: str) -> str:
+    """Pick a 1–2 char avatar label for a chat row."""
+    label = (name or "").strip()
+    if label:
+        return label[0].upper()
+    return (chat_id or "?")[0].upper()
+
+
+@router.get("/deployments/{dep_id}/chats.json")
+async def deployment_chats_json(
+    dep_id: int,
+    limit: int = Query(20, ge=1, le=100),
+    offset: int = Query(0, ge=0),
+    user: User = Depends(require_user),
+    db: Session = Depends(get_db),
+):
+    """Proxy WAHA's chat overview for the chat picker on the Settings page.
+
+    Returns ``{"chats": [{id, name, avatar_initial}], "has_more": bool}``,
+    trimmed down from WAHA's ``ChatSummary``. If the user has no WhatsApp
+    connection there are genuinely no chats to list, so an empty list with
+    a 200 is returned. If WAHA itself is unreachable/erroring, the response
+    carries an ``error`` message instead of an empty chat list — the picker
+    JS shows it and links the user to ``/dependencies`` rather than
+    silently rendering nothing.
+    """
+    svc = DeploymentsService(db)
+    result = _get_deployment(svc, dep_id, user)
+    if isinstance(result, RedirectResponse):
+        return JSONResponse({"chats": [], "has_more": False})
+
+    conn = ConnectionsService(db).get_whatsapp(user)
+    if not conn or not conn.config.get("waha_session"):
+        return JSONResponse({"chats": [], "has_more": False})
+
+    try:
+        settings = get_waha_settings().model_copy(update={"session": conn.config["waha_session"]})
+        client = WahaClient(settings)
+        try:
+            # Over-fetch by one so has_more is reliable even when WAHA's
+            # merge=true collapses @lid/@c.us pairs below the requested limit.
+            raw = await client.get_chats_overview(limit=limit + 1, offset=offset)
+        finally:
+            await client.close()
+    except Exception:
+        logger.exception(
+            "Chat picker: WAHA chats/overview request failed for dep_id=%s session=%s",
+            dep_id,
+            conn.config["waha_session"],
+        )
+        return JSONResponse(
+            {"chats": [], "has_more": False, "error": "WhatsApp API is not reachable"}
+        )
+
+    has_more = len(raw) > limit
+    chats = raw[:limit]
+    trimmed = [
+        {
+            "id": c.get("id", ""),
+            "name": c.get("name") or "",
+            "avatar_initial": _avatar_initial(c.get("name"), c.get("id", "")),
+        }
+        for c in chats
+        if c.get("id")
+    ]
+    return JSONResponse({"chats": trimmed, "has_more": has_more})
 
 
 # --- History ---

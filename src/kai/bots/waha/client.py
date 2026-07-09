@@ -233,6 +233,22 @@ class WahaClient:
         data = resp.json()
         return data if isinstance(data, list) else []
 
+    async def get_chats_overview(self, *, limit: int = 20, offset: int = 0) -> list[dict]:
+        """Wraps ``GET /api/{session}/chats/overview``.
+
+        Returns chat summaries (``ChatSummary``: ``id``, ``name``, ``picture``,
+        ``lastMessage``) sorted by last message timestamp. ``merge=true`` is
+        always passed so ``@lid`` and ``@c.us`` chats for the same contact
+        collapse into one row — the picker must never show a contact twice.
+        """
+        resp = await self._client.get(
+            f"/api/{self.session}/chats/overview",
+            params={"limit": limit, "offset": offset, "merge": "true"},
+        )
+        resp.raise_for_status()
+        data = resp.json()
+        return data if isinstance(data, list) else []
+
     async def get_message(
         self, chat_id: str, message_id: str, *, download_media: bool = True
     ) -> dict | None:
