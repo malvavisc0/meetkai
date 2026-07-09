@@ -72,7 +72,7 @@ class TestBrainsPage:
         client.post("/brain/create", follow_redirects=False)
         r = client.get("/brain")
         assert r.status_code == 200
-        assert "READY" in r.text  # brain exists → status summary badge
+        assert "Ready" in r.text  # brain exists → status summary badge
 
 
 class TestBrainsCreate:
@@ -290,7 +290,7 @@ class TestBrainsDocumentsList:
 
         r = client.get("/brain")
         assert "handbook.pdf" in r.text
-        assert "READY" in r.text  # terminal doc renders the ready badge, not raw status
+        assert "Ready" in r.text  # terminal doc renders the ready badge, not raw status
 
     def test_shows_error_when_lightrag_unreachable(self, client, db, bob, fake_lightrag_client):
         _login(client, db, bob)
@@ -319,7 +319,10 @@ class TestBrainsDocumentsList:
         ]
 
         r = client.get("/brain")
-        assert '<meta http-equiv="refresh"' in r.text
+        # Full-page meta-refresh was replaced by cockpit.js's in-place
+        # data-poll fetch/swap, so the "still processing" state is now
+        # marked via the data-poll attribute instead.
+        assert 'data-poll="3000"' in r.text
 
 
 class TestBrainsDeleteDocument:
