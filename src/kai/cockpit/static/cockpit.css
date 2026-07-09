@@ -111,6 +111,7 @@
     --shadow-xs: 0 1px 2px 0 rgba(13, 17, 23, 0.04);
     --shadow-sm: 0 1px 2px 0 rgba(13, 17, 23, 0.03), 0 1px 6px -2px rgba(13, 17, 23, 0.06);
     --shadow-md: 0 4px 10px -4px rgba(13, 17, 23, 0.1), 0 2px 4px -2px rgba(13, 17, 23, 0.05);
+    --shadow-lg: 0 12px 28px -10px rgba(13, 17, 23, 0.16), 0 4px 10px -4px rgba(13, 17, 23, 0.08);
     --shadow-card: var(--shadow-sm);
     --shadow-focus-accent: 0 0 0 3px color-mix(in srgb, var(--color-accent-600) 22%, transparent);
 
@@ -488,8 +489,8 @@
   .card--clickable:hover,
   .card--clickable:focus-visible {
     border-color: var(--color-border-strong);
-    box-shadow: var(--shadow-md);
-    transform: translateY(-1px);
+    box-shadow: var(--shadow-lg);
+    transform: translateY(-2px);
   }
 
   .card--center {
@@ -530,8 +531,39 @@
   }
 
   .status-dot--running {
+    position: relative;
     background: var(--color-accent-600);
     box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-accent-600) 18%, transparent);
+  }
+
+  /* Radar-ping: a second ring expands and fades from the live dot to read
+     as "actively alive" at a glance, without touching the static ring
+     above (which stays put as the calm baseline state). */
+  .status-dot--running::after {
+    content: "";
+    position: absolute;
+    inset: -3px;
+    border-radius: 50%;
+    border: 1px solid var(--color-accent-600);
+    animation: status-pulse-ring 2.4s cubic-bezier(0.2, 0.6, 0.4, 1) infinite;
+  }
+
+  @keyframes status-pulse-ring {
+    0% {
+      transform: scale(1);
+      opacity: 0.6;
+    }
+    100% {
+      transform: scale(2.6);
+      opacity: 0;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .status-dot--running::after {
+      animation: none;
+      display: none;
+    }
   }
 
   .status-dot--attention {
@@ -1217,6 +1249,10 @@
     box-shadow: none;
   }
 
+  .count-up {
+    font-variant-numeric: tabular-nums;
+  }
+
   @media (max-width: 640px) {
     .health .badge {
       flex: 1 1 calc(50% - var(--space-sm));
@@ -1269,8 +1305,8 @@
   .deployment-card:hover,
   .deployment-card:focus-visible {
     border-color: var(--color-border-strong);
-    box-shadow: var(--shadow-md);
-    transform: translateY(-1px);
+    box-shadow: var(--shadow-lg);
+    transform: translateY(-2px);
   }
 
   .deployment-card__main {

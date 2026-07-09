@@ -4,10 +4,12 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Knowledgeable Artificial Intelligence aka KAI</title>
+  <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
   <link rel="stylesheet" href="/static/cockpit.css">
 </head>
 <body>
   <nav class="topbar">
+    <a class="topbar__brand" href="{{ '/dashboard' if user else '/' }}"> </a>
     {% if user %}
       <span class="topbar__nav">
         <a href="/dashboard">dashboard</a>

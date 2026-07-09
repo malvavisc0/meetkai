@@ -31,26 +31,28 @@
     </div>
 
   {% elif conn and conn.status == "connecting" %}
-    {# --- Connecting state (meta refresh retained) --- #}
-    <meta http-equiv="refresh" content="3">
-    <div class="card status-card status-card--warn">
-      <dl class="def-grid">
-        <dt>WhatsApp</dt>
-        <dd><span class="badge badge--warn">Connecting</span></dd>
-      </dl>
-      <p class="field__help">Waiting for WhatsApp — scan the QR and this page updates itself when it connects.</p>
-    </div>
-
-    {% if qr_url %}
-      <div class="card card--center qr-panel">
-        <img src="{{ qr_url }}" alt="QR code" class="img-constrained">
+    {# --- Connecting state: live-updates via cockpit.js polling, scoped to
+         this wrapper only (data-poll below) --- #}
+    <div class="stack" data-poll="3000">
+      <div class="card status-card status-card--warn">
+        <dl class="def-grid">
+          <dt>WhatsApp</dt>
+          <dd><span class="badge badge--warn">Connecting</span></dd>
+        </dl>
+        <p class="field__help">Waiting for WhatsApp — scan the QR and this page updates itself when it connects.</p>
       </div>
-      <p class="field__help text-center">Scan with WhatsApp — this page updates itself when the scan succeeds.</p>
-    {% endif %}
 
-    <form method="post" action="/connections/whatsapp/disconnect">
-      <button type="submit" class="button">Cancel</button>
-    </form>
+      {% if qr_url %}
+        <div class="card card--center qr-panel">
+          <img src="{{ qr_url }}" alt="QR code" class="img-constrained">
+        </div>
+        <p class="field__help text-center">Scan with WhatsApp — this page updates itself when the scan succeeds.</p>
+      {% endif %}
+
+      <form method="post" action="/connections/whatsapp/disconnect">
+        <button type="submit" class="button">Cancel</button>
+      </form>
+    </div>
 
   {% else %}
     {# --- Disconnected state --- #}

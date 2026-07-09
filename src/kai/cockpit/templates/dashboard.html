@@ -21,17 +21,17 @@
       <span class="badge badge--warn">Brain not initialized</span>
     {% endif %}
     {% if running > 0 %}
-      <span class="badge badge--live">{{ running }} bot{{ '' if running == 1 else 's' }} running</span>
+      <span class="badge badge--live"><span class="count-up" data-count-up="{{ running }}">{{ running }}</span> bot{{ '' if running == 1 else 's' }} running</span>
     {% else %}
       <span class="badge badge--muted">0 bots running</span>
     {% endif %}
     {% if stopped > 0 %}
-      <span class="badge badge--muted">{{ stopped }} stopped</span>
+      <span class="badge badge--muted"><span class="count-up" data-count-up="{{ stopped }}">{{ stopped }}</span> stopped</span>
     {% else %}
       <span class="badge badge--muted">0 stopped</span>
     {% endif %}
     {% if attention_reasons %}
-      <span class="badge badge--danger">{{ attention_reasons|length }} need{{ 's' if attention_reasons|length == 1 else '' }} attention</span>
+      <span class="badge badge--danger"><span class="count-up" data-count-up="{{ attention_reasons|length }}">{{ attention_reasons|length }}</span> need{{ 's' if attention_reasons|length == 1 else '' }} attention</span>
     {% else %}
       <span class="badge badge--muted">0 need attention</span>
     {% endif %}

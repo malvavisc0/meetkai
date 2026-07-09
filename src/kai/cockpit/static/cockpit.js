@@ -269,4 +269,77 @@
   }
 
   document.addEventListener("DOMContentLoaded", initChatPicker);
+
+  // --- Count-up animation ---
+  // Animates any [data-count-up] element's text from 0 to its target value
+  // on load. Purely cosmetic: the server-rendered number is the real value
+  // and is used as both the start markup and the animation target, so this
+  // degrades safely if JS is disabled or fails.
+  function initCountUp() {
+    var els = document.querySelectorAll("[data-count-up]");
+    var reduceMotion =
+      window.matchMedia &&
+      window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    for (var i = 0; i < els.length; i++) {
+      (function (el) {
+        var target = parseInt(el.dataset.countUp, 10);
+        if (isNaN(target)) return;
+        if (reduceMotion || target === 0) {
+          el.textContent = target;
+          return;
+        }
+        var duration = 500;
+        var start = null;
+        function step(timestamp) {
+          if (start === null) start = timestamp;
+          var progress = Math.min((timestamp - start) / duration, 1);
+          var eased = 1 - Math.pow(1 - progress, 3);
+          el.textContent = Math.round(eased * target);
+          if (progress < 1) window.requestAnimationFrame(step);
+        }
+        window.requestAnimationFrame(step);
+      })(els[i]);
+    }
+  }
+
+  document.addEventListener("DOMContentLoaded", initCountUp);
+
+  // --- Live polling without the meta-refresh flash ---
+  // Pages that used <meta http-equiv="refresh"> to self-update while
+  // waiting on an async backend state (WhatsApp QR scan, Brain document
+  // ingest) now wrap just the reloadable region in an element carrying
+  // data-poll="<ms>" instead. We refetch the same URL, and swap only that
+  // element's own markup in place — never the whole page — so unrelated
+  // content elsewhere on the page (e.g. the Brain ingestion forms, which
+  // sit outside this wrapper) is never touched by a poll tick and any
+  // in-progress input there is preserved. Polling stops on its own once
+  // the server stops rendering a data-poll wrapper at all.
+  function initPoll() {
+    var target = document.querySelector("[data-poll]");
+    if (!target) return;
+    var interval = parseInt(target.dataset.poll, 10) || 3000;
+
+    var timer = window.setInterval(async function () {
+      var res;
+      try {
+        res = await fetch(window.location.href, { credentials: "same-origin" });
+      } catch (e) {
+        return; // transient network error — try again next tick
+      }
+      if (!res.ok) return;
+      var html = await res.text();
+      var doc = new DOMParser().parseFromString(html, "text/html");
+      var fresh = doc.querySelector("[data-poll]");
+      if (!fresh) {
+        window.clearInterval(timer);
+        return;
+      }
+      if (fresh.innerHTML !== target.innerHTML) {
+        target.innerHTML = fresh.innerHTML;
+        initCountUp();
+      }
+    }, interval);
+  }
+
+  document.addEventListener("DOMContentLoaded", initPoll);
 })();

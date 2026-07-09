@@ -17,69 +17,70 @@
       </form>
     </div>
   {% else %}
-    {% if any_processing %}
-      <meta http-equiv="refresh" content="3">
-    {% endif %}
-
-    {# --- Status summary card --- #}
-    <div class="card health status-strip{% if any_processing %} status-strip--reading{% endif %}">
-      {% if any_processing %}
-        <span class="badge badge--warn">Reading this document…</span>
-        <span class="field__help">This page updates itself when KAI finishes.</span>
-      {% else %}
-        <span class="badge badge--live">Ready</span>
-        {% if docs %}
-          <span class="field__help">{{ docs|length }} document{{ '' if docs|length == 1 else 's' }} indexed</span>
+    {# --- Status summary + documents: live-updates via cockpit.js polling
+         while any_processing (data-poll below). Scoped to this wrapper only
+         so the ingestion forms further down the page are never touched by
+         a poll tick and any in-progress typing there is preserved. --- #}
+    <div class="stack"{% if any_processing %} data-poll="3000"{% endif %}>
+      <div class="card health status-strip{% if any_processing %} status-strip--reading{% endif %}">
+        {% if any_processing %}
+          <span class="badge badge--warn">Reading this document…</span>
+          <span class="field__help">This page updates itself when KAI finishes.</span>
+        {% else %}
+          <span class="badge badge--live">Ready</span>
+          {% if docs %}
+            <span class="field__help">{{ docs|length }} document{{ '' if docs|length == 1 else 's' }} indexed</span>
+          {% endif %}
+          <span class="field__help">Last updated <span class="mono">{{ brain.updated_at }}</span></span>
         {% endif %}
-        <span class="field__help">Last updated <span class="mono">{{ brain.updated_at }}</span></span>
-      {% endif %}
-    </div>
+      </div>
 
-    {# --- Documents table --- #}
-    <div class="card">
-      <h3 class="card__title">Documents</h3>
-      {% if docs_error %}
-        <p class="text-danger">Could not load documents: {{ docs_error }}</p>
-      {% elif not docs %}
-        <div class="empty-state">
-          <span class="icon icon--lg empty-state__icon">{% include "icons/file-text.svg" %}</span>
-          <p class="empty-state__hint">No knowledge sources yet — add documents, websites, or notes below so bots can ground answers in your material.</p>
-        </div>
-      {% else %}
-        <table class="table table--responsive">
-          <thead>
-            <tr>
-              <th>Document</th>
-              <th>Status</th>
-              <th>Added</th>
-              <th></th>
-            </tr>
-          </thead>
-          <tbody>
-            {% for doc in docs %}
-            <tr>
-              <td data-label="Document">{{ doc.file_path or doc.id }}</td>
-              <td data-label="Status">
-                {% if not doc.is_terminal %}
-                  <span class="badge badge--warn">Reading…</span>
-                {% elif doc.status == 'failed' %}
-                  <span class="badge badge--danger">Failed</span>
-                {% else %}
-                  <span class="badge badge--live">Ready</span>
-                {% endif %}
-              </td>
-              <td data-label="Added"><span class="mono">{{ doc.updated_at }}</span></td>
-              <td data-label="">
-                <form method="post" action="/brain/documents/delete" data-confirm="Delete this document?">
-                  <input type="hidden" name="doc_id" value="{{ doc.id }}">
-                  <button type="submit" class="button button--danger"><span class="icon">{% include "icons/trash-2.svg" %}</span></button>
-                </form>
-              </td>
-            </tr>
-            {% endfor %}
-          </tbody>
-        </table>
-      {% endif %}
+      {# --- Documents table --- #}
+      <div class="card">
+        <h3 class="card__title">Documents</h3>
+        {% if docs_error %}
+          <p class="text-danger">Could not load documents: {{ docs_error }}</p>
+        {% elif not docs %}
+          <div class="empty-state">
+            <span class="icon icon--lg empty-state__icon">{% include "icons/file-text.svg" %}</span>
+            <p class="empty-state__hint">No knowledge sources yet — add documents, websites, or notes below so bots can ground answers in your material.</p>
+          </div>
+        {% else %}
+          <table class="table table--responsive">
+            <thead>
+              <tr>
+                <th>Document</th>
+                <th>Status</th>
+                <th>Added</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for doc in docs %}
+              <tr>
+                <td data-label="Document">{{ doc.file_path or doc.id }}</td>
+                <td data-label="Status">
+                  {% if not doc.is_terminal %}
+                    <span class="badge badge--warn">Reading…</span>
+                  {% elif doc.status == 'failed' %}
+                    <span class="badge badge--danger">Failed</span>
+                  {% else %}
+                    <span class="badge badge--live">Ready</span>
+                  {% endif %}
+                </td>
+                <td data-label="Added"><span class="mono">{{ doc.updated_at }}</span></td>
+                <td data-label="">
+                  <form method="post" action="/brain/documents/delete" data-confirm="Delete this document?">
+                    <input type="hidden" name="doc_id" value="{{ doc.id }}">
+                    <button type="submit" class="button button--danger"><span class="icon">{% include "icons/trash-2.svg" %}</span></button>
+                  </form>
+                </td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        {% endif %}
+      </div>
     </div>
 
     {# --- Teach workspace --- #}
