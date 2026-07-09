@@ -337,12 +337,6 @@
     align-items: center;
   }
 
-  .grid {
-    display: grid;
-    gap: var(--space-md);
-    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
-  }
-
   .page-title {
     font-family: var(--font-display);
     font-weight: 600;
@@ -476,21 +470,6 @@
   .card--danger {
     box-shadow: none;
     border-color: var(--color-danger);
-  }
-
-  .card--clickable {
-    cursor: pointer;
-    padding: var(--space-sm) var(--space-md);
-    display: block;
-    transition: var(--transition-lift);
-    transition-property: box-shadow, transform, border-color;
-  }
-
-  .card--clickable:hover,
-  .card--clickable:focus-visible {
-    border-color: var(--color-border-strong);
-    box-shadow: var(--shadow-lg);
-    transform: translateY(-2px);
   }
 
   .card--center {
@@ -712,11 +691,6 @@
 
   .table tbody tr:last-child td {
     border-bottom: none;
-  }
-
-  .table__row--clickable:hover {
-    background: var(--color-page);
-    cursor: pointer;
   }
 
   /* --- Buttons: premium weight via layered shadow + crisp border, not --- */
@@ -990,71 +964,11 @@
     white-space: pre-wrap;
   }
 
-  /* --- Message list (history page): a real two-sided chat layout so --- */
-  /* who-said-what reads from alignment + color at a glance, not just a */
-  /* thin colored border repeated down the page. */
+  /* --- Message list (history page) --- */
   .msg-list {
     display: flex;
     flex-direction: column;
     gap: var(--space-md);
-  }
-
-  .msg-list__item {
-    max-width: min(70%, 560px);
-    padding: var(--space-sm) var(--space-md);
-    border-radius: var(--radius-lg);
-    border: 1px solid var(--color-border);
-    background: var(--color-surface-alt);
-    align-self: flex-start;
-  }
-
-  .msg-list__item--user {
-    align-self: flex-end;
-    background: var(--color-surface);
-  }
-
-  .msg-list__item--assistant {
-    background: var(--color-accent-50);
-    border-color: color-mix(in srgb, var(--color-accent-600) 20%, var(--color-border));
-  }
-
-  .msg-list__header {
-    display: flex;
-    align-items: baseline;
-    gap: var(--space-sm);
-    margin-bottom: var(--space-2xs);
-  }
-
-  .msg-list__item--user .msg-list__header {
-    flex-direction: row-reverse;
-  }
-
-  .msg-list__role {
-    font-family: var(--font-display);
-    font-weight: 600;
-    font-size: var(--text-xs);
-    color: var(--color-muted);
-  }
-
-  .msg-list__item--assistant .msg-list__role {
-    color: var(--color-accent-700);
-  }
-
-  .msg-list__ts {
-    font-size: var(--text-xs);
-    color: var(--color-subtle);
-  }
-
-  .msg-list__content {
-    white-space: pre-wrap;
-    word-break: break-word;
-    line-height: 1.55;
-  }
-
-  @media (max-width: 640px) {
-    .msg-list__item {
-      max-width: 88%;
-    }
   }
 
   .msg-list__item {
@@ -1101,6 +1015,7 @@
   .msg-list__content {
     white-space: pre-wrap;
     word-break: break-word;
+    line-height: 1.55;
   }
 
   /* --- Empty state --- */
@@ -1220,12 +1135,6 @@
     background: var(--color-warn-bg);
     border-bottom: 1px solid var(--color-warn);
     color: var(--color-warn);
-  }
-
-  .flash--error {
-    background: var(--color-danger-bg);
-    border-bottom-color: var(--color-danger);
-    color: var(--color-danger);
   }
 
   /* --- Health summary row --- */
@@ -1521,19 +1430,6 @@
     font-family: var(--font-mono);
   }
 
-  .display {
-    font-family: var(--font-display);
-    font-weight: 600;
-  }
-
-  .display-title {
-    font-family: var(--font-display);
-    font-weight: 600;
-    letter-spacing: -0.02em;
-    font-size: var(--text-xl);
-    margin: 0;
-  }
-
   .sr-only {
     position: absolute;
     width: 1px;
@@ -1543,9 +1439,6 @@
     white-space: nowrap;
   }
 
-  .mt-0 { margin-top: 0; }
-  .mt-2xs { margin-top: var(--space-2xs); }
-  .mt-lg { margin-top: var(--space-lg); }
   .mt-2xl { margin-top: var(--space-2xl); }
   .mb-0 { margin-bottom: 0; }
   .mb-md { margin-bottom: var(--space-md); }
@@ -1555,6 +1448,5 @@
   .text-danger { color: var(--color-danger); }
   .text-warn { color: var(--color-warn); }
   .text-sm { font-size: var(--text-sm); }
-  .block { display: block; }
   .img-constrained { max-width: 300px; }
 }
