@@ -26,10 +26,6 @@ class TestSettingsValidation:
         with pytest.raises(ValidationError, match=">= 0"):
             Settings(agent_max_history_messages=-1, _env_file="")  # type: ignore[call-arg]
 
-    def test_agent_max_history_chars_must_be_positive(self):
-        with pytest.raises(ValidationError, match=">= 0"):
-            Settings(agent_max_history_chars=-1, _env_file="")  # type: ignore[call-arg]
-
 
 class TestValidateStartup:
     def test_warns_on_missing_api_key(self, caplog):

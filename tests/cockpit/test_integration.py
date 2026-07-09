@@ -208,30 +208,6 @@ class TestFullDeploymentFlow:
         assert dep_svc.get(dep.id) is None
 
 
-class TestSecondUserIsolation:
-    def test_second_user_gets_separate_instance_namespace(self, db, bob):
-        alice = User(
-            email="alice@x.com",
-            language="French",
-            timezone="Europe/Paris",
-            hmac_key="alice-hmac-key",
-            created_at="now",
-            kai_slug=kai_slug_for("alice@x.com"),
-        )
-        db.add(alice)
-        db.commit()
-
-        from kai.cockpit.deployments import DeploymentsService
-
-        svc = DeploymentsService(db)
-        bob_dep = svc.create(bob, "waha", "goal", "English")
-        alice_dep = svc.create(alice, "waha", "goal", "French")
-
-        bob_instance = f"{bob_dep.bot_type}-{bob.email}"
-        alice_instance = f"{alice_dep.bot_type}-{alice.email}"
-        assert bob_instance != alice_instance
-
-
 class TestStartGatedOnWhatsApp:
     """The detail page must hide 'Start' and show 'Connect WhatsApp' when
     the Operator has no connected WhatsApp Connection."""

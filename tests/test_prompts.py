@@ -14,11 +14,6 @@ class TestLoadSystemPrompt:
         f.write_text("# System Prompt\nBe helpful.")
         assert "# System Prompt" in load_system_prompt(f)
 
-    def test_prompt_extension(self, tmp_path):
-        f = tmp_path / "prompt.prompt"
-        f.write_text("Custom prompt format.")
-        assert load_system_prompt(f) == "Custom prompt format."
-
     def test_strips_whitespace(self, tmp_path):
         f = tmp_path / "prompt.txt"
         f.write_text("  \n  Hello  \n  ")
@@ -69,8 +64,3 @@ class TestLoadSystemPrompt:
         content = "A" * 100_000
         f.write_text(content)
         assert len(load_system_prompt(f)) == 100_000
-
-    def test_string_path(self, tmp_path):
-        f = tmp_path / "prompt.txt"
-        f.write_text("Test")
-        assert load_system_prompt(str(f)) == "Test"

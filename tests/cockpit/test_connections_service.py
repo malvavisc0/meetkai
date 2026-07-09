@@ -10,9 +10,7 @@ from unittest.mock import AsyncMock
 import pytest
 
 from kai.cockpit.connections import ConnectionsService
-from kai.cockpit.models import Connection, User
-from kai.cockpit.naming import kai_slug_for
-from kai.utils.common import user_slug
+from kai.cockpit.models import Connection
 
 
 @pytest.fixture
@@ -41,41 +39,6 @@ class TestLazyConnectionCreation:
         first = svc.get_or_create_whatsapp(user)
         second = svc.get_or_create_whatsapp(user)
         assert first.id == second.id
-
-
-class TestSessionNameSanitization:
-    """``user_slug`` just returns the stored ``user.kai_slug`` — the
-    actual sanitization logic lives in ``naming.kai_slug_for`` (tested
-    directly in ``test_naming.py``); this class checks the passthrough."""
-
-    def _user(self, email: str) -> User:
-        return User(
-            email=email,
-            language="English",
-            timezone="UTC",
-            hmac_key="k",
-            created_at="now",
-            kai_slug=kai_slug_for(email),
-        )
-
-    @pytest.mark.parametrize(
-        "email, expected",
-        [
-            ("bob@test.com", "kai-v001-bob_at_test_com"),
-            ("alice@example.org", "kai-v001-alice_at_example_org"),
-            ("user.name+tag@sub.domain.co", "kai-v001-user_name-tag_at_sub_domain_co"),
-            ("BOB@Test.COM", "kai-v001-BOB_at_Test_COM"),
-            ("a_b@example.com", "kai-v001-a_b_at_example_com"),
-            ("weird!#$%@email.com", "kai-v001-weird-_at_email_com"),
-            ("  spaces@x.com  ", "kai-v001-spaces_at_x_com"),
-        ],
-    )
-    def test_returns_the_stored_kai_slug(self, email, expected):
-        assert user_slug(self._user(email).kai_slug) == expected
-
-    def test_only_alphanumerics_underscore_hyphen(self):
-        name = user_slug(self._user("a@b.c").kai_slug)
-        assert all(c.isalnum() or c in "-_" for c in name)
 
 
 class TestPortAllocation:

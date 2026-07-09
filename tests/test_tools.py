@@ -198,7 +198,6 @@ def test_get_hardware_info_returns_basic_fields():
     assert "os" in info and info["os"]
     assert "python_version" in info and info["python_version"]
     assert "cpu_count" in info and info["cpu_count"].isdigit()
-    int(info["cpu_count"])
 
 
 def test_get_hardware_info_handles_missing_proc(monkeypatch):

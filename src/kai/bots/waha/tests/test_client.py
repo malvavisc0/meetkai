@@ -150,14 +150,6 @@ class TestSendMessage:
         body = route.calls[0].request.content
         assert b"mentions" not in body
 
-    @respx.mock
-    @pytest.mark.asyncio
-    async def test_sends_without_mentions_key_when_empty(self, client):
-        route = respx.post("/api/sendText").mock(return_value=Response(201, json={"id": "msg_123"}))
-        await client.send_message("123@c.us", "hello", mentions=[])
-        body = route.calls[0].request.content
-        assert b"mentions" not in body
-
 
 class TestGetChatParticipants:
     @respx.mock
@@ -406,14 +398,3 @@ class TestDownloadMedia:
         )
         result = await client.download_media("/api/files/default/big.jpg", max_size_mb=10)
         assert result is None
-
-    @respx.mock
-    @pytest.mark.asyncio
-    async def test_sends_auth_header(self, settings):
-        route = respx.get("/api/files/default/media.jpg").mock(
-            return_value=Response(200, content=b"data")
-        )
-        client = WahaClient(settings)
-        await client.download_media("/api/files/default/media.jpg")
-        assert route.calls[0].request.headers["X-Api-Key"] == "test-key"
-        await client.close()

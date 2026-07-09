@@ -139,7 +139,9 @@ class TestChatsJson:
         assert body["error"] == "WhatsApp API is not reachable"
         assert "waha down" not in body["error"]
 
-    def test_client_construction_failure_surfaces_error(self, client, db, bob, conn, dep, monkeypatch):
+    def test_client_construction_failure_surfaces_error(
+        self, client, db, bob, conn, dep, monkeypatch
+    ):
         # A failure building the WahaClient itself (e.g. bad/missing WAHA
         # settings) must degrade the same way as a failed chats/overview
         # call, not bubble up as an unhandled 500.

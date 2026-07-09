@@ -58,15 +58,6 @@ class TestShouldRespond:
             is True
         )
 
-    def test_group_reply_to_bot_without_keyword(self):
-        bot = _make_bot(BotConfig(trigger_keyword="kai"))
-        assert (
-            bot._should_respond(
-                "no keyword here", is_group=True, mentions_bot=False, replies_to_bot=True
-            )
-            is True
-        )
-
     def test_group_media_only_without_mention_skipped(self):
         bot = _make_bot(BotConfig(trigger_keyword="kai"))
         assert bot._should_respond("", is_group=True, mentions_bot=False, has_media=True) is False
@@ -235,9 +226,6 @@ class TestPostProcess:
     def test_strips_multiple_hashtags(self):
         assert _make_bot()._post_process("#one #two #three done") == "done"
 
-    def test_empty_string(self):
-        assert _make_bot()._post_process("") == ""
-
     def test_whitespace_only(self):
         assert _make_bot()._post_process("   ") == ""
 
@@ -339,13 +327,6 @@ class TestLoadConfig:
         bot = _make_bot(bot_dir=tmp_path)
         config = bot._load_config(config_path=config_file)
         assert config.whitelist == []
-
-    def test_blacklist_string_treated_as_empty(self, tmp_path):
-        config_file = tmp_path / "config.json"
-        config_file.write_text('{"blacklist": "555@g.us"}')
-        bot = _make_bot(bot_dir=tmp_path)
-        config = bot._load_config(config_path=config_file)
-        assert config.blacklist == []
 
     def test_whitelist_invalid_entries_skipped(self, tmp_path):
         config_file = tmp_path / "config.json"

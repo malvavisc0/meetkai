@@ -8,9 +8,7 @@ import pytest
 from kai.brain.client import DocumentRecord, IngestResult
 from kai.brain.crawler import CrawlLinks, CrawlPage, MarkdownResult
 from kai.cockpit.brains import BrainsService, _slug_for_url
-from kai.cockpit.models import Connection, User
-from kai.cockpit.naming import kai_slug_for
-from kai.utils.common import user_slug
+from kai.cockpit.models import Connection
 
 
 class TestCreateBrain:
@@ -36,32 +34,6 @@ class TestCreateBrain:
     def test_no_row_before_creation(self, db, user):
         svc = BrainsService(db)
         assert svc.get_brain(user) is None
-
-
-class TestWorkspaceNaming:
-    """``user_slug`` returns the stored ``user.kai_slug`` verbatim — the
-    SAME value the WAHA session-naming path returns for that user."""
-
-    def _user(self, email: str) -> User:
-        return User(
-            email=email,
-            language="English",
-            timezone="UTC",
-            hmac_key="k",
-            created_at="now",
-            kai_slug=kai_slug_for(email),
-        )
-
-    @pytest.mark.parametrize(
-        "email, expected",
-        [
-            ("bob@test.com", "kai-v001-bob_at_test_com"),
-            ("carol@example.net", "kai-v001-carol_at_example_net"),
-            ("alice@example.org", "kai-v001-alice_at_example_org"),
-        ],
-    )
-    def test_returns_the_stored_kai_slug(self, email, expected):
-        assert user_slug(self._user(email).kai_slug) == expected
 
 
 class TestUpdateInstruction:

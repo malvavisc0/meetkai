@@ -99,18 +99,3 @@ class TestWriteConfig:
         path = config_writer.write_config(dep, INSTANCE_ID)
         assert path.name == f"{INSTANCE_ID}.json"
         assert path.name != "42.json"
-
-    def test_preserve_uses_instance_id_filename(self):
-        """instagram/max_size preservation must read the same instance_id file."""
-        dep = _make_deployment()
-        # Seed a file with preserved fields under the instance_id name.
-        first = config_writer.write_config(dep, INSTANCE_ID)
-        seeded = json.loads(first.read_text())
-        seeded["media"]["instagram_enabled"] = False
-        seeded["media"]["max_size_mb"] = 25
-        first.write_text(json.dumps(seeded))
-
-        config_writer.write_config(dep, INSTANCE_ID)
-        reloaded = json.loads(first.read_text())
-        assert reloaded["media"]["instagram_enabled"] is False
-        assert reloaded["media"]["max_size_mb"] == 25

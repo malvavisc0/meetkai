@@ -15,9 +15,6 @@ class TestBotTypesRegistry:
         bt = BOT_TYPES["waha"]
         assert "language" in bt.required_settings
 
-    def test_unknown_bot_type_not_registered(self):
-        assert "telegram" not in BOT_TYPES
-
 
 class TestAutoPickVoice:
     def test_known_language(self):

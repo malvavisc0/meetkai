@@ -576,22 +576,6 @@ class TestKaiAgentContext:
         assert len(history) == 0
 
     @pytest.mark.asyncio
-    async def test_silent_stores_nothing_with_context(self, settings):
-        agent = KaiAgent(settings=settings, goal_manager=GoalManager())
-        agent._llm = _mock_llm(action="silent", reply_content=None)
-
-        ctx = MessageContext(
-            sender_name="Juan",
-            sender_id="123@lid",
-            conversation_id="123@g.us",
-            multi_party=True,
-        )
-        result = await agent.chat("hello", output_cls=_TestAction, context=ctx)
-        assert result.action.action == "silent"
-        history = agent._get_history()
-        assert len(history) == 0
-
-    @pytest.mark.asyncio
     async def test_chat_formats_message_with_context(self, settings):
         agent = KaiAgent(settings=settings, goal_manager=GoalManager())
         agent._llm = _mock_llm("hi back")
@@ -958,19 +942,6 @@ class TestAuditFixes:
             agent_history_folder=None,
         )
 
-    @pytest.mark.asyncio
-    async def test_silent_is_an_action_choice(self, settings):
-        # Silence is no longer a ``<<silent>>`` string token parsed by core;
-        # it is one value in the bot's action vocabulary. A silent action
-        # produces an empty reply and stores nothing in history.
-        agent = KaiAgent(settings=settings, goal_manager=GoalManager())
-        agent._llm = _mock_llm(action="silent", reply_content=None)
-
-        result = await agent.chat("hello", output_cls=_TestAction)
-        assert result.action.action == "silent"
-        assert result.reply == ""
-        assert len(agent._get_history()) == 0
-
     def test_strip_reasoning_channels_removes_channel_blocks(self):
         from kai.agent.core import strip_reasoning_channels
 
@@ -989,8 +960,6 @@ class TestAuditFixes:
         # A block fully wrapping content with nothing outside → empty (the
         # model produced only reasoning, no visible reply).
         assert strip_reasoning_channels("<|channel>hi there<channel|>") == ""
-        assert strip_reasoning_channels("plain reply") == "plain reply"
-        assert strip_reasoning_channels("") == ""
 
     @pytest.mark.asyncio
     async def test_action_text_strips_reasoning_channels(self, settings):

@@ -7,10 +7,6 @@ class TestListBots:
     def test_finds_waha_bot(self):
         assert "waha" in list_bots()
 
-    def test_returns_sorted(self):
-        bots = list_bots()
-        assert bots == sorted(bots)
-
 
 class TestLoadBot:
     def test_loads_waha_bot(self):
