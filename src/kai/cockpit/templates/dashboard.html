@@ -41,6 +41,8 @@
     <div class="deployment-list">
       {% for dep in deployments %}
         {% set bot_type = bot_types.get(dep.bot_type) %}
+        {% set status_data = status_map.get(dep.id) %}
+        {% set conversation_count, message_count = interaction_summaries.get(dep.id, (0, 0)) %}
         <a class="card deployment-card{% if attention_reasons.get(dep.id) %} deployment-card--attention{% elif dep.status == 'running' %} deployment-card--running{% else %} deployment-card--stopped{% endif %}" href="/deployments/{{ dep.id }}">
           <div class="deployment-card__main">
             <div class="deployment-card__title">
@@ -63,7 +65,17 @@
             {% endif %}
           </div>
 
-          <span class="button deployment-card__action">Open deployment</span>
+          <div class="deployment-card__stats">
+            <p><span class="deployment-card__stat-num">{{ conversation_count }}</span> Conversation{{ '' if conversation_count == 1 else 's' }}</p>
+            <p><span class="deployment-card__stat-num">{{ message_count }}</span> Message{{ '' if message_count == 1 else 's' }}</p>
+            <p>
+              {% if status_data and status_data.tasks %}
+                <span class="deployment-card__stat-num">{{ status_data.tasks.pending }}</span> Task{{ '' if status_data.tasks.pending == 1 else 's' }}
+              {% else %}
+                <span class="deployment-card__stat-num">&mdash;</span> Tasks
+              {% endif %}
+            </p>
+          </div>
         </a>
       {% endfor %}
     </div>

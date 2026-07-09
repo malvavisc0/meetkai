@@ -17,7 +17,7 @@ router = APIRouter()
 
 
 def _attention_reason(
-    svc: DeploymentsService, dep: Deployment, whatsapp_connected: bool
+    dep: Deployment, status_data: dict | None, whatsapp_connected: bool
 ) -> str | None:
     """Why a deployment needs the operator's action *now*, or None if it doesn't.
 
@@ -29,6 +29,11 @@ def _attention_reason(
     A failed start decays to the neutral ``stopped`` state on the next load
     rather than staying red — red is reserved for states needing action now.
 
+    ``status_data`` is the live ``/status`` probe result for ``dep`` (``None``
+    if it isn't running or the probe failed) — the caller fetches it once per
+    running deployment and reuses it here and for the card's task count, so
+    the route never doubles the number of live status calls.
+
     The route computes this once per deployment and hands the same reasons to
     both the health summary count and the per-row badge, so the two can never
     disagree about which deployments need attention.
@@ -36,7 +41,7 @@ def _attention_reason(
     if dep.desired_state == "running" and not whatsapp_connected:
         return "WhatsApp down, wants running"
     if dep.status == "running":
-        if svc.fetch_status(dep) is None:
+        if status_data is None:
             return "Bot process isn't responding"
         if dep.needs_restart:
             return "Restart needed to apply settings"
@@ -59,12 +64,20 @@ async def dashboard(
     whatsapp_connected = bool(whatsapp and whatsapp.status == "connected")
     brain_initialized = BrainsService(db).get_brain(user) is not None
 
+    # Fetch each running deployment's live status once and reuse it for both
+    # the attention check and the card's task count, rather than probing the
+    # bot process twice per page load.
+    status_map = {d.id: svc.fetch_status(d) for d in deployments if d.status == "running"}
+    # Interaction counts come from the on-disk history file (no network call),
+    # so they're cheap to compute for every card, running or not.
+    interaction_summaries = {d.id: svc.interaction_summary(d) for d in deployments}
+
     running = sum(1 for d in deployments if d.status == "running")
     stopped = sum(1 for d in deployments if d.status == "stopped")
     attention_reasons = {
         d.id: reason
         for d in deployments
-        if (reason := _attention_reason(svc, d, whatsapp_connected)) is not None
+        if (reason := _attention_reason(d, status_map.get(d.id), whatsapp_connected)) is not None
     }
 
     flash = request.session.pop("flash", None)
@@ -81,6 +94,8 @@ async def dashboard(
             "running": running,
             "stopped": stopped,
             "attention_reasons": attention_reasons,
+            "status_map": status_map,
+            "interaction_summaries": interaction_summaries,
             "flash": flash,
         },
     )
