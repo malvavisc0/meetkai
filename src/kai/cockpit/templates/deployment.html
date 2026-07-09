@@ -101,8 +101,8 @@
     {% endif %}
   </div>
 
-  {% if dep.status == "running" %}
-    {% set sleeping_chats = (status.sleep.sleeping if status and status.sleep else []) %}
+  {% if dep.status == "running" and status %}
+    {% set sleeping_chats = status.sleep.sleeping %}
     <div class="card">
       <p class="card__eyebrow">Sleep mode</p>
       <h3 class="card__title">Per-chat sleep</h3>
@@ -155,31 +155,29 @@
   {% endif %}
 
   {# --- Chat --- #}
+  {% if dep.status == "running" and status %}
   <div class="card chat-card">
     <h3 class="card__title">Chat with the Bot</h3>
     <p class="muted">Send a test message as a user would and review KAI's reply.</p>
-    {% if dep.status != "running" or not status %}
-      <p class="muted">{% if dep.status != "running" %}Start the bot to send it a message.{% else %}The bot is not responding yet.{% endif %}</p>
-    {% else %}
-      {% if reply %}
-        <div class="log-panel chat-reply">
-          <div class="log-panel__line">
-            <b class="mono">kai&gt;</b>
-            <span class="log-panel__content">{{ reply }}</span>
-          </div>
+    {% if reply %}
+      <div class="log-panel chat-reply">
+        <div class="log-panel__line">
+          <b class="mono">kai&gt;</b>
+          <span class="log-panel__content">{{ reply }}</span>
         </div>
-      {% endif %}
-      <form method="post" action="/deployments/{{ dep.id }}/chat" class="stack chat-form">
-        <div class="field">
-          <label class="sr-only" for="message">Message</label>
-          <textarea id="message" name="message" rows="3" required data-autosize
-            placeholder="Try a message KAI might get from a real user…"></textarea>
-        </div>
-        <div class="cluster chat-form__actions">
-          <button type="submit" class="button button--primary"><span class="icon">{% include "icons/send.svg" %}</span> Send</button>
-        </div>
-      </form>
+      </div>
     {% endif %}
+    <form method="post" action="/deployments/{{ dep.id }}/chat" class="stack chat-form">
+      <div class="field">
+        <label class="sr-only" for="message">Message</label>
+        <textarea id="message" name="message" rows="3" required data-autosize
+          placeholder="Try a message KAI might get from a real user…"></textarea>
+      </div>
+      <div class="cluster chat-form__actions">
+        <button type="submit" class="button button--primary"><span class="icon">{% include "icons/send.svg" %}</span> Send</button>
+      </div>
+    </form>
   </div>
+  {% endif %}
 </div>
 {% endblock %}
