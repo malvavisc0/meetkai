@@ -2,16 +2,18 @@
 {% block content %}
 <div class="page stack">
   <header class="page-header">
-    <p class="page-eyebrow">Enhanced memory</p>
+    <p class="page-eyebrow">Shared knowledge</p>
     <h1 class="page-title">Brain</h1>
-    <p class="page-subtitle">The shared knowledge bots search before answering questions.</p>
+    <p class="page-subtitle">Feed it your docs and websites once. Every bot answers
+      from it forever — no retraining, no re-explaining.</p>
   </header>
 
   {% if not brain %}
     <div class="card empty-state empty-state--hero">
       <span class="icon icon--lg empty-state__icon">{% include "icons/file-text.svg" %}</span>
       <p>No Brain yet.</p>
-      <p class="empty-state__hint">Create a Brain to give bots shared memory from documents, notes, and websites.</p>
+      <p class="empty-state__hint">Give your bots shared memory — feed them your docs,
+        notes, and websites so they answer from what you know.</p>
       <form method="post" action="/brain/create">
         <button type="submit" class="button button--primary"><span class="icon">{% include "icons/plus.svg" %}</span> Create Brain</button>
       </form>

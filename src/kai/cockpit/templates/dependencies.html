@@ -3,8 +3,8 @@
 <div class="page stack">
   <header class="page-header">
     <p class="page-eyebrow">Infrastructure</p>
-    <h1 class="page-title">Dependencies</h1>
-    <p class="page-subtitle">Live health probes for every service the bots depend on.</p>
+    <h1 class="page-title">Service health</h1>
+    <p class="page-subtitle">Live health checks for everything your bots rely on.</p>
   </header>
 
   {% set healthy = service_health | selectattr("ok") | list %}
