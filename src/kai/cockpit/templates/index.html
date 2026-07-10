@@ -1,10 +1,37 @@
 {% extends "base.html" %}
+{% block topbar %}{% endblock %}
 {% block content %}
-<div class="page page--narrow stack">
-  <div class="card card--center empty-state empty-state--hero">
-    <h1 class="page-title">KAI</h1>
-    <p class="page-subtitle">Knowledgeable Artificial Intelligence</p>
-    <a href="/login" class="button button--primary">Log in</a>
-  </div>
+<div class="page landing-page">
+  <section class="landing-hero">
+    <div class="landing-logo-wrap">
+      <img class="landing-logo" src="/static/icon-192.png" alt="KAI logo">
+    </div>
+
+    <div class="landing-copy">
+      <h1 class="landing-title">Small LLM bots for anything that emits a webhook.</h1>
+      <p class="page-subtitle">
+        A hackable Python framework for building bots with runtime memory, tools,
+        scheduling, and simple transport plugins.
+      </p>
+      <p class="landing-invite muted">
+      The platform is currently in private beta. To request an invite, email
+        <a href="mailto:hello@meetk.ai">hello@meetk.ai</a>.
+      </p>
+    </div>
+
+    <div class="landing-actions">
+      <a href="mailto:hello@meetk.ai" class="button button--primary">
+        <span class="icon">{% include "icons/send.svg" %}</span>
+        Request invite
+      </a>
+      <a href="https://github.com/malvavisc0/meetkai" class="button">
+        View on GitHub
+      </a>
+    </div>
+
+    <p class="landing-signin muted">
+      Already invited? <a href="/login">Sign in to the cockpit</a>.
+    </p>
+  </section>
 </div>
 {% endblock %}

@@ -6,18 +6,13 @@
     <div class="auth-hero">
       <div class="auth-hero__brand">
         <span class="status-dot status-dot--running"></span>
-        <span>KAI Cockpit</span>
+        <span>Cockpit</span>
       </div>
 
       <div class="auth-hero__copy">
         <p class="page-eyebrow">Operator access</p>
         <h1 class="auth-title">Manage your bot fleet with a clean cockpit.</h1>
         <p>Monitor deployments, tune behavior, and keep connected services healthy from one focused console.</p>
-      </div>
-
-      <div class="auth-hero__badges">
-        <span class="auth-pill">Magic link</span>
-        <span class="auth-pill">No password</span>
       </div>
     </div>
 
@@ -30,9 +25,9 @@
         </div>
       {% else %}
         <div class="auth-panel__header">
-          <p class="page-eyebrow">Secure sign in</p>
+          <p class="page-eyebrow">Invite-only beta</p>
           <h2 class="card__title">Return to your console</h2>
-          <p class="page-subtitle">Enter your email and we'll send a one-time login link.</p>
+          <p class="page-subtitle">If you've been invited, enter your email and we'll send a one-time login link.</p>
         </div>
 
         <form method="post" class="auth-form stack text-left">
@@ -48,8 +43,15 @@
               required
             >
           </div>
-          <button type="submit" class="button button--primary button--block">Send magic link</button>
+          <button type="submit" class="button button--primary button--block">
+            <span class="icon">{% include "icons/send.svg" %}</span>
+            Send magic link
+          </button>
         </form>
+
+        <p class="auth-invite muted">
+          Want access? Email <a href="mailto:hello@meetk.ai">hello@meetk.ai</a> for an invite.
+        </p>
       {% endif %}
 
       {% if error %}
