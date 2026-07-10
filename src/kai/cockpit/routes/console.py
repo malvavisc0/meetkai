@@ -104,13 +104,5 @@ async def console(
 @router.get("/")
 async def index(
     request: Request,
-    user: User | None = Depends(get_current_user),
 ):
-    """Placeholder landing page.
-
-    Authenticated users are redirected to /console; anonymous users see a
-    simple landing page with a link to log in.
-    """
-    if user:
-        return RedirectResponse("/console", status_code=302)
     return templates.TemplateResponse(request, "index.html", {"user": None})
