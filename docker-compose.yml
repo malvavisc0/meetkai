@@ -175,12 +175,18 @@ services:
       # the cockpit share this compose network.
       KAI_WAHA_URL: http://waha:3000
       KAI_WAHA_API_KEY: ${WAHA_API_KEY}
-      KAI_WAHA_HMAC_KEY: ${KAI_WAHA_HMAC_KEY}
+      KAI_WAHA_HMAC_KEY: ${KAI_HMAC_KEY}
       KAI_WAHA_WEBHOOK_PUBLIC_HOST: cockpit
       KAI_COCKPIT_WEBHOOK_PORT_RANGE: ${KAI_COCKPIT_WEBHOOK_PORT_RANGE}
-      KAI_SMTP_HOST: mailpit
-      KAI_SMTP_PORT: 1025
-      KAI_SMTP_FROM: kai@localhost
+      # Outbound email (SMTP). Defaults to the local Mailpit dev relay; set
+      # KAI_SMTP_* in .env for a production relay (e.g. Resend:
+      # smtp.resend.com:587, user "resend", password = API key,
+      # KAI_SMTP_FROM=hello@meetk.ai).
+      KAI_SMTP_HOST: ${KAI_SMTP_HOST:-mailpit}
+      KAI_SMTP_PORT: ${KAI_SMTP_PORT:-1025}
+      KAI_SMTP_FROM: ${KAI_SMTP_FROM:-kai@localhost}
+      KAI_SMTP_USER: ${KAI_SMTP_USER:-}
+      KAI_SMTP_PASSWORD: ${KAI_SMTP_PASSWORD:-}
       # KAI_LLM_* / KAI_AGENT_* come from env_file: .env
     depends_on:
       - waha
