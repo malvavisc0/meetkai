@@ -4,22 +4,28 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Knowledgeable Artificial Intelligence aka KAI</title>
-  <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
+  <link rel="icon" type="image/x-icon" href="/static/favicon.ico">
+  <link rel="icon" type="image/png" sizes="32x32" href="/static/favicon-32x32.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/static/favicon-16x16.png">
+  <link rel="apple-touch-icon" sizes="180x180" href="/static/apple-touch-icon.png">
+  <link rel="manifest" href="/static/site.webmanifest">
   <link rel="stylesheet" href="/static/cockpit.css">
 </head>
 <body>
   <nav class="topbar">
-    <a class="topbar__brand" href="{{ '/dashboard' if user else '/' }}"> </a>
+    <a class="topbar__brand topbar__brand--{{ topbar_status(request, user) }}" href="{{ '/console' if user else '/' }}"> </a>
     {% if user %}
       <span class="topbar__nav">
-        <a href="/dashboard">dashboard</a>
-        <a href="/brain">brain</a>
-        <a href="/connections">connections</a>
-        <a href="/dependencies">dependencies</a>
+        <a href="/console"><span class="icon">{% include "icons/layout-dashboard.svg" %}</span><span class="topbar__label">console</span></a>
+        <a href="/brain"><span class="icon">{% include "icons/brain.svg" %}</span><span class="topbar__label">brain</span></a>
+        <a href="/connections"><span class="icon">{% include "icons/plug.svg" %}</span><span class="topbar__label">connections</span></a>
+        <a href="/dependencies"><span class="icon">{% include "icons/package.svg" %}</span><span class="topbar__label">dependencies</span></a>
       </span>
       <span class="topbar__user">
-        {{ user.email }}
-        <a href="/logout">logout</a>
+        <span class="topbar__email">{{ user.email }}</span>
+        <a href="/logout" class="topbar__logout" aria-label="Log out" title="Log out">
+          <span class="icon">{% include "icons/log-out.svg" %}</span>
+        </a>
       </span>
     {% endif %}
   </nav>

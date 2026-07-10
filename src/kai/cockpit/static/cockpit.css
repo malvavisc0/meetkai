@@ -278,18 +278,55 @@
     box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-accent-500) 30%, transparent);
   }
 
+  /* Overall deployment health: green = all bots running, orange = some
+     running, red = none running, gray = logged out / no deployments yet. */
+  .topbar__brand--ok::before {
+    background: #22c55e;
+    box-shadow: 0 0 0 3px color-mix(in srgb, #22c55e 30%, transparent);
+  }
+
+  .topbar__brand--warn::before {
+    background: #f59e0b;
+    box-shadow: 0 0 0 3px color-mix(in srgb, #f59e0b 30%, transparent);
+  }
+
+  .topbar__brand--down::before {
+    background: #ef4444;
+    box-shadow: 0 0 0 3px color-mix(in srgb, #ef4444 30%, transparent);
+  }
+
+  .topbar__brand--none::before {
+    background: #6b7280;
+    box-shadow: 0 0 0 3px color-mix(in srgb, #6b7280 30%, transparent);
+  }
+
   .topbar__nav {
     display: flex;
     gap: var(--space-md);
     align-items: center;
+    flex-wrap: wrap;
   }
 
   .topbar__nav a {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-2xs);
+    position: relative;
     font-family: var(--font-display);
     font-weight: 600;
     color: #e5e7eb;
     text-decoration: none;
     font-size: var(--text-sm);
+  }
+
+  .topbar__nav a .icon {
+    color: #9ca3af;
+  }
+
+  .topbar__nav a .icon svg,
+  .topbar__logout .icon svg {
+    width: 18px;
+    height: 18px;
   }
 
   .topbar__nav a:hover,
@@ -297,23 +334,43 @@
     text-decoration: underline;
   }
 
+  .topbar__nav a:hover .icon,
+  .topbar__nav a:focus-visible .icon {
+    color: inherit;
+  }
+
   .topbar__user {
     margin-left: auto;
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
     color: #9ca3af;
     font-size: var(--text-sm);
+    min-width: 0;
   }
 
-  .topbar__user a {
-    font-family: var(--font-display);
-    font-weight: 600;
+  .topbar__email {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    min-width: 0;
+  }
+
+  .topbar__logout {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    width: 28px;
+    height: 28px;
+    border-radius: var(--radius-sm);
     color: #e5e7eb;
     text-decoration: none;
-    margin-left: var(--space-sm);
   }
 
-  .topbar__user a:hover,
-  .topbar__user a:focus-visible {
-    text-decoration: underline;
+  .topbar__logout:hover,
+  .topbar__logout:focus-visible {
+    background: var(--color-panel-border);
   }
 
   .page {
@@ -395,21 +452,55 @@
     max-width: 60ch;
   }
 
+  /* Icon-only nav below tablet width — same links, no wasted horizontal
+     space on labels. The topbar stays a single row all the way down to
+     narrow phones instead of wrapping into a multi-line stack. */
+  @media (max-width: 700px) {
+    .topbar {
+      gap: var(--space-md);
+      padding-inline: var(--space-md);
+    }
+
+    .topbar__nav {
+      gap: var(--space-sm);
+    }
+
+    .topbar__nav a {
+      padding: var(--space-xs);
+      border-radius: var(--radius-sm);
+    }
+
+    .topbar__nav a:hover,
+    .topbar__nav a:focus-visible {
+      background: var(--color-panel-border);
+      text-decoration: none;
+    }
+
+    .topbar__label {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      overflow: hidden;
+      clip: rect(0 0 0 0);
+      white-space: nowrap;
+    }
+
+    .topbar__email {
+      max-width: 30vw;
+    }
+  }
+
+  /* Below this, drop the email too — dot + nav icons + logout icon only. */
+  @media (max-width: 480px) {
+    .topbar__email {
+      display: none;
+    }
+  }
+
   @media (max-width: 640px) {
     .page {
       width: min(100% - var(--space-md), 1120px);
       margin: var(--space-lg) auto;
-    }
-
-    .topbar__user {
-      margin-left: 0;
-      width: 100%;
-    }
-
-    .topbar {
-      align-items: flex-start;
-      flex-wrap: wrap;
-      gap: var(--space-xs) var(--space-md);
     }
 
     .cluster > .button {
@@ -1154,7 +1245,7 @@
     background: var(--color-warn-bg);
   }
 
-  .dashboard-health {
+  .console-health {
     background: var(--color-surface-alt);
     box-shadow: none;
   }
@@ -1188,7 +1279,7 @@
     }
   }
 
-  /* --- Dashboard deployment cards --- */
+  /* --- Console deployment cards --- */
   .deployment-list {
     display: grid;
     gap: var(--space-md);

@@ -10,6 +10,7 @@ import secrets
 from datetime import UTC, datetime
 
 import pytest
+from fastapi import Request
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
@@ -126,7 +127,8 @@ def client(db, monkeypatch):
 
     app = create_app()
 
-    def _override_get_db():
+    def _override_get_db(request: Request):
+        request.state.db = db
         yield db
 
     app.dependency_overrides[cockpit_db.get_db] = _override_get_db

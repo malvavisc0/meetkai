@@ -25,7 +25,7 @@ def _auto_approve_enabled() -> bool:
 @router.get("/login")
 async def login_get(request: Request, user: User | None = Depends(get_current_user)):
     if user:
-        return RedirectResponse("/dashboard", status_code=302)
+        return RedirectResponse("/console", status_code=302)
     return templates.TemplateResponse(request, "login.html", {"user": None, "requested": False})
 
 
@@ -67,7 +67,7 @@ async def login_auth(
             },
         )
     request.session["user_id"] = user_id
-    return RedirectResponse("/dashboard", status_code=302)
+    return RedirectResponse("/console", status_code=302)
 
 
 @router.get("/logout")

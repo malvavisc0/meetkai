@@ -16,7 +16,7 @@ from kai.cockpit.models import Deployment, User
 
 router = APIRouter()
 
-_HOME_REDIRECT = RedirectResponse("/dashboard", status_code=302)
+_HOME_REDIRECT = RedirectResponse("/console", status_code=302)
 
 
 def _get_deployment(

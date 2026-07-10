@@ -17,6 +17,13 @@ from kai.cockpit.db import create_all
 templates = Jinja2Templates(directory=Path(__file__).parent / "templates")
 logger = logging.getLogger(__name__)
 
+# Registered as a Jinja global (not threaded through every route's context)
+# so the topbar's status dot can render the same way on every page. See
+# `topbar_status()` for the cheap, no-live-probe status computation.
+from kai.cockpit.deployments import topbar_status  # noqa: E402
+
+templates.env.globals["topbar_status"] = topbar_status
+
 _MEDIA_SERVICES: list = []  # module-level, so _lifespan shutdown can reach it
 
 
@@ -98,14 +105,14 @@ def create_app() -> FastAPI:
         brain,
         chat,
         connections,
-        dashboard,
+        console,
         dependencies,
         deployments,
         health,
     )
 
     app.include_router(auth.router)
-    app.include_router(dashboard.router)
+    app.include_router(console.router)
     app.include_router(dependencies.router)
     app.include_router(deployments.router)
     app.include_router(connections.router)

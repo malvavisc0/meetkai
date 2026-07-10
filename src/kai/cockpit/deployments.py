@@ -246,7 +246,7 @@ class DeploymentsService:
         # A settings/goal/language/voice/feature-flags edit while the bot is
         # running leaves the live process with stale in-memory config (the
         # config file is written to disk immediately below). Flag it so the
-        # detail page and dashboard can show a durable "restart to apply"
+        # detail page and console can show a durable "restart to apply"
         # badge that survives reloads — the prior session-flash signal was
         # lost on reload/new tab. Cleared on the next start()/stop().
         if deployment.status == "running":
@@ -659,3 +659,54 @@ def reconcile_deployments() -> None:
                 logger.exception("reconcile: unexpected error restarting deployment %s", dep.id)
     finally:
         db.close()
+
+
+def topbar_status(request, user) -> str:
+    """Overall deployment health for the topbar indicator, shown on every
+    page. Deliberately cheap: only reads the persisted ``status`` and
+    ``desired_state`` columns (no live process probing like
+    ``fetch_status``), so it's safe to call once per template render.
+
+    Red is reserved for an actual problem — a deployment whose user-chosen
+    ``desired_state`` is ``"running"`` but whose live ``status`` isn't (i.e.
+    it crashed or died unexpectedly). A deployment the user intentionally
+    stopped (``desired_state == "stopped"``) is *not* a problem, so a fleet
+    that's entirely, deliberately stopped is "warn" (idle), not "down".
+
+    ``user`` is the already-loaded ``User`` from the template context (every
+    route renders via ``require_user`` / ``get_current_user``). A ``None``
+    user (logged out, or a disabled account that ``get_current_user``
+    filtered out) is treated exactly like being logged out, so no
+    disabled-account deployment health leaks.
+
+    Reuses the request-scoped DB session that ``get_db`` stashes on
+    ``request.state.db`` for the deployment-status query.
+
+    Returns one of:
+      - ``"none"``  — logged out, disabled account, or zero deployments
+      - ``"ok"``    — no unexpected-down deployments, and at least one running
+      - ``"warn"``  — either a partial problem, or everything intentionally
+                      idle (nothing running, nothing unexpectedly down)
+      - ``"down"``  — nothing running, and at least one deployment that
+                      should be running (per ``desired_state``) isn't
+    """
+    if user is None:
+        return "none"
+
+    rows = (
+        request.state.db.query(Deployment.status, Deployment.desired_state)
+        .filter(Deployment.user_id == user.id)
+        .all()
+    )
+
+    if not rows:
+        return "none"
+
+    running = sum(1 for status, _ in rows if status == "running")
+    unexpected_down = sum(
+        1 for status, desired in rows if desired == "running" and status != "running"
+    )
+
+    if unexpected_down == 0:
+        return "ok" if running > 0 else "warn"
+    return "down" if running == 0 else "warn"

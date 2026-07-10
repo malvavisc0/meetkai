@@ -1,4 +1,4 @@
-"""Dashboard route: /dashboard (list deployments + bot picker) + / placeholder."""
+"""Console route: /console (list deployments + bot picker) + / placeholder."""
 
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import RedirectResponse
@@ -48,8 +48,8 @@ def _attention_reason(
     return None
 
 
-@router.get("/dashboard")
-async def dashboard(
+@router.get("/console")
+async def console(
     request: Request,
     user: User = Depends(require_user),
     db: Session = Depends(get_db),
@@ -83,7 +83,7 @@ async def dashboard(
     flash = request.session.pop("flash", None)
     return templates.TemplateResponse(
         request,
-        "dashboard.html",
+        "console.html",
         {
             "user": user,
             "deployments": deployments,
@@ -108,9 +108,9 @@ async def index(
 ):
     """Placeholder landing page.
 
-    Authenticated users are redirected to /dashboard; anonymous users see a
+    Authenticated users are redirected to /console; anonymous users see a
     simple landing page with a link to log in.
     """
     if user:
-        return RedirectResponse("/dashboard", status_code=302)
+        return RedirectResponse("/console", status_code=302)
     return templates.TemplateResponse(request, "index.html", {"user": None})

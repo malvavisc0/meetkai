@@ -62,9 +62,9 @@ class TestFullDeploymentFlow:
         MEDIA_READY.clear()
 
     def test_end_to_end(self, client, db, bob, fake_waha_client, monkeypatch, tmp_path):
-        # 5. GET /dashboard -> dashboard (no deployments)
+        # 5. GET /console -> console (no deployments)
         _login(client, db, bob)
-        r = client.get("/dashboard")
+        r = client.get("/console")
         assert r.status_code == 200
         assert "waha" in r.text.lower() or "deployment" in r.text.lower()
 
@@ -204,7 +204,7 @@ class TestFullDeploymentFlow:
             follow_redirects=False,
         )
         assert r.status_code == 302
-        assert r.headers["location"] == "/dashboard"
+        assert r.headers["location"] == "/console"
         assert dep_svc.get(dep.id) is None
 
 
