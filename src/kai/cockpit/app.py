@@ -26,9 +26,7 @@ templates.env.globals["topbar_status"] = topbar_status
 
 # Contact email shown on landing/login pages. Configurable so deployments
 # don't have to edit templates to change the support address.
-templates.env.globals["contact_email"] = os.environ.get(
-    "KAI_COCKPIT_CONTACT_EMAIL", "hello@meetk.ai"
-)
+templates.env.globals["contact_email"] = os.environ.get("KAI_CONTACT_EMAIL", "hello@meetk.ai")
 
 _MEDIA_SERVICES: list = []  # module-level, so _lifespan shutdown can reach it
 

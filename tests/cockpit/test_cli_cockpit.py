@@ -161,8 +161,8 @@ class TestLoginRequestFlow:
         self._create_user()
         runner.invoke(app, ["cockpit", "request", "create", "bob@x.com"])
 
-        # Force the print-to-stdout mailer path (no SMTP configured).
-        monkeypatch.delenv("KAI_SMTP_HOST", raising=False)
+        # Force the print-to-stdout mailer path (SMTP disabled).
+        monkeypatch.setenv("KAI_SMTP_HOST", "")
 
         result = runner.invoke(app, ["cockpit", "request", "approve", "bob@x.com"])
         assert result.exit_code == 0

@@ -72,10 +72,11 @@ def test_no_inline_style_attributes_in_templates():
         text = path.read_text()
         for lineno, line in enumerate(text.splitlines(), start=1):
             if _INLINE_STYLE_ATTR_RE.search(line):
-                offenders.append(f"{path.relative_to(COCKPIT_TEMPLATES_DIR.parent.parent.parent)}:{lineno}: {line.strip()}")
+                rel = path.relative_to(COCKPIT_TEMPLATES_DIR.parent.parent.parent)
+                offenders.append(f"{rel}:{lineno}: {line.strip()}")
 
     assert not offenders, (
-        "Found inline style=\"...\" attribute(s) in cockpit templates. Add a "
+        'Found inline style="..." attribute(s) in cockpit templates. Add a '
         "class to cockpit.css instead of styling inline (see STYLEGUIDE.md):\n"
         + "\n".join(offenders)
     )
@@ -88,7 +89,8 @@ def test_no_inline_style_blocks_in_templates():
         text = path.read_text()
         for lineno, line in enumerate(text.splitlines(), start=1):
             if _INLINE_STYLE_TAG_RE.search(line):
-                offenders.append(f"{path.relative_to(COCKPIT_TEMPLATES_DIR.parent.parent.parent)}:{lineno}: {line.strip()}")
+                rel = path.relative_to(COCKPIT_TEMPLATES_DIR.parent.parent.parent)
+                offenders.append(f"{rel}:{lineno}: {line.strip()}")
 
     assert not offenders, (
         "Found <style> block(s) in cockpit templates. cockpit.css is the "
