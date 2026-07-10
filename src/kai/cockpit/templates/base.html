@@ -12,6 +12,7 @@
   <link rel="stylesheet" href="/static/cockpit.css">
 </head>
 <body>
+  {% block topbar %}
   <nav class="topbar">
     <a class="topbar__brand topbar__brand--{{ topbar_status(request, user) }}" href="{{ '/console' if user else '/' }}"> </a>
     {% if user %}
@@ -29,6 +30,7 @@
       </span>
     {% endif %}
   </nav>
+  {% endblock %}
   {% if flash %}
     <div class="flash">{{ flash }}</div>
   {% endif %}

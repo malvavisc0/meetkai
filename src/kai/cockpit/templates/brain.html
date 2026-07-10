@@ -100,7 +100,7 @@
               {% if brain.config.get('mandatory') %}checked{% endif %}>
             Require Brain lookup before factual answers
           </label>
-          <div><button type="submit" class="button">Save usage rules</button></div>
+          <div><button type="submit" class="button button--primary"><span class="icon">{% include "icons/check.svg" %}</span> Save usage rules</button></div>
         </form>
       </div>
 
@@ -118,8 +118,11 @@
               <span>Product docs, policies, manuals, PDFs, markdown, and other text files. 100MB max.</span>
             </div>
             <div class="source-item__controls">
-              <label class="sr-only" for="file">Document to upload</label>
-              <input id="file" type="file" name="file" required>
+              <div class="upload-control">
+                <input id="file" type="file" name="file" required class="sr-only">
+                <label for="file" class="button"><span class="icon">{% include "icons/upload.svg" %}</span> Choose document</label>
+                <span class="upload-control__filename" data-filename-for="file"></span>
+              </div>
               <button type="submit" class="button">Upload</button>
             </div>
           </form>

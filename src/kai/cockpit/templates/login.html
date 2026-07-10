@@ -1,23 +1,61 @@
 {% extends "base.html" %}
+{% block topbar %}{% endblock %}
 {% block content %}
-<div class="page page--narrow stack">
-  {% if requested %}
-    <div class="card empty-state">
-      <p>An access request has been sent. Ask an admin to approve it.</p>
+<div class="page auth-page">
+  <section class="card auth-shell">
+    <div class="auth-hero">
+      <div class="auth-hero__brand">
+        <span class="status-dot status-dot--running"></span>
+        <span>KAI Cockpit</span>
+      </div>
+
+      <div class="auth-hero__copy">
+        <p class="page-eyebrow">Operator access</p>
+        <h1 class="auth-title">Manage your bot fleet with a clean cockpit.</h1>
+        <p>Monitor deployments, tune behavior, and keep connected services healthy from one focused console.</p>
+      </div>
+
+      <div class="auth-hero__badges">
+        <span class="auth-pill">Magic link</span>
+        <span class="auth-pill">No password</span>
+      </div>
     </div>
-  {% else %}
-    <div class="card stack card--center">
-      <form method="post" class="stack text-left">
-        <div class="field">
-          <label class="field__label" for="email">Email</label>
-          <input id="email" type="text" name="email" required>
+
+    <div class="auth-panel">
+      {% if requested %}
+        <div class="empty-state auth-confirmation">
+          <span class="icon icon--lg auth-confirmation__icon">{% include "icons/send.svg" %}</span>
+          <h2 class="card__title">Check your email</h2>
+          <p class="empty-state__hint">A login link was sent if the user exists and is active.</p>
         </div>
-        <button type="submit" class="button button--primary button--block">Send magic link</button>
-      </form>
+      {% else %}
+        <div class="auth-panel__header">
+          <p class="page-eyebrow">Secure sign in</p>
+          <h2 class="card__title">Return to your console</h2>
+          <p class="page-subtitle">Enter your email and we'll send a one-time login link.</p>
+        </div>
+
+        <form method="post" class="auth-form stack text-left">
+          <div class="field">
+            <label class="field__label" for="email">Email address</label>
+            <input
+              id="email"
+              type="email"
+              name="email"
+              autocomplete="email"
+              inputmode="email"
+              placeholder="you@example.com"
+              required
+            >
+          </div>
+          <button type="submit" class="button button--primary button--block">Send magic link</button>
+        </form>
+      {% endif %}
+
+      {% if error %}
+        <p class="text-danger auth-error">{{ error }}</p>
+      {% endif %}
     </div>
-  {% endif %}
-  {% if error %}
-    <p class="text-danger">{{ error }}</p>
-  {% endif %}
+  </section>
 </div>
 {% endblock %}

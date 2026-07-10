@@ -1185,7 +1185,7 @@ class TestBotHistoryFolderIsolation:
         assert agent_email._history["chat"][0].content == "email msg"
 
 
-class TestAuditFixesPhase2:
+class TestHistoryEdits:
     @pytest.fixture
     def settings(self):
         return Settings(

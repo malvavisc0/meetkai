@@ -8,7 +8,7 @@
       <p class="page-subtitle">Configure the bot. Changes apply on next start.</p>
     </div>
     <div class="page-header__action">
-      <a href="/deployments/{{ dep.id }}" class="button">Back</a>
+      <a href="/deployments/{{ dep.id }}" class="button button--ghost">Back</a>
     </div>
   </header>
 
@@ -22,23 +22,25 @@
         <textarea id="goal" name="goal" rows="3" required data-autosize>{{ dep.goal }}</textarea>
         <p class="field__help">Applies on next start. Edit to nudge what KAI does.</p>
       </div>
-      <div class="field field--narrow">
-        <label class="field__label" for="language">Language *</label>
-        <input id="language" type="text" name="language" value="{{ dep.language }}" required>
-        <p class="field__help">Defaults to your account language — change it any time.</p>
-      </div>
-      <div class="field field--narrow">
-        <label class="field__label" for="voice">Voice</label>
-        <select id="voice" name="voice">
-          {% for v in voices %}
-            <option value="{{ v }}" {% if v == dep.voice %}selected{% endif %}>{{ v }}</option>
-          {% endfor %}
-        </select>
-        <p class="field__help">Picked from the language. Used when KAI sends voice notes.</p>
-      </div>
-      <div class="field field--narrow">
-        <label class="field__label" for="timezone">Timezone</label>
-        <input id="timezone" type="text" name="timezone" value="{{ dep.settings.get('timezone', '') or '' }}">
+      <div class="field-grid">
+        <div class="field field--narrow">
+          <label class="field__label" for="language">Language *</label>
+          <input id="language" type="text" name="language" value="{{ dep.language }}" required>
+          <p class="field__help">Defaults to your account language — change it any time.</p>
+        </div>
+        <div class="field field--narrow">
+          <label class="field__label" for="voice">Voice</label>
+          <select id="voice" name="voice">
+            {% for v in voices %}
+              <option value="{{ v }}" {% if v == dep.voice %}selected{% endif %}>{{ v }}</option>
+            {% endfor %}
+          </select>
+          <p class="field__help">Picked from the language. Used when KAI sends voice notes.</p>
+        </div>
+        <div class="field field--narrow">
+          <label class="field__label" for="timezone">Timezone</label>
+          <input id="timezone" type="text" name="timezone" value="{{ dep.settings.get('timezone', '') or '' }}">
+        </div>
       </div>
     </div>
 
@@ -46,7 +48,7 @@
     <div class="card">
       <p class="card__eyebrow">Triggers</p>
       <h3 class="card__title">When the bot replies</h3>
-      <div class="field">
+      <div class="field field--narrow">
         <label class="field__label" for="trigger_keyword">Trigger keyword</label>
         <input id="trigger_keyword" type="text" name="trigger_keyword" value="{{ dep.settings.get('trigger_keyword', '') }}">
       </div>
@@ -67,14 +69,17 @@
       <div class="chat-picker-layout">
         <div class="chat-picker-layout__list">
           <div class="field">
-            <input type="search" id="chat_search" placeholder="Search by name or chat id" autocomplete="off">
+            <div class="search-field">
+              <span class="icon">{% include "icons/search.svg" %}</span>
+              <input type="search" id="chat_search" placeholder="Search by name or chat id" autocomplete="off">
+            </div>
           </div>
 
           <div class="chat-picker" data-chat-picker data-dep-id="{{ dep.id }}">
             {# rows rendered by JS from /deployments/{id}/chats.json #}
           </div>
 
-          <button type="button" class="button button--sm" id="chat_load_more">Load more chats</button>
+          <button type="button" class="button button--block" id="chat_load_more">Load more chats</button>
         </div>
 
         <div class="chat-picker-layout__lists">
@@ -95,12 +100,14 @@
     <div class="card">
       <p class="card__eyebrow">Capabilities</p>
       <h3 class="card__title">Media &amp; processing</h3>
-      {% for flag in feature_flags %}
-        <label class="checkbox-row">
-          <input type="checkbox" name="feature_{{ flag }}" value="true" {% if dep.feature_flags.get(flag, true) %}checked{% endif %}>
-          {{ capability_labels.get(flag, flag) }}
-        </label>
-      {% endfor %}
+      <div class="checkbox-grid">
+        {% for flag in feature_flags %}
+          <label class="checkbox-row">
+            <input type="checkbox" name="feature_{{ flag }}" value="true" {% if dep.feature_flags.get(flag, true) %}checked{% endif %}>
+            {{ capability_labels.get(flag, flag) }}
+          </label>
+        {% endfor %}
+      </div>
     </div>
 
     {# --- Participation --- #}
@@ -114,23 +121,25 @@
           Let KAI reply on its own sometimes (participation)
         </label>
       </div>
-      <div class="field field--narrow">
-        <label class="field__label" for="participation_rate">Reply rate (0–1)</label>
-        <input id="participation_rate" type="number" name="participation_rate" value="{{ part.get('rate', 0.15) }}" step="0.01">
-      </div>
-      <div class="field field--narrow">
-        <label class="field__label" for="participation_cooldown">Cooldown between replies (seconds)</label>
-        <input id="participation_cooldown" type="number" name="participation_cooldown" value="{{ part.get('cooldown_seconds', 90) }}" step="1">
-      </div>
-      <div class="field field--narrow">
-        <label class="field__label" for="participation_streak_max">Max replies in a row</label>
-        <input id="participation_streak_max" type="number" name="participation_streak_max" value="{{ part.get('streak_max', 2) }}" step="1">
+      <div class="field-grid">
+        <div class="field field--narrow">
+          <label class="field__label" for="participation_rate">Reply rate (0–1)</label>
+          <input id="participation_rate" type="number" name="participation_rate" value="{{ part.get('rate', 0.15) }}" step="0.01">
+        </div>
+        <div class="field field--narrow">
+          <label class="field__label" for="participation_cooldown">Cooldown between replies (seconds)</label>
+          <input id="participation_cooldown" type="number" name="participation_cooldown" value="{{ part.get('cooldown_seconds', 90) }}" step="1">
+        </div>
+        <div class="field field--narrow">
+          <label class="field__label" for="participation_streak_max">Max replies in a row</label>
+          <input id="participation_streak_max" type="number" name="participation_streak_max" value="{{ part.get('streak_max', 2) }}" step="1">
+        </div>
       </div>
     </div>
 
     {# --- Actions --- #}
     <div class="cluster">
-      <button type="submit" class="button button--primary">Save changes</button>
+      <button type="submit" class="button button--primary"><span class="icon">{% include "icons/check.svg" %}</span> Save changes</button>
       <a href="/deployments/{{ dep.id }}" class="button">Cancel</a>
     </div>
     <p class="field__help">* required. Changes apply on next start.</p>

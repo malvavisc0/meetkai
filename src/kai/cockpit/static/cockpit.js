@@ -342,4 +342,25 @@
   }
 
   document.addEventListener("DOMContentLoaded", initPoll);
+
+  // --- File upload filename display (Brain Sources) ---
+  // Progressive enhancement: shows the chosen file name next to the styled
+  // upload button. Each <span data-filename-for="<inputId>"> mirrors the
+  // selected file. If JS is unavailable, the static "Choose document"
+  // button label remains and the control never implies a broken state.
+  function initUploadFilename() {
+    var spans = document.querySelectorAll("[data-filename-for]");
+    for (var i = 0; i < spans.length; i++) {
+      (function (span) {
+        var input = document.getElementById(span.dataset.filenameFor);
+        if (!input) return;
+        input.addEventListener("change", function () {
+          var name = (input.files && input.files[0] && input.files[0].name) || "";
+          span.textContent = name;
+        });
+      })(spans[i]);
+    }
+  }
+
+  document.addEventListener("DOMContentLoaded", initUploadFilename);
 })();
