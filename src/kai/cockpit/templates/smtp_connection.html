@@ -1,0 +1,72 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="page stack">
+  <header class="page-header page-header--split">
+    <div class="page-header__copy">
+      <p class="page-eyebrow">Channels</p>
+      <h1 class="page-title">SMTP connection</h1>
+      <p class="page-subtitle">Connect an email account so your bots can send emails.</p>
+    </div>
+    <div class="page-header__action">
+      <a href="/connections" class="button button--ghost">Back</a>
+    </div>
+  </header>
+
+  <form method="post" action="/connections/smtp" class="card stack">
+    {% set c = conn.config if conn else {} %}
+    <div class="field">
+      <label class="field__label" for="host">Host</label>
+      <input id="host" type="text" name="host" value="{{ c.get('host', '') }}" required>
+      <p class="field__help">The SMTP server hostname, e.g. <span class="mono">smtp.gmail.com</span>.</p>
+    </div>
+    <div class="field">
+      <label class="field__label" for="port">Port</label>
+      <input id="port" type="number" name="port" value="{{ c.get('port', 587) }}" required>
+      <p class="field__help">Usually 587 for TLS or 465 for SSL.</p>
+    </div>
+    <div class="field">
+      <label class="field__label" for="username">Username</label>
+      <input id="username" type="text" name="username" value="{{ c.get('username', '') }}" required>
+      <p class="field__help">The login username (often the email address).</p>
+    </div>
+    <div class="field">
+      <label class="field__label" for="password">Password</label>
+      {% if has_password %}
+        <input id="password" type="password" name="password" value="" placeholder="••••••••">
+        <p class="field__help">Already set. Leave blank to keep the current value.</p>
+      {% else %}
+        <input id="password" type="text" name="password" value="">
+        <p class="field__help">The SMTP password or app-specific password.</p>
+      {% endif %}
+    </div>
+    <div class="field">
+      <label class="field__label" for="from_address">From address</label>
+      <input id="from_address" type="email" name="from_address" value="{{ c.get('from_address', '') }}" required>
+      <p class="field__help">The email address emails are sent from. Fixed per-deployment — the agent cannot override it.</p>
+    </div>
+    <div class="field">
+      <label class="checkbox-row">
+        <input id="use_tls" type="checkbox" name="use_tls" value="true"
+          {% if c.get('use_tls', true) %}checked{% endif %}>
+        Use TLS (STARTTLS)
+      </label>
+      <p class="field__help">Upgrade the connection to TLS after connecting. Recommended.</p>
+    </div>
+    <div class="cluster">
+      <button type="submit" class="button button--primary"><span class="icon">{% include "icons/check.svg" %}</span> Save connection</button>
+      <button type="submit" formaction="/connections/smtp/test" class="button">Test connection</button>
+    </div>
+  </form>
+
+  {% if conn %}
+  <div class="card card--danger mt-2xl">
+    <h3 class="card__title text-danger">Danger zone</h3>
+    <p><strong>Delete SMTP connection</strong></p>
+    <p class="muted">Removes the SMTP credentials. Bots with the email tool enabled will lose the ability to send emails on their next start.</p>
+    <form method="post" action="/connections/smtp/delete" data-confirm="Delete the SMTP connection?">
+      <button type="submit" class="button button--danger"><span class="icon">{% include "icons/trash-2.svg" %}</span> Delete connection</button>
+    </form>
+  </div>
+  {% endif %}
+</div>
+{% endblock %}

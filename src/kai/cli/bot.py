@@ -338,6 +338,7 @@ def _start(
         stop_task: asyncio.Task | None = None
         run_id: str | None = None
         brain_client: LightRagClient | None = None
+        sql_engine = None
 
         try:
             if voice:
@@ -379,6 +380,44 @@ def _start(
         else:
             for warning in brain_settings.validate_startup():
                 logger.debug("brain disabled: %s", warning)
+
+        from kai.agent.tools.sql import get_sql_settings
+
+        sql_settings = get_sql_settings()
+        if sql_settings.sql_enabled:
+            try:
+                from kai.agent.tools.sql import register_sql_tool
+
+                sql_engine = register_sql_tool(
+                    agent,
+                    sql_settings.dsn,
+                    instruction=sql_settings.instruction,
+                    row_limit=sql_settings.row_limit,
+                )
+                logger.info("sql_query tool registered")
+            except Exception:
+                logger.exception("failed to register sql_query tool; continuing without it")
+
+        from kai.agent.tools.email import get_smtp_settings
+
+        smtp_settings = get_smtp_settings()
+        if smtp_settings.smtp_enabled:
+            try:
+                from kai.agent.tools.email import register_email_tool
+
+                register_email_tool(
+                    agent,
+                    host=smtp_settings.host,
+                    port=smtp_settings.port,
+                    username=smtp_settings.username,
+                    password=smtp_settings.password,
+                    from_address=smtp_settings.from_address,
+                    use_tls=smtp_settings.use_tls,
+                    instruction=smtp_settings.instruction,
+                )
+                logger.info("send_email tool registered")
+            except Exception:
+                logger.exception("failed to register send_email tool; continuing without it")
 
         # Register a run_id so `kai tell` can target this instance.
         # Bots that opt out of tell return None from tell_endpoint().
@@ -449,6 +488,11 @@ def _start(
                     await brain_client.close()
                 except Exception:
                     logger.debug("brain_client.close() raised during shutdown", exc_info=True)
+            if sql_engine is not None:
+                try:
+                    sql_engine.dispose()
+                except Exception:
+                    logger.debug("sql_engine.dispose() raised during shutdown", exc_info=True)
             if run_id is not None:
                 try:
                     _runs_registry(instance_id, settings).remove(run_id)

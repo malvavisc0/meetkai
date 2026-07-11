@@ -26,6 +26,8 @@ from kai.cockpit.deployments import (
     ConnectionRequiredError,
     DeploymentsService,
     DeploymentStartupError,
+    _tool_enabled,
+    _tool_instruction,
 )
 from kai.cockpit.models import Deployment, User
 
@@ -36,7 +38,29 @@ router = APIRouter()
 ALL_VOICES = sorted(set(LANGUAGE_VOICE_MAP.values()))
 ALL_LANGUAGES = sorted(LANGUAGE_VOICE_MAP.keys())
 
+# Services that carry an instruction textarea alongside the toggle.
+_TOOLS_WITH_INSTRUCTION = frozenset({"database", "smtp"})
+
 _HOME_REDIRECT = RedirectResponse("/console", status_code=302)
+
+
+def _build_tools_update(
+    supported_svcs: list[str], form_fields: dict
+) -> dict[str, bool | dict]:
+    """Build the ``settings["tools"]`` dict from the submitted form.
+
+    Simple toggles store a bool. Tools with an instruction (database) store
+    a nested ``{"enabled": bool, "instruction": str}`` dict.
+    """
+    tools: dict[str, bool | dict] = {}
+    for svc in supported_svcs:
+        enabled = f"tool_{svc}" in form_fields
+        if svc in _TOOLS_WITH_INSTRUCTION:
+            instruction = form_fields.get(f"tool_{svc}_instruction", "")
+            tools[svc] = {"enabled": enabled, "instruction": instruction.strip()}
+        else:
+            tools[svc] = enabled
+    return tools
 
 
 def _get_deployment(
@@ -266,6 +290,18 @@ async def deployment_settings_page(
             supported_tools.append((svc, label, svc in available_conns))
     tools_enabled = dep.settings.get("tools", {})
 
+    # Per-tool state for tools that carry an instruction (database).
+    # Uses the same _tool_enabled/_tool_instruction helpers as start() so
+    # there's a single source of truth for the bool→dict transition.
+    tools_state: dict[str, dict] = {}
+    for svc, _, available in supported_tools:
+        raw = tools_enabled.get(svc, False)
+        tools_state[svc] = {
+            "enabled": _tool_enabled(raw),
+            "instruction": _tool_instruction(raw),
+            "available": available,
+        }
+
     flash = request.session.pop("flash", None)
 
     from kai.cockpit.brains import BrainsService
@@ -284,7 +320,7 @@ async def deployment_settings_page(
             "capability_labels": CAPABILITY_LABELS,
             "has_brain": brain is not None,
             "supported_tools": supported_tools,
-            "tools_enabled": tools_enabled,
+            "tools_state": tools_state,
             "flash": flash,
         },
     )
@@ -595,7 +631,9 @@ async def deployment_settings(
         # full ``settings`` dict is built here because edit()'s shallow merge
         # (``{**deployment.settings, **value}``) replaces nested keys rather
         # than deep-merging, so partial updates would clobber siblings.
-        "tools": {svc: f"tool_{svc}" in form_fields for svc in supported_svcs},
+        # Tools that carry an instruction (database) store a nested dict;
+        # plain toggles store a bool.
+        "tools": _build_tools_update(supported_svcs, form_fields),
     }
 
     try:

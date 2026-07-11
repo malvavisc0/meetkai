@@ -41,11 +41,10 @@ BOT_TYPES: dict[str, BotType] = {
         ),
         required_connections=["whatsapp"],
         # Forward declaration: the `database` connection service ships in
-        # Fix 05. Declaring it now makes the catalog the single source of
-        # truth so the settings form can already offer the toggle (disabled
-        # until the connection exists). `email` is deliberately not added
-        # here — no bot type consumes it yet.
-        supported_connections=["database"],
+        # Fix 05, `smtp` in Fix 06. Declaring them here makes the catalog
+        # the single source of truth so the settings form can offer the
+        # toggle (disabled until the connection exists).
+        supported_connections=["database", "smtp"],
     ),
 }
 

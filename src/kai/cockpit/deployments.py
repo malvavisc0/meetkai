@@ -56,16 +56,92 @@ def _instance_id(bot_type: str, email: str) -> str:
     return f"{bot_type}-{email}"
 
 
-def _inject_connection_env(env: dict, service: str, conn: Connection) -> None:
+def _tool_enabled(value: bool | dict) -> bool:
+    """Normalize a stored tool toggle to a boolean ``enabled`` state.
+
+    Handles both the legacy flat bool form (``True`` / ``False``) and the
+    newer nested dict form (``{"enabled": True, "instruction": "..."}``).
+    """
+    if isinstance(value, dict):
+        return bool(value.get("enabled", False))
+    return bool(value)
+
+
+def _tool_instruction(value: bool | dict) -> str:
+    """Extract the instruction text from a stored tool toggle (dict form)."""
+    if isinstance(value, dict):
+        return str(value.get("instruction", ""))
+    return ""
+
+
+# Maps each supported-connection service to its env-var names. ``fields``
+# maps config_key → env_var_name for credential fields. ``instruction``
+# is the env var that carries the operator's per-deployment usage rules.
+# ``bool_fields`` lists config keys whose values should be stringified as
+# "true"/"false". Adding a service here wires injection (start() loop),
+# the instruction guard, and storage (via _TOOLS_WITH_INSTRUCTION in the
+# routes) — a single source of truth.
+SERVICE_ENV_VARS: dict[str, dict] = {
+    "database": {
+        "fields": {"url": "KAI_SQL_DSN"},
+        "instruction": "KAI_SQL_INSTRUCTION",
+        "bool_fields": set(),
+    },
+    "smtp": {
+        "fields": {
+            "host": "KAI_SMTP_TOOL_HOST",
+            "port": "KAI_SMTP_TOOL_PORT",
+            "username": "KAI_SMTP_TOOL_USER",
+            "password": "KAI_SMTP_TOOL_PASSWORD",
+            "from_address": "KAI_SMTP_TOOL_FROM",
+            "use_tls": "KAI_SMTP_TOOL_USE_TLS",
+        },
+        "instruction": "KAI_SMTP_TOOL_INSTRUCTION",
+        "bool_fields": {"use_tls"},
+    },
+}
+
+
+def _inject_connection_env(env: dict, service: str, conn: Connection) -> bool:
     """Inject env vars for a supported credential connection into ``env``.
 
-    Filled in per-service by Fixes 05/06 with bespoke env shapes
-    (e.g. ``database`` → ``KAI_SQL_DSN``, ``smtp`` → ``KAI_SMTP_TOOL_*``).
-    A stub that raises — rather than a silent no-op — so a misconfiguration
-    (operator enables a tool whose env shape isn't wired yet) surfaces
-    immediately at start, not silently.
+    Each service has a bespoke env shape, driven by ``SERVICE_ENV_VARS``.
+    A service not listed there raises ``NotImplementedError`` so a
+    misconfiguration surfaces immediately at start. A decryption failure
+    (wrong key, tampered ciphertext) is converted to
+    ``DeploymentStartupError`` so the route handler surfaces a flash
+    message instead of a bare 500.
+
+    Returns True if at least one field was injected (i.e. the credential
+    had data), False if nothing was set (e.g. an empty connection row).
     """
-    raise NotImplementedError(f"env injection for {service!r} not implemented")
+    try:
+        svc_vars = SERVICE_ENV_VARS.get(service)
+        if svc_vars is None:
+            raise NotImplementedError(f"env injection for {service!r} not implemented")
+        from kai.cockpit.secrets import decrypt_config
+
+        cfg = decrypt_config(service, conn.config)
+        bool_fields = svc_vars.get("bool_fields", set())
+        injected = False
+        for config_key, env_var in svc_vars.get("fields", {}).items():
+            val = cfg.get(config_key)
+            if val is None or val == "":
+                continue
+            if config_key in bool_fields:
+                env[env_var] = "true" if val else "false"
+            else:
+                env[env_var] = str(val)
+            injected = True
+        return injected
+    except DeploymentStartupError:
+        raise
+    except NotImplementedError:
+        raise
+    except Exception as exc:
+        raise DeploymentStartupError(
+            f"could not decrypt {service} connection — reconfigure at /connections/{service}"
+        ) from exc
 
 
 class DeploymentsService:
@@ -406,13 +482,13 @@ class DeploymentsService:
         # bot type declares, inject its env vars only when both the operator
         # has toggled it on for this deployment (settings["tools"]) AND the
         # Connection row exists. Never "on for every bot just because the
-        # operator connected it once." A no-op today (no database/smtp
-        # connections exist yet); the single site Fixes 05/06 fill in.
+        # operator connected it once." The stored value may be a plain bool
+        # (simple toggle) or a nested dict (toggle + instruction).
         tools_cfg = deployment.settings.get("tools", {})
         for service in bt.supported_connections:
             if service in bt.required_connections:
                 continue
-            if not tools_cfg.get(service, False):
+            if not _tool_enabled(tools_cfg.get(service, False)):
                 continue
             c = (
                 self.db.query(Connection)
@@ -424,7 +500,25 @@ class DeploymentsService:
             )
             if c is None:
                 continue
-            _inject_connection_env(env, service, c)
+            try:
+                _inject_connection_env(env, service, c)
+            except DeploymentStartupError as exc:
+                logger.warning(
+                    "Skipping %s connection for deployment %s: %s",
+                    service,
+                    deployment.id,
+                    exc,
+                )
+                continue
+            # Per-tool instruction. Only inject if at least one credential
+            # field was actually set — a connection with no data shouldn't
+            # produce a ghost instruction the bot will silently ignore.
+            svc_vars = SERVICE_ENV_VARS.get(service, {})
+            instr_var = svc_vars.get("instruction")
+            if instr_var and any(
+                ev in env for ev in svc_vars.get("fields", {}).values()
+            ):
+                env[instr_var] = _tool_instruction(tools_cfg.get(service))
 
         proc = subprocess.Popen(
             argv,

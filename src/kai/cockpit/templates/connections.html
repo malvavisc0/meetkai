@@ -67,5 +67,23 @@
       <button type="submit" class="button button--primary"><span class="icon">{% include "icons/plus.svg" %}</span> Connect WhatsApp</button>
     </form>
   {% endif %}
+
+  {# --- Database connection --- #}
+  <div class="card">
+    <div class="cluster cluster--between">
+      <h3 class="card__title">Database</h3>
+      <a href="/connections/database" class="button button--ghost">Configure</a>
+    </div>
+    <p class="field__help">Connect a database so your bots can run read-only SQL queries against it.</p>
+  </div>
+
+  {# --- SMTP connection --- #}
+  <div class="card">
+    <div class="cluster cluster--between">
+      <h3 class="card__title">Email (SMTP)</h3>
+      <a href="/connections/smtp" class="button button--ghost">Configure</a>
+    </div>
+    <p class="field__help">Connect an email account so your bots can send emails.</p>
+  </div>
 </div>
 {% endblock %}

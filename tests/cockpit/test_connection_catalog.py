@@ -34,12 +34,58 @@ def _whatsapp_conn(user_id: int) -> Connection:
     )
 
 
+class _FakeProc:
+    """Shared fake subprocess.Popen stub for the bot-start read protocol."""
+
+    returncode = None
+
+    def __init__(self):
+        self._lines = iter(["starting...\n", "KAI_RUN_ID=deadbeef\n"])
+
+    @property
+    def stdout(self):
+        return self
+
+    def readline(self):
+        return next(self._lines, "")
+
+    def poll(self):
+        return self.returncode
+
+
+def _capture_popen_factory(env_sink: dict):
+    """Return a Popen replacement that records the env dict into ``env_sink``."""
+
+    def _capture(argv, *args, **kwargs):
+        env_sink.update(kwargs.get("env", {}))
+        return _FakeProc()
+
+    return _capture
+
+
+def _setup_run_registry(monkeypatch, tmp_path, instance_id: str):
+    """Register a fake run_id so start() finds it in the runs registry."""
+    from kai.config.settings import Settings
+    from kai.runs import RunRecord, RunRegistry, runs_path
+
+    fake_settings = Settings(_env_file=None, agent_history_folder=str(tmp_path))  # type: ignore[call-arg]
+    monkeypatch.setattr("kai.config.settings.get_settings", lambda: fake_settings)
+    registry = RunRegistry(runs_path(fake_settings.agent_history_folder, instance_id))
+    registry.replace(
+        "deadbeef",
+        RunRecord(
+            endpoint="http://x", hmac_key="k", hmac_algorithm="sha512", pid=1, started_at="t"
+        ),
+    )
+    return fake_settings
+
+
 class TestCatalogData:
     def test_waha_required_connections(self):
         assert BOT_TYPES["waha"].required_connections == ["whatsapp"]
 
     def test_waha_supported_connections(self):
-        assert BOT_TYPES["waha"].supported_connections == ["database"]
+        assert BOT_TYPES["waha"].supported_connections == ["database", "smtp"]
 
     def test_database_secret_fields(self):
         assert CREDENTIAL_TYPES["database"].secret_fields == ["url"]
@@ -65,23 +111,7 @@ class _StartBase:
     def _run_start(self, svc, dep, monkeypatch, tmp_path, user):
         monkeypatch.setattr("kai.cockpit.config_writer.write_config", lambda d, i: None)
 
-        class FakeProc:
-            returncode = None
-
-            def __init__(self):
-                self._lines = iter(["starting...\n", "KAI_RUN_ID=deadbeef\n"])
-
-            @property
-            def stdout(self):
-                return self
-
-            def readline(self):
-                return next(self._lines, "")
-
-            def poll(self):
-                return self.returncode
-
-        monkeypatch.setattr(subprocess, "Popen", lambda *a, **k: FakeProc())
+        monkeypatch.setattr(subprocess, "Popen", lambda *a, **k: _FakeProc())
 
         from kai.config.settings import Settings
         from kai.runs import RunRecord, RunRegistry, runs_path
@@ -205,10 +235,11 @@ class TestSupportedInjectionLoop(_StartBase):
 
         self._run_start(svc, dep, monkeypatch, tmp_path, user)
 
-    def test_toggle_on_and_connection_present_calls_injector(self, db, user, monkeypatch, tmp_path):
+    def test_toggle_on_and_connection_present_injects_sql_env(
+        self, db, user, monkeypatch, tmp_path
+    ):
         """When both the toggle is on and the Connection row exists, the
-        injector is called — the stub raises NotImplementedError (the single
-        site Fixes 05/06 fill in)."""
+        database DSN is injected as KAI_SQL_DSN (Fix 05 fills the stub)."""
         svc = DeploymentsService(db)
         dep = svc.create(user, "waha", "goal", "English")
         svc.edit(dep, settings={"tools": {"database": True}})
@@ -225,15 +256,114 @@ class TestSupportedInjectionLoop(_StartBase):
         )
         db.commit()
 
-        with pytest.raises(NotImplementedError, match="database"):
-            self._run_start(svc, dep, monkeypatch, tmp_path, user)
+        injected_env: dict = {}
+
+        monkeypatch.setattr(subprocess, "Popen", _capture_popen_factory(injected_env))
+
+        _setup_run_registry(monkeypatch, tmp_path, f"{dep.bot_type}-{user.email}")
+
+        svc.start(dep)
+        assert "KAI_SQL_DSN" in injected_env
+        assert injected_env["KAI_SQL_DSN"] == "sqlite:///x"
+        assert injected_env["KAI_SQL_INSTRUCTION"] == ""
+
+    def test_dict_form_injects_instruction(self, db, user, monkeypatch, tmp_path):
+        """Fix 05's nested-dict form injects both KAI_SQL_DSN and
+        KAI_SQL_INSTRUCTION."""
+        svc = DeploymentsService(db)
+        dep = svc.create(user, "waha", "goal", "English")
+        svc.edit(
+            dep,
+            settings={"tools": {"database": {"enabled": True, "instruction": "look up orders"}}},
+        )
+        db.add(_whatsapp_conn(user.id))
+        db.add(
+            Connection(
+                user_id=user.id,
+                service="database",
+                status="connected",
+                config={"label": "prod", "url": "sqlite:///x"},
+                created_at="now",
+                updated_at="now",
+            )
+        )
+        db.commit()
+
+        injected_env: dict = {}
+
+        monkeypatch.setattr(subprocess, "Popen", _capture_popen_factory(injected_env))
+
+        _setup_run_registry(monkeypatch, tmp_path, f"{dep.bot_type}-{user.email}")
+
+        svc.start(dep)
+        assert injected_env["KAI_SQL_DSN"] == "sqlite:///x"
+        assert injected_env["KAI_SQL_INSTRUCTION"] == "look up orders"
 
 
-class TestInjectConnectionEnvStub:
+class TestInjectConnectionEnv:
     def test_raises_for_unknown_service(self):
         conn = _whatsapp_conn(1)
         with pytest.raises(NotImplementedError, match="whatsapp"):
             _inject_connection_env({}, "whatsapp", conn)
+
+    def test_database_injects_sql_dsn(self, monkeypatch):
+        """The database branch decrypts the URL and sets KAI_SQL_DSN."""
+        monkeypatch.setenv("KAI_CREDENTIAL_ENCRYPTION_KEY", "a" * 64)
+        monkeypatch.setenv("KAI_CREDENTIAL_KEY_VERSION", "v1")
+        from kai.cockpit import secrets
+
+        secrets._clear_key_cache()
+        try:
+            encrypted_url = secrets.encrypt("sqlite:///test")
+            conn = Connection(
+                user_id=1,
+                service="database",
+                status="connected",
+                config={"label": "test", "url": encrypted_url},
+                created_at="now",
+                updated_at="now",
+            )
+            env: dict = {}
+            _inject_connection_env(env, "database", conn)
+            assert env["KAI_SQL_DSN"] == "sqlite:///test"
+        finally:
+            secrets._clear_key_cache()
+
+    def test_smtp_injects_all_env_vars(self, monkeypatch):
+        """The smtp branch decrypts and sets all six KAI_SMTP_TOOL_* vars."""
+        monkeypatch.setenv("KAI_CREDENTIAL_ENCRYPTION_KEY", "a" * 64)
+        monkeypatch.setenv("KAI_CREDENTIAL_KEY_VERSION", "v1")
+        from kai.cockpit import secrets
+
+        secrets._clear_key_cache()
+        try:
+            encrypted_pw = secrets.encrypt("secret123")
+            conn = Connection(
+                user_id=1,
+                service="smtp",
+                status="connected",
+                config={
+                    "host": "smtp.example.com",
+                    "port": 587,
+                    "username": "user",
+                    "password": encrypted_pw,
+                    "from_address": "user@example.com",
+                    "use_tls": True,
+                },
+                created_at="now",
+                updated_at="now",
+            )
+            env: dict = {}
+            injected = _inject_connection_env(env, "smtp", conn)
+            assert injected is True
+            assert env["KAI_SMTP_TOOL_HOST"] == "smtp.example.com"
+            assert env["KAI_SMTP_TOOL_PORT"] == "587"
+            assert env["KAI_SMTP_TOOL_USER"] == "user"
+            assert env["KAI_SMTP_TOOL_PASSWORD"] == "secret123"
+            assert env["KAI_SMTP_TOOL_FROM"] == "user@example.com"
+            assert env["KAI_SMTP_TOOL_USE_TLS"] == "true"
+        finally:
+            secrets._clear_key_cache()
 
 
 class TestSettingsStoresToolToggle:

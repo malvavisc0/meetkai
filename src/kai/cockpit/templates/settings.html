@@ -162,10 +162,11 @@
       <p class="card__eyebrow">Tools</p>
       <h3 class="card__title">Optional connections</h3>
       {% for svc, tool_label, available in supported_tools %}
+        {% set ts = tools_state.get(svc, {}) %}
         <div class="field">
           <label class="checkbox-row">
             <input type="checkbox" name="tool_{{ svc }}" value="true"
-              {% if tools_enabled.get(svc, False) %}checked{% endif %}
+              {% if ts.get('enabled', false) %}checked{% endif %}
               {% if not available %}disabled{% endif %}>
             {{ tool_label }}
           </label>
@@ -173,6 +174,14 @@
           <p class="field__help">Connect {{ tool_label }} on the Connections page to enable.</p>
           {% endif %}
         </div>
+        {% if svc in ("database", "smtp") %}
+        <div class="field">
+          <label class="field__label" for="tool_{{ svc }}_instruction">When to use {{ tool_label | lower }}</label>
+          <textarea id="tool_{{ svc }}_instruction" name="tool_{{ svc }}_instruction" rows="4"
+            data-autosize {% if not ts.get('enabled', false) %}disabled{% endif %}>{{ ts.get('instruction', '') or '' }}</textarea>
+          <p class="field__help">Tell this bot when and how to use {{ tool_label | lower }}. One rule per line. Empty = the tool is available but the bot decides on its own.</p>
+        </div>
+        {% endif %}
       {% endfor %}
     </div>
     {% endif %}

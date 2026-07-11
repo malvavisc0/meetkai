@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="page stack">
+  <header class="page-header page-header--split">
+    <div class="page-header__copy">
+      <p class="page-eyebrow">Channels</p>
+      <h1 class="page-title">Database connection</h1>
+      <p class="page-subtitle">Connect a database so your bots can run read-only SQL queries.</p>
+    </div>
+    <div class="page-header__action">
+      <a href="/connections" class="button button--ghost">Back</a>
+    </div>
+  </header>
+
+  <form method="post" action="/connections/database" class="card stack">
+    <div class="field">
+      <label class="field__label" for="label">Label</label>
+      <input id="label" type="text" name="label" value="{{ conn.config.get('label', '') if conn else '' }}" required>
+      <p class="field__help">A friendly name shown in the settings UI.</p>
+    </div>
+    <div class="field">
+      <label class="field__label" for="url">Connection URL (DSN)</label>
+      {% if has_url %}
+        <input id="url" type="password" name="url" value="" placeholder="••••••••">
+        <p class="field__help">Already set. Leave blank to keep the current value. A SQLAlchemy URL, e.g. <span class="mono">postgresql+psycopg://user:pass@host/db</span>. Use a read-only database role.</p>
+      {% else %}
+        <input id="url" type="text" name="url" value="" placeholder="postgresql+psycopg://user:pass@host/db">
+        <p class="field__help">A SQLAlchemy URL. Use a read-only database role — the tool enforces SELECT-only, but the DB grants are the real guard.</p>
+      {% endif %}
+    </div>
+    <div class="cluster">
+      <button type="submit" class="button button--primary"><span class="icon">{% include "icons/check.svg" %}</span> Save connection</button>
+      <button type="submit" formaction="/connections/database/test" class="button">Test connection</button>
+    </div>
+  </form>
+
+  {% if conn %}
+  <div class="card card--danger mt-2xl">
+    <h3 class="card__title text-danger">Danger zone</h3>
+    <p><strong>Delete database connection</strong></p>
+    <p class="muted">Removes the DSN. Bots with the database tool enabled will lose access on their next start.</p>
+    <form method="post" action="/connections/database/delete" data-confirm="Delete the database connection?">
+      <button type="submit" class="button button--danger"><span class="icon">{% include "icons/trash-2.svg" %}</span> Delete connection</button>
+    </form>
+  </div>
+  {% endif %}
+</div>
+{% endblock %}

@@ -895,6 +895,12 @@ class KaiAgent:
                         name=tc.tool_name, args=dict(tc.tool_kwargs), ok=ok, result=result
                     )
                 )
+                logger.info(
+                    "Tool result: %s -> %s (%d chars)",
+                    tc.tool_name,
+                    "ok" if ok else "error",
+                    len(result),
+                )
 
                 if self._tool_call_callback is not None:
                     try:
