@@ -13,7 +13,13 @@ from kai.bots.waha.client import WahaClient
 from kai.bots.waha.config import get_waha_settings
 from kai.cockpit.app import templates
 from kai.cockpit.auth import require_user
-from kai.cockpit.bots import BOT_TYPES, CAPABILITY_LABELS, LANGUAGE_VOICE_MAP, auto_pick_voice
+from kai.cockpit.bots import (
+    BOT_TYPES,
+    CAPABILITY_LABELS,
+    CREDENTIAL_TYPES,
+    LANGUAGE_VOICE_MAP,
+    auto_pick_voice,
+)
 from kai.cockpit.connections import ConnectionsService
 from kai.cockpit.db import get_db
 from kai.cockpit.deployments import (
@@ -246,6 +252,26 @@ async def deployment_settings_page(
     entitlements = {k for k, v in (user.feature_flags or {}).items() if v}
     feature_flags = [f for f in (bt.feature_flags if bt else []) if f in entitlements]
 
+    # Build the optional-connection toggles from the catalog: one checkbox
+    # per supported connection that isn't required (required ones are always
+    # on, no toggle). Each is disabled when the connection doesn't exist yet
+    # — the toggle is stored intent, not an executed grant.
+    available_conns = {
+        c.service for c in ConnectionsService(db).list_for_user(user)
+    }
+    supported_tools: list[tuple[str, str, bool]] = []
+    if bt:
+        for svc in bt.supported_connections:
+            if svc in bt.required_connections:
+                continue
+            label = (
+                CREDENTIAL_TYPES[svc].label
+                if svc in CREDENTIAL_TYPES
+                else svc.capitalize()
+            )
+            supported_tools.append((svc, label, svc in available_conns))
+    tools_enabled = dep.settings.get("tools", {})
+
     flash = request.session.pop("flash", None)
 
     from kai.cockpit.brains import BrainsService
@@ -263,6 +289,8 @@ async def deployment_settings_page(
             "feature_flags": feature_flags,
             "capability_labels": CAPABILITY_LABELS,
             "has_brain": brain is not None,
+            "supported_tools": supported_tools,
+            "tools_enabled": tools_enabled,
             "flash": flash,
         },
     )
@@ -545,10 +573,15 @@ async def deployment_settings(
     entitlements = {k for k, v in (user.feature_flags or {}).items() if v}
     form_fields = dict(await request.form())
     feature_flags = {}
+    supported_svcs: list[str] = []
     if bt:
         for flag in bt.feature_flags:
             requested = f"feature_{flag}" in form_fields
             feature_flags[flag] = bool(requested and flag in entitlements)
+        supported_svcs = [
+            svc for svc in bt.supported_connections
+            if svc not in bt.required_connections
+        ]
 
     settings_update = {
         "trigger_keyword": trigger_keyword,
@@ -562,6 +595,14 @@ async def deployment_settings(
             "cooldown_seconds": participation_cooldown,
             "streak_max": participation_streak_max,
         },
+        # Per-deployment enable of supported connections. A checkbox the UI
+        # disabled (connection doesn't exist yet) can still be crafted in a
+        # direct POST — that's stored intent, not an executed grant:
+        # start() skips injection when the Connection row is absent. The
+        # full ``settings`` dict is built here because edit()'s shallow merge
+        # (``{**deployment.settings, **value}``) replaces nested keys rather
+        # than deep-merging, so partial updates would clobber siblings.
+        "tools": {svc: f"tool_{svc}" in form_fields for svc in supported_svcs},
     }
 
     try:

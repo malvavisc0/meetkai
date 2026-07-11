@@ -44,7 +44,7 @@ def _kai_argv_prefix() -> list[str]:
 
 
 class ConnectionRequiredError(Exception):
-    """Raised when a waha deployment is started without a connected WhatsApp."""
+    """Raised when a deployment is started without a required connection connected."""
 
 
 class DeploymentStartupError(Exception):
@@ -54,6 +54,18 @@ class DeploymentStartupError(Exception):
 def _instance_id(bot_type: str, email: str) -> str:
     """Compute the per-bot instance namespace the spawned process uses."""
     return f"{bot_type}-{email}"
+
+
+def _inject_connection_env(env: dict, service: str, conn: Connection) -> None:
+    """Inject env vars for a supported credential connection into ``env``.
+
+    Filled in per-service by Fixes 05/06 with bespoke env shapes
+    (e.g. ``database`` → ``KAI_SQL_DSN``, ``smtp`` → ``KAI_SMTP_TOOL_*``).
+    A stub that raises — rather than a silent no-op — so a misconfiguration
+    (operator enables a tool whose env shape isn't wired yet) surfaces
+    immediately at start, not silently.
+    """
+    raise NotImplementedError(f"env injection for {service!r} not implemented")
 
 
 class DeploymentsService:
@@ -287,17 +299,29 @@ class DeploymentsService:
         user = self._user_for(deployment)
         instance_id = self._instance_id(deployment, user=user)
 
-        conn = (
-            self.db.query(Connection)
-            .filter(
-                Connection.user_id == user.id,
-                Connection.service == "whatsapp",
-                Connection.status == "connected",
+        bt = BOT_TYPES.get(deployment.bot_type)
+        if bt is None:
+            raise ValueError(f"unknown bot type: {deployment.bot_type}")
+
+        # Catalog-driven start gate: every connection this bot type
+        # declares as required must be present and connected. Replaces the
+        # prior literal ``Connection.service == "whatsapp"`` filter — a
+        # second bot type needing a different connection can now declare it.
+        required_conns: dict[str, Connection] = {}
+        for service in bt.required_connections:
+            c = (
+                self.db.query(Connection)
+                .filter(
+                    Connection.user_id == user.id,
+                    Connection.service == service,
+                )
+                .first()
             )
-            .first()
-        )
-        if not conn:
-            raise ConnectionRequiredError("Connect WhatsApp first at /connections")
+            if c is None or c.status != "connected":
+                raise ConnectionRequiredError(f"Connect {service} first at /connections")
+            required_conns[service] = c
+
+        conn = required_conns.get("whatsapp")
 
         # Brain (lightrag) — a second, NON-fatal connection lookup (unlike
         # WhatsApp above). A Brain is never a hard prerequisite for a bot to
@@ -328,24 +352,33 @@ class DeploymentsService:
             deployment.voice,
         ]
 
-        env = {
-            **os.environ,
-            "KAI_WAHA_SESSION": conn.config["waha_session"],
-            "KAI_WAHA_HMAC_KEY": user.hmac_key,
-            "KAI_WAHA_WEBHOOK_PORT": str(conn.config["waha_webhook_port"]),
-            "KAI_WAHA_WEBHOOK_HOST": "0.0.0.0",
-            "KAI_WAHA_WEBHOOK_PUBLIC_HOST": os.environ.get("KAI_WAHA_WEBHOOK_PUBLIC_HOST", ""),
-            "KAI_WAHA_WEBHOOK_PATH": conn.config["waha_webhook_path"],
-            "KAI_WAHA_WHISPER_SERVER_HOST": os.environ.get(
+        env: dict[str, str] = {**os.environ}
+        # WAHA-specific env shape — bespoke to the waha bot type (§2.1).
+        # ``conn`` is the whatsapp Connection from the required-connections
+        # gate; it's None for a future non-whatsapp bot type, which would
+        # have its own bespoke env block here instead.
+        if conn is not None:
+            env["KAI_WAHA_SESSION"] = conn.config["waha_session"]
+            env["KAI_WAHA_HMAC_KEY"] = user.hmac_key
+            env["KAI_WAHA_WEBHOOK_PORT"] = str(conn.config["waha_webhook_port"])
+            env["KAI_WAHA_WEBHOOK_HOST"] = "0.0.0.0"
+            env["KAI_WAHA_WEBHOOK_PUBLIC_HOST"] = os.environ.get(
+                "KAI_WAHA_WEBHOOK_PUBLIC_HOST", ""
+            )
+            env["KAI_WAHA_WEBHOOK_PATH"] = conn.config["waha_webhook_path"]
+            env["KAI_WAHA_WHISPER_SERVER_HOST"] = os.environ.get(
                 "KAI_WAHA_WHISPER_SERVER_HOST", "127.0.0.1"
-            ),
-            "KAI_WAHA_WHISPER_SERVER_PORT": os.environ.get("KAI_WAHA_WHISPER_SERVER_PORT", "8787"),
-            "KAI_WAHA_KOKORO_SERVER_HOST": os.environ.get(
+            )
+            env["KAI_WAHA_WHISPER_SERVER_PORT"] = os.environ.get(
+                "KAI_WAHA_WHISPER_SERVER_PORT", "8787"
+            )
+            env["KAI_WAHA_KOKORO_SERVER_HOST"] = os.environ.get(
                 "KAI_WAHA_KOKORO_SERVER_HOST", "127.0.0.1"
-            ),
-            "KAI_WAHA_KOKORO_SERVER_PORT": os.environ.get("KAI_WAHA_KOKORO_SERVER_PORT", "8788"),
-            "KAI_CONFIGS_DIR": "data/configs/cockpit",
-        }
+            )
+            env["KAI_WAHA_KOKORO_SERVER_PORT"] = os.environ.get(
+                "KAI_WAHA_KOKORO_SERVER_PORT", "8788"
+            )
+            env["KAI_CONFIGS_DIR"] = "data/configs/cockpit"
         if brain_conn is not None:
             workspace = brain_conn.config["workspace"]
             if deployment.brain_instruction is not None and deployment.brain_instruction.strip():
@@ -356,6 +389,30 @@ class DeploymentsService:
             env["KAI_BRAIN_WORKSPACE"] = workspace
             env["KAI_BRAIN_INSTRUCTION"] = instruction
             env["KAI_BRAIN_MANDATORY"] = "true" if mandatory else "false"
+
+        # Supported-connection injection: for each optional connection this
+        # bot type declares, inject its env vars only when both the operator
+        # has toggled it on for this deployment (settings["tools"]) AND the
+        # Connection row exists. Never "on for every bot just because the
+        # operator connected it once." A no-op today (no database/smtp
+        # connections exist yet); the single site Fixes 05/06 fill in.
+        tools_cfg = deployment.settings.get("tools", {})
+        for service in bt.supported_connections:
+            if service in bt.required_connections:
+                continue
+            if not tools_cfg.get(service, False):
+                continue
+            c = (
+                self.db.query(Connection)
+                .filter(
+                    Connection.user_id == user.id,
+                    Connection.service == service,
+                )
+                .first()
+            )
+            if c is None:
+                continue
+            _inject_connection_env(env, service, c)
 
         proc = subprocess.Popen(
             argv,

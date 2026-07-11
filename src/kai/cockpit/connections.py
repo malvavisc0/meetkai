@@ -30,6 +30,21 @@ class ConnectionsService:
     def __init__(self, db: Session) -> None:
         self.db = db
 
+    def list_for_user(self, user: User) -> list[Connection]:
+        """Every connection row for this operator (all services).
+
+        The generic "what does this operator have?" read the catalog-driven
+        code needs — the settings UI and any future "show all connections"
+        page use this instead of a raw query in the route. Per-type helpers
+        (``get_whatsapp``, ``get_brain``, future ``get_database``) stay as
+        the bespoke read path for a single known service.
+        """
+        return (
+            self.db.query(Connection)
+            .filter(Connection.user_id == user.id)
+            .all()
+        )
+
     def get_whatsapp(self, user: User) -> Connection | None:
         """Get the user's WhatsApp connection row, or None."""
         return (

@@ -157,6 +157,26 @@
     </div>
     {% endif %}
 
+    {% if supported_tools %}
+    <div class="card">
+      <p class="card__eyebrow">Tools</p>
+      <h3 class="card__title">Optional connections</h3>
+      {% for svc, tool_label, available in supported_tools %}
+        <div class="field">
+          <label class="checkbox-row">
+            <input type="checkbox" name="tool_{{ svc }}" value="true"
+              {% if tools_enabled.get(svc, False) %}checked{% endif %}
+              {% if not available %}disabled{% endif %}>
+            {{ tool_label }}
+          </label>
+          {% if not available %}
+          <p class="field__help">Connect {{ tool_label }} on the Connections page to enable.</p>
+          {% endif %}
+        </div>
+      {% endfor %}
+    </div>
+    {% endif %}
+
     {# --- Actions --- #}
     <div class="cluster">
       <button type="submit" class="button button--primary"><span class="icon">{% include "icons/check.svg" %}</span> Save changes</button>

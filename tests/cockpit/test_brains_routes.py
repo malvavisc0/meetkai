@@ -150,7 +150,6 @@ class TestBrainsInstruction:
         assert "how to do X from section Y" in r.text
 
 
-
 class TestBrainsUpload:
     def test_uploads_file_and_flashes_success(self, client, db, bob, fake_lightrag_client):
         _login(client, db, bob)
