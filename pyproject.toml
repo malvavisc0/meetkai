@@ -25,6 +25,7 @@ dependencies = [
     "python-multipart",
     "sqlalchemy",
     "itsdangerous",
+    "cryptography",
 ]
 
 [project.optional-dependencies]

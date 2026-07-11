@@ -56,6 +56,38 @@ def cockpit_serve(
     uvicorn.run(app_obj, host=host, port=port)
 
 
+@cockpit_app.command("rotate-credential-key")
+def cockpit_rotate_credential_key():
+    """Rotate the credential encryption key (run on demand).
+
+    Bumps ``KAI_CREDENTIAL_KEY_VERSION``, re-encrypts every stored credential
+    Connection under the new derived key, and updates ``.env``. The root
+    secret (``KAI_CREDENTIAL_ENCRYPTION_KEY``) is never touched.
+    """
+    from kai.cockpit.db import SessionLocal, create_all
+    from kai.cockpit.key_rotation import rotate_credential_key
+
+    create_all()
+    db = SessionLocal()
+    try:
+        try:
+            new_version, env_written = rotate_credential_key(db)
+        except RuntimeError as exc:
+            err_line(str(exc))
+            raise typer.Exit(1) from exc
+
+        console.print(f"{GL_OK} [{OK}]credential key rotated to {new_version}[/{OK}]")
+        console.print("Restart the cockpit to apply.")
+        if not env_written:
+            console.print(
+                f"[{WARN}].env not found — set "
+                f"KAI_CREDENTIAL_KEY_VERSION={new_version} in your "
+                f"environment (docker-compose, systemd, etc.) before restart.[/{WARN}]"
+            )
+    finally:
+        db.close()
+
+
 @cockpit_user_app.command("create")
 def cockpit_user_create(
     email: str = typer.Argument(..., help="Email or username"),
