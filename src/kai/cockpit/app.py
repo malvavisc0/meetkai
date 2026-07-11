@@ -113,6 +113,7 @@ def create_app() -> FastAPI:
         dependencies,
         deployments,
         health,
+        webhooks,
     )
 
     app.include_router(auth.router)
@@ -123,5 +124,6 @@ def create_app() -> FastAPI:
     app.include_router(brain.router)
     app.include_router(chat.router)
     app.include_router(health.router)
+    app.include_router(webhooks.router)
 
     return app

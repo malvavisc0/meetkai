@@ -10,6 +10,7 @@ from kai.bots.base import TellResult
 logger = logging.getLogger(__name__)
 
 WebhookHandler = Callable[[dict], Awaitable[None]]
+IngestHandler = Callable[[dict], Awaitable[dict]]
 
 
 class TellHandler(Protocol):
@@ -41,6 +42,7 @@ def create_webhook_app(
     webhook_path: str = "/webhook/waha",
     on_message: WebhookHandler | None = None,
     on_tell: TellHandler | None = None,
+    on_ingest: IngestHandler | None = None,
     on_status: StatusHandler | None = None,
     on_clear: ClearHandler | None = None,
     on_sleep: SleepHandler | None = None,
@@ -52,11 +54,14 @@ def create_webhook_app(
     ``/tell``, ``/status`` and ``/clear`` routes share this single secret and
     are all HMAC-verified. ``on_tell`` wires a bot's ``handle_operator``;
     when ``None`` the ``/tell`` route answers 404 (the bot opts out of
-    operator control). ``on_status`` wires a bot's ``status_snapshot``;
-    when ``None`` the ``/status`` route answers 404. ``on_clear`` wires a
-    bot's history-reset hook; when ``None`` the ``/clear`` route answers 404.
-    ``on_sleep``/``on_wake`` toggle a chat's sleep state; when ``None`` the
-    matching route answers 404.
+    operator control). ``on_ingest`` wires a bot's ``ingest_event`` (forwarded
+    by the cockpit's centralized ``/webhook/{slug}/{type}`` ingress); when
+    ``None`` the ``/ingest`` route answers 404 (the bot opts out of centralized
+    webhook ingest — e.g. WAHA). ``on_status`` wires a bot's
+    ``status_snapshot``; when ``None`` the ``/status`` route answers 404.
+    ``on_clear`` wires a bot's history-reset hook; when ``None`` the ``/clear``
+    route answers 404. ``on_sleep``/``on_wake`` toggle a chat's sleep state;
+    when ``None`` the matching route answers 404.
     """
     app = FastAPI(title="kai webhook")
 
@@ -144,6 +149,39 @@ def create_webhook_app(
         if isinstance(result, TellResult):
             return result.model_dump()
         return result
+
+    @app.post("/ingest")
+    async def ingest(request: Request):
+        """Forwarded-event route for the cockpit's centralized webhook ingress.
+
+        HMAC-verified with the same key as the inbound webhook. The body is a
+        ``NormalizedMessage`` dict forwarded by the cockpit's
+        ``/webhook/{slug}/{type}`` route. When ``on_ingest`` is ``None`` the
+        bot opts out (404) — e.g. WAHA, which keeps its own bespoke webhook.
+        """
+        if on_ingest is None:
+            raise HTTPException(status_code=404, detail="ingest not supported by this bot")
+
+        body = await request.body()
+        if len(body) > _MAX_BODY_BYTES:
+            raise HTTPException(status_code=413, detail="payload too large")
+
+        signature = request.headers.get("X-Webhook-Hmac", "")
+        if not _verify_signature(hmac_key, hmac_algorithm, body, signature):
+            raise HTTPException(status_code=401, detail="Invalid signature")
+
+        try:
+            payload = await request.json()
+        except Exception:
+            raise HTTPException(status_code=400, detail="malformed body")
+
+        try:
+            return await on_ingest(payload)
+        except NotImplementedError:
+            raise HTTPException(status_code=404, detail="ingest not supported by this bot")
+        except Exception:
+            logger.exception("on_ingest handler error")
+            raise HTTPException(status_code=500, detail="ingest failed")
 
     @app.get("/status")
     async def status(request: Request):

@@ -294,3 +294,12 @@ class BaseBot(ABC):
         the webhook ``/status`` route answers 404 for bots that opt out.
         """
         raise NotImplementedError(f"{self.name} does not implement status_snapshot()")
+
+    async def ingest_event(self, event: dict) -> dict:
+        """Receive a forwarded, already-normalized inbound event from the cockpit.
+
+        Default: not implemented (the bot opts out of centralized webhook
+        ingest). A bot that consumes a ``WEBHOOK_TYPES`` entry overrides this
+        to apply its own bespoke preprocessing and feed the result to its agent.
+        """
+        raise NotImplementedError(f"{self.name} does not implement ingest_event()")

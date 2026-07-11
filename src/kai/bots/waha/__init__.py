@@ -313,6 +313,7 @@ class Bot(BaseBot):
             webhook_path=self._waha.webhook_path,
             on_message=self._handle_message,
             on_tell=self.handle_operator,
+            on_ingest=None,
             on_status=self.status_snapshot,
             on_clear=self.clear_operator_history,
             on_sleep=self.set_sleep,

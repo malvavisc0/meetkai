@@ -131,6 +131,20 @@ class DeploymentsService:
         except (httpx.HTTPError, json.JSONDecodeError) as exc:
             return {"ok": False, "error": str(exc)}
 
+    def forward_event(self, deployment: Deployment, path: str, body: bytes) -> bool:
+        """Forward a normalized inbound event to a running deployment's bot.
+
+        Returns True if the bot accepted the event, False if the bot isn't
+        reachable or rejected it. ``_call_bot`` returns ``{"ok": False, ...}``
+        on every failure shape (HTTP error, JSON decode), so ``False`` is the
+        one failure signal; a response with no ``ok`` key at all is success.
+        """
+        record = self._resolve_run(deployment)
+        if record is None:
+            return False
+        result = self._call_bot(record, "POST", path, body)
+        return result.get("ok", True) is not False
+
     def get(self, deployment_id: int) -> Deployment | None:
         return self.db.query(Deployment).filter(Deployment.id == deployment_id).first()
 
@@ -353,7 +367,7 @@ class DeploymentsService:
         ]
 
         env: dict[str, str] = {**os.environ}
-        # WAHA-specific env shape — bespoke to the waha bot type (§2.1).
+        # WAHA-specific env shape — bespoke to the waha bot type.
         # ``conn`` is the whatsapp Connection from the required-connections
         # gate; it's None for a future non-whatsapp bot type, which would
         # have its own bespoke env block here instead.
