@@ -53,6 +53,8 @@ class Deployment(Base):
     # the on-disk config. Set in DeploymentsService.edit() when running,
     # cleared in start()/stop(). Persists across reloads/sessions (unlike
     # the prior session-flash signal, which was lost on reload).
+    brain_mandatory: Mapped[bool | None] = mapped_column(Boolean, nullable=True, default=None)
+    brain_instruction: Mapped[str | None] = mapped_column(String, nullable=True, default=None)
     needs_restart: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     created_at: Mapped[str] = mapped_column(String, nullable=False)
     updated_at: Mapped[str] = mapped_column(String, nullable=False)

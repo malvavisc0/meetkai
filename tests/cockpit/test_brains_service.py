@@ -21,7 +21,7 @@ class TestCreateBrain:
         # bob@test.com -> kai-v001-bob_at_test_com (same scheme as WAHA)
         assert brain.config["workspace"] == "kai-v001-bob_at_test_com"
         assert brain.config["instruction"] == ""
-        assert brain.config["mandatory"] is False
+        assert "mandatory" not in brain.config
 
     def test_idempotent(self, db, user):
         svc = BrainsService(db)
@@ -40,27 +40,23 @@ class TestUpdateInstruction:
     def test_raises_without_a_brain(self, db, user):
         svc = BrainsService(db)
         with pytest.raises(ValueError):
-            svc.update_instruction(user, instruction="ask about pricing", mandatory=True)
+            svc.update_instruction(user, instruction="ask about pricing")
 
-    def test_saves_instruction_and_mandatory(self, db, user):
+    def test_saves_instruction(self, db, user):
         svc = BrainsService(db)
         svc.create_brain(user)
-        updated = svc.update_instruction(
-            user, instruction="how to do X from section Y", mandatory=True
-        )
+        updated = svc.update_instruction(user, instruction="how to do X from section Y")
         assert updated.config["instruction"] == "how to do X from section Y"
-        assert updated.config["mandatory"] is True
         # workspace untouched by an instruction update
         assert updated.config["workspace"] == "kai-v001-bob_at_test_com"
 
     def test_update_persists_across_fresh_query(self, db, user):
         svc = BrainsService(db)
         svc.create_brain(user)
-        svc.update_instruction(user, instruction="refund policy", mandatory=False)
+        svc.update_instruction(user, instruction="refund policy")
         reloaded = svc.get_brain(user)
         assert reloaded is not None
         assert reloaded.config["instruction"] == "refund policy"
-        assert reloaded.config["mandatory"] is False
 
 
 class TestDeleteBrain:

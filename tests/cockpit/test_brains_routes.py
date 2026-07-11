@@ -123,7 +123,7 @@ class TestBrainsInstruction:
         _login(client, db, bob)
         resp = client.post(
             "/brain/instruction",
-            data={"instruction": "ask about pricing", "mandatory": "true"},
+            data={"instruction": "ask about pricing"},
             follow_redirects=False,
         )
         assert resp.status_code == 302
@@ -137,37 +137,18 @@ class TestBrainsInstruction:
         client.post("/brain/create", follow_redirects=False)
         resp = client.post(
             "/brain/instruction",
-            data={"instruction": "how to do X from section Y", "mandatory": "true"},
+            data={"instruction": "how to do X from section Y"},
             follow_redirects=False,
         )
         assert resp.status_code == 302
         brain = BrainsService(db).get_brain(bob)
         assert brain is not None
         assert brain.config["instruction"] == "how to do X from section Y"
-        assert brain.config["mandatory"] is True
+        assert "mandatory" not in brain.config
 
         r = client.get("/brain")
         assert "how to do X from section Y" in r.text
 
-    def test_unchecked_checkbox_clears_mandatory(self, client, db, bob):
-        from kai.cockpit.brains import BrainsService
-
-        _login(client, db, bob)
-        client.post("/brain/create", follow_redirects=False)
-        client.post(
-            "/brain/instruction",
-            data={"instruction": "x", "mandatory": "true"},
-            follow_redirects=False,
-        )
-        # Unchecked checkboxes are simply absent from form data.
-        client.post(
-            "/brain/instruction",
-            data={"instruction": "x"},
-            follow_redirects=False,
-        )
-        brain = BrainsService(db).get_brain(bob)
-        assert brain is not None
-        assert brain.config["mandatory"] is False
 
 
 class TestBrainsUpload:

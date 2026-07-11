@@ -65,13 +65,12 @@ async def brains_create(
 async def brains_update_instruction(
     request: Request,
     instruction: str = Form(""),
-    mandatory: str = Form(""),
     user: User = Depends(require_user),
     db: Session = Depends(get_db),
 ):
     svc = BrainsService(db)
     try:
-        svc.update_instruction(user, instruction=instruction, mandatory=mandatory == "true")
+        svc.update_instruction(user, instruction=instruction)
         request.session["flash"] = "Brain instructions saved."
     except ValueError as exc:
         request.session["flash"] = str(exc)

@@ -232,6 +232,7 @@ class TestStart:
     ):
         svc = DeploymentsService(db)
         dep = svc.create(user, "waha", "goal", "English")
+        svc.edit(dep, brain_mandatory=True)
 
         db.add(
             Connection(
@@ -255,7 +256,6 @@ class TestStart:
                 config={
                     "workspace": "kai-v001-bob_at_test_com",
                     "instruction": "how to do X from section Y",
-                    "mandatory": True,
                 },
                 created_at="now",
                 updated_at="now",

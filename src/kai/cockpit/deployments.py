@@ -228,6 +228,14 @@ class DeploymentsService:
                         raise ValueError(f"setting '{req}' cannot be empty")
                 deployment.settings = {**deployment.settings, **value}
                 settings_changed = True
+            elif key == "brain_mandatory":
+                if value is not None and not isinstance(value, bool):
+                    raise ValueError("brain_mandatory must be a bool or null")
+                deployment.brain_mandatory = value
+            elif key == "brain_instruction":
+                if value is not None and not isinstance(value, str):
+                    raise ValueError("brain_instruction must be a string or null")
+                deployment.brain_instruction = str(value).strip() if value is not None else None
 
         # Resolve any language conflict: an explicit ``language`` argument
         # always wins over a value inside ``settings["language"]``. Without
@@ -339,9 +347,15 @@ class DeploymentsService:
             "KAI_CONFIGS_DIR": "data/configs/cockpit",
         }
         if brain_conn is not None:
-            env["KAI_BRAIN_WORKSPACE"] = brain_conn.config.get("workspace", "default")
-            env["KAI_BRAIN_INSTRUCTION"] = brain_conn.config.get("instruction", "")
-            env["KAI_BRAIN_MANDATORY"] = "true" if brain_conn.config.get("mandatory") else "false"
+            workspace = brain_conn.config["workspace"]
+            if deployment.brain_instruction is not None and deployment.brain_instruction.strip():
+                instruction = deployment.brain_instruction
+            else:
+                instruction = brain_conn.config.get("instruction", "")
+            mandatory = deployment.brain_mandatory is True
+            env["KAI_BRAIN_WORKSPACE"] = workspace
+            env["KAI_BRAIN_INSTRUCTION"] = instruction
+            env["KAI_BRAIN_MANDATORY"] = "true" if mandatory else "false"
 
         proc = subprocess.Popen(
             argv,

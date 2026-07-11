@@ -97,11 +97,6 @@
             <textarea id="instruction" name="instruction" rows="4" data-autosize
               placeholder="Examples:&#10;When someone asks about Product X&#10;Questions about pricing, setup, refunds, guarantees, or policies&#10;If the answer depends on uploaded documents or current company information">{{ brain.config.get('instruction', '') }}</textarea>
           </div>
-          <label class="checkbox-row">
-            <input type="checkbox" name="mandatory" value="true"
-              {% if brain.config.get('mandatory') %}checked{% endif %}>
-            Require Brain lookup before factual answers
-          </label>
           <div><button type="submit" class="button button--primary"><span class="icon">{% include "icons/check.svg" %}</span> Save usage rules</button></div>
         </form>
       </div>

@@ -91,7 +91,6 @@ class BrainsService:
             config={
                 "workspace": user_slug(user.kai_slug),
                 "instruction": "",
-                "mandatory": False,
             },
             created_at=now_iso(),
             updated_at=now_iso(),
@@ -101,8 +100,8 @@ class BrainsService:
         self.db.refresh(conn)
         return conn
 
-    def update_instruction(self, user: User, *, instruction: str, mandatory: bool) -> Connection:
-        """Save the operator's "when to use the Brain" free text + mandatory flag.
+    def update_instruction(self, user: User, *, instruction: str) -> Connection:
+        """Save the operator's "when to use the Brain" free text.
 
         Raises ``ValueError`` if the user has no Brain yet — the website
         should only expose this form once a Brain exists.
@@ -114,7 +113,6 @@ class BrainsService:
         conn.config = {
             **conn.config,
             "instruction": instruction,
-            "mandatory": mandatory,
         }
         conn.updated_at = now_iso()
         self.db.commit()

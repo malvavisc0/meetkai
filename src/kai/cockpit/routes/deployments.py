@@ -248,6 +248,10 @@ async def deployment_settings_page(
 
     flash = request.session.pop("flash", None)
 
+    from kai.cockpit.brains import BrainsService
+
+    brain = BrainsService(db).get_brain(user)
+
     return templates.TemplateResponse(
         request,
         "settings.html",
@@ -258,6 +262,7 @@ async def deployment_settings_page(
             "voices": ALL_VOICES,
             "feature_flags": feature_flags,
             "capability_labels": CAPABILITY_LABELS,
+            "has_brain": brain is not None,
             "flash": flash,
         },
     )
@@ -519,6 +524,8 @@ async def deployment_settings(
     participation_rate: float = Form(0.15),
     participation_cooldown: float = Form(90),
     participation_streak_max: int = Form(2),
+    brain_mandatory: str = Form(""),
+    brain_instruction: str = Form(""),
     user: User = Depends(require_user),
     db: Session = Depends(get_db),
 ):
@@ -565,6 +572,8 @@ async def deployment_settings(
             voice=voice or dep.voice,
             feature_flags=feature_flags,
             settings=settings_update,
+            brain_mandatory=(brain_mandatory == "true"),
+            brain_instruction=brain_instruction.strip() or None,
         )
     except ValueError as exc:
         request.session["flash"] = str(exc)
