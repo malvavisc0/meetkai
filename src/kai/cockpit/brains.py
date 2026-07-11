@@ -14,6 +14,11 @@ from sqlalchemy.orm import Session
 from kai.brain.client import DocumentRecord, IngestResult, LightRagClient
 from kai.brain.config import get_brain_settings
 from kai.brain.crawler import Crawl4aiClient
+from kai.brain.validation import (
+    validate_ingest_url,
+    validate_upload_filename,
+    validate_upload_size,
+)
 from kai.cockpit.models import Connection, User
 from kai.utils.common import now_iso, user_slug
 
@@ -162,7 +167,15 @@ class BrainsService:
             await client.close()
 
     async def ingest_file(self, user: User, *, filename: str, file: BinaryIO) -> IngestResult:
-        """Ingest an uploaded file."""
+        """Ingest an uploaded file.
+
+        Raises ``ValueError`` if the file extension isn't in the ingest
+        allowlist, or if the file is empty or over the size cap — checked
+        here (before any network I/O against LightRAG) so an untyped or
+        oversized upload never reaches the shared LightRAG container.
+        """
+        validate_upload_filename(filename)
+        validate_upload_size(file)
         brain = self._require_brain(user)
         client = self._lightrag_client()
         try:
@@ -186,7 +199,16 @@ class BrainsService:
         All fetched pages are batch-ingested into LightRAG via
         ``ingest_texts`` (one track_id for the whole crawl) under per-page
         ``file_source`` slugs (e.g. ``transmissionbt-com-download``).
+
+        Raises ``ValueError`` (before any crawl4ai call) if ``url`` isn't
+        http(s), has no host, or resolves to a private/loopback/link-local
+        (incl. cloud metadata)/reserved address — see
+        ``kai.brain.validation.validate_ingest_url``. Same-host links
+        discovered during the BFS are re-validated before being fetched,
+        since ``_normalize_internal_link`` only checks scheme + hostname
+        match, not the address they resolve to.
         """
+        await validate_ingest_url(url)
         brain = self._require_brain(user)
         settings = get_brain_settings()
         seed_host = urlparse(url).netloc
@@ -198,6 +220,13 @@ class BrainsService:
             queue: deque[tuple[str, int]] = deque([(url, 0)])
             while queue and fetched < settings.crawl_max_pages:
                 page_url, depth = queue.popleft()
+                try:
+                    await validate_ingest_url(page_url)
+                except ValueError:
+                    # A discovered link resolves somewhere unsafe (or its DNS
+                    # changed since the seed check) — skip it, don't abort
+                    # the whole crawl.
+                    continue
                 page = await crawler.crawl(url=page_url)
                 fetched += 1
                 # Only ingest and follow links from pages that actually

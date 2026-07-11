@@ -29,6 +29,22 @@ def fake_crawler_client(monkeypatch):
     return client
 
 
+@pytest.fixture(autouse=True)
+def fake_dns(monkeypatch):
+    """Stub real DNS lookups so ``validate_ingest_url`` tests don't depend on
+    live network access, and private/internal hosts can be exercised
+    deterministically."""
+    private_hosts = {
+        "localhost": ["127.0.0.1"],
+        "metadata.internal": ["169.254.169.254"],
+    }
+
+    def _resolve(host: str) -> list[str]:
+        return private_hosts.get(host, ["93.184.216.34"])
+
+    monkeypatch.setattr("kai.brain.validation._resolve_all", _resolve)
+
+
 @pytest.fixture
 def bob(db):
     u = User(
@@ -187,6 +203,32 @@ class TestBrainsUpload:
         r = client.get("/brain")
         assert "No Brain provisioned for this Operator" in r.text
 
+    def test_rejects_disallowed_file_extension(self, client, db, bob, fake_lightrag_client):
+        _login(client, db, bob)
+        client.post("/brain/create", follow_redirects=False)
+        resp = client.post(
+            "/brain/upload",
+            files={"file": ("payload.exe", io.BytesIO(b"MZ..."), "application/octet-stream")},
+            follow_redirects=False,
+        )
+        assert resp.status_code == 302
+        fake_lightrag_client.ingest_file.assert_not_awaited()
+        r = client.get("/brain")
+        assert "Unsupported file type" in r.text
+
+    def test_rejects_oversized_file(self, client, db, bob, fake_lightrag_client):
+        _login(client, db, bob)
+        client.post("/brain/create", follow_redirects=False)
+        resp = client.post(
+            "/brain/upload",
+            files={"file": ("big.txt", io.BytesIO(b"x" * (26 * 1024 * 1024)), "text/plain")},
+            follow_redirects=False,
+        )
+        assert resp.status_code == 302
+        fake_lightrag_client.ingest_file.assert_not_awaited()
+        r = client.get("/brain")
+        assert "too large" in r.text
+
 
 class TestBrainsIngestUrl:
     @staticmethod
@@ -234,6 +276,32 @@ class TestBrainsIngestUrl:
         resp = client.post("/brain/ingest-url", data={"url": "   "}, follow_redirects=False)
         assert resp.status_code == 302
         fake_crawler_client.crawl.assert_not_awaited()
+
+    def test_rejects_loopback_url(self, client, db, bob, fake_lightrag_client, fake_crawler_client):
+        _login(client, db, bob)
+        client.post("/brain/create", follow_redirects=False)
+        resp = client.post(
+            "/brain/ingest-url", data={"url": "http://localhost/"}, follow_redirects=False
+        )
+        assert resp.status_code == 302
+        fake_crawler_client.crawl.assert_not_awaited()
+        r = client.get("/brain")
+        assert "private, local, or reserved" in r.text
+
+    def test_rejects_cloud_metadata_url(
+        self, client, db, bob, fake_lightrag_client, fake_crawler_client
+    ):
+        _login(client, db, bob)
+        client.post("/brain/create", follow_redirects=False)
+        resp = client.post(
+            "/brain/ingest-url",
+            data={"url": "http://metadata.internal/latest/meta-data/"},
+            follow_redirects=False,
+        )
+        assert resp.status_code == 302
+        fake_crawler_client.crawl.assert_not_awaited()
+        r = client.get("/brain")
+        assert "private, local, or reserved" in r.text
 
 
 class TestBrainsIngestText:

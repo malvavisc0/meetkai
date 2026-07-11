@@ -2,9 +2,9 @@
 
 import os
 import smtplib
-
-from email.utils import formataddr
 from email.message import EmailMessage
+from email.utils import formataddr
+
 
 def send_magic_link(user_email: str, magic_url: str) -> None:
     """Send magic link email. Falls back to print if SMTP not configured."""
@@ -13,7 +13,7 @@ def send_magic_link(user_email: str, magic_url: str) -> None:
     smtp_port = int(os.environ.get("KAI_SMTP_PORT", "1025"))
     smtp_user = os.environ.get("KAI_SMTP_USER")
     smtp_pass = os.environ.get("KAI_SMTP_PASSWORD")
-    
+
     if not smtp_host:
         print(f"Magic link for {user_email}: {magic_url}")
         return
@@ -28,7 +28,7 @@ def send_magic_link(user_email: str, magic_url: str) -> None:
         f"It expires in 10 minutes. If you didn't request it, you can "
         f"safely ignore this email — no one else can use this link."
     )
-    
+
     with smtplib.SMTP(smtp_host, smtp_port) as server:
         server.ehlo()
         if smtp_user and smtp_pass:

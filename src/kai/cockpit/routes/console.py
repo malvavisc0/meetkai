@@ -1,11 +1,10 @@
 """Console route: /console (list deployments + bot picker) + / placeholder."""
 
 from fastapi import APIRouter, Depends, Request
-from fastapi.responses import RedirectResponse
 from sqlalchemy.orm import Session
 
 from kai.cockpit.app import templates
-from kai.cockpit.auth import get_current_user, require_user
+from kai.cockpit.auth import require_user
 from kai.cockpit.bots import BOT_TYPES
 from kai.cockpit.brains import BrainsService
 from kai.cockpit.connections import ConnectionsService

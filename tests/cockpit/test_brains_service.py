@@ -108,6 +108,26 @@ def fake_crawler_client(monkeypatch):
     return client
 
 
+@pytest.fixture(autouse=True)
+def fake_dns(monkeypatch):
+    """Stub out real DNS lookups in ``validate_ingest_url`` for these tests.
+
+    Every hostname resolves to a public IP unless explicitly listed as
+    private/internal, so tests don't depend on live network access and
+    negative (SSRF) cases can be exercised deterministically.
+    """
+    private_hosts = {
+        "localhost": ["127.0.0.1"],
+        "metadata.internal": ["169.254.169.254"],
+        "intranet.local": ["10.0.0.5"],
+    }
+
+    def _resolve(host: str) -> list[str]:
+        return private_hosts.get(host, ["93.184.216.34"])
+
+    monkeypatch.setattr("kai.brain.validation._resolve_all", _resolve)
+
+
 class TestIngestText:
     async def test_raises_without_a_brain(self, db, user, fake_lightrag_client):
         svc = BrainsService(db)
@@ -144,6 +164,30 @@ class TestIngestFile:
             file=fake_file, filename="handbook.pdf", workspace="kai-v001-bob_at_test_com"
         )
         fake_lightrag_client.close.assert_awaited_once()
+
+    async def test_rejects_disallowed_extension(self, db, user, fake_lightrag_client):
+        svc = BrainsService(db)
+        svc.create_brain(user)
+        fake_file = io.BytesIO(b"dummy")
+        with pytest.raises(ValueError, match="Unsupported file type"):
+            await svc.ingest_file(user, filename="malware.exe", file=fake_file)
+        fake_lightrag_client.ingest_file.assert_not_awaited()
+
+    async def test_rejects_oversized_file(self, db, user, fake_lightrag_client):
+        svc = BrainsService(db)
+        svc.create_brain(user)
+        fake_file = io.BytesIO(b"x" * (26 * 1024 * 1024))
+        with pytest.raises(ValueError, match="too large"):
+            await svc.ingest_file(user, filename="big.txt", file=fake_file)
+        fake_lightrag_client.ingest_file.assert_not_awaited()
+
+    async def test_rejects_empty_file(self, db, user, fake_lightrag_client):
+        svc = BrainsService(db)
+        svc.create_brain(user)
+        fake_file = io.BytesIO(b"")
+        with pytest.raises(ValueError, match="empty"):
+            await svc.ingest_file(user, filename="empty.txt", file=fake_file)
+        fake_lightrag_client.ingest_file.assert_not_awaited()
 
 
 class TestIngestUrl:
@@ -251,6 +295,34 @@ class TestIngestUrl:
         svc = BrainsService(db)
         with pytest.raises(ValueError):
             await svc.ingest_url(user, url="https://example.com/docs")
+        fake_crawler_client.crawl.assert_not_awaited()
+
+    async def test_rejects_non_http_scheme(self, db, user, fake_crawler_client):
+        svc = BrainsService(db)
+        svc.create_brain(user)
+        with pytest.raises(ValueError, match="http"):
+            await svc.ingest_url(user, url="ftp://example.com/")
+        fake_crawler_client.crawl.assert_not_awaited()
+
+    async def test_rejects_loopback_host(self, db, user, fake_crawler_client):
+        svc = BrainsService(db)
+        svc.create_brain(user)
+        with pytest.raises(ValueError, match="private, local, or reserved"):
+            await svc.ingest_url(user, url="http://localhost/")
+        fake_crawler_client.crawl.assert_not_awaited()
+
+    async def test_rejects_cloud_metadata_host(self, db, user, fake_crawler_client):
+        svc = BrainsService(db)
+        svc.create_brain(user)
+        with pytest.raises(ValueError, match="private, local, or reserved"):
+            await svc.ingest_url(user, url="http://metadata.internal/latest/meta-data/")
+        fake_crawler_client.crawl.assert_not_awaited()
+
+    async def test_rejects_private_ip_host(self, db, user, fake_crawler_client):
+        svc = BrainsService(db)
+        svc.create_brain(user)
+        with pytest.raises(ValueError, match="private, local, or reserved"):
+            await svc.ingest_url(user, url="http://intranet.local/admin")
         fake_crawler_client.crawl.assert_not_awaited()
 
 
