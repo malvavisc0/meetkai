@@ -13,42 +13,44 @@ This client is the thin HTTP layer the cockpit BFS loop calls.
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass, field
 from typing import Any
 
 import httpx
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from kai.brain.config import BrainSettings, get_brain_settings
 
 logger = logging.getLogger(__name__)
 
 
-@dataclass
-class CrawlLinks:
+class CrawlLinks(BaseModel):
     """The internal/external links discovered on a crawled page."""
 
-    internal: list[str] = field(default_factory=list)
-    external: list[str] = field(default_factory=list)
+    model_config = ConfigDict(frozen=True)
+
+    internal: list[str] = Field(default_factory=list)
+    external: list[str] = Field(default_factory=list)
 
     @classmethod
     def from_dict(cls, links: dict[str, Any] | None) -> CrawlLinks:
         if not links:
             return cls()
-        internal: list[str] = []
-        external: list[str] = []
-        for entry in links.get("internal", []) or []:
-            href = entry.get("href") if isinstance(entry, dict) else entry
-            if isinstance(href, str):
-                internal.append(href)
-        for entry in links.get("external", []) or []:
-            href = entry.get("href") if isinstance(entry, dict) else entry
-            if isinstance(href, str):
-                external.append(href)
-        return cls(internal=internal, external=external)
+
+        def _hrefs(entries: list[Any]) -> list[str]:
+            out: list[str] = []
+            for entry in entries:
+                href = entry.get("href") if isinstance(entry, dict) else entry
+                if isinstance(href, str):
+                    out.append(href)
+            return out
+
+        return cls(
+            internal=_hrefs(links.get("internal") or []),
+            external=_hrefs(links.get("external") or []),
+        )
 
 
-@dataclass
-class MarkdownResult:
+class MarkdownResult(BaseModel):
     """The markdown dict returned by POST /crawl.
 
     NOTE: ``/md`` returns markdown as a *string* (handled by
@@ -58,28 +60,25 @@ class MarkdownResult:
     ``raw_markdown``.
     """
 
+    model_config = ConfigDict(frozen=True)
+
     raw_markdown: str = ""
     markdown_with_citations: str = ""
     references_markdown: str = ""
     fit_markdown: str = ""
 
+    @model_validator(mode="before")
     @classmethod
-    def from_dict(cls, md: Any) -> MarkdownResult:
-        """Accept either the dict (from /crawl) or a string (defensive)."""
-        if isinstance(md, dict):
-            return cls(
-                raw_markdown=md.get("raw_markdown", "") or "",
-                markdown_with_citations=md.get("markdown_with_citations", "") or "",
-                references_markdown=md.get("references_markdown", "") or "",
-                fit_markdown=md.get("fit_markdown", "") or "",
-            )
-        if isinstance(md, str):
-            return cls(raw_markdown=md)
-        return cls()
+    def _coerce_source(cls, data: Any) -> Any:
+        """Accept the /crawl dict shape, or a bare string (defensive)."""
+        if isinstance(data, str):
+            return {"raw_markdown": data}
+        if data is None:
+            return {}
+        return data
 
 
-@dataclass
-class CrawlPage:
+class CrawlPage(BaseModel):
     """The full result of a POST /crawl single-page fetch.
 
     ``markdown`` is the MarkdownResult (dict-extracted); ``links`` is the
@@ -87,10 +86,12 @@ class CrawlPage:
     crawl). ``success`` is the per-page fetch flag.
     """
 
-    url: str
-    success: bool
-    markdown: MarkdownResult
-    links: CrawlLinks
+    model_config = ConfigDict(frozen=True)
+
+    url: str = ""
+    success: bool = False
+    markdown: MarkdownResult = Field(default_factory=MarkdownResult)
+    links: CrawlLinks = Field(default_factory=CrawlLinks)
     error_message: str | None = None
 
     @classmethod
@@ -98,7 +99,7 @@ class CrawlPage:
         return cls(
             url=result.get("url", ""),
             success=bool(result.get("success")),
-            markdown=MarkdownResult.from_dict(result.get("markdown")),
+            markdown=MarkdownResult.model_validate(result.get("markdown")),
             links=CrawlLinks.from_dict(result.get("links")),
             error_message=result.get("error_message"),
         )

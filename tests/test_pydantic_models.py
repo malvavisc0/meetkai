@@ -215,14 +215,30 @@ def _enum_of_prop(schema: dict[str, Any], prop: dict[str, Any]) -> list[Any] | N
         options = prop.get(key)
         if not isinstance(options, list):
             continue
+        # A union is only a closed enum if every option is itself an enum (or
+        # null, for Optional[Literal]). A union like ``Literal[...] | str`` —
+        # emitted as ``anyOf: [{enum, type:string}, {type:string}]`` — is an
+        # *open* field (any string is accepted), so it must not be reported
+        # as a closed set the sweep would then try to enforce.
+        members: list[Any] = []
+        all_enum = True
         for opt in options:
             if not isinstance(opt, dict):
+                all_enum = False
+                break
+            if opt.get("type") == "null":
                 continue
             if isinstance(opt.get("enum"), list):
-                return list(opt["enum"])
-            target = _resolve_ref(schema, opt.get("$ref"))
-            if target and isinstance(target.get("enum"), list):
-                return list(target["enum"])
+                members = list(opt["enum"])
+                continue
+            ref_target = _resolve_ref(schema, opt.get("$ref"))
+            if ref_target and isinstance(ref_target.get("enum"), list):
+                members = list(ref_target["enum"])
+                continue
+            all_enum = False
+            break
+        if all_enum and members:
+            return members
     return None
 
 
@@ -248,6 +264,8 @@ def test_model_builds_json_schema(model: type[BaseModel]) -> None:
     Catches the ``is not fully defined`` class of error for every pydantic
     model in the package, not just the one that broke at chat time.
     """
+    if _is_settings(model):
+        pytest.skip("BaseSettings is env-backed; validated via its own path")
     model.model_rebuild()
     schema = model.model_json_schema()
     assert isinstance(schema, dict)

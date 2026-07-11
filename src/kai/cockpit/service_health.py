@@ -75,15 +75,11 @@ async def _check_db() -> HealthCheck:
 
 async def _check_llm() -> HealthCheck:
     settings = get_settings()
-    hc = HealthCheck(label="LLM API")
     if not settings.llm_api_key:
-        hc.detail = "no API key configured"
-        return hc
+        return HealthCheck(label="LLM API", detail="no API key configured")
     headers = {"Authorization": f"Bearer {settings.llm_api_key}"}
     ok, detail = await _probe(f"{settings.llm_api_base.rstrip('/')}/models", headers=headers)
-    hc.ok = ok
-    hc.detail = detail
-    return hc
+    return HealthCheck(label="LLM API", ok=ok, detail=detail)
 
 
 async def _check_whisper(host: str, port: int) -> HealthCheck:

@@ -7,7 +7,7 @@ Adding a new bot type later = add an entry here + a settings form schema.
 from dataclasses import dataclass, field
 
 
-@dataclass
+@dataclass(frozen=True)
 class BotType:
     name: str
     feature_flags: list[str]
@@ -59,7 +59,7 @@ LANGUAGE_VOICE_MAP: dict[str, str] = {
 }
 
 
-@dataclass
+@dataclass(frozen=True)
 class CredentialField:
     name: str
     label: str
@@ -68,7 +68,7 @@ class CredentialField:
     help: str = ""
 
 
-@dataclass
+@dataclass(frozen=True)
 class CredentialType:
     """Settings-form shape for one credential connection type.
 

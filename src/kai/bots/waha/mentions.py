@@ -4,7 +4,7 @@ import logging
 import re
 import unicodedata
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
 from kai.bots.waha.jid import sanitize_display_name, user_digits
 
@@ -29,6 +29,8 @@ _MENTION_BARE_RE = re.compile(
 
 
 class ResolvedReply(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
     text: str
     mentions: list[str]
 

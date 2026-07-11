@@ -68,7 +68,10 @@ class FfmpegVendor(Vendor):
         if self.is_installed():
             logger.info("ffmpeg already present at %s — skipping", self.vendor_dir / "ffmpeg")
             return VendorResult(
-                self.name, ok=True, path=str(self.vendor_dir / "ffmpeg"), detail="already installed"
+                self.name,
+                ok=True,
+                path=str(self.vendor_dir / "ffmpeg"),
+                detail="already installed",
             )
 
         plat = _detect_platform()

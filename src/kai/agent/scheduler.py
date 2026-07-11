@@ -31,7 +31,7 @@ from pathlib import Path
 from typing import Any, Literal, cast
 
 from llama_index.core.tools import FunctionTool
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from kai.agent.context import ToolContext
 from kai.agent.helpers import (
@@ -116,6 +116,8 @@ class Task(BaseModel):
     ``count`` limit the recurrence. ``occurrences`` tracks how many times the
     task has fired.
     """
+
+    model_config = ConfigDict(frozen=True)
 
     id: str
     chat_id: str

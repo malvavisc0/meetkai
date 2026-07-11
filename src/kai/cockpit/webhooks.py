@@ -41,7 +41,7 @@ class NormalizedMessage(BaseModel):
     event: str = ""
 
 
-@dataclass
+@dataclass(frozen=True)
 class WebhookType:
     name: str
     # Implementations MUST:

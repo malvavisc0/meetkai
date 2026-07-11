@@ -5,7 +5,7 @@ from abc import ABC, abstractmethod
 from pathlib import Path
 from typing import Literal
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict, Field
 
 from kai.agent.context import ToolContext
 from kai.agent.core import ActionResult, KaiAgent
@@ -41,8 +41,10 @@ class TellResult(BaseModel):
       ``ChatResult.action.text`` (the turn resolved ``action == "console"``).
     """
 
+    model_config = ConfigDict(frozen=True)
+
     ok: bool
-    actions: list[dict] = []
+    actions: list[dict] = Field(default_factory=list)
     reply: str = ""
 
 

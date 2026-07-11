@@ -28,7 +28,7 @@ from pathlib import Path
 VENDOR_NAMES: tuple[str, ...] = ("ffmpeg", "whisper", "kokoro")
 
 
-@dataclass
+@dataclass(frozen=True)
 class VendorResult:
     """Outcome of an install/update/delete operation."""
 

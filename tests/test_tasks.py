@@ -408,7 +408,7 @@ class TestRecurringTasks:
         first_next = asyncio.run(store.list_for())[0]
         assert first_next.occurrences == 1
 
-        first_next.due_at = now - timedelta(seconds=1)
+        first_next = first_next.model_copy(update={"due_at": now - timedelta(seconds=1)})
         asyncio.run(store.add(first_next))
         asyncio.run(sched._tick())
         assert len(executed) == 2

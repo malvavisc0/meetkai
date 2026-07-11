@@ -13,10 +13,10 @@ against a running ``ghcr.io/hkuds/lightrag:v1.5.4`` container.
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass, field
 from typing import Any, BinaryIO, Literal
 
 import httpx
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from kai.brain.config import BrainSettings, get_brain_settings
 
@@ -33,12 +33,24 @@ DOC_STATUS_PROCESSED = "processed"
 DOC_STATUS_FAILED = "failed"
 TERMINAL_STATUSES = frozenset({DOC_STATUS_PROCESSED, DOC_STATUS_FAILED})
 
+# The field carries a Literal so an unexpected API value fails validation at
+# the boundary instead of flowing through silently. The ``| str`` fallback
+# keeps parsing resilient: LightRAG has added statuses before.
+DocStatus = Literal[
+    "pending",
+    "parsing",
+    "analyzing",
+    "processing",
+    "preprocessed",
+    "processed",
+    "failed",
+]
+
 # Query modes LightRAG supports (/query body).
 QueryMode = Literal["naive", "local", "global", "hybrid", "mix"]
 
 
-@dataclass
-class DocumentRecord:
+class DocumentRecord(BaseModel):
     """One document row from /documents/track_status or /documents/paginated.
 
     The fields mirror the v1.5.4 response shape. ``id`` is the
@@ -46,94 +58,86 @@ class DocumentRecord:
     job id (``insert_...`` / ``upload_...``) used for status polling.
     """
 
-    id: str
-    track_id: str
-    status: str
-    file_path: str  # = the file_source passed at ingest
-    chunks_count: int | None
-    content_length: int
-    created_at: str
-    updated_at: str
+    model_config = ConfigDict(frozen=True)
+
+    id: str = ""
+    track_id: str = ""
+    status: DocStatus | str = ""
+    file_path: str = ""
+    chunks_count: int | None = None
+    content_length: int = 0
+    created_at: str = ""
+    updated_at: str = ""
     error_msg: str | None = None
-    metadata: dict[str, Any] = field(default_factory=dict)
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+    @field_validator("content_length", mode="before")
+    @classmethod
+    def _default_none(cls, v: int | None) -> int:
+        return v or 0
+
+    @field_validator("metadata", mode="before")
+    @classmethod
+    def _default_metadata(cls, v: dict[str, Any] | None) -> dict[str, Any]:
+        return v or {}
 
     @property
     def is_terminal(self) -> bool:
         return self.status in TERMINAL_STATUSES
 
     @classmethod
-    def from_dict(cls, doc: dict[str, Any], *, track_id: str | None = None) -> DocumentRecord:
-        """Build a DocumentRecord from a response dict.
-
-        ``track_id`` is passed explicitly when the source doesn't include it
-        (e.g. ``/documents/track_status``); when omitted it is read from
-        ``doc.get("track_id", "")`` (e.g. ``/documents/paginated``).
-        """
-        return cls(
-            id=doc.get("id", ""),
-            track_id=track_id if track_id is not None else doc.get("track_id", ""),
-            status=doc.get("status", ""),
-            file_path=doc.get("file_path", ""),
-            chunks_count=doc.get("chunks_count"),
-            content_length=doc.get("content_length", 0) or 0,
-            created_at=doc.get("created_at", ""),
-            updated_at=doc.get("updated_at", ""),
-            error_msg=doc.get("error_msg"),
-            metadata=doc.get("metadata", {}) or {},
-        )
-
-    @classmethod
     def from_track_doc(cls, track_id: str, doc: dict[str, Any]) -> DocumentRecord:
-        """Build from one element of track_status's documents[] list."""
-        return cls.from_dict(doc, track_id=track_id)
+        """Build from one element of track_status's documents[] list.
+
+        ``track_id`` isn't in the per-doc payload for this endpoint, so it's
+        injected before validation.
+        """
+        return cls.model_validate({**doc, "track_id": track_id})
 
     @classmethod
     def from_list_doc(cls, doc: dict[str, Any]) -> DocumentRecord:
-        """Build from one element of paginated's documents[] list."""
-        return cls.from_dict(doc)
+        """Build from one element of paginated's documents[] list (track_id is present)."""
+        return cls.model_validate(doc)
 
 
-@dataclass
-class IngestResult:
+class IngestResult(BaseModel):
     """Returned by ingest_text / ingest_file / ingest_texts."""
 
-    track_id: str
-    status: str
-    message: str
+    model_config = ConfigDict(frozen=True)
+
+    track_id: str = ""
+    status: str = ""
+    message: str = ""
 
     @classmethod
     def from_response(cls, data: dict[str, Any]) -> IngestResult:
-        return cls(
-            track_id=data.get("track_id", ""),
-            status=data.get("status", ""),
-            message=data.get("message", ""),
-        )
+        return cls.model_validate(data)
 
 
-@dataclass
-class QueryReference:
+class QueryReference(BaseModel):
     """One source document cited in a /query response."""
 
-    file_path: str
+    model_config = ConfigDict(frozen=True)
 
-    @classmethod
-    def from_dict(cls, ref: dict[str, Any]) -> QueryReference:
-        return cls(file_path=ref.get("file_path", ""))
+    file_path: str = ""
 
 
-@dataclass
-class QueryResult:
+class QueryResult(BaseModel):
     """The result of a /query call."""
 
-    response: str
-    references: list[QueryReference] = field(default_factory=list)
+    model_config = ConfigDict(frozen=True)
+
+    response: str = ""
+    references: list[QueryReference] = Field(default_factory=list)
 
     @classmethod
     def from_response(cls, data: dict[str, Any]) -> QueryResult:
         refs_raw = data.get("references") or []
         return cls(
             response=data.get("response", ""),
-            references=[QueryReference.from_dict(r) for r in refs_raw if isinstance(r, dict)],
+            references=[
+                QueryReference.model_validate(r) for r in refs_raw if isinstance(r, dict)
+            ],
         )
 
 

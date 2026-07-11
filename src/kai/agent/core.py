@@ -16,7 +16,7 @@ from llama_index.core.tools import FunctionTool
 from llama_index.core.types import PydanticProgramMode
 from llama_index.llms.openai import utils as _openai_utils
 from llama_index.llms.openai_like import OpenAILike
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 from kai.agent.context import MessageContext
 from kai.agent.goal import GoalManager
@@ -98,6 +98,8 @@ _VALID_ROLES = frozenset(r.value for r in MessageRole)
 class ToolCallRecord(BaseModel):
     """One tool call made by the agent during a turn (side-effecting tools)."""
 
+    model_config = ConfigDict(frozen=True)
+
     name: str
     args: dict
     ok: bool
@@ -130,10 +132,10 @@ class ChatResult(BaseModel):
     invocations recorded during the turn.
     """
 
-    model_config = ConfigDict(arbitrary_types_allowed=True)
+    model_config = ConfigDict(arbitrary_types_allowed=True, frozen=True)
 
     reply: str = ""
-    tool_calls: list[ToolCallRecord] = []
+    tool_calls: list[ToolCallRecord] = Field(default_factory=list)
     action: ActionResult
     error: str | None = None  # None on success; set on timeout/exception/schema failure
 

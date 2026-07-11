@@ -4,7 +4,7 @@ These are distinct from :mod:`kai.bots.waha.config` which holds the
 WAHA *transport* settings (API URL, webhook, whisper, etc.).
 """
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 _DEFAULT_PARTICIPATION_RATE = 0.15
 _DEFAULT_PARTICIPATION_COOLDOWN = 90.0
@@ -12,6 +12,8 @@ _DEFAULT_PARTICIPATION_STREAK_MAX = 2
 
 
 class MediaConfig(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
     image_enabled: bool = True
     stt_enabled: bool = True
     tts_enabled: bool = True
@@ -21,6 +23,8 @@ class MediaConfig(BaseModel):
 
 
 class ParticipationConfig(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
     enabled: bool = True
     rate: float = _DEFAULT_PARTICIPATION_RATE
     cooldown_seconds: float = _DEFAULT_PARTICIPATION_COOLDOWN

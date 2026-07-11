@@ -1,17 +1,31 @@
 import logging
 
-from pydantic import BaseModel, PrivateAttr
+from pydantic import BaseModel, ConfigDict
 
 logger = logging.getLogger(__name__)
 
 
 class Goal(BaseModel):
+    """A clear, operator-set directive the agent should work toward."""
+
+    model_config = ConfigDict(frozen=True)
+
     description: str
 
 
-class GoalManager(BaseModel):
-    _current: Goal | None = PrivateAttr(default=None)
-    _revision: int = PrivateAttr(default=0)
+class GoalManager:
+    """Tracks the current goal and its revision count.
+
+    A plain class (not a ``BaseModel``): it's a stateful service object with
+    only private attributes and methods, never serialized or validated from
+    external data. Using ``BaseModel`` gave it an empty JSON schema and
+    unused ``model_validate``/``model_dump`` methods that implied a
+    serialization boundary that doesn't exist.
+    """
+
+    def __init__(self) -> None:
+        self._current: Goal | None = None
+        self._revision: int = 0
 
     def set_goal(self, description: str) -> Goal:
         self._current = Goal(description=description)

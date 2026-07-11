@@ -15,7 +15,7 @@ import os
 import secrets
 from pathlib import Path
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
 logger = logging.getLogger(__name__)
 
@@ -42,6 +42,8 @@ def pid_alive(pid: int) -> bool:
 
 
 class RunRecord(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
     endpoint: str
     hmac_key: str
     hmac_algorithm: str = "sha512"
