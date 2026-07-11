@@ -135,9 +135,7 @@ class QueryResult(BaseModel):
         refs_raw = data.get("references") or []
         return cls(
             response=data.get("response", ""),
-            references=[
-                QueryReference.model_validate(r) for r in refs_raw if isinstance(r, dict)
-            ],
+            references=[QueryReference.model_validate(r) for r in refs_raw if isinstance(r, dict)],
         )
 
 

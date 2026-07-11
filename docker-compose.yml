@@ -59,12 +59,7 @@ services:
 
   # Brain: one shared LightRAG container for ALL users/Brains. Per-user
   # isolation is via LightRAG's --workspace/WORKSPACE mechanism (kai names
-  # them kai-v001-<sanitized-email>), NOT separate containers. kai talks to
-  # it purely outbound over HTTP (no inbound webhook, unlike WAHA). LLM +
-  # embedding + rerank all go through OpenRouter with a single key. The
-  # embedding model + EMBEDDING_DIM are pinned at first document upload for
-  # the container's lifetime — do not change after documents exist without
-  # clearing ./data/lightrag_storage first.
+  # them kai-v001-<sanitized-email>), NOT separate containers.
   lightrag:
     image: ghcr.io/hkuds/lightrag:v1.5.4
     container_name: lightrag
@@ -130,61 +125,16 @@ services:
   cockpit:
     build: .
     container_name: cockpit
-    # This hostname is what WAHA (on the same docker network) uses to call
-    # back into each spawned bot's webhook listener — see
-    # KAI_WAHA_WEBHOOK_PUBLIC_HOST below. `kai start` subprocesses spawned
-    # by the cockpit run *inside this same container*, so their webhook 
-    # servers are reachable at this hostname too. Do NOT run `kai start waha`
-    # from the host — it would bind outside this docker network and WAHA 
-    # could never reach its webhook.
     hostname: cockpit
     restart: unless-stopped
-    # `kai` resolves to the console script installed in the image venv
-    # (PATH set via Dockerfile). No `uv run` wrapper — the package is
-    # already installed, so wrapping would only add per-spawn re-resolution
-    # overhead. The entrypoint.sh ensures /app/data (and its configs/cockpit
-    # subdir) exist before the server starts.
     command: kai cockpit serve --host 0.0.0.0 --port 8080
     ports:
       - "8080:8080"
     volumes:
-      # All kai state lives under one data root: cockpit.db, per-bot
-      # task/sleep/seen/history files, and the cockpit-managed bot config
-      # files (data/configs/cockpit/<dep>.json, pointed at by
-      # KAI_CONFIGS_DIR). No separate configs/ volume.
       - ./data/kai:/app/data
-      # `kai vendors install <name>` (src/kai/vendors/manager.py) resolves
-      # the project root to /app and writes binaries/venvs to /app/vendor/
-      # and models to /app/models/ — mount these so installed vendors
-      # survive container recreation/image rebuilds instead of being lost.
       - ./data/vendor:/app/vendor
       - ./data/models:/app/models
     env_file: .env
-    environment:
-      TZ: ${TZ}
-      KAI_COCKPIT_DB: sqlite:///data/cockpit.db
-      KAI_COCKPIT_SECRET: ${KAI_COCKPIT_SECRET}
-      # Cockpit-managed bot configs live inside the data volume (no separate
-      # configs/ mount): /app/data/configs/cockpit/<dep>.json.
-      KAI_CONFIGS_DIR: data/configs/cockpit
-      # Public base URL the cockpit uses when minting magic-link emails. For
-      # local dev this is the host-mapped port; in production set it to the
-      # real public hostname (e.g. https://eu.kai.example.com).
-      KAI_COCKPIT_PUBLIC_URL: ${KAI_COCKPIT_PUBLIC_URL:-http://localhost:8080}
-      # In-network service name, not a host IP/public address — WAHA and
-      # the cockpit share this compose network.
-      KAI_WAHA_URL: http://waha:3000
-      KAI_WAHA_API_KEY: ${WAHA_API_KEY}
-      KAI_WAHA_HMAC_KEY: ${KAI_HMAC_KEY}
-      KAI_WAHA_WEBHOOK_PUBLIC_HOST: cockpit
-      KAI_COCKPIT_WEBHOOK_PORT_RANGE: ${KAI_COCKPIT_WEBHOOK_PORT_RANGE}
-      # Outbound email (SMTP). Defaults to the local Mailpit dev relay.
-      KAI_SMTP_HOST: ${KAI_SMTP_HOST:-mailpit}
-      KAI_SMTP_PORT: ${KAI_SMTP_PORT:-1025}
-      KAI_SMTP_FROM: ${KAI_SMTP_FROM:-support@meetk.ai}
-      KAI_SMTP_USER: ${KAI_SMTP_USER:-}
-      KAI_SMTP_PASSWORD: ${KAI_SMTP_PASSWORD:-}
-      # KAI_LLM_* / KAI_AGENT_* come from env_file: .env
     depends_on:
       - waha
       - mailpit

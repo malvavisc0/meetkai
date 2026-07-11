@@ -23,7 +23,7 @@ from kai.vendors.manager import Vendor, VendorResult
 
 logger = logging.getLogger(__name__)
 
-WHISPER_VERSION = os.environ.get("WHISPER_VERSION", "v1.8.6")
+WHISPER_VERSION = os.environ.get("WHISPER_VERSION", "master")
 _REPO_URL = "https://github.com/ggml-org/whisper.cpp.git"
 
 # Language -> model size. Matches the shell script's resolve_model_size.

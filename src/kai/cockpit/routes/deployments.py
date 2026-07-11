@@ -44,9 +44,7 @@ _TOOLS_WITH_INSTRUCTION = frozenset({"database", "smtp"})
 _HOME_REDIRECT = RedirectResponse("/console", status_code=302)
 
 
-def _build_tools_update(
-    supported_svcs: list[str], form_fields: dict
-) -> dict[str, bool | dict]:
+def _build_tools_update(supported_svcs: list[str], form_fields: dict) -> dict[str, bool | dict]:
     """Build the ``settings["tools"]`` dict from the submitted form.
 
     Simple toggles store a bool. Tools with an instruction (database) store

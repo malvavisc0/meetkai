@@ -1,8 +1,4 @@
-"""Shared connections service — WAHA QR connect/disconnect + Connection CRUD.
-
-Account-level integration management. v1: WhatsApp only. Future: github,
-telegram, etc. Used by both CLI and web routes.
-"""
+"""Shared connections service"""
 
 from __future__ import annotations
 
@@ -56,7 +52,7 @@ class ConnectionsService:
             return conn
 
         session_name = user_slug(user.kai_slug)
-        port_range = os.environ.get("KAI_COCKPIT_WEBHOOK_PORT_RANGE", "8100-8199")
+        port_range = os.environ.get("KAI_WAHA_WEBHOOK_PORT_RANGE", "8100-8199")
         parts = port_range.split("-")
         lo = int(parts[0])
         hi = int(parts[1]) if len(parts) > 1 else lo + 100

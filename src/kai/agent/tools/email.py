@@ -181,8 +181,6 @@ def register_email_tool(
     tool and appends a workflow instruction block to the system prompt.
     No persistent resource to return (smtplib connections are short-lived).
     """
-    tool = make_send_email_tool(
-        host, int(port), username, password, from_address, use_tls=use_tls
-    )
+    tool = make_send_email_tool(host, int(port), username, password, from_address, use_tls=use_tls)
     agent.register_tool(tool)
     agent.set_tool_workflow(build_email_workflow_instruction(instruction))

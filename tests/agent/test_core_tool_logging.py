@@ -30,7 +30,7 @@ class TestToolResultLogFormat:
         assert "16" in log_line  # len("Error: bad query")
 
     def test_empty_result(self):
-        log_line = f"Tool result: web_search -> ok (0 chars)"
+        log_line = "Tool result: web_search -> ok (0 chars)"
         assert "0" in log_line
         assert "web_search" in log_line
         assert "ok" in log_line

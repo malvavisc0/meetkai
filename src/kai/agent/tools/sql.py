@@ -206,10 +206,7 @@ def make_sql_query_tool(
                 rows = rows[:row_limit]
                 cols = list(result.keys())
                 out = [
-                    {
-                        col: _omit_large_cell(val)
-                        for col, val in zip(cols, row, strict=False)
-                    }
+                    {col: _omit_large_cell(val) for col, val in zip(cols, row, strict=False)}
                     for row in rows
                 ]
             text = json.dumps(out, default=str)

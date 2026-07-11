@@ -515,9 +515,7 @@ class DeploymentsService:
             # produce a ghost instruction the bot will silently ignore.
             svc_vars = SERVICE_ENV_VARS.get(service, {})
             instr_var = svc_vars.get("instruction")
-            if instr_var and any(
-                ev in env for ev in svc_vars.get("fields", {}).values()
-            ):
+            if instr_var and any(ev in env for ev in svc_vars.get("fields", {}).values()):
                 env[instr_var] = _tool_instruction(tools_cfg.get(service))
 
         proc = subprocess.Popen(

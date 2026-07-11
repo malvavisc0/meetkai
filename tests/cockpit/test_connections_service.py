@@ -43,13 +43,13 @@ class TestLazyConnectionCreation:
 
 class TestPortAllocation:
     def test_allocates_from_range(self, db, user, monkeypatch):
-        monkeypatch.setenv("KAI_COCKPIT_WEBHOOK_PORT_RANGE", "9000-9002")
+        monkeypatch.setenv("KAI_WAHA_WEBHOOK_PORT_RANGE", "9000-9002")
         svc = ConnectionsService(db)
         conn = svc.get_or_create_whatsapp(user)
         assert 9000 <= conn.config["waha_webhook_port"] <= 9002
 
     def test_skips_used_ports(self, db, user, monkeypatch):
-        monkeypatch.setenv("KAI_COCKPIT_WEBHOOK_PORT_RANGE", "9000-9002")
+        monkeypatch.setenv("KAI_WAHA_WEBHOOK_PORT_RANGE", "9000-9002")
         db.add(
             Connection(
                 user_id=999,
@@ -65,7 +65,7 @@ class TestPortAllocation:
         assert conn.config["waha_webhook_port"] == 9001
 
     def test_raises_when_range_exhausted(self, db, user, monkeypatch):
-        monkeypatch.setenv("KAI_COCKPIT_WEBHOOK_PORT_RANGE", "9000-9000")
+        monkeypatch.setenv("KAI_WAHA_WEBHOOK_PORT_RANGE", "9000-9000")
         db.add(
             Connection(
                 user_id=999,

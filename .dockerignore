@@ -13,3 +13,4 @@ tests/
 docs/
 .claude/
 .kilo/
+.env.example
