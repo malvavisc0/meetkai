@@ -188,3 +188,5 @@ services:
     depends_on:
       - waha
       - mailpit
+      - crawl4ai
+      - lightrag

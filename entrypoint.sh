@@ -16,4 +16,18 @@ set -e
 
 mkdir -p /app/data/configs/cockpit /app/data/logs
 
+# Idempotent: each vendor's install() checks for its binary/model first and
+# skips the build/download when already present (see
+# src/kai/vendors/manager.py), so this is a fast no-op on every boot after
+# the first. First boot on a fresh ./data/vendor + ./data/models actually
+# builds whisper.cpp and downloads the whisper/kokoro models — this can take
+# a few minutes and needs network access to GitHub + Hugging Face.
+#
+# A failure here (e.g. no network, missing build deps) is fatal by design:
+# `set -e` means the container exits non-zero instead of the cockpit coming
+# up in a degraded state where every bot start fails with a delayed,
+# less-obvious "media services not ready" timeout. Fail loudly here, at
+# boot, where `docker compose logs cockpit` shows exactly why.
+kai vendors install all
+
 exec "$@"
