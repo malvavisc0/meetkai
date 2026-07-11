@@ -39,11 +39,7 @@ class ConnectionsService:
         (``get_whatsapp``, ``get_brain``, future ``get_database``) stay as
         the bespoke read path for a single known service.
         """
-        return (
-            self.db.query(Connection)
-            .filter(Connection.user_id == user.id)
-            .all()
-        )
+        return self.db.query(Connection).filter(Connection.user_id == user.id).all()
 
     def get_whatsapp(self, user: User) -> Connection | None:
         """Get the user's WhatsApp connection row, or None."""

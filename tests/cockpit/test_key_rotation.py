@@ -80,8 +80,15 @@ class TestRotateCredentialKey:
             user.id,
             "smtp",
             encrypt_config(
-                "smtp", {"host": "h", "port": 587, "username": "u", "password": "pw",
-                          "from_address": "a@b.c", "use_tls": True}
+                "smtp",
+                {
+                    "host": "h",
+                    "port": 587,
+                    "username": "u",
+                    "password": "pw",
+                    "from_address": "a@b.c",
+                    "use_tls": True,
+                },
             ),
         )
         db.add(db_conn)
@@ -103,9 +110,7 @@ class TestUpdateEnvFile:
     def test_rewrites_existing_line(self, tmp_path):
         env_path = tmp_path / ".env"
         env_path.write_text(
-            "KAI_CREDENTIAL_ENCRYPTION_KEY=abc\n"
-            "KAI_CREDENTIAL_KEY_VERSION=v1\n"
-            "OTHER=val\n",
+            "KAI_CREDENTIAL_ENCRYPTION_KEY=abc\nKAI_CREDENTIAL_KEY_VERSION=v1\nOTHER=val\n",
             encoding="utf-8",
         )
 

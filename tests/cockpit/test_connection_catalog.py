@@ -135,7 +135,6 @@ class TestStartGate(_StartBase):
         fake_bt = BotType(
             name="multi",
             feature_flags=[],
-            settings=[],
             required_connections=["whatsapp", "email"],
             supported_connections=[],
         )
@@ -189,9 +188,7 @@ class TestSupportedInjectionLoop(_StartBase):
         self._run_start(svc, dep, monkeypatch, tmp_path, user)
         assert called == []
 
-    def test_toggle_on_but_connection_absent_skips_injection(
-        self, db, user, monkeypatch, tmp_path
-    ):
+    def test_toggle_on_but_connection_absent_skips_injection(self, db, user, monkeypatch, tmp_path):
         """Enabling tool_database with no database Connection row is stored
         intent, not an executed grant — start() skips injection (no
         NotImplementedError)."""
@@ -208,9 +205,7 @@ class TestSupportedInjectionLoop(_StartBase):
 
         self._run_start(svc, dep, monkeypatch, tmp_path, user)
 
-    def test_toggle_on_and_connection_present_calls_injector(
-        self, db, user, monkeypatch, tmp_path
-    ):
+    def test_toggle_on_and_connection_present_calls_injector(self, db, user, monkeypatch, tmp_path):
         """When both the toggle is on and the Connection row exists, the
         injector is called — the stub raises NotImplementedError (the single
         site Fixes 05/06 fill in)."""

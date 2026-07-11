@@ -11,7 +11,6 @@ from dataclasses import dataclass, field
 class BotType:
     name: str
     feature_flags: list[str]
-    settings: list[str]
     required_settings: list[str] = field(default_factory=list)
     description: str = ""
     default_goal: str = ""
@@ -30,18 +29,6 @@ BOT_TYPES: dict[str, BotType] = {
     "waha": BotType(
         name="waha",
         feature_flags=["image", "stt", "tts", "video"],
-        settings=[
-            "whitelist",
-            "blacklist",
-            "language",
-            "trigger_keyword",
-            "mentions_enabled",
-            "timezone",
-            "participation.enabled",
-            "participation.rate",
-            "participation.cooldown_seconds",
-            "participation.streak_max",
-        ],
         required_settings=["language"],
         description=(
             "WhatsApp Bot. Replies in chats and groups and can proactively "

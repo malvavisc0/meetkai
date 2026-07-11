@@ -48,13 +48,18 @@ class Deployment(Base):
     language: Mapped[str] = mapped_column(String, nullable=False)
     feature_flags: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
     settings: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
+    # Per-deployment Brain overrides, both nullable. `brain_mandatory=None`
+    # behaves the same as `False` (Brain available, not forced).
+    # `brain_instruction=None` means: use the Brain connection's own
+    # instruction text instead of a per-deployment override. Actually
+    # applied in DeploymentsService.start(), not here.
+    brain_mandatory: Mapped[bool | None] = mapped_column(Boolean, nullable=True, default=None)
+    brain_instruction: Mapped[str | None] = mapped_column(String, nullable=True, default=None)
     # True when settings were edited while the bot was running, so the live
     # process has stale config in memory and a restart is needed to apply
     # the on-disk config. Set in DeploymentsService.edit() when running,
     # cleared in start()/stop(). Persists across reloads/sessions (unlike
     # the prior session-flash signal, which was lost on reload).
-    brain_mandatory: Mapped[bool | None] = mapped_column(Boolean, nullable=True, default=None)
-    brain_instruction: Mapped[str | None] = mapped_column(String, nullable=True, default=None)
     needs_restart: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     created_at: Mapped[str] = mapped_column(String, nullable=False)
     updated_at: Mapped[str] = mapped_column(String, nullable=False)

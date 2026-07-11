@@ -50,11 +50,7 @@ def rotate_credential_key(db: Session) -> tuple[str, bool]:
     _clear_key_cache()
 
     reencrypted = 0
-    for conn in (
-        db.query(Connection)
-        .filter(Connection.service.in_(list(CREDENTIAL_TYPES)))
-        .all()
-    ):
+    for conn in db.query(Connection).filter(Connection.service.in_(list(CREDENTIAL_TYPES))).all():
         plaintext_config = decrypt_config(conn.service, conn.config)
         conn.config = encrypt_config(conn.service, plaintext_config)
         reencrypted += 1
@@ -64,7 +60,9 @@ def rotate_credential_key(db: Session) -> tuple[str, bool]:
 
     logger.info(
         "Credential key rotated: %s -> %s (%d connections re-encrypted)",
-        current_version, new_version, reencrypted,
+        current_version,
+        new_version,
+        reencrypted,
     )
     return new_version, env_written
 

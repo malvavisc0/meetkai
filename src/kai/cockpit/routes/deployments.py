@@ -256,19 +256,13 @@ async def deployment_settings_page(
     # per supported connection that isn't required (required ones are always
     # on, no toggle). Each is disabled when the connection doesn't exist yet
     # — the toggle is stored intent, not an executed grant.
-    available_conns = {
-        c.service for c in ConnectionsService(db).list_for_user(user)
-    }
+    available_conns = {c.service for c in ConnectionsService(db).list_for_user(user)}
     supported_tools: list[tuple[str, str, bool]] = []
     if bt:
         for svc in bt.supported_connections:
             if svc in bt.required_connections:
                 continue
-            label = (
-                CREDENTIAL_TYPES[svc].label
-                if svc in CREDENTIAL_TYPES
-                else svc.capitalize()
-            )
+            label = CREDENTIAL_TYPES[svc].label if svc in CREDENTIAL_TYPES else svc.capitalize()
             supported_tools.append((svc, label, svc in available_conns))
     tools_enabled = dep.settings.get("tools", {})
 
@@ -579,8 +573,7 @@ async def deployment_settings(
             requested = f"feature_{flag}" in form_fields
             feature_flags[flag] = bool(requested and flag in entitlements)
         supported_svcs = [
-            svc for svc in bt.supported_connections
-            if svc not in bt.required_connections
+            svc for svc in bt.supported_connections if svc not in bt.required_connections
         ]
 
     settings_update = {

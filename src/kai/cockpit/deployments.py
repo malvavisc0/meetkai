@@ -362,9 +362,7 @@ class DeploymentsService:
             env["KAI_WAHA_HMAC_KEY"] = user.hmac_key
             env["KAI_WAHA_WEBHOOK_PORT"] = str(conn.config["waha_webhook_port"])
             env["KAI_WAHA_WEBHOOK_HOST"] = "0.0.0.0"
-            env["KAI_WAHA_WEBHOOK_PUBLIC_HOST"] = os.environ.get(
-                "KAI_WAHA_WEBHOOK_PUBLIC_HOST", ""
-            )
+            env["KAI_WAHA_WEBHOOK_PUBLIC_HOST"] = os.environ.get("KAI_WAHA_WEBHOOK_PUBLIC_HOST", "")
             env["KAI_WAHA_WEBHOOK_PATH"] = conn.config["waha_webhook_path"]
             env["KAI_WAHA_WHISPER_SERVER_HOST"] = os.environ.get(
                 "KAI_WAHA_WHISPER_SERVER_HOST", "127.0.0.1"
