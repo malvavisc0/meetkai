@@ -1451,6 +1451,15 @@
     margin-bottom: 0;
   }
 
+  /* A .field__help directly after a .field-grid is a group-level note about
+     the whole set of fields (e.g. the voice-note fields under
+     Participation), not a per-field caption. Give it the standard
+     field-to-field gap instead of the tighter field-to-caption gap so it
+     doesn't look glued to the row above. */
+  .field-grid + .field__help {
+    margin-top: var(--space-sm);
+  }
+
   @media (max-width: 640px) {
     .field-grid {
       grid-template-columns: 1fr;

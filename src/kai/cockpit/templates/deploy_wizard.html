@@ -32,7 +32,7 @@
     <div class="field">
       <label class="field__label" for="goal">What should this bot do?</label>
       <textarea id="goal" name="goal" rows="4" required data-autosize {% if missing_connections %}disabled{% endif %}>{{ goal or "" }}</textarea>
-      <p class="field__help">A working starting point is filled in — edit it so it fits your situation, or leave it. KAI follows whatever you write here.</p>
+      <p class="field__help">A working starting point is filled in — edit it so it fits your situation, or leave it. kAI follows whatever you write here.</p>
     </div>
 
     <div class="field field--narrow">
@@ -54,7 +54,7 @@
           <option value="{{ v }}" {% if v == voice %}selected{% endif %}>{{ v }}</option>
         {% endfor %}
       </select>
-      <p class="field__help">Picked from the language. Used when KAI sends voice notes.</p>
+      <p class="field__help">Picked from the language. Used when kAI sends voice notes.</p>
     </div>
 
     <div class="cluster">

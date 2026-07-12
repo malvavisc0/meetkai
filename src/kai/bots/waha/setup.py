@@ -10,6 +10,9 @@ _DEFAULT_PARTICIPATION_RATE = 0.15
 _DEFAULT_PARTICIPATION_COOLDOWN = 90
 _DEFAULT_PARTICIPATION_STREAK_MAX = 2
 
+_DEFAULT_VOICE_NOTE_RATE = 0.25
+_DEFAULT_VOICE_NOTE_COOLDOWN = 300
+
 
 class MediaConfig(BaseModel):
     model_config = ConfigDict(frozen=True)
@@ -29,6 +32,8 @@ class ParticipationConfig(BaseModel):
     rate: float = _DEFAULT_PARTICIPATION_RATE
     cooldown_seconds: int = _DEFAULT_PARTICIPATION_COOLDOWN
     streak_max: int = _DEFAULT_PARTICIPATION_STREAK_MAX
+    voice_note_rate: float = _DEFAULT_VOICE_NOTE_RATE
+    voice_note_cooldown: int = _DEFAULT_VOICE_NOTE_COOLDOWN
 
 
 class BotConfig(BaseModel):

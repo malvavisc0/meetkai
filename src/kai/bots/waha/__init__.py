@@ -31,12 +31,15 @@ from kai.bots.waha.processing import (
     looks_like_base64_media,
     post_process,
     should_organically_participate,
+    should_send_voice_followup,
 )
 from kai.bots.waha.seen_store import SeenStore
 from kai.bots.waha.setup import (
     _DEFAULT_PARTICIPATION_COOLDOWN,
     _DEFAULT_PARTICIPATION_RATE,
     _DEFAULT_PARTICIPATION_STREAK_MAX,
+    _DEFAULT_VOICE_NOTE_COOLDOWN,
+    _DEFAULT_VOICE_NOTE_RATE,
     BotConfig,
     MediaConfig,
     ParticipationConfig,
@@ -162,6 +165,7 @@ class Bot(BaseBot):
         self._sleep_store: SleepStore | None = None
         self._last_reply_at: dict[str, float] = {}
         self._consecutive_replies: dict[str, int] = {}
+        self._last_voice_at: dict[str, float] = {}
         self._server: uvicorn.Server | None = None
         self._shutting_down = asyncio.Event()
         self._stt: STTProvider | None = None
@@ -280,6 +284,10 @@ class Bot(BaseBot):
                     "cooldown_seconds", _DEFAULT_PARTICIPATION_COOLDOWN
                 ),
                 streak_max=participation_data.get("streak_max", _DEFAULT_PARTICIPATION_STREAK_MAX),
+                voice_note_rate=participation_data.get("voice_note_rate", _DEFAULT_VOICE_NOTE_RATE),
+                voice_note_cooldown=participation_data.get(
+                    "voice_note_cooldown", _DEFAULT_VOICE_NOTE_COOLDOWN
+                ),
             ),
         )
 
@@ -1082,16 +1090,38 @@ class Bot(BaseBot):
         # origin conversation. Voice notes fall back to text when TTS is
         # unavailable or synthesis fails.
         reply = self._post_process(action.text or "")
+        voice_already_attempted = False
         if kind == "send_voice_note":
             console.print(f"[green]>[/green]  {reply}  [dim](voice)[/dim]")
             sent = await self._send_voice_reply(meta.chat_id, reply)
             if sent:
                 self._mark_replied(meta.chat_id)
+                self._last_voice_at[meta.chat_id] = time.monotonic()
                 return
             logger.info("Voice reply fell back to text for %s", meta.chat_id)
+            voice_already_attempted = True
         console.print(f"[green]>[/green]  {reply}")
         await self._send_reply(meta, roster, reply)
         self._mark_replied(meta.chat_id)
+        if not voice_already_attempted:
+            await self._maybe_send_voice_followup(meta.chat_id, reply)
+
+    async def _maybe_send_voice_followup(self, chat_id: str, text: str) -> None:
+        """After a text reply lands, sometimes echo it as a voice note.
+
+        The LLM rarely picks ``send_voice_note`` on its own, so this gives
+        the feature a probabilistic floor: a fraction of text replies get
+        an audio follow-up, gated by TTS availability and a per-chat
+        cooldown so it never spams. Failures are silent — the text already
+        went out, so a voice miss costs nothing.
+        """
+        if not self._voice_enabled():
+            return
+        if not self._should_send_voice_followup(chat_id):
+            return
+        sent = await self._send_voice_reply(chat_id, text)
+        if sent:
+            self._last_voice_at[chat_id] = time.monotonic()
 
     async def _handle_sleep_mode(
         self,
@@ -1674,15 +1704,19 @@ class Bot(BaseBot):
         clean = strip_mention_markup(text).strip()
         if not clean or len(clean) > self._waha.kokoro_max_chars:
             return False
-        audio = await asyncio.to_thread(
-            synthesize,
-            text=clean,
-            host=self._waha.kokoro_server_host,
-            port=self._waha.kokoro_server_port,
-            voice=self._tts_voice,
-            lang=self._tts_lang,
-            speed=self._waha.kokoro_speed,
-        )
+        try:
+            audio = await asyncio.to_thread(
+                synthesize,
+                text=clean,
+                host=self._waha.kokoro_server_host,
+                port=self._waha.kokoro_server_port,
+                voice=self._tts_voice,
+                lang=self._tts_lang,
+                speed=self._waha.kokoro_speed,
+            )
+        except Exception as exc:
+            logger.warning("Voice synthesis failed, falling back to text: %s", exc)
+            return False
         if audio is None:
             return False
         async with self._waha_client_ctx() as client:
@@ -1841,6 +1875,16 @@ class Bot(BaseBot):
             participation_cfg=self._config.participation,
             last_reply_at=self._last_reply_at,
             consecutive_replies=self._consecutive_replies,
+        )
+
+    def _should_send_voice_followup(self, chat_id: str) -> bool:
+        """Delegate to the extracted voice-followup probability check."""
+        cfg = self._config.participation
+        return should_send_voice_followup(
+            chat_id,
+            voice_note_rate=cfg.voice_note_rate,
+            voice_note_cooldown=cfg.voice_note_cooldown,
+            last_voice_at=self._last_voice_at,
         )
 
     def _post_process(self, reply: str) -> str:

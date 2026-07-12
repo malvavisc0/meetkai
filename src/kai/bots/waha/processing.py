@@ -197,3 +197,25 @@ def should_organically_participate(
     if "?" in text:
         base = min(base + 0.2, 1.0)
     return random.random() < base
+
+
+def should_send_voice_followup(
+    chat_id: str,
+    *,
+    voice_note_rate: float,
+    voice_note_cooldown: int,
+    last_voice_at: dict[str, float],
+) -> bool:
+    """Decide whether to follow up a text reply with a voice note.
+
+    Pure probability roll guarded by a per-chat cooldown so the bot
+    doesn't spam voice notes. The LLM rarely picks ``send_voice_note``
+    on its own, so this gives the feature a floor: a fraction of text
+    replies get an audio echo regardless of the model's preference.
+    """
+    if voice_note_rate <= 0:
+        return False
+    now = time.monotonic()
+    if now - last_voice_at.get(chat_id, 0.0) < voice_note_cooldown:
+        return False
+    return random.random() < voice_note_rate

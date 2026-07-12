@@ -119,6 +119,16 @@ No fifth button variant is introduced without updating this table first.
 - `.field-grid` groups related compact fields (e.g. `Language`/`Voice`/
   `Timezone`) in a responsive grid that collapses to one column below tablet
   width. `Goal` stays full-width above the grid as the dominant field.
+- A group of related compact fields is always one flat `.field-grid`, even
+  when some fields are conceptually a sub-group (e.g. the voice-note fields
+  under Participation). Splitting a field group into nested/sibling
+  `.field-grid`s makes their column widths drift apart because each grid
+  computes its own column count independently; a shared help line for the
+  sub-group goes below the fields it describes, not nested around its own
+  grid. That trailing note uses the standard field-to-field gap
+  (`var(--space-sm)`, via `.field-grid + .field__help`), not the tighter
+  field-to-caption gap, since it describes the whole row of fields rather
+  than captioning a single one.
 - Labels sit immediately above their control; help text sits immediately
   below. Placeholder text is never used as a label substitute.
 - `input[type="file"]` is never shown in its native form. It is visually
@@ -155,6 +165,7 @@ No fifth button variant is introduced without updating this table first.
 | `.cluster--between` | Pins a cluster's children to opposite ends (card title + status badge, card title + action) |
 | `.field--narrow input, .field--narrow select` | Narrow width covers selects, not just inputs |
 | `.field-grid` / `.field-grid .field` | Responsive compact field group |
+| `.field-grid + .field__help` | Group-level help note after a field-grid uses the field-to-field gap, not the tighter field-to-caption gap |
 | `.search-field` | Leading-icon wrapper for `input[type="search"]` |
 | `.upload-control` / `.upload-control__filename` | Styled file upload affordance |
 | `.chat-picker__row:hover` / `:focus-within` | Interactive row states |

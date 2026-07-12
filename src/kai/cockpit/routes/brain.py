@@ -91,7 +91,7 @@ async def brains_upload(
         if not file.filename:
             raise ValueError("No file selected.")
         await svc.ingest_file(user, filename=file.filename, file=file.file)
-        request.session["flash"] = f"Uploaded {file.filename}. KAI is adding it to the Brain."
+        request.session["flash"] = f"Uploaded {file.filename}. kAI is adding it to the Brain."
     except ValueError as exc:
         request.session["flash"] = str(exc)
     except Exception as exc:
@@ -112,7 +112,7 @@ async def brains_ingest_url(
         if not url:
             raise ValueError("URL is required.")
         result = await svc.ingest_url(user, url=url)
-        request.session["flash"] = f"Added {url}. KAI is saving it to the Brain. ({result.message})"
+        request.session["flash"] = f"Added {url}. kAI is saving it to the Brain. ({result.message})"
     except ValueError as exc:
         request.session["flash"] = str(exc)
     except Exception as exc:
@@ -137,7 +137,7 @@ async def brains_ingest_text(
         if not text:
             raise ValueError("Text is required.")
         await svc.ingest_text(user, name=name, text=text)
-        request.session["flash"] = f"Added {name}. KAI is saving it to the Brain."
+        request.session["flash"] = f"Added {name}. kAI is saving it to the Brain."
     except ValueError as exc:
         request.session["flash"] = str(exc)
     except Exception as exc:

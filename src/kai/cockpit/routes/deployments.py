@@ -620,6 +620,8 @@ async def deployment_settings(
     participation_rate: float = Form(0.15),
     participation_cooldown: int = Form(90),
     participation_streak_max: int = Form(2),
+    voice_note_rate: float = Form(0.25),
+    voice_note_cooldown: int = Form(300),
     brain_mandatory: str = Form(""),
     brain_instruction: str = Form(""),
     user: User = Depends(require_user),
@@ -661,6 +663,8 @@ async def deployment_settings(
             "rate": participation_rate,
             "cooldown_seconds": participation_cooldown,
             "streak_max": participation_streak_max,
+            "voice_note_rate": voice_note_rate,
+            "voice_note_cooldown": voice_note_cooldown,
         },
         # Per-deployment enable of supported connections. A checkbox the UI
         # disabled (connection doesn't exist yet) can still be crafted in a

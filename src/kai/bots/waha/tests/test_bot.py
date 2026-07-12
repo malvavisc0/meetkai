@@ -14,6 +14,7 @@ from kai.bots.waha.actions import (
     WahaNoSilentNoVoiceAction,
 )
 from kai.bots.waha.history import register_chat_history_tool
+from kai.bots.waha.processing import should_send_voice_followup
 from kai.bots.waha.seen_store import SeenStore
 from kai.bots.waha.sleep_store import SleepStore
 
@@ -83,7 +84,7 @@ class TestShouldRespond:
 
     def test_case_insensitive_keyword(self):
         bot = _make_bot(BotConfig(trigger_keyword="kai"))
-        assert bot._should_respond("Hey KAI", is_group=True, mentions_bot=False) is True
+        assert bot._should_respond("Hey kAI", is_group=True, mentions_bot=False) is True
 
     def test_empty_keyword_responds_to_all_group_messages(self):
         bot = _make_bot(BotConfig(trigger_keyword=""))
@@ -1227,6 +1228,153 @@ class TestOrganicParticipation:
 
         agent.chat.assert_not_awaited()
         agent.observe.assert_awaited()
+
+
+class TestShouldSendVoiceFollowup:
+    """Pure-function tests for the extracted voice-followup probability check."""
+
+    def test_zero_rate_never_offers(self):
+        assert (
+            should_send_voice_followup(
+                "g@g.us", voice_note_rate=0.0, voice_note_cooldown=0, last_voice_at={}
+            )
+            is False
+        )
+
+    def test_cooldown_blocks_offer(self):
+        import time as _time
+
+        last_voice_at = {"g@g.us": _time.monotonic()}
+        assert (
+            should_send_voice_followup(
+                "g@g.us",
+                voice_note_rate=1.0,
+                voice_note_cooldown=300,
+                last_voice_at=last_voice_at,
+            )
+            is False
+        )
+
+    def test_cooldown_elapsed_allows_offer(self, monkeypatch):
+        import time as _time
+
+        last_voice_at = {"g@g.us": _time.monotonic() - 301.0}
+        monkeypatch.setattr("random.random", lambda: 0.5)
+        assert (
+            should_send_voice_followup(
+                "g@g.us",
+                voice_note_rate=1.0,
+                voice_note_cooldown=300,
+                last_voice_at=last_voice_at,
+            )
+            is True
+        )
+
+    def test_never_offered_chat_ignores_cooldown(self, monkeypatch):
+        monkeypatch.setattr("random.random", lambda: 0.5)
+        assert (
+            should_send_voice_followup(
+                "new@g.us", voice_note_rate=1.0, voice_note_cooldown=300, last_voice_at={}
+            )
+            is True
+        )
+
+
+class TestVoiceFollowup:
+    """Bot-level tests for the probabilistic voice-note echo after a text reply."""
+
+    def _dm_payload(self, body: str = "hello") -> dict:
+        return {
+            "event": "message",
+            "payload": {
+                "id": "dm1",
+                "from": "123@c.us",
+                "body": body,
+                "type": "chat",
+                "_data": {"notifyName": "Friend"},
+            },
+        }
+
+    def _voice_ready_bot(self, *, voice_note_rate: float, voice_note_cooldown: int = 0) -> Bot:
+        bot = _make_bot(
+            BotConfig(
+                trigger_keyword="kai",
+                participation=ParticipationConfig(
+                    voice_note_rate=voice_note_rate, voice_note_cooldown=voice_note_cooldown
+                ),
+            )
+        )
+        bot._waha = MagicMock()
+        bot._waha.kokoro_enabled = True
+        bot._tts_available = True
+        bot._send_with_retry = AsyncMock()
+        return bot
+
+    @pytest.mark.asyncio
+    async def test_text_reply_gets_voice_followup_when_offered(self, monkeypatch):
+        bot = self._voice_ready_bot(voice_note_rate=1.0)
+        bot._send_voice_reply = AsyncMock(return_value=True)
+        agent = MagicMock()
+        agent.chat = AsyncMock(return_value=_chat_result("hi there"))
+        agent.observe = AsyncMock()
+        bot._agent = agent
+        monkeypatch.setattr("random.random", lambda: 0.0)
+
+        await bot._handle_message(self._dm_payload())
+
+        bot._send_with_retry.assert_awaited_once()
+        bot._send_voice_reply.assert_awaited_once_with("123@c.us", "hi there")
+        assert "123@c.us" in bot._last_voice_at
+
+    @pytest.mark.asyncio
+    async def test_text_reply_skips_voice_followup_when_tts_unavailable(self, monkeypatch):
+        bot = self._voice_ready_bot(voice_note_rate=1.0)
+        bot._tts_available = False
+        bot._send_voice_reply = AsyncMock(return_value=True)
+        agent = MagicMock()
+        agent.chat = AsyncMock(return_value=_chat_result("hi there"))
+        agent.observe = AsyncMock()
+        bot._agent = agent
+        monkeypatch.setattr("random.random", lambda: 0.0)
+
+        await bot._handle_message(self._dm_payload())
+
+        bot._send_with_retry.assert_awaited_once()
+        bot._send_voice_reply.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_text_reply_skips_voice_followup_when_rate_zero(self, monkeypatch):
+        bot = self._voice_ready_bot(voice_note_rate=0.0)
+        bot._send_voice_reply = AsyncMock(return_value=True)
+        agent = MagicMock()
+        agent.chat = AsyncMock(return_value=_chat_result("hi there"))
+        agent.observe = AsyncMock()
+        bot._agent = agent
+        monkeypatch.setattr("random.random", lambda: 0.0)
+
+        await bot._handle_message(self._dm_payload())
+
+        bot._send_voice_reply.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_failed_voice_note_falls_back_to_text_without_retrying_followup(
+        self, monkeypatch
+    ):
+        # When the model's own send_voice_note fails, the turn already falls
+        # back to text. The probabilistic followup must not fire again for
+        # the same reply — that would just retry the same failing synthesis.
+        bot = self._voice_ready_bot(voice_note_rate=1.0)
+        bot._send_voice_reply = AsyncMock(return_value=False)
+        agent = MagicMock()
+        agent.chat = AsyncMock(return_value=_chat_result("hi there", action="send_voice_note"))
+        agent.observe = AsyncMock()
+        bot._agent = agent
+        monkeypatch.setattr("random.random", lambda: 0.0)
+
+        await bot._handle_message(self._dm_payload())
+
+        bot._send_with_retry.assert_awaited_once()
+        bot._send_voice_reply.assert_awaited_once_with("123@c.us", "hi there")
 
 
 class TestGroupRosterRefresh:

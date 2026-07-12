@@ -20,7 +20,7 @@
       <div class="field">
         <label class="field__label" for="goal">Goal *</label>
         <textarea id="goal" name="goal" rows="3" required data-autosize>{{ dep.goal }}</textarea>
-        <p class="field__help">Applies on next start. Edit to nudge what KAI does.</p>
+        <p class="field__help">Applies on next start. Edit to nudge what kAI does.</p>
       </div>
       <div class="field-grid">
         <div class="field field--narrow">
@@ -35,7 +35,7 @@
               <option value="{{ v }}" {% if v == dep.voice %}selected{% endif %}>{{ v }}</option>
             {% endfor %}
           </select>
-          <p class="field__help">Picked from the language. Used when KAI sends voice notes.</p>
+          <p class="field__help">Picked from the language. Used when kAI sends voice notes.</p>
         </div>
         <div class="field field--narrow">
           <label class="field__label" for="timezone">Timezone</label>
@@ -57,7 +57,7 @@
           <input type="checkbox" name="mentions_enabled" value="true" {% if dep.settings.get('mentions_enabled', true) %}checked{% endif %}>
           Reply when mentioned or replied to
         </label>
-        <p class="field__help">KAI also replies whenever this keyword appears in a message.</p>
+        <p class="field__help">kAI also replies whenever this keyword appears in a message.</p>
       </div>
     </div>
 
@@ -123,7 +123,7 @@
       <div class="field">
         <label class="checkbox-row">
           <input type="checkbox" name="participation_enabled" value="true" {% if part.get('enabled', true) %}checked{% endif %}>
-          Let KAI reply on its own sometimes (participation)
+          Let kAI reply on its own sometimes (participation)
         </label>
       </div>
       <div class="field-grid">
@@ -132,14 +132,23 @@
           <input id="participation_rate" type="number" name="participation_rate" value="{{ part.get('rate') }}" step="0.01">
         </div>
         <div class="field field--narrow">
-          <label class="field__label" for="participation_cooldown">Cooldown between replies (seconds)</label>
+          <label class="field__label" for="participation_cooldown">Cooldown between replies</label>
           <input id="participation_cooldown" type="number" name="participation_cooldown" value="{{ part.get('cooldown_seconds') | int }}" step="1">
         </div>
         <div class="field field--narrow">
           <label class="field__label" for="participation_streak_max">Max replies in a row</label>
           <input id="participation_streak_max" type="number" name="participation_streak_max" value="{{ part.get('streak_max') | int }}" step="1">
         </div>
+        <div class="field field--narrow">
+          <label class="field__label" for="voice_note_rate">Voice note chance (0–1)</label>
+          <input id="voice_note_rate" type="number" name="voice_note_rate" value="{{ part.get('voice_note_rate', 0.25) }}" step="0.01">
+        </div>
+        <div class="field field--narrow">
+          <label class="field__label" for="voice_note_cooldown">Voice note cooldown</label>
+          <input id="voice_note_cooldown" type="number" name="voice_note_cooldown" value="{{ part.get('voice_note_cooldown', 300) | int }}" step="1">
+        </div>
       </div>
+      <p class="field__help">Voice note follow-up: after sending a text reply, kAI sometimes echoes it as a voice note too. Cooldown times are in seconds.</p>
     </div>
 
     {% if has_brain %}
