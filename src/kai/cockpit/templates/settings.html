@@ -158,7 +158,7 @@
       <div class="field">
         <label class="checkbox-row">
           <input type="checkbox" name="brain_mandatory" value="true"
-            {% if dep.brain_mandatory is True %}checked{% endif %}>
+            {% if dep.brain_mandatory is sameas true %}checked{% endif %}>
           Require the Brain for factual answers
         </label>
         <p class="field__help">When on, this bot must call the Brain before answering factual questions. When off, the bot uses the Brain but may answer from memory.</p>
