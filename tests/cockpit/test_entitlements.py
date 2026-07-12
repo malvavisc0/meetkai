@@ -1,12 +1,14 @@
 """Route-level tests for the feature-flag entitlement gate.
 
 A deployment's feature_flags may only be enabled for flags the user is
-entitled to. The settings form renders only entitled flags, but a direct
-POST can spoof checkbox names — the server must clamp them server-side.
+entitled to. The settings form renders every flag the bot type declares,
+marking unentitled ones disabled + unchecked; a direct POST can spoof
+checkbox names — the server must clamp them server-side.
 """
 
 from __future__ import annotations
 
+import re
 from datetime import UTC, datetime
 from unittest.mock import AsyncMock
 
@@ -116,19 +118,24 @@ class TestEntitlementGate:
         db.refresh(dep)
         assert dep.feature_flags["image"] is False
 
-    def test_settings_page_only_renders_entitled_flags(
+    def test_settings_page_renders_all_flags_disabled_when_unentitled(
         self, client, db, bob, dep, fake_waha_client
     ):
-        """The settings form must not show flags the user can't enable."""
+        """Every bot-type flag renders; unentitled ones are disabled so the
+        operator sees what's possible, not an empty card."""
         _login(client, db, bob)
         r = client.get(f"/deployments/{dep.id}/settings")
         assert r.status_code == 200
-        # bob is entitled to image only (among the waha flags).
         body = r.text
+        # bob is entitled to image only (among the waha flags).
         assert "feature_image" in body
-        assert "feature_video" not in body
-        assert "feature_stt" not in body
-        assert "feature_tts" not in body
+        assert "feature_video" in body
+        assert "feature_stt" in body
+        assert "feature_tts" in body
+        # unentitled flags must be disabled so they can't be toggled on
+        assert re.search(r'name="feature_video"[^>]*disabled', body)
+        assert re.search(r'name="feature_stt"[^>]*disabled', body)
+        assert re.search(r'name="feature_tts"[^>]*disabled', body)
 
 
 class TestUserFlagsCli:

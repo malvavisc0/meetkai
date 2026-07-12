@@ -275,7 +275,7 @@ class Bot(BaseBot):
             participation=ParticipationConfig(
                 enabled=bool(data.get("participation", {}).get("enabled", True)),
                 rate=float(data.get("participation", {}).get("rate", _DEFAULT_PARTICIPATION_RATE)),
-                cooldown_seconds=float(
+                cooldown_seconds=int(
                     data.get("participation", {}).get(
                         "cooldown_seconds", _DEFAULT_PARTICIPATION_COOLDOWN
                     )

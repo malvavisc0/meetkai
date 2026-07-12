@@ -160,6 +160,9 @@ No fifth button variant is introduced without updating this table first.
 | `.chat-picker__row:hover` / `:focus-within` | Interactive row states |
 | `input[type="checkbox"]` (accent-styled) | Consistent checkbox appearance app-wide |
 | `.checkbox-grid` | Two-column layout for a group of equal-weight toggles |
+| `.checkbox-row--locked` | Dimmed modifier for an unentitled/disabled toggle row |
+| `.chat-picker__spinner` | Spinner for the async chat-picker loading state |
+| `.chat-picker__empty` | Empty-state message when a chat fetch returns zero rows |
 
 New local icons: `icons/search.svg`, `icons/upload.svg`, `icons/check.svg`,
 `icons/bot.svg`.

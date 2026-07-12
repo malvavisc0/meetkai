@@ -7,7 +7,7 @@ WAHA *transport* settings (API URL, webhook, whisper, etc.).
 from pydantic import BaseModel, ConfigDict, Field
 
 _DEFAULT_PARTICIPATION_RATE = 0.15
-_DEFAULT_PARTICIPATION_COOLDOWN = 90.0
+_DEFAULT_PARTICIPATION_COOLDOWN = 90
 _DEFAULT_PARTICIPATION_STREAK_MAX = 2
 
 
@@ -27,7 +27,7 @@ class ParticipationConfig(BaseModel):
 
     enabled: bool = True
     rate: float = _DEFAULT_PARTICIPATION_RATE
-    cooldown_seconds: float = _DEFAULT_PARTICIPATION_COOLDOWN
+    cooldown_seconds: int = _DEFAULT_PARTICIPATION_COOLDOWN
     streak_max: int = _DEFAULT_PARTICIPATION_STREAK_MAX
 
 

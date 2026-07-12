@@ -107,10 +107,6 @@ async def _check_crawl4ai(crawler_url: str, token: str) -> HealthCheck:
     return HealthCheck(label="Crawler", ok=ok, detail=detail)
 
 
-def _config_error(label: str, exc: Exception) -> HealthCheck:
-    return HealthCheck(label=label, ok=False, detail=f"config error: {type(exc).__name__}")
-
-
 async def check_service_health() -> list[HealthCheck]:
     """Probe the external infrastructure the deployment relies on.
 

@@ -889,7 +889,7 @@ class TestReasoningChannelStripping:
             BotConfig(
                 trigger_keyword="kai",
                 participation=ParticipationConfig(
-                    enabled=True, rate=1.0, cooldown_seconds=0.0, streak_max=5
+                    enabled=True, rate=1.0, cooldown_seconds=0, streak_max=5
                 ),
             )
         )
@@ -1057,7 +1057,7 @@ class TestOrganicParticipation:
             BotConfig(
                 trigger_keyword="kai",
                 participation=ParticipationConfig(
-                    enabled=True, rate=1.0, cooldown_seconds=60.0, streak_max=5
+                    enabled=True, rate=1.0, cooldown_seconds=60, streak_max=5
                 ),
             )
         )
@@ -1073,7 +1073,7 @@ class TestOrganicParticipation:
             BotConfig(
                 trigger_keyword="kai",
                 participation=ParticipationConfig(
-                    enabled=True, rate=1.0, cooldown_seconds=0.0, streak_max=2
+                    enabled=True, rate=1.0, cooldown_seconds=0, streak_max=2
                 ),
             )
         )
@@ -1107,7 +1107,7 @@ class TestOrganicParticipation:
             BotConfig(
                 trigger_keyword="kai",
                 participation=ParticipationConfig(
-                    enabled=True, rate=1.0, cooldown_seconds=100.0, streak_max=5
+                    enabled=True, rate=1.0, cooldown_seconds=100, streak_max=5
                 ),
             )
         )
@@ -1124,7 +1124,7 @@ class TestOrganicParticipation:
             BotConfig(
                 trigger_keyword="kai",
                 participation=ParticipationConfig(
-                    enabled=True, rate=1.0, cooldown_seconds=100.0, streak_max=5
+                    enabled=True, rate=1.0, cooldown_seconds=100, streak_max=5
                 ),
             )
         )
@@ -1140,7 +1140,7 @@ class TestOrganicParticipation:
             BotConfig(
                 trigger_keyword="kai",
                 participation=ParticipationConfig(
-                    enabled=True, rate=1.0, cooldown_seconds=100.0, streak_max=5
+                    enabled=True, rate=1.0, cooldown_seconds=100, streak_max=5
                 ),
             )
         )
@@ -1157,7 +1157,7 @@ class TestOrganicParticipation:
             BotConfig(
                 trigger_keyword="kai",
                 participation=ParticipationConfig(
-                    enabled=True, rate=0.0, cooldown_seconds=100.0, streak_max=5
+                    enabled=True, rate=0.0, cooldown_seconds=100, streak_max=5
                 ),
             )
         )
@@ -1175,7 +1175,7 @@ class TestOrganicParticipation:
             BotConfig(
                 trigger_keyword="kai",
                 participation=ParticipationConfig(
-                    enabled=True, rate=0.0, cooldown_seconds=100.0, streak_max=5
+                    enabled=True, rate=0.0, cooldown_seconds=100, streak_max=5
                 ),
             )
         )
@@ -1192,7 +1192,7 @@ class TestOrganicParticipation:
             BotConfig(
                 trigger_keyword="kai",
                 participation=ParticipationConfig(
-                    enabled=True, rate=1.0, cooldown_seconds=0.0, streak_max=5
+                    enabled=True, rate=1.0, cooldown_seconds=100, streak_max=5
                 ),
             )
         )
@@ -1213,7 +1213,7 @@ class TestOrganicParticipation:
             BotConfig(
                 trigger_keyword="kai",
                 participation=ParticipationConfig(
-                    enabled=True, rate=0.0, cooldown_seconds=0.0, streak_max=5
+                    enabled=True, rate=0.0, cooldown_seconds=0, streak_max=5
                 ),
             )
         )

@@ -76,7 +76,10 @@
           </div>
 
           <div class="chat-picker" data-chat-picker data-dep-id="{{ dep.id }}">
-            {# rows rendered by JS from /deployments/{id}/chats.json #}
+            <div class="chat-picker__loading" data-chat-loading="true">
+              <span class="chat-picker__spinner" aria-hidden="true"></span>
+              <span>Loading chats…</span>
+            </div>
           </div>
 
           <button type="button" class="button button--block" id="chat_load_more">Load more chats</button>
@@ -101,10 +104,12 @@
       <p class="card__eyebrow">Capabilities</p>
       <h3 class="card__title">Media &amp; processing</h3>
       <div class="checkbox-grid">
-        {% for flag in feature_flags %}
-          <label class="checkbox-row">
-            <input type="checkbox" name="feature_{{ flag }}" value="true" {% if dep.feature_flags.get(flag, true) %}checked{% endif %}>
-            {{ capability_labels.get(flag, flag) }}
+        {% for flag, label, entitled in feature_flags %}
+          <label class="checkbox-row{% if not entitled %} checkbox-row--locked{% endif %}">
+            <input type="checkbox" name="feature_{{ flag }}" value="true"
+              {% if entitled and dep.feature_flags.get(flag, true) %}checked{% endif %}
+              {% if not entitled %}disabled{% endif %}>
+            {{ label }}
           </label>
         {% endfor %}
       </div>
@@ -124,15 +129,15 @@
       <div class="field-grid">
         <div class="field field--narrow">
           <label class="field__label" for="participation_rate">Reply rate (0–1)</label>
-          <input id="participation_rate" type="number" name="participation_rate" value="{{ part.get('rate', 0.15) }}" step="0.01">
+          <input id="participation_rate" type="number" name="participation_rate" value="{{ part.get('rate') }}" step="0.01">
         </div>
         <div class="field field--narrow">
           <label class="field__label" for="participation_cooldown">Cooldown between replies (seconds)</label>
-          <input id="participation_cooldown" type="number" name="participation_cooldown" value="{{ part.get('cooldown_seconds', 90) }}" step="1">
+          <input id="participation_cooldown" type="number" name="participation_cooldown" value="{{ part.get('cooldown_seconds') | int }}" step="1">
         </div>
         <div class="field field--narrow">
           <label class="field__label" for="participation_streak_max">Max replies in a row</label>
-          <input id="participation_streak_max" type="number" name="participation_streak_max" value="{{ part.get('streak_max', 2) }}" step="1">
+          <input id="participation_streak_max" type="number" name="participation_streak_max" value="{{ part.get('streak_max') | int }}" step="1">
         </div>
       </div>
     </div>

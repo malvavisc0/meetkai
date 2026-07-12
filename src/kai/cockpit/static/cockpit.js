@@ -155,16 +155,37 @@
   }
 
   function showChatLoading(container) {
+    clearChatLoading(container);
     var row = document.createElement("div");
     row.className = "chat-picker__loading";
     row.dataset.chatLoading = "true";
-    row.textContent = "Loading chats…";
+    var spinner = document.createElement("span");
+    spinner.className = "chat-picker__spinner";
+    spinner.setAttribute("aria-hidden", "true");
+    var text = document.createElement("span");
+    text.textContent = "Loading chats…";
+    row.appendChild(spinner);
+    row.appendChild(text);
     container.appendChild(row);
     return row;
   }
 
   function clearChatLoading(container) {
     var rows = container.querySelectorAll("[data-chat-loading]");
+    for (var i = 0; i < rows.length; i++) rows[i].remove();
+  }
+
+  function showChatEmpty(container) {
+    clearChatEmpty(container);
+    var row = document.createElement("div");
+    row.className = "chat-picker__empty";
+    row.dataset.chatEmpty = "true";
+    row.textContent = "No chats found.";
+    container.appendChild(row);
+  }
+
+  function clearChatEmpty(container) {
+    var rows = container.querySelectorAll("[data-chat-empty]");
     for (var i = 0; i < rows.length; i++) rows[i].remove();
   }
 
@@ -205,6 +226,7 @@
     }
 
     async function fetchAndRender() {
+      clearChatEmpty(container);
       showChatLoading(container);
       if (search) search.disabled = true;
       if (loadMore) loadMore.disabled = true;
@@ -217,6 +239,9 @@
         } else {
           appendRows(data.chats || []);
           hasMore = !!data.has_more;
+          if (!data.chats || data.chats.length === 0) {
+            showChatEmpty(container);
+          }
         }
       } finally {
         if (search) search.disabled = false;

@@ -302,10 +302,17 @@ async def deployment_settings_page(
     svc, dep = result
 
     bt = BOT_TYPES.get(dep.bot_type)
-    # Only render feature flags the user is entitled to (truthy in their
-    # feature_flags) — the form must not show a flag the user cannot enable.
+    # Render every flag the bot type declares, not just the entitled ones:
+    # an unentitled flag shows up disabled + unchecked so the operator sees
+    # what's possible and knows to request access, rather than staring at an
+    # empty card. The POST handler clamps submitted values to entitlements
+    # so a crafted checkbox can't self-enable anything.
     entitlements = {k for k, v in (user.feature_flags or {}).items() if v}
-    feature_flags = [f for f in (bt.feature_flags if bt else []) if f in entitlements]
+    feature_flags: list[tuple[str, str, bool]] = []
+    if bt:
+        for flag in bt.feature_flags:
+            label = CAPABILITY_LABELS.get(flag, flag.capitalize())
+            feature_flags.append((flag, label, flag in entitlements))
 
     # Build the optional-connection toggles from the catalog: one checkbox
     # per supported connection that isn't required (required ones are always
@@ -611,7 +618,7 @@ async def deployment_settings(
     blacklist: str = Form(""),
     participation_enabled: str = Form(""),
     participation_rate: float = Form(0.15),
-    participation_cooldown: float = Form(90),
+    participation_cooldown: int = Form(90),
     participation_streak_max: int = Form(2),
     brain_mandatory: str = Form(""),
     brain_instruction: str = Form(""),

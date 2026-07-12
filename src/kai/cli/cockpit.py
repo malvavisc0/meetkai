@@ -126,6 +126,10 @@ def cockpit_user_create(
         db.commit()
         db.refresh(user)
         console.print(f"{GL_OK} [{OK}]created user[/{OK}]  id={user.id} email={user.email}")
+        console.print(
+            f"[{DIM}]All feature flags are off by default. Grant capabilities with:[/{DIM}]\n"
+            f"[{DIM}]  kai cockpit user flags {email} --image --stt --tts --video[/{DIM}]"
+        )
     finally:
         db.close()
 
