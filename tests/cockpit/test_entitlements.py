@@ -45,6 +45,23 @@ def fake_waha_client(monkeypatch):
 @pytest.fixture
 def dep(db, bob):
     from kai.cockpit.deployments import DeploymentsService
+    from kai.cockpit.models import Connection
+
+    db.add(
+        Connection(
+            user_id=bob.id,
+            service="whatsapp",
+            status="connected",
+            config={
+                "waha_session": "kai-bob",
+                "waha_webhook_port": 8101,
+                "waha_webhook_path": "/webhook/whatsapp-1",
+            },
+            created_at="now",
+            updated_at="now",
+        )
+    )
+    db.commit()
 
     svc = DeploymentsService(db)
     d = svc.create(bob, "waha", "be helpful", "English")

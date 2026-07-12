@@ -214,10 +214,17 @@ class TestStartGatedOnWhatsApp:
 
     def test_start_hidden_when_whatsapp_not_connected(self, client, db, bob, fake_waha_client):
         _login(client, db, bob)
-        # NO WhatsApp connection created -> start must be hidden.
+        # Connect, create the deployment, then disconnect: create() now
+        # requires WhatsApp connected, but an operator can disconnect any
+        # time afterward — Start must still be hidden once that happens.
+        client.post("/connections/whatsapp/connect", follow_redirects=False)
+
         from kai.cockpit.deployments import DeploymentsService
 
         dep = DeploymentsService(db).create(bob, "waha", "be helpful", "English")
+
+        client.post("/connections/whatsapp/disconnect", follow_redirects=False)
+
         r = client.get(f"/deployments/{dep.id}")
         assert r.status_code == 200
         assert "Connect WhatsApp" in r.text

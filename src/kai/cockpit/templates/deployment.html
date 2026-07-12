@@ -13,15 +13,12 @@
   </header>
 
   {# --- Runtime overview --- #}
-  {% if dep.status == 'running' and (needs_restart or not status) %}
+  {% if attention_reason %}
     {% set status_class = 'status-card--attention' %}
     {% set dot_class = 'status-dot--attention' %}
   {% elif dep.status == 'running' %}
     {% set status_class = 'status-card--running' %}
     {% set dot_class = 'status-dot--running' %}
-  {% elif dep.status == 'needs_connect' %}
-    {% set status_class = 'status-card--warn' %}
-    {% set dot_class = 'status-dot--warn' %}
   {% else %}
     {% set status_class = 'status-card--stopped' %}
     {% set dot_class = 'status-dot--stopped' %}
@@ -34,17 +31,17 @@
       <dd>
         {% if dep.status == "running" %}
           <span class="badge badge--live">Running</span>
-        {% elif dep.status == "needs_connect" %}
-          <span class="badge badge--warn">Not connected</span>
         {% else %}
           <span class="badge badge--muted">Stopped</span>
         {% endif %}
-        {% if dep.status == "running" and needs_restart %}
-          <span class="badge badge--warn">Restart needed — settings changed since last start</span>
-        {% elif dep.status == "running" and not status %}
-          <span class="badge badge--danger">Not responding</span>
+        {% if attention_reason %}
+          <span class="badge badge--danger">Attention</span>
         {% endif %}
       </dd>
+      {% if attention_reason %}
+        <dt>Attention</dt>
+        <dd class="text-danger">{{ attention_reason }}</dd>
+      {% endif %}
       {% if dep.run_id %}
         <dt>Run ID</dt>
         <dd><span class="mono">{{ dep.run_id }}</span></dd>

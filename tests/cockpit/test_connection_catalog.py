@@ -132,15 +132,39 @@ class _StartBase:
 
 
 class TestStartGate(_StartBase):
+    def _bare_deployment(self, db, user) -> Deployment:
+        """A ``waha`` Deployment row constructed directly, bypassing
+        ``DeploymentsService.create()`` (which now enforces
+        ``required_connections`` itself — see TestCreateGate below) so
+        these tests can exercise ``start()``'s own, independent check."""
+        dep = Deployment(
+            user_id=user.id,
+            bot_type="waha",
+            run_id=None,
+            status="stopped",
+            desired_state="stopped",
+            voice="af_heart",
+            goal="goal",
+            language="English",
+            feature_flags={},
+            settings={},
+            created_at="now",
+            updated_at="now",
+        )
+        db.add(dep)
+        db.commit()
+        db.refresh(dep)
+        return dep
+
     def test_rejects_when_whatsapp_missing(self, db, user):
         svc = DeploymentsService(db)
-        dep = svc.create(user, "waha", "goal", "English")
+        dep = self._bare_deployment(db, user)
         with pytest.raises(ConnectionRequiredError, match="whatsapp"):
             svc.start(dep)
 
     def test_rejects_when_whatsapp_not_connected(self, db, user):
         svc = DeploymentsService(db)
-        dep = svc.create(user, "waha", "goal", "English")
+        dep = self._bare_deployment(db, user)
         db.add(
             Connection(
                 user_id=user.id,
@@ -174,7 +198,7 @@ class TestStartGate(_StartBase):
             user_id=user.id,
             bot_type="multi",
             run_id=None,
-            status="needs_connect",
+            status="stopped",
             desired_state="stopped",
             voice="af_heart",
             goal="goal",
@@ -197,14 +221,33 @@ class TestStartGate(_StartBase):
             svc.start(dep)
 
 
+class TestCreateGate:
+    """DeploymentsService.create() also enforces required_connections —
+    an operator can't configure a bot it will never be allowed to start."""
+
+    def test_rejects_when_whatsapp_missing(self, db, user):
+        svc = DeploymentsService(db)
+        with pytest.raises(ConnectionRequiredError, match="whatsapp"):
+            svc.create(user, "waha", "goal", "English")
+
+    def test_succeeds_once_whatsapp_connected(self, db, user):
+        db.add(_whatsapp_conn(user.id))
+        db.commit()
+
+        svc = DeploymentsService(db)
+        dep = svc.create(user, "waha", "goal", "English")
+        assert dep.id is not None
+
+
 class TestSupportedInjectionLoop(_StartBase):
     def test_not_enabled_does_not_call_injector(self, db, user, monkeypatch, tmp_path):
         """When a supported connection is not toggled on in settings["tools"],
         _inject_connection_env must not be called — start() succeeds."""
-        svc = DeploymentsService(db)
-        dep = svc.create(user, "waha", "goal", "English")
         db.add(_whatsapp_conn(user.id))
         db.commit()
+
+        svc = DeploymentsService(db)
+        dep = svc.create(user, "waha", "goal", "English")
 
         called: list[str] = []
 
@@ -222,11 +265,12 @@ class TestSupportedInjectionLoop(_StartBase):
         """Enabling tool_database with no database Connection row is stored
         intent, not an executed grant — start() skips injection (no
         NotImplementedError)."""
+        db.add(_whatsapp_conn(user.id))
+        db.commit()
+
         svc = DeploymentsService(db)
         dep = svc.create(user, "waha", "goal", "English")
         svc.edit(dep, settings={"tools": {"database": True}})
-        db.add(_whatsapp_conn(user.id))
-        db.commit()
 
         def boom(_env, service, _conn):
             raise NotImplementedError(service)
@@ -240,9 +284,6 @@ class TestSupportedInjectionLoop(_StartBase):
     ):
         """When both the toggle is on and the Connection row exists, the
         database DSN is injected as KAI_SQL_DSN (Fix 05 fills the stub)."""
-        svc = DeploymentsService(db)
-        dep = svc.create(user, "waha", "goal", "English")
-        svc.edit(dep, settings={"tools": {"database": True}})
         db.add(_whatsapp_conn(user.id))
         db.add(
             Connection(
@@ -255,6 +296,10 @@ class TestSupportedInjectionLoop(_StartBase):
             )
         )
         db.commit()
+
+        svc = DeploymentsService(db)
+        dep = svc.create(user, "waha", "goal", "English")
+        svc.edit(dep, settings={"tools": {"database": True}})
 
         injected_env: dict = {}
 
@@ -270,12 +315,6 @@ class TestSupportedInjectionLoop(_StartBase):
     def test_dict_form_injects_instruction(self, db, user, monkeypatch, tmp_path):
         """Fix 05's nested-dict form injects both KAI_SQL_DSN and
         KAI_SQL_INSTRUCTION."""
-        svc = DeploymentsService(db)
-        dep = svc.create(user, "waha", "goal", "English")
-        svc.edit(
-            dep,
-            settings={"tools": {"database": {"enabled": True, "instruction": "look up orders"}}},
-        )
         db.add(_whatsapp_conn(user.id))
         db.add(
             Connection(
@@ -288,6 +327,13 @@ class TestSupportedInjectionLoop(_StartBase):
             )
         )
         db.commit()
+
+        svc = DeploymentsService(db)
+        dep = svc.create(user, "waha", "goal", "English")
+        svc.edit(
+            dep,
+            settings={"tools": {"database": {"enabled": True, "instruction": "look up orders"}}},
+        )
 
         injected_env: dict = {}
 
@@ -372,6 +418,9 @@ class TestSettingsStoresToolToggle:
         full tools dict and passes it through. This is the stored-intent
         half: start() skipping injection when the Connection row is absent
         is covered by TestSupportedInjectionLoop above."""
+        db.add(_whatsapp_conn(user.id))
+        db.commit()
+
         svc = DeploymentsService(db)
         dep = svc.create(user, "waha", "goal", "English")
         svc.edit(dep, settings={"tools": {"database": True}})
@@ -382,6 +431,9 @@ class TestSettingsStoresToolToggle:
         """edit() does a shallow merge: a partial settings update replaces
         the tools key entirely. The POST handler must therefore pass the
         complete tools dict, not just changed keys."""
+        db.add(_whatsapp_conn(user.id))
+        db.commit()
+
         svc = DeploymentsService(db)
         dep = svc.create(user, "waha", "goal", "English")
         svc.edit(dep, settings={"tools": {"database": True}})

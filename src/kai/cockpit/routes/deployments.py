@@ -16,8 +16,10 @@ from kai.cockpit.auth import require_user
 from kai.cockpit.bots import (
     BOT_TYPES,
     CAPABILITY_LABELS,
+    CONNECTION_LABELS,
     CREDENTIAL_TYPES,
     LANGUAGE_VOICE_MAP,
+    BotType,
     auto_pick_voice,
 )
 from kai.cockpit.connections import ConnectionsService
@@ -28,6 +30,7 @@ from kai.cockpit.deployments import (
     DeploymentStartupError,
     _tool_enabled,
     _tool_instruction,
+    attention_reason,
 )
 from kai.cockpit.models import Deployment, User
 
@@ -109,6 +112,25 @@ def _fmt_ts(ts: str | None) -> str:
 # --- Deploy wizard ---
 
 
+def _missing_required_connections(db: Session, user: User, bt: BotType) -> list[str]:
+    """Display labels for the ``bt.required_connections`` this operator has
+    not connected yet.
+
+    Empty list means the bot type can be created right now. Shared by the
+    wizard's GET (to gate the submit button) and POST (server-side, so a
+    disabled button in the DOM is never the only thing standing between an
+    operator and a deployment its ``required_connections`` don't satisfy —
+    ``DeploymentsService.create()`` enforces the same rule either way).
+    """
+    if not bt.required_connections:
+        return []
+    connected = {
+        c.service for c in ConnectionsService(db).list_for_user(user) if c.status == "connected"
+    }
+    missing = [service for service in bt.required_connections if service not in connected]
+    return [CONNECTION_LABELS.get(service, service) for service in missing]
+
+
 @router.get("/deployments/new")
 async def deploy_new_get(
     request: Request,
@@ -139,6 +161,7 @@ async def deploy_new_get(
             "voice": voice,
             "voices": ALL_VOICES,
             "languages": ALL_LANGUAGES,
+            "missing_connections": _missing_required_connections(db, user, bt),
         },
     )
 
@@ -156,7 +179,8 @@ async def deploy_new_post(
     svc = DeploymentsService(db)
     try:
         dep = svc.create(user, bot_type, goal, language, voice or None)
-    except ValueError as exc:
+    except (ValueError, ConnectionRequiredError) as exc:
+        bt = BOT_TYPES.get(bot_type)
         return templates.TemplateResponse(
             request,
             "deploy_wizard.html",
@@ -164,12 +188,13 @@ async def deploy_new_post(
                 "user": user,
                 "step": "config",
                 "bot_type": bot_type,
-                "bt": BOT_TYPES.get(bot_type),
+                "bt": bt,
                 "goal": goal,
                 "language": language,
                 "voice": voice,
                 "voices": ALL_VOICES,
                 "languages": ALL_LANGUAGES,
+                "missing_connections": _missing_required_connections(db, user, bt) if bt else [],
                 "error": str(exc),
             },
         )
@@ -223,6 +248,13 @@ async def deployment_detail(
             except (ValueError, TypeError):
                 pass
 
+    # Same signal the console list badges use — a running bot whose
+    # WhatsApp got disconnected out from under it looks identical to a
+    # healthy one otherwise (still "running", Stop button still shown), so
+    # an operator landing directly on this page (not via /console) would
+    # otherwise have no way to notice messages are silently failing.
+    reason = attention_reason(dep, status_data, whatsapp_connected)
+
     flash = request.session.pop("flash", None)
     # needs_restart is now a persisted column (survives reloads/new tabs),
     # not a session flash — see DeploymentsService.edit()/start()/stop().
@@ -243,6 +275,7 @@ async def deployment_detail(
             "uptime_s": uptime_s,
             "needs_restart": needs_restart,
             "whatsapp_connected": whatsapp_connected,
+            "attention_reason": reason,
             "conversation_count": conversation_count,
             "message_count": message_count,
             "capability_labels": CAPABILITY_LABELS,

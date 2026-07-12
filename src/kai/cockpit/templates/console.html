@@ -3,39 +3,9 @@
 <div class="page stack">
   <header class="page-header">
     <p class="page-eyebrow">Operator console</p>
-    <h1 class="page-title">Your bots</h1>
+    <h1 class="page-title">Running bots</h1>
     <p class="page-subtitle">See your whole team at a glance — and spot anything that needs you.</p>
   </header>
-
-  {# Health summary: status badges only, never the action accent.
-     All-neutral-or-live is the restful default — load the page, see no red, leave. #}
-  <div class="card health status-strip console-health">
-    {% if whatsapp_connected %}
-      <span class="badge badge--live">WhatsApp connected</span>
-    {% else %}
-      <span class="badge badge--warn">WhatsApp not connected</span>
-    {% endif %}
-    {% if brain_initialized %}
-      <span class="badge badge--live">Brain initialized</span>
-    {% else %}
-      <span class="badge badge--warn">Brain not initialized</span>
-    {% endif %}
-    {% if running > 0 %}
-      <span class="badge badge--live"><span class="count-up" data-count-up="{{ running }}">{{ running }}</span> bot{{ '' if running == 1 else 's' }} running</span>
-    {% else %}
-      <span class="badge badge--muted">0 bots running</span>
-    {% endif %}
-    {% if stopped > 0 %}
-      <span class="badge badge--muted"><span class="count-up" data-count-up="{{ stopped }}">{{ stopped }}</span> stopped</span>
-    {% else %}
-      <span class="badge badge--muted">0 stopped</span>
-    {% endif %}
-    {% if attention_reasons %}
-      <span class="badge badge--danger"><span class="count-up" data-count-up="{{ attention_reasons|length }}">{{ attention_reasons|length }}</span> need{{ 's' if attention_reasons|length == 1 else '' }} attention</span>
-    {% else %}
-      <span class="badge badge--muted">0 need attention</span>
-    {% endif %}
-  </div>
 
   {% if deployments %}
     <div class="deployment-list">
@@ -81,7 +51,7 @@
     </div>
   {% else %}
     <div class="card empty-state empty-state--hero">
-      <span class="icon icon--lg empty-state__icon">{% include "icons/inbox.svg" %}</span>
+      <span class="icon icon--lg empty-state__icon">{% include "icons/bot.svg" %}</span>
       <p>No bots yet.</p>
       <p class="empty-state__hint">Pick a role below. Your first bot won't forget a thing.</p>
     </div>

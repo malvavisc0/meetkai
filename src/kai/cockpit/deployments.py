@@ -44,11 +44,45 @@ def _kai_argv_prefix() -> list[str]:
 
 
 class ConnectionRequiredError(Exception):
-    """Raised when a deployment is started without a required connection connected."""
+    """Raised when a deployment is created or started without a required
+    connection connected (see ``BotType.required_connections``)."""
 
 
 class DeploymentStartupError(Exception):
     """Raised when the bot subprocess fails to start or register."""
+
+
+def attention_reason(
+    dep: Deployment, status_data: dict | None, whatsapp_connected: bool
+) -> str | None:
+    """Why a deployment needs the operator's action *now*, or None if it doesn't.
+
+    - WhatsApp disconnected while the bot is meant to be running (intent unmet).
+    - A ``running`` row whose live status probe comes back empty (process died
+      but the row wasn't reconciled — reconciliation only runs at startup).
+    - A running deployment with unapplied settings changes (needs_restart).
+
+    A failed start decays to the neutral ``stopped`` state on the next load
+    rather than staying red — red is reserved for states needing action now.
+
+    ``status_data`` is the live ``/status`` probe result for ``dep`` (``None``
+    if it isn't running or the probe failed) — the caller fetches it once per
+    running deployment and reuses it here and for the card's task count, so
+    the route never doubles the number of live status calls.
+
+    Shared by the console list (per-card badge) and the deployment detail
+    page (a banner when a running bot's WhatsApp is disconnected) — both
+    routes compute this the same way, from the same inputs, so they can
+    never disagree about whether a deployment needs attention.
+    """
+    if dep.desired_state == "running" and not whatsapp_connected:
+        return "WhatsApp down, wants running"
+    if dep.status == "running":
+        if status_data is None:
+            return "Bot process isn't responding"
+        if dep.needs_restart:
+            return "Restart needed to apply settings"
+    return None
 
 
 def _instance_id(bot_type: str, email: str) -> str:
@@ -253,6 +287,29 @@ class DeploymentsService:
         if not language or not language.strip():
             raise ValueError("language is required")
 
+        bt = BOT_TYPES[bot_type]
+
+        # Catalog-driven creation gate: every connection this bot type
+        # declares as required must be present and connected *before* the
+        # deployment can even be created — not just before it starts.
+        # Letting an operator configure a bot it can never run is a source
+        # of confusion (a "ready" looking deployment that silently can't
+        # start), so the requirement is enforced at the earliest point
+        # instead of deferred to start(). Mirrors the same catalog read
+        # start() uses below, so the two can never disagree about what a
+        # bot type requires.
+        for service in bt.required_connections:
+            c = (
+                self.db.query(Connection)
+                .filter(
+                    Connection.user_id == user.id,
+                    Connection.service == service,
+                )
+                .first()
+            )
+            if c is None or c.status != "connected":
+                raise ConnectionRequiredError(f"Connect {service} first at /connections")
+
         existing = (
             self.db.query(Deployment)
             .filter(Deployment.user_id == user.id, Deployment.bot_type == bot_type)
@@ -271,7 +328,6 @@ class DeploymentsService:
         default_config = BotConfig(language=language, timezone=user.timezone)
         settings = default_config.model_dump()
 
-        bt = BOT_TYPES[bot_type]
         feature_flags = {f: False for f in bt.feature_flags}
 
         dep = Deployment(
@@ -282,7 +338,7 @@ class DeploymentsService:
             voice=voice.strip(),
             settings=settings,
             feature_flags=feature_flags,
-            status="needs_connect",
+            status="stopped",
             desired_state="stopped",
             created_at=now_iso(),
             updated_at=now_iso(),

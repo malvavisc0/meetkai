@@ -152,6 +152,7 @@ No fifth button variant is introduced without updating this table first.
 | Class / selector | Purpose |
 |---|---|
 | `.button--ghost` | Text-only header `Back` navigation |
+| `.cluster--between` | Pins a cluster's children to opposite ends (card title + status badge, card title + action) |
 | `.field--narrow input, .field--narrow select` | Narrow width covers selects, not just inputs |
 | `.field-grid` / `.field-grid .field` | Responsive compact field group |
 | `.search-field` | Leading-icon wrapper for `input[type="search"]` |
@@ -160,7 +161,8 @@ No fifth button variant is introduced without updating this table first.
 | `input[type="checkbox"]` (accent-styled) | Consistent checkbox appearance app-wide |
 | `.checkbox-grid` | Two-column layout for a group of equal-weight toggles |
 
-New local icons: `icons/search.svg`, `icons/upload.svg`, `icons/check.svg`.
+New local icons: `icons/search.svg`, `icons/upload.svg`, `icons/check.svg`,
+`icons/bot.svg`.
 
 ## Review guardrails
 

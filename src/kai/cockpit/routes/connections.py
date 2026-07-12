@@ -7,8 +7,10 @@ from sqlalchemy.orm import Session
 from kai.cockpit.app import templates
 from kai.cockpit.auth import require_user
 from kai.cockpit.connections import ConnectionsService
+from kai.cockpit.database_connections import DatabaseConnectionsService
 from kai.cockpit.db import get_db
 from kai.cockpit.models import User
+from kai.cockpit.smtp_connections import SmtpConnectionsService
 
 router = APIRouter()
 
@@ -30,6 +32,11 @@ async def connections_page(
     if conn and conn.status == "connecting":
         qr_url = "/connections/whatsapp/qr"
 
+    db_conn = DatabaseConnectionsService(db).get(user)
+    has_database = bool(db_conn and db_conn.config.get("url"))
+    smtp_conn = SmtpConnectionsService(db).get(user)
+    has_smtp = bool(smtp_conn and smtp_conn.config.get("password"))
+
     flash = request.session.pop("flash", None)
     return templates.TemplateResponse(
         request,
@@ -38,6 +45,8 @@ async def connections_page(
             "user": user,
             "conn": conn,
             "qr_url": qr_url,
+            "has_database": has_database,
+            "has_smtp": has_smtp,
             "flash": flash,
         },
     )

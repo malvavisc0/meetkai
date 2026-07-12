@@ -12,6 +12,20 @@ from kai.cockpit.deployments import (
     DeploymentStartupError,
 )
 from kai.cockpit.models import Connection
+from tests.cockpit.conftest import _connect_whatsapp
+
+
+@pytest.fixture(autouse=True)
+def _whatsapp_connected(user, db):
+    """Most of this module's tests just want a "ready to go" user:
+    ``DeploymentsService.create()`` now enforces
+    ``BotType.required_connections``, so a connected WhatsApp is a
+    prerequisite for the ``svc.create(user, "waha", ...)`` calls throughout
+    this file. The handful of tests that specifically exercise the
+    disconnected/missing-connection path mutate or remove this connection
+    themselves after ``create()`` succeeds.
+    """
+    _connect_whatsapp(db, user)
 
 
 class TestCreate:
@@ -19,7 +33,7 @@ class TestCreate:
         svc = DeploymentsService(db)
         dep = svc.create(user, "waha", "be helpful", "English")
         assert dep.id is not None
-        assert dep.status == "needs_connect"
+        assert dep.status == "stopped"
         assert dep.desired_state == "stopped"
         assert dep.settings["language"] == "English"
         assert dep.feature_flags == {"image": False, "stt": False, "tts": False, "video": False}
@@ -61,6 +75,50 @@ class TestCreate:
         svc.create(user, "waha", "goal", "English")
         with pytest.raises(ValueError):
             svc.create(user, "waha", "another goal", "English")
+
+
+class TestCreateConnectionGate:
+    """DeploymentsService.create() enforces BotType.required_connections —
+    a bot can't even be created before its required connections exist, not
+    just started (see also TestConnectionCatalog's start()-time gate)."""
+
+    def test_rejects_when_whatsapp_missing(self, db):
+        """A user fixture with no Connection row at all (bypassing the
+        module's autouse ``_whatsapp_connected`` fixture by constructing a
+        fresh user) must be rejected at create()."""
+        import secrets
+        from datetime import UTC, datetime
+
+        from kai.cockpit.models import User
+
+        lonely_user = User(
+            email="lonely@test.com",
+            language="English",
+            timezone="UTC",
+            hmac_key=secrets.token_hex(32),
+            created_at=datetime.now(UTC).isoformat(),
+        )
+        db.add(lonely_user)
+        db.commit()
+
+        svc = DeploymentsService(db)
+        with pytest.raises(ConnectionRequiredError, match="whatsapp"):
+            svc.create(lonely_user, "waha", "goal", "English")
+
+    def test_rejects_when_whatsapp_disconnected(self, db, user):
+        conn = db.query(Connection).filter_by(user_id=user.id, service="whatsapp").first()
+        conn.status = "disconnected"
+        db.commit()
+
+        svc = DeploymentsService(db)
+        with pytest.raises(ConnectionRequiredError, match="whatsapp"):
+            svc.create(user, "waha", "goal", "English")
+
+    def test_succeeds_once_whatsapp_connected(self, db, user):
+        # The module-level autouse fixture already connected WhatsApp.
+        svc = DeploymentsService(db)
+        dep = svc.create(user, "waha", "goal", "English")
+        assert dep.id is not None
 
 
 class TestEdit:
@@ -140,8 +198,12 @@ class TestStartMediaReadinessGate:
         try:
             svc = DeploymentsService(db)
             dep = svc.create(user, "waha", "goal", "English")
-            # No connection yet — expect the *next* check to fail, proving the
-            # media-readiness gate itself did not block this call.
+            # Disconnect WhatsApp *after* creation so the next check (the
+            # connection gate) fails, proving the media-readiness gate
+            # itself did not block this call.
+            conn = db.query(Connection).filter_by(user_id=user.id, service="whatsapp").first()
+            conn.status = "disconnected"
+            db.commit()
             with pytest.raises(ConnectionRequiredError):
                 svc.start(dep)
         finally:
@@ -164,27 +226,19 @@ class TestStart:
     def test_requires_connection(self, db, user):
         svc = DeploymentsService(db)
         dep = svc.create(user, "waha", "goal", "English")
+        # Disconnect after creation to prove start() re-checks the
+        # connection independently rather than trusting create()'s
+        # one-time check (an operator can disconnect WhatsApp any time
+        # after creating the bot).
+        conn = db.query(Connection).filter_by(user_id=user.id, service="whatsapp").first()
+        conn.status = "disconnected"
+        db.commit()
         with pytest.raises(ConnectionRequiredError):
             svc.start(dep)
 
     def test_start_spawns_subprocess_and_registers_run(self, db, user, monkeypatch, tmp_path):
         svc = DeploymentsService(db)
         dep = svc.create(user, "waha", "goal", "English")
-
-        conn = Connection(
-            user_id=user.id,
-            service="whatsapp",
-            status="connected",
-            config={
-                "waha_session": "kai-bob",
-                "waha_webhook_port": 8101,
-                "waha_webhook_path": "/webhook/whatsapp-1",
-            },
-            created_at="now",
-            updated_at="now",
-        )
-        db.add(conn)
-        db.commit()
 
         monkeypatch.setattr("kai.cockpit.config_writer.write_config", lambda dep, instance_id: None)
 
@@ -234,20 +288,6 @@ class TestStart:
         dep = svc.create(user, "waha", "goal", "English")
         svc.edit(dep, brain_mandatory=True)
 
-        db.add(
-            Connection(
-                user_id=user.id,
-                service="whatsapp",
-                status="connected",
-                config={
-                    "waha_session": "kai-bob",
-                    "waha_webhook_port": 8101,
-                    "waha_webhook_path": "/webhook/whatsapp-1",
-                },
-                created_at="now",
-                updated_at="now",
-            )
-        )
         db.add(
             Connection(
                 user_id=user.id,
@@ -316,22 +356,6 @@ class TestStart:
         svc = DeploymentsService(db)
         dep = svc.create(user, "waha", "goal", "English")
 
-        db.add(
-            Connection(
-                user_id=user.id,
-                service="whatsapp",
-                status="connected",
-                config={
-                    "waha_session": "kai-bob",
-                    "waha_webhook_port": 8101,
-                    "waha_webhook_path": "/webhook/whatsapp-1",
-                },
-                created_at="now",
-                updated_at="now",
-            )
-        )
-        db.commit()
-
         monkeypatch.setattr("kai.cockpit.config_writer.write_config", lambda dep, instance_id: None)
 
         captured_env: dict = {}
@@ -380,16 +404,6 @@ class TestStart:
     def test_start_raises_on_process_exit_without_run_id(self, db, user, monkeypatch):
         svc = DeploymentsService(db)
         dep = svc.create(user, "waha", "goal", "English")
-        conn = Connection(
-            user_id=user.id,
-            service="whatsapp",
-            status="connected",
-            config={"waha_session": "s", "waha_webhook_port": 1, "waha_webhook_path": "/w"},
-            created_at="now",
-            updated_at="now",
-        )
-        db.add(conn)
-        db.commit()
 
         monkeypatch.setattr("kai.cockpit.config_writer.write_config", lambda dep, instance_id: None)
 
@@ -541,19 +555,7 @@ class TestDelete:
 
     def test_delete_keeps_whatsapp_connection(self, db, user, monkeypatch):
         """Deleting a deployment must NOT touch the WhatsApp Connection."""
-        from kai.cockpit.models import Connection
-
         monkeypatch.setattr("kai.cockpit.config_writer.write_config", lambda d, i: None)
-        conn = Connection(
-            user_id=user.id,
-            service="whatsapp",
-            status="connected",
-            config={"waha_session": "s", "waha_webhook_port": 1, "waha_webhook_path": "/w"},
-            created_at="now",
-            updated_at="now",
-        )
-        db.add(conn)
-        db.commit()
 
         svc = DeploymentsService(db)
         dep = svc.create(user, "waha", "goal", "English")
@@ -572,19 +574,6 @@ class TestReconcileDeployments:
 
         svc = DeploymentsService(db)
         dep = svc.create(user, "waha", "goal", "English")
-        conn = Connection(
-            user_id=user.id,
-            service="whatsapp",
-            status="connected",
-            config={
-                "waha_session": "s",
-                "waha_webhook_port": 1,
-                "waha_webhook_path": "/webhook/whatsapp/1",
-            },
-            created_at="now",
-            updated_at="now",
-        )
-        db.add(conn)
         # Simulate a deployment that was running before a restart: intent
         # persisted (desired_state) but no run_id / live process anymore.
         dep.desired_state = "running"
@@ -646,6 +635,7 @@ class TestReconcileDeployments:
         )
         db.add(user2)
         db.commit()
+        _connect_whatsapp(db, user2)
 
         svc = DeploymentsService(db)
         dep1 = svc.create(user, "waha", "goal 1", "English")

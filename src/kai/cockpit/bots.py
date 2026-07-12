@@ -31,9 +31,10 @@ BOT_TYPES: dict[str, BotType] = {
         feature_flags=["image", "stt", "tts", "video"],
         required_settings=["language"],
         description=(
-            "WhatsApp Bot. Replies in chats and groups and can proactively "
-            "participate in conversations. Media and voice capabilities "
-            "depend on the enabled feature flags."
+            "Integrate an AI assistant directly into your WhatsApp. "
+            "It keeps track of context for smarter replies and responds "
+            "instantly when is need it. Support for images, voice notes, "
+            "and video means the bot can interact naturally."
         ),
         default_goal=(
             "Be warm, useful, and concise. Answer what you can from what you "
@@ -110,6 +111,15 @@ CREDENTIAL_TYPES: dict[str, CredentialType] = {
         secret_fields=["password"],
         testable=True,
     ),
+}
+
+# Display label for every connection service a BotType can declare in
+# required_connections/supported_connections. WhatsApp isn't a
+# CredentialType (it's provisioned via WAHA, not a generic credential
+# form), so it needs its own entry rather than living in CREDENTIAL_TYPES.
+CONNECTION_LABELS: dict[str, str] = {
+    "whatsapp": "WhatsApp",
+    **{service: ct.label for service, ct in CREDENTIAL_TYPES.items()},
 }
 
 

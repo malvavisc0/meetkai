@@ -10,9 +10,11 @@
   {% if conn and conn.status == "connected" %}
     {# --- Connected state --- #}
     <div class="card status-card status-card--running">
+      <div class="cluster cluster--between">
+        <h3 class="card__title">WhatsApp</h3>
+        <span class="badge badge--live">Connected</span>
+      </div>
       <dl class="def-grid">
-        <dt>WhatsApp</dt>
-        <dd><span class="badge badge--live">Connected</span></dd>
         {% if conn.config.get('waha_session') %}
           <dt>Session</dt>
           <dd><span class="mono">{{ conn.config.get('waha_session', '?') }}</span></dd>
@@ -20,27 +22,25 @@
         <dt>Connected since</dt>
         <dd><span class="mono">{{ conn.updated_at }}</span></dd>
       </dl>
-    </div>
-    <div class="cluster">
-      <form method="post" action="/connections/whatsapp/refresh">
-        <button type="submit" class="button button--primary"><span class="icon">{% include "icons/rotate-cw.svg" %}</span> Refresh</button>
-      </form>
-      <form method="post" action="/connections/whatsapp/disconnect" data-confirm="Disconnect WhatsApp?">
-        <button type="submit" class="button">Disconnect</button>
-      </form>
+      <div class="cluster">
+        <form method="post" action="/connections/whatsapp/refresh">
+          <button type="submit" class="button button--primary"><span class="icon">{% include "icons/rotate-cw.svg" %}</span> Refresh</button>
+        </form>
+        <form method="post" action="/connections/whatsapp/disconnect" data-confirm="Disconnect WhatsApp?">
+          <button type="submit" class="button">Disconnect</button>
+        </form>
+      </div>
     </div>
 
   {% elif conn and conn.status == "connecting" %}
     {# --- Connecting state: live-updates via cockpit.js polling, scoped to
          this wrapper only (data-poll below) --- #}
-    <div class="stack" data-poll="3000">
-      <div class="card status-card status-card--warn">
-        <dl class="def-grid">
-          <dt>WhatsApp</dt>
-          <dd><span class="badge badge--warn">Connecting</span></dd>
-        </dl>
-        <p class="field__help">Waiting for WhatsApp — scan the QR and this page updates itself when it connects.</p>
+    <div class="card status-card status-card--warn" data-poll="3000">
+      <div class="cluster cluster--between">
+        <h3 class="card__title">WhatsApp</h3>
+        <span class="badge badge--warn">Connecting</span>
       </div>
+      <p class="field__help">Waiting for WhatsApp — scan the QR and this page updates itself when it connects.</p>
 
       {% if qr_url %}
         <div class="card card--center qr-panel">
@@ -57,33 +57,47 @@
   {% else %}
     {# --- Disconnected state --- #}
     <div class="card status-card status-card--stopped">
-      <dl class="def-grid">
-        <dt>WhatsApp</dt>
-        <dd><span class="badge badge--muted">Not connected</span></dd>
-      </dl>
+      <div class="cluster cluster--between">
+        <h3 class="card__title">WhatsApp</h3>
+        <span class="badge badge--warn">Not connected</span>
+      </div>
       <p class="field__help">Connect WhatsApp before starting a deployment that should answer real conversations.</p>
+      <form method="post" action="/connections/whatsapp/connect">
+        <button type="submit" class="button"><span class="icon">{% include "icons/plus.svg" %}</span> Connect</button>
+      </form>
     </div>
-    <form method="post" action="/connections/whatsapp/connect">
-      <button type="submit" class="button button--primary"><span class="icon">{% include "icons/plus.svg" %}</span> Connect WhatsApp</button>
-    </form>
   {% endif %}
 
   {# --- Database connection --- #}
   <div class="card">
     <div class="cluster cluster--between">
       <h3 class="card__title">Database</h3>
-      <a href="/connections/database" class="button button--ghost">Configure</a>
+      {% if has_database %}
+        <span class="badge badge--live">Connected</span>
+      {% else %}
+        <span class="badge badge--warn">Not connected</span>
+      {% endif %}
     </div>
     <p class="field__help">Connect a database so your bots can run read-only SQL queries against it.</p>
+    <div class="cluster">
+      <a href="/connections/database" class="button"><span class="icon">{% include "icons/plus.svg" %}</span>Configure</a>
+    </div>
   </div>
 
   {# --- SMTP connection --- #}
   <div class="card">
     <div class="cluster cluster--between">
-      <h3 class="card__title">Email (SMTP)</h3>
-      <a href="/connections/smtp" class="button button--ghost">Configure</a>
+      <h3 class="card__title">Email via SMTP</h3>
+      {% if has_smtp %}
+        <span class="badge badge--live">Connected</span>
+      {% else %}
+        <span class="badge badge--warn">Not connected</span>
+      {% endif %}
     </div>
     <p class="field__help">Connect an email account so your bots can send emails.</p>
+    <div class="cluster">
+      <a href="/connections/smtp" class="button"><span class="icon">{% include "icons/plus.svg" %}</span> Setup</a>
+    </div>
   </div>
 </div>
 {% endblock %}

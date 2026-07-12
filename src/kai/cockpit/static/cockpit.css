@@ -451,6 +451,21 @@
     align-items: center;
   }
 
+  /* Pins a cluster's children to opposite ends (e.g. a card's title on the
+     left, its status badge or action on the right) instead of the default
+     left-packed flow. */
+  .cluster--between {
+    justify-content: space-between;
+  }
+
+  /* .card__title carries a bottom margin for the common case of a title
+     stacked above other block content. Inside a cluster row (e.g. title +
+     status badge side-by-side) that margin throws off vertical centering,
+     so strip it here — mirrors the .deployment-card__title override. */
+  .cluster--between .card__title {
+    margin: 0;
+  }
+
   .page-title {
     font-family: var(--font-display);
     font-weight: 600;
@@ -1617,21 +1632,6 @@
   .status-strip--reading {
     border-color: color-mix(in srgb, var(--color-warn) 45%, var(--color-border));
     background: var(--color-warn-bg);
-  }
-
-  .console-health {
-    background: var(--color-surface-alt);
-    box-shadow: none;
-  }
-
-  /* .badge--muted's background is the same token as .console-health's own
-     background, so a muted badge (0 bots running / 0 stopped / 0 need
-     attention) would otherwise render with an invisible pill — it would
-     look like bare dot+text next to the clearly-pilled live/warn badges in
-     the same strip. Give it the plain white surface here so every badge in
-     the summary row reads as a pill, not just the colored ones. */
-  .console-health .badge--muted {
-    background: var(--color-surface);
   }
 
   .count-up {

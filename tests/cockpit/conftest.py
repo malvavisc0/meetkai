@@ -112,6 +112,46 @@ def user(db):
     return u
 
 
+def _connect_whatsapp(db, user, status: str = "connected"):
+    """Create (or update) a WhatsApp ``Connection`` row for ``user``.
+
+    Plain helper, not a fixture, so tests that manage their own Connection
+    rows (or specifically test the disconnected/missing-connection path)
+    are never forced through it. Used by ``connected_user`` below and by
+    tests/fixtures in other files that need a ready-to-go WhatsApp
+    connection before calling ``DeploymentsService.create()``, which
+    enforces ``BotType.required_connections``.
+    """
+    from kai.cockpit.models import Connection
+
+    conn = Connection(
+        user_id=user.id,
+        service="whatsapp",
+        status=status,
+        config={
+            "waha_session": f"kai-{user.kai_slug or user.email.split('@')[0]}",
+            "waha_webhook_port": 8101,
+            "waha_webhook_path": "/webhook/whatsapp-1",
+        },
+        created_at=datetime.now(UTC).isoformat(),
+        updated_at=datetime.now(UTC).isoformat(),
+    )
+    db.add(conn)
+    db.commit()
+    db.refresh(conn)
+    return conn
+
+
+@pytest.fixture
+def connected_user(user, db):
+    """The ``user`` fixture with a connected WhatsApp ``Connection`` already
+    attached — for the majority of tests that just want a "ready to go"
+    user able to create a ``waha`` deployment.
+    """
+    _connect_whatsapp(db, user)
+    return user
+
+
 @pytest.fixture
 def client(db, monkeypatch):
     """A Starlette TestClient wired to the isolated ``db`` session.

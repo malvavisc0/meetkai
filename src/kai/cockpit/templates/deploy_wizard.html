@@ -24,20 +24,20 @@
     {% endif %}
   </div>
 
-  <form method="post" action="/deployments/new" class="card stack">
+  <form method="post" action="/deployments/new" class="card">
     <p class="card__eyebrow">Configuration</p>
     <h3 class="card__title">Bot identity &amp; voice</h3>
     <input type="hidden" name="bot_type" value="{{ bot_type }}">
 
     <div class="field">
       <label class="field__label" for="goal">What should this bot do?</label>
-      <textarea id="goal" name="goal" rows="4" required data-autosize>{{ goal or "" }}</textarea>
+      <textarea id="goal" name="goal" rows="4" required data-autosize {% if missing_connections %}disabled{% endif %}>{{ goal or "" }}</textarea>
       <p class="field__help">A working starting point is filled in — edit it so it fits your situation, or leave it. KAI follows whatever you write here.</p>
     </div>
 
     <div class="field field--narrow">
       <label class="field__label" for="language">Language</label>
-      <select id="language" name="language">
+      <select id="language" name="language" {% if missing_connections %}disabled{% endif %}>
         {% if language and language not in languages %}
           <option value="{{ language }}" selected>{{ language }}</option>
         {% endif %}
@@ -49,7 +49,7 @@
     </div>
     <div class="field field--narrow">
       <label class="field__label" for="voice">Voice</label>
-      <select id="voice" name="voice">
+      <select id="voice" name="voice" {% if missing_connections %}disabled{% endif %}>
         {% for v in voices %}
           <option value="{{ v }}" {% if v == voice %}selected{% endif %}>{{ v }}</option>
         {% endfor %}
@@ -58,10 +58,14 @@
     </div>
 
     <div class="cluster">
-      <button type="submit" class="button button--primary"><span class="icon">{% include "icons/plus.svg" %}</span> Create deployment</button>
-      <a href="/console" class="button">Cancel</a>
+      {% if missing_connections %}
+        <p class="muted text-warn">Connect {{ missing_connections|join(", ") }} before creating this bot.</p>
+        <a href="/connections" class="button">Connect {{ missing_connections|join(", ") }}</a>
+      {% else %}
+        <button type="submit" class="button button--primary"><span class="icon">{% include "icons/plus.svg" %}</span> Create deployment</button>
+        <a href="/console" class="button">Cancel</a>
+      {% endif %}
     </div>
-    <p class="field__help">KAI will be ready to start as soon as you connect WhatsApp.</p>
   </form>
 </div>
 {% endblock %}

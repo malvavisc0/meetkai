@@ -167,13 +167,22 @@ class WhisperVendor(Vendor):
         return dest
 
     def install(self) -> VendorResult:
+        whisper_cli = self.vendor_dir / "whisper-cli"
+        whisper_server = self.vendor_dir / "whisper-server"
         if self.is_installed():
-            logger.info("whisper-cli already present — rebuilding")
+            logger.info(f"whisper-cli already present at {whisper_cli} — skipping")
+            model = self._download_model()
+            return VendorResult(
+                self.name,
+                ok=True,
+                path=str(whisper_cli),
+                detail=f"already installed, model={model.name}",
+            )
         self._build()
         model = self._download_model()
-        logger.info("whisper-cli -> %s", self.vendor_dir / "whisper-cli")
-        logger.info("whisper-server -> %s", self.vendor_dir / "whisper-server")
-        logger.info("whisper model -> %s", model)
+        logger.info(f"whisper-cli -> {whisper_cli}")
+        logger.info(f"whisper-server -> {whisper_server}")
+        logger.info(f"whisper model -> {model}")
         return VendorResult(
             self.name,
             ok=True,

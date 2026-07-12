@@ -9,7 +9,7 @@
 
   {% set healthy = service_health | selectattr("ok") | list %}
   <div class="card health-card">
-    <p class="card__eyebrow">Service health</p>
+    <p class="card__eyebrow">Dependencies</p>
     <div class="health-grid">
       {% for svc in service_health %}
         <div class="health-grid__row">

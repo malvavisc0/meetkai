@@ -12,7 +12,7 @@
     </div>
   </header>
 
-  <form method="post" action="/connections/database" class="card stack">
+  <form method="post" action="/connections/database" class="card">
     <div class="field">
       <label class="field__label" for="label">Label</label>
       <input id="label" type="text" name="label" value="{{ conn.config.get('label', '') if conn else '' }}" required>

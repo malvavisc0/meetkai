@@ -14,7 +14,40 @@ def _create_user(email: str = "bob@x.com") -> None:
     )
 
 
+def _connect_whatsapp(email: str = "bob@x.com") -> None:
+    """Insert a connected WhatsApp ``Connection`` row directly — bypasses
+    ``connection connect``, which talks to a real WAHA instance and isn't
+    mockable at the CLI-invocation boundary these tests use.
+    ``DeploymentsService.create()`` requires this connection to exist.
+    """
+    from kai.cockpit.db import SessionLocal
+    from kai.cockpit.models import Connection, User
+
+    db = SessionLocal()
+    try:
+        db_user = db.query(User).filter(User.email == email).first()
+        assert db_user is not None, f"user '{email}' not found"
+        db.add(
+            Connection(
+                user_id=db_user.id,
+                service="whatsapp",
+                status="connected",
+                config={
+                    "waha_session": "kai-bob",
+                    "waha_webhook_port": 8101,
+                    "waha_webhook_path": "/webhook/whatsapp-1",
+                },
+                created_at="now",
+                updated_at="now",
+            )
+        )
+        db.commit()
+    finally:
+        db.close()
+
+
 def _create_deployment(email: str = "bob@x.com") -> int:
+    _connect_whatsapp(email)
     res = runner.invoke(
         app,
         [

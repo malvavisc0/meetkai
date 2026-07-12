@@ -6,21 +6,15 @@ import pytest
 
 from kai.cockpit.deployments import DeploymentsService
 from kai.cockpit.models import Connection
+from tests.cockpit.conftest import _connect_whatsapp
 
 
-def _whatsapp_conn(user_id: int) -> Connection:
-    return Connection(
-        user_id=user_id,
-        service="whatsapp",
-        status="connected",
-        config={
-            "waha_session": "kai-bob",
-            "waha_webhook_port": 8101,
-            "waha_webhook_path": "/webhook/whatsapp-1",
-        },
-        created_at="now",
-        updated_at="now",
-    )
+@pytest.fixture(autouse=True)
+def _whatsapp_connected(user, db):
+    """DeploymentsService.create() enforces required_connections — every
+    test in this module needs a connected WhatsApp before it can create its
+    ``waha`` deployment."""
+    _connect_whatsapp(db, user)
 
 
 def _brain_conn(user_id: int, *, instruction: str = "default rules") -> Connection:
@@ -140,7 +134,6 @@ class TestStartBrainMandatory(_StartBrainPolicyBase):
         dep = svc.create(user, "waha", "goal", "English")
         svc.edit(dep, brain_mandatory=True)
 
-        db.add(_whatsapp_conn(user.id))
         db.add(_brain_conn(user.id))
         db.commit()
 
@@ -152,7 +145,6 @@ class TestStartBrainMandatory(_StartBrainPolicyBase):
         dep = svc.create(user, "waha", "goal", "English")
         # brain_mandatory is None by default
 
-        db.add(_whatsapp_conn(user.id))
         db.add(_brain_conn(user.id))
         db.commit()
 
@@ -164,7 +156,6 @@ class TestStartBrainMandatory(_StartBrainPolicyBase):
         dep = svc.create(user, "waha", "goal", "English")
         svc.edit(dep, brain_mandatory=False)
 
-        db.add(_whatsapp_conn(user.id))
         db.add(_brain_conn(user.id))
         db.commit()
 
@@ -178,7 +169,6 @@ class TestStartBrainInstruction(_StartBrainPolicyBase):
         dep = svc.create(user, "waha", "goal", "English")
         svc.edit(dep, brain_instruction="custom rules")
 
-        db.add(_whatsapp_conn(user.id))
         db.add(_brain_conn(user.id, instruction="default rules"))
         db.commit()
 
@@ -190,7 +180,6 @@ class TestStartBrainInstruction(_StartBrainPolicyBase):
         dep = svc.create(user, "waha", "goal", "English")
         # brain_instruction is None → inherit from brain connection
 
-        db.add(_whatsapp_conn(user.id))
         db.add(_brain_conn(user.id, instruction="default rules"))
         db.commit()
 
@@ -202,7 +191,6 @@ class TestStartBrainInstruction(_StartBrainPolicyBase):
         dep = svc.create(user, "waha", "goal", "English")
         svc.edit(dep, brain_instruction="   ")  # whitespace-only → falls back
 
-        db.add(_whatsapp_conn(user.id))
         db.add(_brain_conn(user.id, instruction="default rules"))
         db.commit()
 
@@ -215,7 +203,6 @@ class TestStartBrainWorkspace(_StartBrainPolicyBase):
         svc = DeploymentsService(db)
         dep = svc.create(user, "waha", "goal", "English")
 
-        db.add(_whatsapp_conn(user.id))
         db.add(_brain_conn(user.id))
         db.commit()
 
@@ -227,9 +214,6 @@ class TestStartNoBrain(_StartBrainPolicyBase):
     def test_no_brain_env_vars_when_no_connection(self, db, user, monkeypatch, tmp_path):
         svc = DeploymentsService(db)
         dep = svc.create(user, "waha", "goal", "English")
-
-        db.add(_whatsapp_conn(user.id))
-        db.commit()
 
         env = self._start_and_capture_env(svc, dep, monkeypatch, tmp_path, user)
         assert "KAI_BRAIN_WORKSPACE" not in env

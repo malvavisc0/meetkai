@@ -52,7 +52,10 @@ def conn(db, bob):
 
 
 @pytest.fixture
-def dep(db, bob):
+def dep(db, bob, conn):
+    """Depends on ``conn`` — DeploymentsService.create() now requires a
+    connected WhatsApp Connection to exist before a ``waha`` deployment can
+    be created at all."""
     from kai.cockpit.deployments import DeploymentsService
 
     return DeploymentsService(db).create(bob, "waha", "be helpful", "English")
@@ -159,14 +162,18 @@ class TestChatsJson:
         assert body["error"] == "WhatsApp API is not reachable"
         assert "bad waha settings" not in body["error"]
 
-    def test_no_connection_returns_empty(self, client, db, bob, dep, monkeypatch):
+    def test_no_connection_returns_empty(self, client, db, bob, conn, dep, monkeypatch):
         _login(client, db, bob)
         _mock_waha(monkeypatch, overview=[{"id": "1@c.us", "name": "x"}])
+        # dep required conn to exist at creation time — remove it now to
+        # simulate an operator who disconnected WhatsApp afterward.
+        db.delete(conn)
+        db.commit()
         r = client.get(f"/deployments/{dep.id}/chats.json")
         assert r.status_code == 200
         assert r.json()["chats"] == []
 
-    def test_unauthenticated_redirects(self, client, db, bob, dep):
+    def test_unauthenticated_redirects(self, client, db, bob, conn, dep):
         r = client.get(f"/deployments/{dep.id}/chats.json", follow_redirects=False)
         assert r.status_code == 302
         assert r.headers["location"] == "/login"
@@ -215,7 +222,7 @@ class TestWhitelistBlacklistRoundTrip:
     through the form submit.
     """
 
-    def test_normalizes_whitespace_and_blank_lines(self, client, db, bob, dep, monkeypatch):
+    def test_normalizes_whitespace_and_blank_lines(self, client, db, bob, conn, dep, monkeypatch):
         _login(client, db, bob)
         messy = "  120363@g.us  \n\n 591@c.us \n\n  \n 154@lid "
         r = client.post(

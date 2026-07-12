@@ -27,7 +27,7 @@ def deployment_create(
 ):
     """Create a new deployment for a user."""
     from kai.cockpit.db import SessionLocal, create_all
-    from kai.cockpit.deployments import DeploymentsService
+    from kai.cockpit.deployments import ConnectionRequiredError, DeploymentsService
     from kai.cockpit.models import User
 
     create_all()
@@ -41,7 +41,14 @@ def deployment_create(
             err_line(f"user '{user}' is disabled")
             raise typer.Exit(1)
         svc = DeploymentsService(db)
-        dep = svc.create(db_user, bot_type, goal, language, voice or None)
+        try:
+            dep = svc.create(db_user, bot_type, goal, language, voice or None)
+        except ConnectionRequiredError as exc:
+            err_line(str(exc))
+            raise typer.Exit(1) from exc
+        except ValueError as exc:
+            err_line(str(exc))
+            raise typer.Exit(1) from exc
         console.print(
             f"{GL_OK} [{OK}]created deployment[/{OK}]  id={dep.id} bot_type={dep.bot_type} "
             f"language={dep.language} voice={dep.voice}"
