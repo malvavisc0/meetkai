@@ -253,6 +253,9 @@ class Bot(BaseBot):
                 return []
             return [str(entry).strip() for entry in raw if isinstance(entry, str) and entry.strip()]
 
+        media_data = data.get("media", {})
+        participation_data = data.get("participation", {})
+
         return BotConfig(
             trigger_keyword=str(data.get("trigger_keyword", "kai")).strip(),
             whitelist=_parse_id_list(data.get("whitelist"), "whitelist"),
@@ -261,30 +264,22 @@ class Bot(BaseBot):
             timezone=str(data.get("timezone", "")).strip() or None,
             mentions_enabled=bool(data.get("mentions_enabled", True)),
             media=MediaConfig(
-                image_enabled=bool(data.get("media", {}).get("image_enabled", True)),
+                image_enabled=bool(media_data.get("image_enabled", True)),
                 stt_enabled=bool(
-                    data.get("media", {}).get(
-                        "stt_enabled", data.get("media", {}).get("voice_enabled", True)
-                    )
+                    media_data.get("stt_enabled", media_data.get("voice_enabled", True))
                 ),
-                tts_enabled=bool(data.get("media", {}).get("tts_enabled", True)),
-                video_enabled=bool(data.get("media", {}).get("video_enabled", True)),
-                instagram_enabled=bool(data.get("media", {}).get("instagram_enabled", True)),
-                max_size_mb=int(data.get("media", {}).get("max_size_mb", 10)),
+                tts_enabled=bool(media_data.get("tts_enabled", True)),
+                video_enabled=bool(media_data.get("video_enabled", True)),
+                instagram_enabled=bool(media_data.get("instagram_enabled", True)),
+                max_size_mb=media_data.get("max_size_mb", 10),
             ),
             participation=ParticipationConfig(
-                enabled=bool(data.get("participation", {}).get("enabled", True)),
-                rate=float(data.get("participation", {}).get("rate", _DEFAULT_PARTICIPATION_RATE)),
-                cooldown_seconds=int(
-                    data.get("participation", {}).get(
-                        "cooldown_seconds", _DEFAULT_PARTICIPATION_COOLDOWN
-                    )
+                enabled=bool(participation_data.get("enabled", True)),
+                rate=participation_data.get("rate", _DEFAULT_PARTICIPATION_RATE),
+                cooldown_seconds=participation_data.get(
+                    "cooldown_seconds", _DEFAULT_PARTICIPATION_COOLDOWN
                 ),
-                streak_max=int(
-                    data.get("participation", {}).get(
-                        "streak_max", _DEFAULT_PARTICIPATION_STREAK_MAX
-                    )
-                ),
+                streak_max=participation_data.get("streak_max", _DEFAULT_PARTICIPATION_STREAK_MAX),
             ),
         )
 
