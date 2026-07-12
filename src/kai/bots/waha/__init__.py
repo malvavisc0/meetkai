@@ -1119,9 +1119,8 @@ class Bot(BaseBot):
             return
         if not self._should_send_voice_followup(chat_id):
             return
-        sent = await self._send_voice_reply(chat_id, text)
-        if sent:
-            self._last_voice_at[chat_id] = time.monotonic()
+        self._last_voice_at[chat_id] = time.monotonic()
+        await self._send_voice_reply(chat_id, text)
 
     async def _handle_sleep_mode(
         self,

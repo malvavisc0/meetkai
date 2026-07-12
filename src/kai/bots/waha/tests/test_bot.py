@@ -1376,6 +1376,31 @@ class TestVoiceFollowup:
         bot._send_with_retry.assert_awaited_once()
         bot._send_voice_reply.assert_awaited_once_with("123@c.us", "hi there")
 
+    @pytest.mark.asyncio
+    async def test_failed_followup_still_starts_cooldown(self, monkeypatch):
+        # A failed synthesis/delivery attempt must still record last_voice_at,
+        # otherwise a chat with consistently failing TTS (e.g. replies always
+        # over kokoro_max_chars) gets re-rolled and re-synthesized on every
+        # single text reply forever, defeating the cooldown entirely.
+        bot = self._voice_ready_bot(voice_note_rate=1.0, voice_note_cooldown=300)
+        bot._send_voice_reply = AsyncMock(return_value=False)
+        agent = MagicMock()
+        agent.chat = AsyncMock(return_value=_chat_result("hi there"))
+        agent.observe = AsyncMock()
+        bot._agent = agent
+        monkeypatch.setattr("random.random", lambda: 0.0)
+
+        await bot._handle_message(self._dm_payload())
+
+        bot._send_voice_reply.assert_awaited_once_with("123@c.us", "hi there")
+        assert "123@c.us" in bot._last_voice_at
+
+        # Second reply arrives immediately after: cooldown must block a
+        # second synthesis attempt even though the first one failed.
+        await bot._handle_message(self._dm_payload())
+
+        bot._send_voice_reply.assert_awaited_once()
+
 
 class TestGroupRosterRefresh:
     @pytest.mark.asyncio
