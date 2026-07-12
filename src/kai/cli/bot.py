@@ -483,6 +483,7 @@ def _start(
                 except Exception:
                     logger.debug("bot.stop() raised during shutdown", exc_info=True)
             await agent.flush()
+            await agent.aclose()
             if brain_client is not None:
                 try:
                     await brain_client.close()

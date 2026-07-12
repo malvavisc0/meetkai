@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Any
 from zoneinfo import ZoneInfo
 
+import httpx
 from llama_index.core.base.llms.types import ImageBlock, TextBlock, VideoBlock
 from llama_index.core.llms import ChatMessage, MessageRole
 from llama_index.core.tools import FunctionTool
@@ -258,7 +259,14 @@ class KaiAgent:
         self._tool_workflows: list[str] = []
         self._tool_instructions = get_tool_instructions(self._tools)
         self._tool_call_callback: ToolCallCallback | None = None
-        self._llm = self._build_llm()
+        # A single long-lived httpx.AsyncClient shared with the OpenAI SDK's
+        # AsyncOpenAI client (via ``async_http_client=``). The SDK does not
+        # take ownership/close it, so ``aclose()`` must be called on shutdown.
+        self._http = httpx.AsyncClient(
+            timeout=httpx.Timeout(300.0, connect=10.0),
+            limits=httpx.Limits(max_connections=10, max_keepalive_connections=5),
+        )
+        self._llm = self._build_llm(async_http_client=self._http)
         self._history: OrderedDict[str, list[ChatMessage]] = OrderedDict()
         self._timestamps: OrderedDict[str, list[str | None]] = OrderedDict()
         self._load_history_state()
@@ -393,7 +401,9 @@ class KaiAgent:
         """
         self._tool_call_callback = callback
 
-    def _build_llm(self) -> OpenAILike:
+    def _build_llm(
+        self, async_http_client: httpx.AsyncClient | None = None
+    ) -> OpenAILike:
         additional_kwargs = {
             "extra_body": {
                 "chat_template_kwargs": {
@@ -408,6 +418,10 @@ class KaiAgent:
             is_chat_model=True,
             additional_kwargs=additional_kwargs,
             is_function_calling_model=True,
+            # Reuse the AsyncOpenAI client (and thus the shared httpx client)
+            # across calls so connection pooling/keepalive is effective.
+            reuse_client=True,
+            async_http_client=async_http_client,  # type: ignore[call-arg]
             # ``PydanticProgramMode.LLM`` makes any ``as_structured_llm`` call
             # (used elsewhere in the framework) route through text completion +
             # ``PydanticOutputParser`` rather than function-calling programs.
@@ -1192,3 +1206,12 @@ class KaiAgent:
                 pass
             self._flush_task = None
         await self._flush_now()
+
+    async def aclose(self) -> None:
+        """Release the shared httpx client backing the LLM.
+
+        After this the agent's LLM must not be used again. Call during
+        shutdown, after ``flush()``.
+        """
+        if not self._http.is_closed:
+            await self._http.aclose()
