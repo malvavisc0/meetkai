@@ -705,30 +705,93 @@ class DeploymentsService:
         self.db.commit()
 
     def delete(self, deployment: Deployment) -> None:
-        """Delete a deployment: stop it if running, then remove row + config.
+        """Delete a deployment: stop it if running, purge all per-bot state,
+        then remove the DB row.
 
-        Deleting a deployment does NOT disconnect WhatsApp
-        — the account-level Connection (and its WAHA session) is left intact
-        so the operator can redeploy without re-scanning the QR. Only the
-        deployment record and its cockpit-managed bot config file are
-        removed; per-bot state files (tasks/sleep/seen/history) under the
-        data volume are left in place (they're harmless once no process
-        references them and are cheap to keep).
+        Deleting a deployment does NOT disconnect WhatsApp — the
+        account-level Connection (and its WAHA session) is left intact so
+        the operator can redeploy without re-scanning the QR. Everything
+        else tied to this deployment instance — config file, chat history,
+        goal, runs, seen-IDs, sleep-state, and tasks — is purged so no
+        orphaned state survives.
         """
         if deployment.status == "running" or deployment.run_id:
             self.stop(deployment)
 
-        # Remove the cockpit-managed bot config file so a future deployment
-        # of the same instance id starts from BotConfig defaults rather than
-        # inheriting this one's stale overrides.
-        try:
-            config_path = config_writer.CONFIGS_DIR / f"{self._instance_id(deployment)}.json"
-            config_path.unlink(missing_ok=True)
-        except OSError:
-            pass
+        self._purge_bot_state(deployment)
 
         self.db.delete(deployment)
         self.db.commit()
+
+    def _purge_bot_state(self, deployment: Deployment) -> None:
+        """Remove every per-bot state file for this deployment instance.
+
+        Unlinks the cockpit-managed config, chat history, goal, runs,
+        seen-IDs, sleep-state, and tasks stores. Missing files are
+        silently skipped. The WhatsApp connection and WAHA session are
+        NOT touched (account-level, not deployment-level).
+        """
+        instance_id = self._instance_id(deployment)
+
+        from kai.bots import load_bot
+        from kai.config.settings import get_settings
+
+        settings = get_settings()
+
+        # agent_history_folder (history/goal/runs) is resolved by core.py
+        # relative to the process CWD. tasks_folder (seen/sleep/tasks) is
+        # resolved by base.py/waha's Bot relative to the *bot's own package
+        # directory* instead — see kai.bots.base.Bot._resolve_store_path and
+        # TaskScheduler setup. Mirror both exactly or a relative tasks_folder
+        # (the default, "data") silently purges the wrong directory.
+        #
+        # The exact filenames below are hardcoded to match four independent
+        # producers (kai.agent.core.KaiAgent._resolve_history_file for
+        # history/goal, kai.runs.runs_path for runs, kai.bots.waha.Bot's
+        # seen/sleep suffixes, and kai.bots.base.Bot's tasks suffix) — there
+        # is no single shared naming helper. runs_path is reused directly
+        # below since it's already a public function; the others have no
+        # public equivalent to call. If any of those naming rules ever
+        # changes, update the suffixes here too, or purge will silently
+        # leave orphaned files behind (unlink uses missing_ok=True).
+        history_suffixes = [
+            f"{instance_id}.json",
+            f"{instance_id}.json.goal",
+        ]
+        task_suffixes = [
+            f"{instance_id}.seen.json",
+            f"{instance_id}.sleep.json",
+            f"{instance_id}.tasks.json",
+        ]
+
+        if settings.agent_history_folder is not None:
+            history_folder = Path(settings.agent_history_folder)
+            for suffix in history_suffixes:
+                try:
+                    (history_folder / suffix).unlink(missing_ok=True)
+                except OSError:
+                    pass
+            try:
+                runs_path(settings.agent_history_folder, instance_id).unlink(missing_ok=True)
+            except OSError:
+                pass
+
+        if settings.tasks_folder is not None:
+            tasks_folder = Path(settings.tasks_folder)
+            if not tasks_folder.is_absolute():
+                tasks_folder = load_bot(deployment.bot_type).bot_dir / tasks_folder
+            for suffix in task_suffixes:
+                try:
+                    (tasks_folder / suffix).unlink(missing_ok=True)
+                except OSError:
+                    pass
+
+        # Cockpit-managed config (may live in a different directory than
+        # the state files above, e.g. data/configs/cockpit/).
+        try:
+            (config_writer.CONFIGS_DIR / f"{instance_id}.json").unlink(missing_ok=True)
+        except OSError:
+            pass
 
     def run_started_at(self, deployment: Deployment) -> str | None:
         """The run record's ``started_at`` ISO timestamp, or None if not running."""

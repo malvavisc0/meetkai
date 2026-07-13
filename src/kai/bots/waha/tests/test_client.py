@@ -8,12 +8,8 @@ from kai.bots.waha.config import WahaSettings
 
 @pytest.fixture
 def settings():
-    return WahaSettings(
-        _env_file=None,  # type: ignore[call-arg]
-        url="http://localhost:3000",
-        api_key="test-key",
-        session="default",
-        hmac_key="secret",
+    return WahaSettings.for_test(
+        url="http://localhost:3000", api_key="test-key", session="default", hmac_key="secret"
     )
 
 
@@ -346,12 +342,7 @@ class TestApiKeyHeader:
     @respx.mock
     @pytest.mark.asyncio
     async def test_no_api_key_when_empty(self):
-        settings = WahaSettings(
-            _env_file=None,  # type: ignore[call-arg]
-            url="http://localhost:3000",
-            api_key="",
-            hmac_key="secret",
-        )
+        settings = WahaSettings.for_test(url="http://localhost:3000", api_key="", hmac_key="secret")
         route = respx.get("/api/sessions").mock(return_value=Response(200, json=[]))
         client = WahaClient(settings)
         await client.get_sessions()

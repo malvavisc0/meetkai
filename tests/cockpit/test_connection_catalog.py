@@ -68,7 +68,7 @@ def _setup_run_registry(monkeypatch, tmp_path, instance_id: str):
     from kai.config.settings import Settings
     from kai.runs import RunRecord, RunRegistry, runs_path
 
-    fake_settings = Settings(_env_file=None, agent_history_folder=str(tmp_path))  # type: ignore[call-arg]
+    fake_settings = Settings.for_test(agent_history_folder=str(tmp_path))
     monkeypatch.setattr("kai.config.settings.get_settings", lambda: fake_settings)
     registry = RunRegistry(runs_path(fake_settings.agent_history_folder, instance_id))
     registry.replace(
@@ -116,7 +116,7 @@ class _StartBase:
         from kai.config.settings import Settings
         from kai.runs import RunRecord, RunRegistry, runs_path
 
-        fake_settings = Settings(_env_file=None, agent_history_folder=str(tmp_path))  # type: ignore[call-arg]
+        fake_settings = Settings.for_test(agent_history_folder=str(tmp_path))
         monkeypatch.setattr("kai.config.settings.get_settings", lambda: fake_settings)
 
         instance_id = f"{dep.bot_type}-{user.email}"

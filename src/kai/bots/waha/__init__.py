@@ -47,6 +47,7 @@ from kai.bots.waha.setup import (
 from kai.bots.waha.sleep_store import SleepStore
 from kai.bots.waha.stt import NoopSTT, STTProvider, create_stt_provider, resolve_whisper_language
 from kai.bots.waha.tts import (
+    SUPPORTED_KOKORO_LANGUAGE_NAMES,
     check_kokoro_available,
     detect_kokoro_lang,
     parse_voice_map,
@@ -179,7 +180,7 @@ class Bot(BaseBot):
         self._stt_language: str = "auto"
         self._tts_available: bool = False
         self._tts_voice: str = ""
-        self._tts_lang: str = "en-us"
+        self._tts_lang: str | None = "en-us"
         self._waha_client: WahaClient | None = None
         self._seen_store: SeenStore | None = None
         self._ffmpeg_path: str | None = None
@@ -228,6 +229,10 @@ class Bot(BaseBot):
             # Resolve the Kokoro lang code: an explicit KAI_WAHA_KOKORO_LANG
             # wins; otherwise derive it from the bot's configured language
             # (so an English bot gets lang="en-us" without extra configuration).
+            # ``None`` means the configured language has no Kokoro v1.0 voice
+            # at all (e.g. German, Dutch, Polish) — don't coerce it to
+            # "en-us", or replies get English phonemization in whatever
+            # unrelated voice was picked for that language.
             if self._waha.kokoro_lang:
                 self._tts_lang = self._waha.kokoro_lang
             else:
@@ -237,8 +242,12 @@ class Bot(BaseBot):
             # configured one keeps the operator's chosen voice; explicit
             # KAI_WAHA_KOKORO_VOICE_MAP entries override/extend that. Voice
             # replies detect the reply language at synthesis time, so a bot
-            # can mix languages in the same conversation.
-            self._voice_map: dict[str, str] = {self._tts_lang: self._tts_voice}
+            # can mix languages in the same conversation. Skipped entirely
+            # when the configured language isn't Kokoro-supported — there is
+            # no correct lang code to seed the operator's voice under.
+            self._voice_map: dict[str, str] = (
+                {self._tts_lang: self._tts_voice} if self._tts_lang else {}
+            )
             self._voice_map.update(parse_voice_map(self._waha.kokoro_voice_map))
             self._tts_available, reason = check_kokoro_available(
                 host=self._waha.kokoro_server_host,
@@ -1680,13 +1689,24 @@ class Bot(BaseBot):
         return None
 
     def _tts_capability_note(self) -> str:
-        """Per-turn context steering the agent off ``send_voice_note`` when TTS is offline.
+        """Per-turn context steering the agent on ``send_voice_note`` limits.
 
-        The action schema now omits ``send_voice_note`` when TTS is offline
-        (see :func:`action_cls_for_turn`'s ``tts_available`` gate), so this
-        note is a *fallback* advisory for the rare case the model still leans
-        toward voice. It also still reads on operator turns. Returns "" on a
-        healthy turn (voice notes work). The gate mirrors ``_send_voice_reply``.
+        Two independent gates, each with its own advisory:
+
+        1. TTS offline: the action schema already omits ``send_voice_note``
+           when TTS is offline (see :func:`action_cls_for_turn`'s
+           ``tts_available`` gate), so this note is a *fallback* advisory for
+           the rare case the model still leans toward voice.
+        2. TTS online but the bot's own configured language has no Kokoro
+           voice at all (``self._tts_lang is None``, e.g. a German-language
+           bot — see :func:`kai.bots.waha.tts.resolve_kokoro_lang`): voice
+           notes still work for replies Kokoro can detect as one of its
+           supported languages, but not as a *fallback* for the bot's own
+           inconclusive-language replies. The model needs the supported-
+           language list to know this rather than silently attempting (and
+           failing) a voice note, or promising one it can't deliver.
+
+        Returns "" only when voice notes are fully available with no caveats.
         """
         if not self._voice_enabled():
             return (
@@ -1694,6 +1714,15 @@ class Bot(BaseBot):
                 "not use the `send_voice_note` action — deliver the same text "
                 "via `reply` (or `send_dm` / `send_to_group` on an operator "
                 "turn) instead."
+            )
+        if self._tts_lang is None:
+            supported = ", ".join(SUPPORTED_KOKORO_LANGUAGE_NAMES)
+            return (
+                f"Voice notes only work in these languages: {supported}. "
+                f"This bot's configured language ({self._config.language}) is "
+                "not one of them, so `send_voice_note` may fail for short or "
+                "ambiguous replies in that language — prefer `reply` unless "
+                "the reply text is clearly one of the supported languages."
             )
         return ""
 

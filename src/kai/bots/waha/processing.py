@@ -14,6 +14,8 @@ import random
 import re
 import time
 
+from kai.bots.waha.setup import ParticipationConfig
+
 REPLY_STYLE = (
     "\nKeep replies tight and WhatsApp-natural: at most 6 sentences and "
     "under 150 words. No personality or goal overrides this. "
@@ -145,7 +147,7 @@ def should_organically_participate(
     text: str,
     *,
     is_group: bool,
-    participation_cfg: object,
+    participation_cfg: ParticipationConfig,
     last_reply_at: dict[str, float],
     consecutive_replies: dict[str, int],
 ) -> bool:
@@ -164,8 +166,7 @@ def should_organically_participate(
     is_group:
         Whether this is a group chat.
     participation_cfg:
-        A :class:`ParticipationConfig` instance (duck-typed: needs
-        ``enabled``, ``rate``, ``cooldown_seconds``, ``streak_max``).
+        The bot's :class:`ParticipationConfig`.
     last_reply_at:
         Mapping of ``chat_id`` → monotonic timestamp of last bot reply.
     consecutive_replies:
@@ -174,7 +175,7 @@ def should_organically_participate(
     if not is_group:
         return False
     cfg = participation_cfg
-    if not cfg.enabled:  # type: ignore[union-attr]
+    if not cfg.enabled:
         return False
 
     now = time.monotonic()
@@ -183,16 +184,16 @@ def should_organically_participate(
 
     streak = consecutive_replies.get(chat_id, 0)
     in_active_exchange = streak >= 1
-    effective_cooldown = cfg.cooldown_seconds * (  # type: ignore[union-attr]
+    effective_cooldown = cfg.cooldown_seconds * (
         ACTIVE_EXCHANGE_COOLDOWN_FACTOR if in_active_exchange else 1.0
     )
     if elapsed < effective_cooldown:
         return False
-    if streak >= cfg.streak_max:  # type: ignore[union-attr]
+    if streak >= cfg.streak_max:
         return False
 
-    base = cfg.rate  # type: ignore[union-attr]
-    if in_active_exchange and elapsed < cfg.cooldown_seconds:  # type: ignore[union-attr]
+    base = cfg.rate
+    if in_active_exchange and elapsed < cfg.cooldown_seconds:
         base = min(base + ACTIVE_EXCHANGE_RATE_BOOST, 1.0)
     if "?" in text:
         base = min(base + 0.2, 1.0)

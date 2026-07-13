@@ -4,7 +4,14 @@ SQLAlchemy 2.0 declarative (Mapped / mapped_column). No relationships in v1
 — all joins are explicit via foreign keys.
 """
 
-from sqlalchemy import JSON, Boolean, ForeignKey, Integer, String, UniqueConstraint
+from sqlalchemy import (
+    JSON,
+    Boolean,
+    ForeignKey,
+    Integer,
+    String,
+    UniqueConstraint,
+)
 from sqlalchemy.orm import Mapped, mapped_column
 
 from kai.cockpit.db import Base
@@ -12,6 +19,7 @@ from kai.cockpit.db import Base
 
 class User(Base):
     __tablename__ = "users"
+    __table_args__ = {"sqlite_autoincrement": True}
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     email: Mapped[str] = mapped_column(String, unique=True, nullable=False)
@@ -35,7 +43,10 @@ class User(Base):
 
 class Deployment(Base):
     __tablename__ = "deployments"
-    __table_args__ = (UniqueConstraint("user_id", "bot_type"),)
+    __table_args__ = (
+        UniqueConstraint("user_id", "bot_type"),
+        {"sqlite_autoincrement": True},
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
@@ -73,6 +84,7 @@ class Connection(Base):
         # backends allow multiple NULLs through a unique constraint, so
         # non-whatsapp connections that never set this column are unaffected).
         UniqueConstraint("webhook_port"),
+        {"sqlite_autoincrement": True},
     )
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
@@ -90,6 +102,7 @@ class Connection(Base):
 
 class LoginRequest(Base):
     __tablename__ = "login_requests"
+    __table_args__ = {"sqlite_autoincrement": True}
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
@@ -101,6 +114,7 @@ class LoginRequest(Base):
 
 class LoginToken(Base):
     __tablename__ = "login_tokens"
+    __table_args__ = {"sqlite_autoincrement": True}
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     token: Mapped[str] = mapped_column(String, unique=True, nullable=False)

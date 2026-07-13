@@ -288,8 +288,7 @@ class TestKaiAgent:
 class TestKaiAgentChat:
     @pytest.fixture
     def settings(self):
-        return Settings(
-            _env_file=None,  # type: ignore[call-arg]
+        return Settings.for_test(
             llm_api_base="http://localhost:8080/v1",
             llm_api_key="test-key",
             llm_model="test-model",
@@ -454,8 +453,7 @@ class TestKaiAgentChat:
         )
 
     def test_build_llm_enables_thinking_when_configured(self):
-        settings = Settings(
-            _env_file=None,  # type: ignore[call-arg]
+        settings = Settings.for_test(
             llm_api_base="http://localhost:8080/v1",
             llm_api_key="test-key",
             llm_model="test-model",
@@ -510,8 +508,7 @@ class TestKaiAgentChat:
 class TestKaiAgentContext:
     @pytest.fixture
     def settings(self):
-        return Settings(
-            _env_file=None,  # type: ignore[call-arg]
+        return Settings.for_test(
             llm_api_base="http://localhost:8080/v1",
             llm_api_key="test-key",
             llm_model="test-model",
@@ -596,8 +593,7 @@ class TestKaiAgentContext:
 class TestKaiAgentToolHistory:
     @pytest.fixture
     def settings(self):
-        return Settings(
-            _env_file=None,  # type: ignore[call-arg]
+        return Settings.for_test(
             llm_api_base="http://localhost:8080/v1",
             llm_api_key="test-key",
             llm_model="test-model",
@@ -934,8 +930,7 @@ class TestKaiAgentToolHistory:
 class TestAuditFixes:
     @pytest.fixture
     def settings(self):
-        return Settings(
-            _env_file=None,  # type: ignore[call-arg]
+        return Settings.for_test(
             llm_api_base="http://localhost:8080/v1",
             llm_api_key="test-key",
             llm_model="test-model",
@@ -1127,8 +1122,7 @@ class TestAuditFixes:
 
 class TestBotHistoryFolderIsolation:
     def test_history_file_resolved_from_folder_and_namespace(self, tmp_path):
-        settings = Settings(
-            _env_file=None,  # type: ignore[call-arg]
+        settings = Settings.for_test(
             llm_api_base="http://localhost:8080/v1",
             llm_api_key="test-key",
             agent_history_folder=tmp_path,
@@ -1137,8 +1131,7 @@ class TestBotHistoryFolderIsolation:
         assert agent._history_file == tmp_path / "waha.json"
 
     def test_history_file_default_namespace(self, tmp_path):
-        settings = Settings(
-            _env_file=None,  # type: ignore[call-arg]
+        settings = Settings.for_test(
             llm_api_base="http://localhost:8080/v1",
             llm_api_key="test-key",
             agent_history_folder=tmp_path,
@@ -1147,8 +1140,7 @@ class TestBotHistoryFolderIsolation:
         assert agent._history_file == tmp_path / "default.json"
 
     def test_history_file_none_when_folder_unset(self):
-        settings = Settings(
-            _env_file=None,  # type: ignore[call-arg]
+        settings = Settings.for_test(
             llm_api_base="http://localhost:8080/v1",
             llm_api_key="test-key",
             agent_history_folder=None,
@@ -1158,14 +1150,12 @@ class TestBotHistoryFolderIsolation:
 
     def test_per_bot_history_isolation(self, tmp_path):
         folder = tmp_path / "data"
-        settings_waha = Settings(
-            _env_file=None,  # type: ignore[call-arg]
+        settings_waha = Settings.for_test(
             llm_api_base="http://localhost:8080/v1",
             llm_api_key="test-key",
             agent_history_folder=folder,
         )
-        settings_email = Settings(
-            _env_file=None,  # type: ignore[call-arg]
+        settings_email = Settings.for_test(
             llm_api_base="http://localhost:8080/v1",
             llm_api_key="test-key",
             agent_history_folder=folder,
@@ -1188,8 +1178,7 @@ class TestBotHistoryFolderIsolation:
 class TestHistoryEdits:
     @pytest.fixture
     def settings(self):
-        return Settings(
-            _env_file=None,  # type: ignore[call-arg]
+        return Settings.for_test(
             llm_api_base="http://localhost:8080/v1",
             llm_api_key="test-key",
             llm_model="test-model",
@@ -1269,8 +1258,7 @@ class TestStructuredPredictionContract:
 
     @pytest.fixture
     def settings(self):
-        return Settings(
-            _env_file=None,  # type: ignore[call-arg]
+        return Settings.for_test(
             llm_api_base="http://localhost:8080/v1",
             llm_api_key="test-key",
             llm_model="test-model",

@@ -383,7 +383,7 @@ class TestConfigResolution:
 
         monkeypatch.setattr(
             "kai.bots.base.get_settings",
-            lambda: Settings(_env_file=None, configs_dir=configs_dir),  # type: ignore[call-arg]
+            lambda: Settings.for_test(configs_dir=configs_dir),
         )
         bot = _make_bot(bot_dir=tmp_path)
         path = bot.resolve_config_path()
@@ -399,7 +399,7 @@ class TestConfigResolution:
 
         monkeypatch.setattr(
             "kai.bots.base.get_settings",
-            lambda: Settings(_env_file=None, configs_dir=configs_dir),  # type: ignore[call-arg]
+            lambda: Settings.for_test(configs_dir=configs_dir),
         )
         bot = _make_bot(bot_dir=tmp_path)
         path = bot.resolve_config_path()
@@ -412,7 +412,7 @@ class TestConfigResolution:
         configs_dir.mkdir()
         monkeypatch.setattr(
             "kai.bots.base.get_settings",
-            lambda: Settings(_env_file=None, configs_dir=configs_dir),  # type: ignore[call-arg]
+            lambda: Settings.for_test(configs_dir=configs_dir),
         )
         bot = _make_bot(bot_dir=tmp_path)
         assert bot.resolve_config_path() is None
@@ -429,7 +429,7 @@ class TestConfigResolution:
 
         monkeypatch.setattr(
             "kai.bots.base.get_settings",
-            lambda: Settings(_env_file=None, configs_dir=configs_dir),  # type: ignore[call-arg]
+            lambda: Settings.for_test(configs_dir=configs_dir),
         )
         bot = _make_bot(bot_dir=tmp_path)
         config = bot._load_config()

@@ -53,10 +53,19 @@ LANGUAGE_VOICE_MAP: dict[str, str] = {
     "Spanish": "ef_dora",
     "English": "af_heart",
     "French": "ff_siwis",
-    "German": "hf_alpha",
     "Italian": "if_sara",
     "Portuguese": "pf_dora",
 }
+
+# Languages the LLM can be told to reply in, beyond the ones Kokoro v1.0 has
+# a voice for (LANGUAGE_VOICE_MAP above). German has no Kokoro v1.0 voice at
+# all — a bot configured for German still replies in German text; it just
+# never gets voice notes (see kai.bots.waha.tts.resolve_kokoro_lang). Do NOT
+# add German (or any other Kokoro-unsupported language) to
+# LANGUAGE_VOICE_MAP with a made-up voice — that previously mapped German to
+# "hf_alpha" (a Hindi voice), which made German voice replies get
+# synthesized with English phonemization in a Hindi voice.
+AGENT_ONLY_LANGUAGES: tuple[str, ...] = ("German",)
 
 
 @dataclass(frozen=True)

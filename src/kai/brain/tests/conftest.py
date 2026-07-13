@@ -12,7 +12,7 @@ def _clean_brain_env(monkeypatch):
     pydantic-settings reads os.environ, and ``_env_file=None`` only disables
     .env *file* loading — it does not stop real exported env vars (a shell
     that sourced .env, or a running ``kai start``) from overriding the Field
-    defaults. Without this, ``BrainSettings(_env_file=None)`` picks up the
+    defaults. Without this, ``BrainSettings.for_test()`` picks up the
     leaked base_url / api_key and the "defaults are empty" assertions fail.
     """
     for key in list(os.environ):
@@ -22,8 +22,7 @@ def _clean_brain_env(monkeypatch):
 
 @pytest.fixture
 def settings():
-    return BrainSettings(
-        _env_file=None,  # type: ignore[call-arg]
+    return BrainSettings.for_test(
         base_url="http://localhost:9621",
         lightrag_api_key="lightrag-test-key",
         workspace="kai-test",

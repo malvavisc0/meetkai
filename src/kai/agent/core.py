@@ -998,11 +998,11 @@ class KaiAgent:
                         *predict_messages,
                         ChatMessage(role=MessageRole.ASSISTANT, content=raw_text),
                         ChatMessage(
-                            role=MessageRole.USER,
+                            role=MessageRole.SYSTEM,
                             content=(
-                                "That was not valid JSON. Return ONLY a JSON "
-                                "object matching the schema — no prose, no "
-                                "code fences, no field labels."
+                                "The previous response was not valid JSON. "
+                                "Return ONLY a JSON object matching the schema — "
+                                "no prose, no code fences, no field labels."
                             ),
                         ),
                     ]

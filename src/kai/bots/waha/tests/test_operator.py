@@ -277,6 +277,30 @@ class TestHandleOperator:
         assert extra == bot._OPERATOR_TURN_CONTEXT
 
     @pytest.mark.asyncio
+    async def test_operator_turn_injects_language_note_when_bot_language_unsupported(self):
+        """A German (or any Kokoro-unsupported language) bot must be told
+        which languages voice notes actually work for, instead of silently
+        attempting (and failing) a voice note in its own language."""
+        bot = _make_bot()
+        bot._waha = MagicMock()
+        bot._waha.kokoro_enabled = True
+        bot._tts_available = True
+        bot._tts_lang = None
+        bot._config.language = "German"
+        agent = MagicMock()
+        agent.get_tools.return_value = []
+        agent.chat = AsyncMock(return_value=_operator_result("ack"))
+        agent.record_assistant_message = AsyncMock()
+        bot._agent = agent
+
+        await bot.handle_operator("do something", persist=False)
+
+        extra = agent.chat.call_args.kwargs["extra_system_context"]
+        assert "Voice notes only work in these languages" in extra
+        assert "English" in extra
+        assert "German" in extra
+
+    @pytest.mark.asyncio
     async def test_dispatch_send_to_group_sends_and_records(self):
         bot = _make_bot()
         bot._send_with_retry = AsyncMock()

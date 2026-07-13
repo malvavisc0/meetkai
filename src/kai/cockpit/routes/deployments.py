@@ -14,6 +14,7 @@ from kai.bots.waha.config import get_waha_settings
 from kai.cockpit.app import templates
 from kai.cockpit.auth import require_user
 from kai.cockpit.bots import (
+    AGENT_ONLY_LANGUAGES,
     BOT_TYPES,
     CAPABILITY_LABELS,
     CONNECTION_LABELS,
@@ -39,7 +40,7 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 ALL_VOICES = sorted(set(LANGUAGE_VOICE_MAP.values()))
-ALL_LANGUAGES = sorted(LANGUAGE_VOICE_MAP.keys())
+ALL_LANGUAGES = sorted({*LANGUAGE_VOICE_MAP.keys(), *AGENT_ONLY_LANGUAGES})
 
 # Services that carry an instruction textarea alongside the toggle.
 _TOOLS_WITH_INSTRUCTION = frozenset({"database", "smtp"})

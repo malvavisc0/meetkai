@@ -17,11 +17,12 @@ class TestResolveKokoroLang:
         assert resolve_kokoro_lang("JAPANESE") == "ja"
 
     def test_empty_falls_back(self) -> None:
-        assert resolve_kokoro_lang("") == "en-us"
-        assert resolve_kokoro_lang("   ") == "en-us"
+        assert resolve_kokoro_lang("") is None
+        assert resolve_kokoro_lang("   ") is None
 
     def test_unknown_falls_back(self) -> None:
-        assert resolve_kokoro_lang("klingon") == "en-us"
+        assert resolve_kokoro_lang("klingon") is None
+        assert resolve_kokoro_lang("German") is None
 
 
 class TestDetectKokoroLang:

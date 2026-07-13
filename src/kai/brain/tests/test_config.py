@@ -6,7 +6,7 @@ from kai.brain.config import BRAIN_TOOL_NAME, BrainSettings, build_brain_workflo
 
 class TestBrainSettings:
     def test_defaults(self):
-        s = BrainSettings(_env_file=None)  # type: ignore[call-arg]
+        s = BrainSettings.for_test()
         assert s.base_url == ""
         assert s.lightrag_api_key == ""
         assert s.workspace == "default"
@@ -19,36 +19,32 @@ class TestBrainSettings:
 
     def test_env_prefix_kai_brain(self):
         # KAI_BRAIN_* env vars map to fields (env_prefix)
-        s = BrainSettings(
-            _env_file=None,  # type: ignore[call-arg]
-            base_url="http://lightrag:9621",
-            lightrag_api_key="k",
-        )
+        s = BrainSettings.for_test(base_url="http://lightrag:9621", lightrag_api_key="k")
         assert s.base_url == "http://lightrag:9621"
         assert s.lightrag_api_key == "k"
 
     def test_invalid_base_url_scheme(self):
         with pytest.raises(ValidationError):
-            BrainSettings(_env_file=None, base_url="ftp://bad")  # type: ignore[call-arg]
+            BrainSettings.for_test(base_url="ftp://bad")
 
     def test_invalid_base_url_no_host(self):
         with pytest.raises(ValidationError):
-            BrainSettings(_env_file=None, base_url="http://")  # type: ignore[call-arg]
+            BrainSettings.for_test(base_url="http://")
 
     def test_invalid_crawler_url(self):
         with pytest.raises(ValidationError):
-            BrainSettings(_env_file=None, crawler_url="not-a-url")  # type: ignore[call-arg]
+            BrainSettings.for_test(crawler_url="not-a-url")
 
     def test_negative_max_depth_rejected(self):
         with pytest.raises(ValidationError):
-            BrainSettings(_env_file=None, crawl_max_depth=-1)  # type: ignore[call-arg]
+            BrainSettings.for_test(crawl_max_depth=-1)
 
     def test_zero_max_pages_rejected(self):
         with pytest.raises(ValidationError):
-            BrainSettings(_env_file=None, crawl_max_pages=0)  # type: ignore[call-arg]
+            BrainSettings.for_test(crawl_max_pages=0)
 
     def test_validate_startup_warns_on_missing_keys(self):
-        s = BrainSettings(_env_file=None)  # type: ignore[call-arg]
+        s = BrainSettings.for_test()
         warnings = s.validate_startup()
         assert any("BASE_URL" in w for w in warnings)
         assert any("LIGHTRAG_API_KEY" in w for w in warnings)
@@ -56,8 +52,7 @@ class TestBrainSettings:
         assert any("CRAWL4AI_TOKEN" in w for w in warnings)
 
     def test_validate_startup_clean_when_set(self):
-        s = BrainSettings(
-            _env_file=None,  # type: ignore[call-arg]
+        s = BrainSettings.for_test(
             base_url="http://lightrag:9621",
             lightrag_api_key="k",
             crawler_url="http://crawl4ai:11235",
@@ -66,21 +61,17 @@ class TestBrainSettings:
         assert s.validate_startup() == []
 
     def test_base_url_trailing_slash_stripped(self):
-        s = BrainSettings(_env_file=None, base_url="http://lightrag:9621/")  # type: ignore[call-arg]
+        s = BrainSettings.for_test(base_url="http://lightrag:9621/")
         assert s.base_url == "http://lightrag:9621"
 
     def test_brain_enabled_requires_base_url_and_api_key(self):
-        s = BrainSettings(_env_file=None)  # type: ignore[call-arg]
+        s = BrainSettings.for_test()
         assert s.brain_enabled is False
-        s = BrainSettings(
-            _env_file=None,  # type: ignore[call-arg]
-            base_url="http://lightrag:9621",
-            lightrag_api_key="k",
-        )
+        s = BrainSettings.for_test(base_url="http://lightrag:9621", lightrag_api_key="k")
         assert s.brain_enabled is True
 
     def test_workflow_instruction_delegates_to_builder(self):
-        s = BrainSettings(_env_file=None, instruction="Ask about pricing", mandatory=True)  # type: ignore[call-arg]
+        s = BrainSettings.for_test(instruction="Ask about pricing", mandatory=True)
         assert s.workflow_instruction() == build_brain_workflow_instruction(
             "Ask about pricing", True
         )

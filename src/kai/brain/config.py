@@ -169,6 +169,17 @@ class BrainSettings(BaseSettings):
         """
         return build_brain_workflow_instruction(self.instruction, self.mandatory)
 
+    @classmethod
+    def for_test(cls, **overrides: object) -> BrainSettings:
+        """Construct BrainSettings for tests without loading ``.env``/env vars.
+
+        Centralizes the one pydantic-settings/pyright stub gap (the
+        private ``_env_file`` init kwarg isn't part of the generated
+        ``__init__`` signature) so individual tests don't each need their
+        own ``# type: ignore[call-arg]``.
+        """
+        return cls(_env_file=None, **overrides)  # type: ignore[call-arg]
+
 
 # The agent-facing tool name. Kept as a single constant so the prompt text
 # below and the actual ``FunctionTool`` registration (see

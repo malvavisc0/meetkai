@@ -182,7 +182,7 @@ class TestStartMediaReadinessGate:
         MEDIA_READY.clear()
         monkeypatch.setattr(
             "kai.bots.waha.config.get_waha_settings",
-            lambda: WahaSettings(media_ready_timeout=0.05),  # type: ignore[call-arg]
+            lambda: WahaSettings.for_test(media_ready_timeout=0.05, hmac_key="test-secret"),
         )
 
         svc = DeploymentsService(db)
@@ -263,7 +263,7 @@ class TestStart:
         from kai.config.settings import Settings
         from kai.runs import RunRecord, RunRegistry, runs_path
 
-        fake_settings = Settings(_env_file=None, agent_history_folder=str(tmp_path))  # type: ignore[call-arg]
+        fake_settings = Settings.for_test(agent_history_folder=str(tmp_path))
         monkeypatch.setattr("kai.config.settings.get_settings", lambda: fake_settings)
 
         instance_id = f"{dep.bot_type}-{user.email}"
@@ -332,7 +332,7 @@ class TestStart:
         from kai.config.settings import Settings
         from kai.runs import RunRecord, RunRegistry, runs_path
 
-        fake_settings = Settings(_env_file=None, agent_history_folder=str(tmp_path))  # type: ignore[call-arg]
+        fake_settings = Settings.for_test(agent_history_folder=str(tmp_path))
         monkeypatch.setattr("kai.config.settings.get_settings", lambda: fake_settings)
 
         instance_id = f"{dep.bot_type}-{user.email}"
@@ -385,7 +385,7 @@ class TestStart:
         from kai.config.settings import Settings
         from kai.runs import RunRecord, RunRegistry, runs_path
 
-        fake_settings = Settings(_env_file=None, agent_history_folder=str(tmp_path))  # type: ignore[call-arg]
+        fake_settings = Settings.for_test(agent_history_folder=str(tmp_path))
         monkeypatch.setattr("kai.config.settings.get_settings", lambda: fake_settings)
 
         instance_id = f"{dep.bot_type}-{user.email}"
@@ -460,7 +460,7 @@ class TestStop:
         from kai.config.settings import Settings
         from kai.runs import RunRecord, RunRegistry, runs_path
 
-        fake_settings = Settings(_env_file=None, agent_history_folder=str(tmp_path))  # type: ignore[call-arg]
+        fake_settings = Settings.for_test(agent_history_folder=str(tmp_path))
         monkeypatch.setattr("kai.config.settings.get_settings", lambda: fake_settings)
 
         instance_id = f"{dep.bot_type}-{user.email}"
@@ -513,7 +513,7 @@ class TestDelete:
         from kai.config.settings import Settings
         from kai.runs import RunRecord, RunRegistry, runs_path
 
-        fake_settings = Settings(_env_file=None, agent_history_folder=str(tmp_path))  # type: ignore[call-arg]
+        fake_settings = Settings.for_test(agent_history_folder=str(tmp_path))
         monkeypatch.setattr("kai.config.settings.get_settings", lambda: fake_settings)
 
         instance_id = f"{dep.bot_type}-{user.email}"
@@ -564,6 +564,51 @@ class TestDelete:
         from kai.cockpit.connections import ConnectionsService
 
         assert ConnectionsService(db).get_whatsapp(user) is not None
+
+    def test_delete_purges_all_bot_state_files(self, db, user, monkeypatch, tmp_path):
+        """delete() must remove every per-bot state file, not just the config."""
+        from kai.cockpit import config_writer
+        from kai.config.settings import Settings
+
+        configs_dir = tmp_path / "configs" / "cockpit"
+        monkeypatch.setattr(config_writer, "CONFIGS_DIR", configs_dir)
+
+        data_dir = tmp_path / "data"
+        data_dir.mkdir()
+
+        fake_settings = Settings.for_test(
+            agent_history_folder=str(data_dir), tasks_folder=str(data_dir)
+        )
+        monkeypatch.setattr("kai.config.settings.get_settings", lambda: fake_settings)
+
+        svc = DeploymentsService(db)
+        dep = svc.create(user, "waha", "goal", "English")
+        instance_id = f"{dep.bot_type}-{user.email}"
+        config_writer.write_config(dep, instance_id)
+
+        # Create all per-bot state files.
+        files: list = []
+        suffixes = [
+            f"{instance_id}.json",
+            f"{instance_id}.json.goal",
+            f"{instance_id}.runs.json",
+            f"{instance_id}.seen.json",
+            f"{instance_id}.sleep.json",
+            f"{instance_id}.tasks.json",
+        ]
+        for suffix in suffixes:
+            path = data_dir / suffix
+            path.write_text("{}")
+            files.append(path)
+        config_path = configs_dir / f"{instance_id}.json"
+        assert config_path.exists()
+        files.append(config_path)
+
+        svc.delete(dep)
+
+        for path in files:
+            assert not path.exists(), f"State file not purged: {path}"
+        assert svc.get(dep.id) is None
 
 
 class TestReconcileDeployments:

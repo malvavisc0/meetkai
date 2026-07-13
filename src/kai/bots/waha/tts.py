@@ -50,6 +50,37 @@ _DEFAULT_VOICE_BY_LANG: dict[str, str] = {
 # codes are valid for KAI_WAHA_KOKORO_VOICE_MAP / kokoro_voice_map entries.
 SUPPORTED_KOKORO_LANGS: tuple[str, ...] = tuple(_DEFAULT_VOICE_BY_LANG.keys())
 
+# One canonical display name per supported lang code, for surfacing to
+# humans/the agent (see SUPPORTED_KOKORO_LANGUAGE_NAMES below). Picks the more
+# common of any synonyms in _LANGUAGE_NAME_TO_KOKORO_LANG (e.g. "Chinese"
+# over "Mandarin", "English" over "British English" — the en-us/en-gb variant
+# distinction only matters for voice *selection* via resolve_kokoro_voice,
+# not for this yes/no capability list).
+_CANONICAL_LANG_NAME_BY_CODE: dict[str, str] = {
+    "en-us": "English",
+    "en-gb": "English",
+    "es": "Spanish",
+    "fr-fr": "French",
+    "it": "Italian",
+    "pt-br": "Portuguese",
+    "cmn": "Chinese",
+    "ja": "Japanese",
+    "hi": "Hindi",
+}
+
+# Human-readable names for SUPPORTED_KOKORO_LANGS, deduplicated and derived
+# from _CANONICAL_LANG_NAME_BY_CODE so it can't silently drift out of sync
+# with _DEFAULT_VOICE_BY_LANG — adding/removing a lang code there without a
+# matching entry here raises KeyError immediately instead of the agent
+# silently getting a stale supported-language list. Used to tell the agent
+# which languages voice notes actually work for — see
+# WahaBot._tts_capability_note — so it doesn't promise/attempt a voice note
+# in a language Kokoro has no voice for (e.g. German) and can tell the user
+# in text instead.
+SUPPORTED_KOKORO_LANGUAGE_NAMES: tuple[str, ...] = tuple(
+    dict.fromkeys(_CANONICAL_LANG_NAME_BY_CODE[code] for code in SUPPORTED_KOKORO_LANGS)
+)
+
 # Unicode letter ranges that count as "Latin" (ASCII + accented Latin in the
 # Latin-1 Supplement / Latin Extended blocks). Used to distinguish accented
 # Latin text (Spanish/French/Portuguese) from genuinely unsupported scripts
@@ -248,36 +279,45 @@ def _fold_accents(s: str) -> str:
     )
 
 
-def resolve_kokoro_lang(language: str) -> str:
+def resolve_kokoro_lang(language: str) -> str | None:
     """Resolve a language name (e.g. "Spanish") to a Kokoro lang code (e.g. "es").
 
-    Returns "en-us" for empty/unknown input so synthesis never silently fails.
+    Returns ``None`` when *language* is empty or isn't one Kokoro v1.0 ships
+    voices for (e.g. "German", "Dutch", "Klingon"). Coercing an unsupported
+    language to "en-us" here used to defeat the unsupported-language guard
+    in :func:`detect_kokoro_lang`/:func:`resolve_kokoro_voice` below: the
+    bot's own configured language would be silently treated as English,
+    so replies got synthesized with English phonemization and whatever
+    voice the operator had (wrongly) picked for that language — audibly
+    "speaking German with an English accent". Callers must fall back to a
+    text reply when this returns ``None``.
     """
     if not language:
-        return "en-us"
+        return None
     lang = language.strip().lower()
     if not lang:
-        return "en-us"
-    return _LANGUAGE_NAME_TO_KOKORO_LANG.get(lang, "en-us")
+        return None
+    return _LANGUAGE_NAME_TO_KOKORO_LANG.get(lang)
 
 
 def _is_supported(lang: str) -> bool:
     return lang in _DEFAULT_VOICE_BY_LANG
 
 
-def detect_kokoro_lang(text: str, *, fallback: str = "en-us") -> str | None:
+def detect_kokoro_lang(text: str, *, fallback: str | None = "en-us") -> str | None:
     """Detect which Kokoro-supported language *text* is written in.
 
     Returns a Kokoro lang code from the v1.0 supported set. Returns ``None``
     when the script is not supported by Kokoro v1.0 (Cyrillic, Arabic, Korean,
     Thai, ...); callers should fall back to a text reply in that case. For
     inconclusive Latin text (no common words matched), returns *fallback* when
-    it is itself a supported language. If *fallback* is not a Kokoro-supported
-    language (e.g. a bot configured for German, Dutch, Polish, ...), inconclusive
-    Latin text also returns ``None`` rather than guessing an unrelated voice
-    (e.g. English) for text Kokoro was never asked to speak.
+    it is itself a supported language. If *fallback* is ``None`` or not a
+    Kokoro-supported language (e.g. a bot configured for German, Dutch,
+    Polish, ...), inconclusive Latin text also returns ``None`` rather than
+    guessing an unrelated voice (e.g. English) for text Kokoro was never
+    asked to speak.
     """
-    fallback_supported = _is_supported(fallback)
+    fallback_supported = fallback is not None and _is_supported(fallback)
     fb = fallback if fallback_supported else "en-us"
 
     # 1) Non-Latin script detection.

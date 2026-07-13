@@ -18,6 +18,7 @@ from kai.bots.waha.payload import GROUP_SUFFIX, _extract_sender_id, _extract_sen
 
 if TYPE_CHECKING:
     from kai.agent.core import KaiAgent
+    from kai.bots.waha import Bot
     from kai.bots.waha.client import WahaClient
 
 logger = logging.getLogger(__name__)
@@ -26,7 +27,7 @@ logger = logging.getLogger(__name__)
 def register_chat_history_tool(
     agent: KaiAgent,
     *,
-    bot: object,
+    bot: Bot,
 ) -> None:
     """Register ``get_chat_history``, scoped to the current chat.
 
@@ -59,7 +60,7 @@ def register_chat_history_tool(
             offset: Skip this many recent messages to page into older
                 history. 0 = most recent batch; 50 = the next older 50.
         """
-        tool_context = bot._tool_context  # type: ignore[attr-defined]
+        tool_context = bot._tool_context
         if tool_context is None:
             return "Error: no chat context available"
         limit = max(1, min(int(limit), 200))
@@ -68,12 +69,12 @@ def register_chat_history_tool(
         if not chat_id:
             return "Error: no chat context available"
 
-        client: WahaClient | None = bot._waha_client  # type: ignore[attr-defined]
+        client: WahaClient | None = bot._waha_client
         should_close = False
         if client is None:
             from kai.bots.waha.client import WahaClient as _WahaClient
 
-            client = _WahaClient(bot._waha)  # type: ignore[attr-defined]
+            client = _WahaClient(bot._waha)
             should_close = True
         try:
             messages = await client.get_chat_messages(chat_id, limit=limit, offset=offset)
@@ -85,7 +86,7 @@ def register_chat_history_tool(
                 await client.close()
 
         # WAHA returns newest-first; reverse so the model reads chronologically.
-        roster: dict[str, str] = bot._rosters.get(chat_id, {})  # type: ignore[attr-defined]
+        roster: dict[str, str] = bot._rosters.get(chat_id, {})
         is_group = GROUP_SUFFIX in chat_id
         lines: list[str] = []
         for m in reversed(messages):

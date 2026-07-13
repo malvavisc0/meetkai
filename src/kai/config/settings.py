@@ -113,6 +113,17 @@ class Settings(BaseSettings):
             logger.warning(w)
         return warnings
 
+    @classmethod
+    def for_test(cls, **overrides: object) -> "Settings":
+        """Construct Settings for tests without loading ``.env``/env vars.
+
+        Centralizes the one pydantic-settings/pyright stub gap (the
+        private ``_env_file`` init kwarg isn't part of the generated
+        ``__init__`` signature) so individual tests don't each need their
+        own ``# type: ignore[call-arg]``.
+        """
+        return cls(_env_file=None, **overrides)  # type: ignore[call-arg]
+
 
 def get_settings() -> Settings:
     return Settings()

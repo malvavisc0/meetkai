@@ -16,7 +16,7 @@ def _isolated_run_registry(tmp_path, monkeypatch):
     from kai.cli import bot as cli_mod
     from kai.config.settings import Settings
 
-    fake_settings = Settings(_env_file=None, agent_history_folder=str(tmp_path))  # type: ignore[call-arg]
+    fake_settings = Settings.for_test(agent_history_folder=str(tmp_path))
     monkeypatch.setattr(cli_mod, "get_settings", lambda: fake_settings)
 
 

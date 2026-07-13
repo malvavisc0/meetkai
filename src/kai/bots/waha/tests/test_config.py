@@ -6,7 +6,7 @@ from kai.bots.waha.config import WahaSettings
 
 class TestWahaSettingsValidation:
     def test_valid_defaults(self):
-        s = WahaSettings(_env_file="", hmac_key="test-secret")  # type: ignore[call-arg]
+        s = WahaSettings.for_test(hmac_key="test-secret")
         assert s.url == "http://localhost:3000"
         assert s.session == "default"
         assert s.webhook_port == 8000
@@ -16,44 +16,44 @@ class TestWahaSettingsValidation:
     def test_hmac_key_is_required(self):
         # KAI_WAHA_HMAC_KEY is mandatory — construction without it fails.
         with pytest.raises(ValidationError, match="hmac_key"):
-            WahaSettings(_env_file="")  # type: ignore[call-arg]
+            WahaSettings.for_test()
 
     def test_url_must_be_http(self):
         with pytest.raises(ValidationError, match="http"):
-            WahaSettings(url="ftp://example.com", _env_file="", hmac_key="k")  # type: ignore[call-arg]
+            WahaSettings.for_test(url="ftp://example.com", hmac_key="k")
 
     def test_url_no_host(self):
         with pytest.raises(ValidationError, match="host"):
-            WahaSettings(url="http://", _env_file="", hmac_key="k")  # type: ignore[call-arg]
+            WahaSettings.for_test(url="http://", hmac_key="k")
 
     def test_url_strips_trailing_slash(self):
-        s = WahaSettings(url="http://example.com/", _env_file="", hmac_key="k")  # type: ignore[call-arg]
+        s = WahaSettings.for_test(url="http://example.com/", hmac_key="k")
         assert s.url == "http://example.com"
 
     def test_webhook_port_too_low(self):
         with pytest.raises(ValidationError, match="1-65535"):
-            WahaSettings(webhook_port=0, _env_file="", hmac_key="k")  # type: ignore[call-arg]
+            WahaSettings.for_test(webhook_port=0, hmac_key="k")
 
     def test_webhook_port_too_high(self):
         with pytest.raises(ValidationError, match="1-65535"):
-            WahaSettings(webhook_port=70000, _env_file="", hmac_key="k")  # type: ignore[call-arg]
+            WahaSettings.for_test(webhook_port=70000, hmac_key="k")
 
     def test_webhook_port_valid_range(self):
-        s = WahaSettings(webhook_port=1, _env_file="", hmac_key="k")  # type: ignore[call-arg]
+        s = WahaSettings.for_test(webhook_port=1, hmac_key="k")
         assert s.webhook_port == 1
-        s = WahaSettings(webhook_port=65535, _env_file="", hmac_key="k")  # type: ignore[call-arg]
+        s = WahaSettings.for_test(webhook_port=65535, hmac_key="k")
         assert s.webhook_port == 65535
 
     def test_webhook_path_must_start_with_slash(self):
         with pytest.raises(ValidationError, match="start with /"):
-            WahaSettings(webhook_path="webhook", _env_file="", hmac_key="k")  # type: ignore[call-arg]
+            WahaSettings.for_test(webhook_path="webhook", hmac_key="k")
 
     def test_session_cannot_be_empty(self):
         with pytest.raises(ValidationError, match="empty"):
-            WahaSettings(session="", _env_file="", hmac_key="k")  # type: ignore[call-arg]
+            WahaSettings.for_test(session="", hmac_key="k")
 
     def test_session_strips_whitespace(self):
-        s = WahaSettings(session="  default  ", _env_file="", hmac_key="k")  # type: ignore[call-arg]
+        s = WahaSettings.for_test(session="  default  ", hmac_key="k")
         assert s.session == "default"
 
 
@@ -62,7 +62,7 @@ class TestWahaValidateStartup:
         import logging
 
         with caplog.at_level(logging.WARNING, logger="kai.bots.waha.config"):
-            s = WahaSettings(_env_file="", api_key="", hmac_key="k")  # type: ignore[call-arg]
+            s = WahaSettings.for_test(api_key="", hmac_key="k")
             warnings = s.validate_startup()
             assert len(warnings) == 1
             assert "WAHA_API_KEY" in warnings[0]
@@ -71,6 +71,6 @@ class TestWahaValidateStartup:
         import logging
 
         with caplog.at_level(logging.WARNING, logger="kai.bots.waha.config"):
-            s = WahaSettings(_env_file="", api_key="real-key", hmac_key="k")  # type: ignore[call-arg]
+            s = WahaSettings.for_test(api_key="real-key", hmac_key="k")
             warnings = s.validate_startup()
             assert len(warnings) == 0
