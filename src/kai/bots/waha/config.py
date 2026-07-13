@@ -68,6 +68,15 @@ class WahaSettings(BaseSettings):
         description="Kokoro language code (empty = derive from bot language at startup)",
     )
     kokoro_speed: float = Field(default=1.0, description="Kokoro speech speed multiplier (0.5–2.0)")
+    kokoro_voice_map: str = Field(
+        default="",
+        description=(
+            "Per-language Kokoro voice overrides as 'lang=voice,lang=voice' "
+            "(e.g. 'es=ef_dora,fr-fr=ff_siwis'). Unmapped languages use the "
+            "built-in default voice for that language. Voice replies detect "
+            "the reply's language at synthesis time regardless of this setting."
+        ),
+    )
     kokoro_max_chars: int = Field(
         default=300,
         description=(

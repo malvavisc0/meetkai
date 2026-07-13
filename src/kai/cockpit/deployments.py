@@ -522,6 +522,9 @@ class DeploymentsService:
             env["KAI_WAHA_KOKORO_SERVER_PORT"] = os.environ.get(
                 "KAI_WAHA_KOKORO_SERVER_PORT", "8788"
             )
+            voice_map = deployment.settings.get("kokoro_voice_map", "")
+            if voice_map:
+                env["KAI_WAHA_KOKORO_VOICE_MAP"] = voice_map
             env["KAI_CONFIGS_DIR"] = "data/configs/cockpit"
         if brain_conn is not None:
             workspace = brain_conn.config["workspace"]

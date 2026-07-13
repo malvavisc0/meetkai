@@ -42,6 +42,23 @@
           <input id="timezone" type="text" name="timezone" value="{{ dep.settings.get('timezone', '') or '' }}">
         </div>
       </div>
+      <div class="field">
+        <label class="field__label" for="kokoro_voice_map">Voice overrides by language</label>
+        <input
+          id="kokoro_voice_map"
+          type="text"
+          name="kokoro_voice_map"
+          value="{{ dep.settings.get('kokoro_voice_map', '') or '' }}"
+          placeholder="es=ef_dora,fr-fr=ff_siwis"
+        >
+        <p class="field__help">
+          Replies are spoken in a voice matching their detected language, even when it differs
+          from the language set above. This field only overrides the default voice for specific
+          languages, formatted as lang=voice,lang=voice (e.g. es=ef_dora,fr-fr=ff_siwis).
+          Supported languages: {{ kokoro_languages|join(", ") }}. Leave blank to use the default
+          voice per language.
+        </p>
+      </div>
     </div>
 
     {# --- Triggers & filters --- #}

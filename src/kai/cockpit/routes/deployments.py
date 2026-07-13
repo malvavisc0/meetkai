@@ -346,6 +346,8 @@ async def deployment_settings_page(
 
     brain = BrainsService(db).get_brain(user)
 
+    from kai.bots.waha.tts import SUPPORTED_KOKORO_LANGS
+
     return templates.TemplateResponse(
         request,
         "settings.html",
@@ -354,6 +356,7 @@ async def deployment_settings_page(
             "dep": dep,
             "dep_user": user,
             "voices": ALL_VOICES,
+            "kokoro_languages": SUPPORTED_KOKORO_LANGS,
             "feature_flags": feature_flags,
             "capability_labels": CAPABILITY_LABELS,
             "has_brain": brain is not None,
@@ -622,6 +625,7 @@ async def deployment_settings(
     participation_streak_max: int = Form(2),
     voice_note_rate: float = Form(0.25),
     voice_note_cooldown: int = Form(300),
+    kokoro_voice_map: str = Form(""),
     brain_mandatory: str = Form(""),
     brain_instruction: str = Form(""),
     user: User = Depends(require_user),
@@ -652,6 +656,19 @@ async def deployment_settings(
             svc for svc in bt.supported_connections if svc not in bt.required_connections
         ]
 
+    from kai.bots.waha.tts import SUPPORTED_KOKORO_LANGS, parse_voice_map
+
+    kokoro_voice_map = kokoro_voice_map.strip()
+    unknown_langs = sorted(
+        lang for lang in parse_voice_map(kokoro_voice_map) if lang not in SUPPORTED_KOKORO_LANGS
+    )
+    if unknown_langs:
+        request.session["flash"] = (
+            f"Unknown Kokoro language code(s) in voice overrides: {', '.join(unknown_langs)}. "
+            f"Supported: {', '.join(SUPPORTED_KOKORO_LANGS)}."
+        )
+        return RedirectResponse(f"/deployments/{dep_id}/settings", status_code=302)
+
     settings_update = {
         "trigger_keyword": trigger_keyword,
         "timezone": timezone or None,
@@ -676,6 +693,7 @@ async def deployment_settings(
         # Tools that carry an instruction (database) store a nested dict;
         # plain toggles store a bool.
         "tools": _build_tools_update(supported_svcs, form_fields),
+        "kokoro_voice_map": kokoro_voice_map,
     }
 
     try:

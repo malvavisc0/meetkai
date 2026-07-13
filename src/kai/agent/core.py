@@ -401,9 +401,7 @@ class KaiAgent:
         """
         self._tool_call_callback = callback
 
-    def _build_llm(
-        self, async_http_client: httpx.AsyncClient | None = None
-    ) -> OpenAILike:
+    def _build_llm(self, async_http_client: httpx.AsyncClient | None = None) -> OpenAILike:
         additional_kwargs = {
             "extra_body": {
                 "chat_template_kwargs": {

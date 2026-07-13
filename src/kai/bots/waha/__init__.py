@@ -46,7 +46,14 @@ from kai.bots.waha.setup import (
 )
 from kai.bots.waha.sleep_store import SleepStore
 from kai.bots.waha.stt import NoopSTT, STTProvider, create_stt_provider, resolve_whisper_language
-from kai.bots.waha.tts import check_kokoro_available, resolve_kokoro_lang, synthesize
+from kai.bots.waha.tts import (
+    check_kokoro_available,
+    detect_kokoro_lang,
+    parse_voice_map,
+    resolve_kokoro_lang,
+    resolve_kokoro_voice,
+    synthesize,
+)
 from kai.bots.waha.video import compress_video, resolve_ffmpeg
 from kai.bots.waha.webhook import create_webhook_app
 from kai.bots.waha.youtube import extract_youtube_video_id, fetch_youtube_transcript
@@ -225,6 +232,14 @@ class Bot(BaseBot):
                 self._tts_lang = self._waha.kokoro_lang
             else:
                 self._tts_lang = resolve_kokoro_lang(self._config.language)
+            # Per-language voice overrides. Seeded with the operator's
+            # configured primary voice so a detected language that matches the
+            # configured one keeps the operator's chosen voice; explicit
+            # KAI_WAHA_KOKORO_VOICE_MAP entries override/extend that. Voice
+            # replies detect the reply language at synthesis time, so a bot
+            # can mix languages in the same conversation.
+            self._voice_map: dict[str, str] = {self._tts_lang: self._tts_voice}
+            self._voice_map.update(parse_voice_map(self._waha.kokoro_voice_map))
             self._tts_available, reason = check_kokoro_available(
                 host=self._waha.kokoro_server_host,
                 port=self._waha.kokoro_server_port,
@@ -233,6 +248,7 @@ class Bot(BaseBot):
                 logger.warning("Kokoro TTS unavailable: %s", reason)
         else:
             self._tts_available = False
+            self._voice_map = {}
 
     def _load_config(self, config_path: Path | None = None) -> BotConfig:
         path = config_path or self.resolve_config_path()
@@ -1693,15 +1709,28 @@ class Bot(BaseBot):
     async def _send_voice_reply(self, chat_id: str, text: str) -> bool:
         """Synthesize *text* to a voice note and send it via ``/api/sendVoice``.
 
+        The reply's language is detected from *text* so a bot can answer in
+        any language and still get a matching Kokoro voice. When the detected
+        language is not supported by Kokoro v1.0 (e.g. Cyrillic, Arabic,
+        Korean), synthesis is skipped and the caller falls back to text.
+
         Returns ``True`` on success. Returns ``False`` when TTS is
-        unavailable, the text exceeds ``kokoro_max_chars``, or
-        synthesis / delivery fails — the caller should fall back to a
-        text reply in that case.
+        unavailable, the text exceeds ``kokoro_max_chars``, the language is
+        unsupported, or synthesis / delivery fails — the caller should fall
+        back to a text reply in that case.
         """
         if not self._tts_available or self._waha is None or not self._waha.kokoro_enabled:
             return False
         clean = strip_mention_markup(text).strip()
         if not clean or len(clean) > self._waha.kokoro_max_chars:
+            return False
+        lang = detect_kokoro_lang(clean, fallback=self._tts_lang)
+        if lang is None:
+            logger.info("Skipping voice reply: unsupported language in %r", clean[:60])
+            return False
+        voice = resolve_kokoro_voice(lang, overrides=self._voice_map)
+        if voice is None:
+            logger.info("Skipping voice reply: no Kokoro voice for lang %s", lang)
             return False
         try:
             audio = await asyncio.to_thread(
@@ -1709,8 +1738,8 @@ class Bot(BaseBot):
                 text=clean,
                 host=self._waha.kokoro_server_host,
                 port=self._waha.kokoro_server_port,
-                voice=self._tts_voice,
-                lang=self._tts_lang,
+                voice=voice,
+                lang=lang,
                 speed=self._waha.kokoro_speed,
             )
         except Exception as exc:

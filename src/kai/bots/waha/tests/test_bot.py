@@ -1313,6 +1313,7 @@ class TestVoiceFollowup:
     @pytest.mark.asyncio
     async def test_text_reply_gets_voice_followup_when_offered(self, monkeypatch):
         bot = self._voice_ready_bot(voice_note_rate=1.0)
+        send_with_retry = cast(AsyncMock, bot._send_with_retry)
         bot._send_voice_reply = AsyncMock(return_value=True)
         agent = MagicMock()
         agent.chat = AsyncMock(return_value=_chat_result("hi there"))
@@ -1322,13 +1323,14 @@ class TestVoiceFollowup:
 
         await bot._handle_message(self._dm_payload())
 
-        bot._send_with_retry.assert_awaited_once()
+        send_with_retry.assert_awaited_once()
         bot._send_voice_reply.assert_awaited_once_with("123@c.us", "hi there")
         assert "123@c.us" in bot._last_voice_at
 
     @pytest.mark.asyncio
     async def test_text_reply_skips_voice_followup_when_tts_unavailable(self, monkeypatch):
         bot = self._voice_ready_bot(voice_note_rate=1.0)
+        send_with_retry = cast(AsyncMock, bot._send_with_retry)
         bot._tts_available = False
         bot._send_voice_reply = AsyncMock(return_value=True)
         agent = MagicMock()
@@ -1339,7 +1341,7 @@ class TestVoiceFollowup:
 
         await bot._handle_message(self._dm_payload())
 
-        bot._send_with_retry.assert_awaited_once()
+        send_with_retry.assert_awaited_once()
         bot._send_voice_reply.assert_not_awaited()
 
     @pytest.mark.asyncio
@@ -1364,6 +1366,7 @@ class TestVoiceFollowup:
         # back to text. The probabilistic followup must not fire again for
         # the same reply — that would just retry the same failing synthesis.
         bot = self._voice_ready_bot(voice_note_rate=1.0)
+        send_with_retry = cast(AsyncMock, bot._send_with_retry)
         bot._send_voice_reply = AsyncMock(return_value=False)
         agent = MagicMock()
         agent.chat = AsyncMock(return_value=_chat_result("hi there", action="send_voice_note"))
@@ -1373,7 +1376,7 @@ class TestVoiceFollowup:
 
         await bot._handle_message(self._dm_payload())
 
-        bot._send_with_retry.assert_awaited_once()
+        send_with_retry.assert_awaited_once()
         bot._send_voice_reply.assert_awaited_once_with("123@c.us", "hi there")
 
     @pytest.mark.asyncio
@@ -1602,6 +1605,10 @@ class TestDMNoSilence:
         bot._waha = MagicMock()
         bot._waha.kokoro_enabled = True
         bot._tts_available = True
+        # Voice delivery is not under test here (only the no-silent schema is);
+        # mock it so a probabilistic voice-followup roll can't reach the real
+        # _send_voice_reply and crash on the mocked WahaSettings attrs.
+        bot._send_voice_reply = AsyncMock(return_value=False)
         agent = MagicMock()
         agent.chat = AsyncMock(return_value=_chat_result("hi"))
         agent.observe = AsyncMock()
