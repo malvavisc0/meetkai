@@ -3,45 +3,79 @@
 {% block content %}
 <div class="page landing-page">
   <section class="landing-hero">
-    <div class="landing-logo-wrap">
-      <img class="landing-logo" src="/static/icon-192.png" alt="kAI logo">
-    </div>
-
-    <div class="landing-copy">
-      <h1 class="landing-title">Your AI team for every webhook, email, and event.</h1>
-      <p class="page-subtitle">
-        Always on, instantly responsive, and context-aware. Hire AI agents that 
-        perform like your top employees—never dropping a conversation or missing a beat.
-      </p>
-      <p class="landing-invite muted">
-        The platform is in private beta. Tell us how you'd use it and we'll send an invite —
-        email <a href="mailto:{{ contact_email }}">{{ contact_email }}</a>.
-      </p>
-    </div>
-
-    <div class="landing-actions">
-      <a href="mailto:{{ contact_email }}" class="button button--primary">
-        <span class="icon">{% include "icons/send.svg" %}</span>
-        Request invite
+    <header class="landing-nav">
+      <a class="landing-brand" href="/" aria-label="kAI home">
+        <img class="landing-brand__mark" src="/static/icon-192.png" alt="">
+        <span>kAI</span>
       </a>
-      <a href="https://github.com/malvavisc0/meetkai" class="button">
-        View on GitHub
-      </a>
-    </div>
+      <a class="landing-nav__login" href="/login">Sign in</a>
+    </header>
 
-    <p class="landing-signin muted">
-      Already invited? <a href="/login">Sign in to the cockpit</a>.
-    </p>
+    <div class="landing-hero__grid">
+      <div class="landing-copy landing-copy--hero">
+        <p class="landing-eyebrow">AI operations, always on</p>
+        <h1 class="landing-title">Put an AI teammate behind every important message.</h1>
+        <p class="landing-lede">
+          kAI turns incoming email, webhooks, and events into thoughtful work.
+          Your agents know the context, follow the rules, and respond without dropping the thread.
+        </p>
+        <div class="landing-actions">
+          <a href="mailto:{{ contact_email }}" class="button button--primary">
+            <span class="icon">{% include "icons/send.svg" %}</span>
+            Request an invite
+          </a>
+          <a href="https://github.com/malvavisc0/meetkai" class="button">
+            View on GitHub
+          </a>
+        </div>
+        <p class="landing-invite muted">
+          Private beta. Tell us how you would use kAI at
+          <a href="mailto:{{ contact_email }}">{{ contact_email }}</a>.
+        </p>
+      </div>
+
+      <div class="landing-workflow" aria-label="An incoming event is routed to a knowledgeable AI agent">
+        <div class="landing-workflow__topline">
+          <span>kAI workflow</span>
+          <span class="badge badge--live">Live</span>
+        </div>
+        <div class="landing-event">
+          <span class="landing-event__icon">{% include "icons/mail.svg" %}</span>
+          <span>
+            <strong>New customer email</strong>
+            <small>billing@acme.co</small>
+          </span>
+          <span class="landing-event__time">now</span>
+        </div>
+        <div class="landing-workflow__line" aria-hidden="true"></div>
+        <div class="landing-agent">
+          <img class="landing-agent__avatar" src="/static/icon-192.png" alt="">
+          <span>
+            <strong>Billing assistant</strong>
+            <small>Knows policies and account history</small>
+          </span>
+          <span class="status-dot status-dot--running"></span>
+        </div>
+        <div class="landing-reply">
+          <span class="landing-reply__label">Draft reply</span>
+          <p>I found the invoice and updated the billing contact. The revised receipt is on its way.</p>
+          <div class="landing-reply__meta"><span>Context applied</span><span>Ready to send</span></div>
+        </div>
+      </div>
+    </div>
   </section>
 
-  <section class="landing-copy">
-    <h2 class="landing-title">Want to see it in action?</h2>
-    <p class="page-subtitle">
-      Email <a href="mailto:support@meetk.ai">support@meetk.ai</a> and ask it anything about KAI.
-      It's a live AI bot — built with KAI, running on KAI.
-    </p>
-    <div class="landing-actions">
-      <a href="mailto:support@meetk.ai" class="button button--primary">
+  <section class="landing-demo">
+    <div>
+      <p class="landing-eyebrow">See it working</p>
+      <h2 class="landing-demo__title">Ask the bot that runs on kAI.</h2>
+      <p class="landing-demo__copy">
+        Email <a href="mailto:support@meetk.ai">support@meetk.ai</a> anything about kAI.
+        It is a live agent, built with kAI and answering from its own knowledge.
+      </p>
+    </div>
+    <div class="landing-demo__action">
+      <a href="mailto:support@meetk.ai" class="button">
         <span class="icon">{% include "icons/send.svg" %}</span>
         Email the support bot
       </a>
