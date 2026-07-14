@@ -1,7 +1,5 @@
 """CLI tests for `kai start --user/--voice` (docs/cockpit/01, 04)."""
 
-import os
-
 import pytest
 from typer.testing import CliRunner
 
@@ -29,7 +27,7 @@ def _patch_minimal_bot_lifecycle(monkeypatch):
     """
     from kai.bots.waha import Bot
 
-    monkeypatch.setattr(Bot, "configure", lambda self, agent, settings: None)
+    monkeypatch.setattr(Bot, "configure", lambda self, agent, settings, **kw: None)
     monkeypatch.setattr(Bot, "tell_endpoint", lambda self: "http://127.0.0.1:9999")
     monkeypatch.setattr(Bot, "tell_hmac_key", lambda self: "test-key")
 
@@ -98,13 +96,13 @@ class TestStartUserFlag:
         assert result.exit_code == 0
         assert "KAI_RUN_ID=" in result.stdout
 
-    def test_voice_flag_sets_env_before_configure(self, monkeypatch):
+    def test_voice_flag_passed_to_configure(self, monkeypatch):
         from kai.bots.waha import Bot
 
-        seen_voice_env = {}
+        seen_voice = {}
 
-        def _capture_configure(self, agent, settings):
-            seen_voice_env["value"] = os.environ.get("KAI_WAHA_KOKORO_VOICE")
+        def _capture_configure(self, agent, settings, *, voice=None):
+            seen_voice["value"] = voice
 
         monkeypatch.setattr(Bot, "configure", _capture_configure)
         monkeypatch.setattr(Bot, "tell_endpoint", lambda self: None)
@@ -117,4 +115,4 @@ class TestStartUserFlag:
         result = runner.invoke(app, ["start", "waha", "--voice", "custom_voice"])
 
         assert result.exit_code == 0
-        assert seen_voice_env["value"] == "custom_voice"
+        assert seen_voice["value"] == "custom_voice"

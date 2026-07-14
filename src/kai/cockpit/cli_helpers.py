@@ -1,6 +1,6 @@
 """Shared helpers used by both the CLI and the web auth routes."""
 
-import os
+from kai.cockpit.settings import get_cockpit_settings
 
 
 def public_url() -> str:
@@ -11,7 +11,7 @@ def public_url() -> str:
     externally-facing address are built from this so a self-hosted install
     doesn't leak the demo domain.
     """
-    return os.environ.get("KAI_PUBLIC_URL", "").rstrip("/")
+    return get_cockpit_settings().public_url.rstrip("/")
 
 
 def build_magic_link_url(token: str) -> str:

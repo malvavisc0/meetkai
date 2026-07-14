@@ -5,6 +5,7 @@ rather than via respx/httpx, since the service only
 ever calls through the client's public methods.
 """
 
+from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
 import pytest
@@ -19,7 +20,10 @@ def fake_waha_client(monkeypatch):
     client = AsyncMock()
     client.close = AsyncMock()
     monkeypatch.setattr("kai.cockpit.connections.WahaClient", lambda settings: client)
-    monkeypatch.setattr("kai.cockpit.connections.get_waha_settings", lambda: object())
+    monkeypatch.setattr(
+        "kai.cockpit.connections.get_waha_settings",
+        lambda: SimpleNamespace(webhook_public_host="test-host"),
+    )
     return client
 
 

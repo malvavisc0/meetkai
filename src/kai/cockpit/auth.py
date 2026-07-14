@@ -1,18 +1,17 @@
 """Session middleware and auth dependencies for the cockpit web app."""
 
-import os
-
 from fastapi import Depends, HTTPException
 from sqlalchemy.orm import Session
 from starlette.requests import Request
 
 from kai.cockpit.db import get_db
 from kai.cockpit.models import User
+from kai.cockpit.settings import get_cockpit_settings
 
 
 def get_cockpit_secret() -> str:
     """Return the session signing secret from env."""
-    secret = os.environ.get("KAI_COCKPIT_SECRET", "")
+    secret = get_cockpit_settings().cockpit_secret
     if not secret:
         raise RuntimeError("KAI_COCKPIT_SECRET is not set — required for session signing")
     return secret

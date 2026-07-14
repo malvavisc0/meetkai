@@ -34,7 +34,7 @@ class TestStartCommand:
         # configure() reads a bot config file that isn't present in the test
         # env; stub it so the test exercises the intended path (run() raising
         # BotStartupError -> "startup failed" panel).
-        monkeypatch.setattr(Bot, "configure", lambda self, agent, settings: None)
+        monkeypatch.setattr(Bot, "configure", lambda self, agent, settings, **kw: None)
         monkeypatch.setattr(Bot, "run", boom)
         result = runner.invoke(app, ["start", "waha"])
         assert result.exit_code != 0

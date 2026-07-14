@@ -341,9 +341,7 @@ def _start(
         sql_engine = None
 
         try:
-            if voice:
-                os.environ["KAI_WAHA_KOKORO_VOICE"] = voice
-            bot.configure(agent, settings)
+            bot.configure(agent, settings, voice=voice or None)
         except (FileNotFoundError, ValueError, OSError) as exc:
             err_line(f"configuration error  {exc}")
             return 1

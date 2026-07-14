@@ -185,10 +185,14 @@ class Bot(BaseBot):
         self._seen_store: SeenStore | None = None
         self._ffmpeg_path: str | None = None
 
-    def configure(self, agent: KaiAgent, settings: Settings) -> None:
+    def configure(self, agent: KaiAgent, settings: Settings, *, voice: str | None = None) -> None:
         self._agent = agent
         self._settings = settings
-        self._waha = get_waha_settings()
+        waha = get_waha_settings()
+        # --voice CLI flag overrides KAI_WAHA_KOKORO_VOICE for this run.
+        if voice:
+            waha = waha.model_copy(update={"kokoro_voice": voice})
+        self._waha = waha
         self._config = self._load_config()
         if settings.agent_language_explicit:
             self._config.language = settings.agent_language

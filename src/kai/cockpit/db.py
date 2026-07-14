@@ -1,13 +1,14 @@
 """SQLAlchemy engine, session factory, and helpers for the cockpit database."""
 
-import os
 from collections.abc import Generator
 
 from fastapi import Request
 from sqlalchemy import create_engine
 from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 
-db_url = os.environ.get("KAI_COCKPIT_DB", "sqlite:///data/cockpit.db")
+from kai.cockpit.settings import get_cockpit_settings
+
+db_url = get_cockpit_settings().cockpit_db
 
 engine = create_engine(db_url, echo=False)
 SessionLocal = sessionmaker(bind=engine)

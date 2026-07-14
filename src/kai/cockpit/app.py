@@ -1,7 +1,6 @@
 """Cockpit webapp — FastAPI app factory, middleware, route mounting."""
 
 import logging
-import os
 import threading
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime
@@ -14,6 +13,7 @@ from starlette.middleware.sessions import SessionMiddleware
 
 from kai.cockpit.auth import get_cockpit_secret
 from kai.cockpit.db import create_all
+from kai.cockpit.settings import get_cockpit_settings
 
 templates = Jinja2Templates(directory=Path(__file__).parent / "templates")
 logger = logging.getLogger(__name__)
@@ -27,7 +27,7 @@ templates.env.globals["topbar_status"] = topbar_status
 
 # Contact email shown on landing/login pages. Configurable so deployments
 # don't have to edit templates to change the support address.
-templates.env.globals["contact_email"] = os.environ.get("KAI_CONTACT_EMAIL", "hello@meetk.ai")
+templates.env.globals["contact_email"] = get_cockpit_settings().contact_email
 
 
 def format_timestamp(timestamp: str | None) -> str:
@@ -96,7 +96,7 @@ async def _lifespan(app: FastAPI):
     # already run, and a background thread racing that connection against
     # the test's own session corrupts SQLAlchemy's identity map. Production
     # runs (KAI_COCKPIT_TESTING unset) always reconcile on startup.
-    if not os.environ.get("KAI_COCKPIT_TESTING"):
+    if not get_cockpit_settings().cockpit_testing:
         threading.Thread(
             target=_reconcile_deployments_in_background,
             name="reconcile-deployments",

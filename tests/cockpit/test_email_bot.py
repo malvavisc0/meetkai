@@ -19,11 +19,22 @@ from kai.bots.email.config import EmailSettings
 from kai.bots.email.setup import BotConfig
 
 
-def _make_bot(tmp_path: Path) -> Bot:
+def _make_bot(
+    tmp_path: Path,
+    *,
+    vision: bool = False,
+    max_attachment_bytes: int = 10 * 1024 * 1024,
+) -> Bot:
     """Construct an email bot with minimal wiring for ingest_event tests."""
     bot = Bot(bot_dir=tmp_path)
     bot._config = BotConfig(language="English", timezone="UTC")
-    bot._email = EmailSettings(control_host="0.0.0.0", control_port=8200, hmac_key="test-key")
+    bot._email = EmailSettings(
+        control_host="0.0.0.0",
+        control_port=8200,
+        hmac_key="test-key",
+        vision=vision,
+        max_attachment_bytes=max_attachment_bytes,
+    )
     bot._smtp = MagicMock()
     bot._smtp.smtp_enabled = True
     bot._smtp.host = "smtp.example.com"
@@ -253,10 +264,9 @@ class TestAttachments:
 
     @pytest.mark.asyncio
     async def test_image_attachment_downloaded_and_passed_to_agent(self, tmp_path, monkeypatch):
-        bot = _make_bot(tmp_path)
+        bot = _make_bot(tmp_path, vision=True)
         bot._agent = AsyncMock()
         bot._agent.chat = AsyncMock(return_value=_chat_result("silent"))
-        monkeypatch.setenv("KAI_EMAIL_VISION", "1")
 
         mock_class, mock_get = self._mock_async_client(b"\x89PNG fake image bytes")
         with patch("kai.bots.email.httpx.AsyncClient", mock_class):
@@ -289,7 +299,6 @@ class TestAttachments:
         bot = _make_bot(tmp_path)
         bot._agent = AsyncMock()
         bot._agent.chat = AsyncMock(return_value=_chat_result("silent"))
-        monkeypatch.delenv("KAI_EMAIL_VISION", raising=False)
 
         with patch("kai.bots.email.httpx.AsyncClient") as mock_class:
             mock_class.return_value.__aenter__ = AsyncMock(return_value=MagicMock())
@@ -320,10 +329,9 @@ class TestAttachments:
 
     @pytest.mark.asyncio
     async def test_non_image_attachment_tagged_not_downloaded(self, tmp_path, monkeypatch):
-        bot = _make_bot(tmp_path)
+        bot = _make_bot(tmp_path, vision=True)
         bot._agent = AsyncMock()
         bot._agent.chat = AsyncMock(return_value=_chat_result("silent"))
-        monkeypatch.setenv("KAI_EMAIL_VISION", "1")
 
         with patch("kai.bots.email.httpx.AsyncClient") as mock_class:
             mock_class.return_value.__aenter__ = AsyncMock(return_value=MagicMock())
@@ -353,11 +361,9 @@ class TestAttachments:
 
     @pytest.mark.asyncio
     async def test_attachment_too_large_returns_none(self, tmp_path, monkeypatch):
-        bot = _make_bot(tmp_path)
+        bot = _make_bot(tmp_path, vision=True, max_attachment_bytes=100)
         bot._agent = AsyncMock()
         bot._agent.chat = AsyncMock(return_value=_chat_result("silent"))
-        monkeypatch.setenv("KAI_EMAIL_VISION", "1")
-        monkeypatch.setattr("kai.bots.email._MAX_ATTACHMENT_BYTES", 100)
 
         mock_class, mock_get = self._mock_async_client(b"x" * 200)
         with patch("kai.bots.email.httpx.AsyncClient", mock_class):

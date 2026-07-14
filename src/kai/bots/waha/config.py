@@ -2,7 +2,7 @@ import logging
 from urllib.parse import urlparse
 
 from pydantic import Field, field_validator
-from pydantic_settings import BaseSettings
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 logger = logging.getLogger(__name__)
 
@@ -14,7 +14,7 @@ class WahaSettings(BaseSettings):
     Other bots (email, Telegram, …) have their own transport settings.
     """
 
-    model_config = {"env_prefix": "KAI_WAHA_", "env_file": ".env", "extra": "ignore"}
+    model_config = SettingsConfigDict(env_prefix="KAI_WAHA_", env_file=".env", extra="ignore")
 
     url: str = Field(default="http://localhost:3000", description="WAHA API base URL")
     api_key: str = Field(default="", description="WAHA API key (X-Api-Key header)")

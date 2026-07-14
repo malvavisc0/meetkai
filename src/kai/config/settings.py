@@ -3,7 +3,7 @@ from pathlib import Path
 from urllib.parse import urlparse
 
 from pydantic import Field, field_validator
-from pydantic_settings import BaseSettings
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 logger = logging.getLogger(__name__)
 
@@ -15,7 +15,7 @@ class Settings(BaseSettings):
     Transport-specific settings (WAHA, Telegram, …) live in their bot packages.
     """
 
-    model_config = {"env_prefix": "KAI_", "env_file": ".env", "extra": "ignore"}
+    model_config = SettingsConfigDict(env_prefix="KAI_", env_file=".env", extra="ignore")
 
     llm_api_base: str = Field(
         default="https://api.openai.com/v1", description="OpenAI-like API base URL"

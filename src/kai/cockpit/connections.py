@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import asyncio
 import logging
-import os
 
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
@@ -12,6 +11,7 @@ from sqlalchemy.orm import Session
 from kai.bots.waha.client import WahaClient
 from kai.bots.waha.config import get_waha_settings
 from kai.cockpit.models import Connection, User
+from kai.cockpit.settings import get_cockpit_settings
 from kai.utils.common import now_iso, user_slug
 
 logger = logging.getLogger(__name__)
@@ -52,7 +52,7 @@ class ConnectionsService:
             return conn
 
         session_name = user_slug(user.kai_slug)
-        port_range = os.environ.get("KAI_WAHA_WEBHOOK_PORT_RANGE", "8100-8199")
+        port_range = get_cockpit_settings().waha_webhook_port_range
         parts = port_range.split("-")
         lo = int(parts[0])
         hi = int(parts[1]) if len(parts) > 1 else lo + 100
@@ -94,14 +94,15 @@ class ConnectionsService:
         """
         conn = self.get_or_create_whatsapp(user)
 
-        public_host = os.environ.get("KAI_WAHA_WEBHOOK_PUBLIC_HOST", "")
+        waha = get_waha_settings()
+        public_host = waha.webhook_public_host
         webhook_url = (
             f"http://{public_host}:"
             f"{conn.config['waha_webhook_port']}"
             f"{conn.config['waha_webhook_path']}"
         )
 
-        client = WahaClient(get_waha_settings())
+        client = WahaClient(waha)
         try:
             await client.create_session(
                 name=conn.config["waha_session"],

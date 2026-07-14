@@ -27,6 +27,13 @@ _HKDF_INFO = b"kai-connection-secrets"
 _VERSION_SEP = ":"
 _key_cache: dict[str, Fernet] = {}
 
+# Active key version for new encrypt() calls. Set by key rotation so the
+# running process encrypts new secrets under the new version without mutating
+# the process environment; the version is also persisted to ``.env`` by the
+# rotation command for the next process start. ``None`` means "read the
+# version from ``KAI_CREDENTIAL_KEY_VERSION`` (env / .env) on each call".
+_active_version_override: str | None = None
+
 
 class EncryptionSettings(BaseSettings):
     """Root secret + active key version for credential encryption."""
@@ -52,6 +59,8 @@ def _root_key_material() -> bytes:
 
 
 def _active_version() -> str:
+    if _active_version_override is not None:
+        return _active_version_override
     settings = get_encryption_settings()
     if not settings.credential_key_version:
         raise RuntimeError(
@@ -59,6 +68,20 @@ def _active_version() -> str:
             "encryption. Set it to the active key version (e.g. v1) in .env."
         )
     return settings.credential_key_version
+
+
+def set_active_version(version: str) -> None:
+    """Set the active encryption key version for subsequent ``encrypt()`` calls.
+
+    Used by key rotation: after re-encrypting every credential under a new
+    version, the running process must encrypt any *new* credentials under that
+    same new version. Rather than mutating ``os.environ`` (which would also
+    require ``get_encryption_settings()`` to re-read it), the active version is
+    held here as explicit module state and persisted to ``.env`` for the next
+    process start by the rotation command.
+    """
+    global _active_version_override
+    _active_version_override = version
 
 
 def _derive_fernet(version: str) -> Fernet:
@@ -83,8 +106,15 @@ def _derive_fernet(version: str) -> Fernet:
 
 
 def _clear_key_cache() -> None:
-    """Drop all cached Fernet instances (test/rotation use only)."""
+    """Drop all cached Fernet instances and reset the active-version override.
+
+    Test/rotation use only: clears derived Fernet keys (keyed by version) and
+    the in-memory active-version override so a fresh key/version is picked up
+    from env on the next call.
+    """
+    global _active_version_override
     _key_cache.clear()
+    _active_version_override = None
 
 
 def encrypt(plaintext: str) -> str:

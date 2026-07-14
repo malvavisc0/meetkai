@@ -1,18 +1,20 @@
 """Send magic-link emails via stdlib smtplib, or print to stdout."""
 
-import os
 import smtplib
 from email.message import EmailMessage
 from email.utils import formataddr
 
+from kai.cockpit.settings import get_cockpit_settings
+
 
 def send_magic_link(user_email: str, magic_url: str) -> None:
     """Send magic link email. Falls back to print if SMTP not configured."""
-    smtp_host = os.environ.get("KAI_SMTP_HOST", "mailpit")
-    smtp_from = os.environ.get("KAI_SMTP_FROM", "kai@dev")
-    smtp_port = int(os.environ.get("KAI_SMTP_PORT", "1025"))
-    smtp_user = os.environ.get("KAI_SMTP_USER")
-    smtp_pass = os.environ.get("KAI_SMTP_PASSWORD")
+    settings = get_cockpit_settings()
+    smtp_host = settings.smtp_host
+    smtp_from = settings.smtp_from
+    smtp_port = settings.smtp_port
+    smtp_user = settings.smtp_user
+    smtp_pass = settings.smtp_password
 
     if not smtp_host:
         print(f"Magic link for {user_email}: {magic_url}")

@@ -1,7 +1,5 @@
 """Auth routes: /login, /login/auth (magic link), /logout."""
 
-import os
-
 from fastapi import APIRouter, Depends, Form, Request
 from fastapi.responses import RedirectResponse
 from sqlalchemy.orm import Session
@@ -14,12 +12,13 @@ from kai.cockpit.cli_helpers import build_magic_link_url
 from kai.cockpit.db import get_db
 from kai.cockpit.mailer import send_magic_link
 from kai.cockpit.models import User
+from kai.cockpit.settings import get_cockpit_settings
 
 router = APIRouter()
 
 
 def _auto_approve_enabled() -> bool:
-    return os.environ.get("KAI_COCKPIT_AUTO_APPROVE_LOGIN", "").lower() in ("1", "true", "yes")
+    return get_cockpit_settings().cockpit_auto_approve_login
 
 
 @router.get("/login")

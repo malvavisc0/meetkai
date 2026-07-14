@@ -10,7 +10,6 @@ requirement behind it.
 from __future__ import annotations
 
 import logging
-import os
 import re
 from pathlib import Path
 
@@ -26,28 +25,27 @@ def rotate_credential_key(db: Session) -> tuple[str, bool]:
     ``.env`` doesn't exist (Docker, env-in-compose) so the CLI can print a
     manual instruction. ``KAI_CREDENTIAL_ENCRYPTION_KEY`` (the root secret) is
     never touched — only the version is bumped.
+
+    The new version becomes the process's active version (via
+    :func:`set_active_version`) so subsequent ``encrypt()`` calls use it, and
+    is persisted to ``.env`` for the next process start. The process
+    environment is never mutated.
     """
     from kai.cockpit.bots import CREDENTIAL_TYPES
     from kai.cockpit.models import Connection
     from kai.cockpit.secrets import (
-        _clear_key_cache,
+        _active_version,
         decrypt_config,
         encrypt_config,
-        get_encryption_settings,
+        set_active_version,
     )
 
-    current_version = get_encryption_settings().credential_key_version
-    if not current_version:
-        raise RuntimeError(
-            "KAI_CREDENTIAL_KEY_VERSION is not set — cannot rotate. "
-            "Set it to the current version (e.g. v1) in .env first."
-        )
+    current_version = _active_version()
 
     num = int(current_version.lstrip("v"))
     new_version = f"v{num + 1}"
 
-    os.environ["KAI_CREDENTIAL_KEY_VERSION"] = new_version
-    _clear_key_cache()
+    set_active_version(new_version)
 
     reencrypted = 0
     for conn in db.query(Connection).filter(Connection.service.in_(list(CREDENTIAL_TYPES))).all():

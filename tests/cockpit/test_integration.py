@@ -1,6 +1,7 @@
 """End-to-end integration test"""
 
 import subprocess
+from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
 import pytest
@@ -35,7 +36,10 @@ def fake_waha_client(monkeypatch):
     client.create_session.return_value = {}
     client.get_session.return_value = {"status": "WORKING"}
     monkeypatch.setattr("kai.cockpit.connections.WahaClient", lambda settings: client)
-    monkeypatch.setattr("kai.cockpit.connections.get_waha_settings", lambda: object())
+    monkeypatch.setattr(
+        "kai.cockpit.connections.get_waha_settings",
+        lambda: SimpleNamespace(webhook_public_host="test-host"),
+    )
     return client
 
 

@@ -19,7 +19,6 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
-import os
 from email.message import EmailMessage
 from email.utils import formataddr
 from pathlib import Path
@@ -39,8 +38,6 @@ from kai.config.prompts import load_system_prompt
 from kai.config.settings import Settings
 
 logger = logging.getLogger(__name__)
-
-_MAX_ATTACHMENT_BYTES = int(os.environ.get("KAI_EMAIL_MAX_ATTACHMENT_BYTES", 10 * 1024 * 1024))
 
 
 class EmailAction(ActionResult):
@@ -70,7 +67,7 @@ class Bot(BaseBot):
         self._shutting_down = asyncio.Event()
         self._smtp: SmtpSettings | None = None
 
-    def configure(self, agent: KaiAgent, settings: Settings) -> None:
+    def configure(self, agent: KaiAgent, settings: Settings, *, voice: str | None = None) -> None:
         self._agent = agent
         self._settings = settings
         self._email = get_email_settings()
@@ -301,7 +298,9 @@ class Bot(BaseBot):
             async with httpx.AsyncClient(timeout=30, follow_redirects=True) as client:
                 resp = await client.get(url)
                 resp.raise_for_status()
-                if len(resp.content) > _MAX_ATTACHMENT_BYTES:
+                if self._email is None:
+                    return None
+                if len(resp.content) > self._email.max_attachment_bytes:
                     logger.warning("Attachment too large: %d bytes", len(resp.content))
                     return None
                 return resp.content
@@ -312,10 +311,10 @@ class Bot(BaseBot):
     def _vision_enabled(self) -> bool:
         """True when the deployment's image feature flag is on.
 
-        Reads ``KAI_EMAIL_VISION``, injected by the cockpit at start time
-        from ``Deployment.feature_flags["image"]``.
+        Sourced from ``EmailSettings.vision`` (``KAI_EMAIL_VISION``), injected
+        by the cockpit at start time from ``Deployment.feature_flags["image"]``.
         """
-        return os.environ.get("KAI_EMAIL_VISION") == "1"
+        return self._email is not None and self._email.vision
 
 
 __all__ = ["Bot", "BotConfig", "EmailAction"]

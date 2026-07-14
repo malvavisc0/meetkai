@@ -498,9 +498,13 @@ class DeploymentsService:
         from kai.bots.waha.config import get_waha_settings
         from kai.cockpit.media_services import MEDIA_READY
 
+        # Fetched once and reused both for the media-ready gate below and for
+        # the WAHA env vars injected into the spawned subprocess further down,
+        # so the cockpit's WAHA settings are the single source the bot inherits.
+        waha = get_waha_settings()
         # Bounded gate: block briefly for a still-loading media service
         # rather than failing instantly, but never wedge the request forever.
-        timeout = get_waha_settings().media_ready_timeout
+        timeout = waha.media_ready_timeout
         if not MEDIA_READY.wait(timeout=timeout):
             raise DeploymentStartupError(
                 f"media services not ready after waiting {timeout}s — "
@@ -573,24 +577,20 @@ class DeploymentsService:
             env["KAI_WAHA_HMAC_KEY"] = user.hmac_key
             env["KAI_WAHA_WEBHOOK_PORT"] = str(conn.config["waha_webhook_port"])
             env["KAI_WAHA_WEBHOOK_HOST"] = "0.0.0.0"
-            env["KAI_WAHA_WEBHOOK_PUBLIC_HOST"] = os.environ.get("KAI_WAHA_WEBHOOK_PUBLIC_HOST", "")
+            env["KAI_WAHA_WEBHOOK_PUBLIC_HOST"] = waha.webhook_public_host
             env["KAI_WAHA_WEBHOOK_PATH"] = conn.config["waha_webhook_path"]
-            env["KAI_WAHA_WHISPER_SERVER_HOST"] = os.environ.get(
-                "KAI_WAHA_WHISPER_SERVER_HOST", "127.0.0.1"
-            )
-            env["KAI_WAHA_WHISPER_SERVER_PORT"] = os.environ.get(
-                "KAI_WAHA_WHISPER_SERVER_PORT", "8787"
-            )
-            env["KAI_WAHA_KOKORO_SERVER_HOST"] = os.environ.get(
-                "KAI_WAHA_KOKORO_SERVER_HOST", "127.0.0.1"
-            )
-            env["KAI_WAHA_KOKORO_SERVER_PORT"] = os.environ.get(
-                "KAI_WAHA_KOKORO_SERVER_PORT", "8788"
-            )
+            env["KAI_WAHA_WHISPER_SERVER_HOST"] = waha.whisper_server_host
+            env["KAI_WAHA_WHISPER_SERVER_PORT"] = str(waha.whisper_server_port)
+            env["KAI_WAHA_KOKORO_SERVER_HOST"] = waha.kokoro_server_host
+            env["KAI_WAHA_KOKORO_SERVER_PORT"] = str(waha.kokoro_server_port)
             voice_map = deployment.settings.get("kokoro_voice_map", "")
             if voice_map:
                 env["KAI_WAHA_KOKORO_VOICE_MAP"] = voice_map
-            env["KAI_CONFIGS_DIR"] = "data/configs/cockpit"
+            # The bot reads its external config from KAI_CONFIGS_DIR; the
+            # cockpit writes those configs to config_writer.CONFIGS_DIR, so
+            # the injected value is sourced from there (single source of
+            # truth) rather than re-hardcoded here.
+            env["KAI_CONFIGS_DIR"] = str(config_writer.CONFIGS_DIR)
 
         # Required credential connections (e.g. the email bot's required
         # smtp): inject their env the same way supported connections do.
@@ -620,7 +620,7 @@ class DeploymentsService:
             env["KAI_BOT_CONTROL_PORT"] = str(control_port)
             env["KAI_BOT_CONTROL_HOST"] = "0.0.0.0"
             env["KAI_BOT_HMAC_KEY"] = user.hmac_key
-            env["KAI_CONFIGS_DIR"] = "data/configs/cockpit"
+            env["KAI_CONFIGS_DIR"] = str(config_writer.CONFIGS_DIR)
             deployment.settings = {**deployment.settings, "control_port": control_port}
             # Deployment vision flag → KAI_EMAIL_VISION (the bot's
             # _vision_enabled() reads it). Generic mechanism: a bot declares

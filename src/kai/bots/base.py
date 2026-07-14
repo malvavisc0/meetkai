@@ -104,12 +104,15 @@ class BaseBot(ABC):
             return packaged
         return None
 
-    def configure(self, agent: KaiAgent, settings: Settings) -> None:
+    def configure(self, agent: KaiAgent, settings: Settings, *, voice: str | None = None) -> None:
         """Default configure: hold the agent for task execution.
 
         Override to load bot-specific config, register tools, etc. Subclasses
         that override this should call ``super().configure(...)`` (to capture
         the agent reference) and :meth:`setup_task_scheduler`.
+
+        ``voice`` is an optional per-run override passed from the ``--voice``
+        CLI flag; bots without voice support (the default) ignore it.
         """
         self._agent = agent
 
