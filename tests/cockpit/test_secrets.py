@@ -93,8 +93,25 @@ class TestConfigHelpers:
         assert once["url"] == twice["url"]
 
     def test_encrypt_config_rejects_non_credential_type(self):
-        with pytest.raises(ValueError, match="not a credential connection type"):
+        with pytest.raises(ValueError, match="is not a known connection type"):
             encrypt_config("whatsapp", {"waha_session": "x"})
+
+    def test_decrypt_config_rejects_non_credential_type(self):
+        with pytest.raises(ValueError, match="is not a known connection type"):
+            decrypt_config("whatsapp", {"waha_session": "x"})
+
+    def test_encrypt_config_round_trip_resend_signing_secret(self):
+        config = {"signing_secret": "whsec_live_abc123"}
+        encrypted = encrypt_config("resend", config)
+        assert is_encrypted(encrypted["signing_secret"])
+        decrypted = decrypt_config("resend", encrypted)
+        assert decrypted["signing_secret"] == "whsec_live_abc123"
+
+    def test_encrypt_config_idempotent_resend(self):
+        config = {"signing_secret": "whsec_live_abc123"}
+        once = encrypt_config("resend", config)
+        twice = encrypt_config("resend", once)
+        assert once["signing_secret"] == twice["signing_secret"]
 
 
 class TestMissingKey:

@@ -300,6 +300,14 @@ class BaseBot(ABC):
     async def ingest_event(self, event: dict) -> dict:
         """Receive a forwarded, already-normalized inbound event from the cockpit.
 
+        The ``event`` dict is the ``model_dump()`` of a
+        ``kai.cockpit.webhooks.NormalizedMessage`` (see its docstring for the
+        contract): ``source`` (sender id / conversation_id), ``text``
+        (plaintext body), ``metadata`` (provider-specific fields, e.g.
+        ``message_id``/``subject``/``to``/``attachments``), and ``event`` (the
+        event type, e.g. ``email.inbound``). A bot should return
+        ``{"ok": False}`` for event types it doesn't act on.
+
         Default: not implemented (the bot opts out of centralized webhook
         ingest). A bot that consumes a ``WEBHOOK_TYPES`` entry overrides this
         to apply its own bespoke preprocessing and feed the result to its agent.

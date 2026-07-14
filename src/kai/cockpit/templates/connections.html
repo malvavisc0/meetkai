@@ -99,5 +99,21 @@
       <a href="/connections/smtp" class="button"><span class="icon">{% include "icons/plus.svg" %}</span> Setup</a>
     </div>
   </div>
+
+  {# --- Email (Resend) connection --- #}
+  <div class="card">
+    <div class="cluster cluster--between">
+      <h3 class="card__title">Email (Resend)</h3>
+      {% if has_resend %}
+        <span class="badge badge--live">Connected</span>
+      {% else %}
+        <span class="badge badge--warn">Not connected</span>
+      {% endif %}
+    </div>
+    <p class="field__help">Connect a Resend webhook so your email bot can receive inbound emails.</p>
+    <div class="cluster">
+      <a href="/connections/resend" class="button"><span class="icon">{% include "icons/plus.svg" %}</span> Setup</a>
+    </div>
+  </div>
 </div>
 {% endblock %}

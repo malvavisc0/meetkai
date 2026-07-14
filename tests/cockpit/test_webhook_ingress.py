@@ -53,7 +53,7 @@ def _whatsapp_conn(user_id: int) -> Connection:
 
 _FAKE_TYPE = WebhookType(
     name="test",
-    verify_signature=lambda request, body: True,
+    verify_signature=lambda request, body, secret: True,
     parse=lambda payload: NormalizedMessage(
         source="test-provider", text=payload.get("text", ""), event="message"
     ),
@@ -62,9 +62,51 @@ _FAKE_TYPE = WebhookType(
 
 @pytest.fixture
 def fake_webhook_type(monkeypatch):
+    # Register both a WebhookType (route verify/parse) and a matching
+    # WebhookConnectionType (so decrypt_config knows "test" carries a
+    # signing_secret — mirroring how "resend" is paired with its
+    # WebhookConnectionType in production).
+    from kai.cockpit.bots import WEBHOOK_CONNECTION_TYPES, WebhookConnectionType
+    from kai.cockpit.webhooks import _clear_seen_nonces
+
     monkeypatch.setitem(WEBHOOK_TYPES, "test", _FAKE_TYPE)
+    monkeypatch.setitem(
+        WEBHOOK_CONNECTION_TYPES,
+        "test",
+        WebhookConnectionType(
+            service="test",
+            label="Test",
+            fields=[],
+            webhook_type="test",
+            secret_fields=["signing_secret"],
+        ),
+    )
+    _clear_seen_nonces()
     yield
     WEBHOOK_TYPES.pop("test", None)
+    WEBHOOK_CONNECTION_TYPES.pop("test", None)
+    _clear_seen_nonces()
+
+
+@pytest.fixture
+def fake_connection(db, alice):
+    """A Connection row for the fake 'test' webhook type — the reordered
+    route loads a per-operator connection before verification, so the route
+    404s without one."""
+    from datetime import UTC, datetime
+
+    conn = Connection(
+        user_id=alice.id,
+        service="test",
+        status="connected",
+        config={"signing_secret": "test-secret"},
+        created_at=datetime.now(UTC).isoformat(),
+        updated_at=datetime.now(UTC).isoformat(),
+    )
+    db.add(conn)
+    db.commit()
+    db.refresh(conn)
+    return conn
 
 
 class TestRouteStatusCodes:
@@ -82,13 +124,15 @@ class TestRouteStatusCodes:
         )
         assert r.status_code == 404
 
-    def test_bad_signature_returns_401(self, client, alice, fake_webhook_type, monkeypatch):
+    def test_bad_signature_returns_401(
+        self, client, alice, fake_webhook_type, fake_connection, monkeypatch
+    ):
         monkeypatch.setitem(
             WEBHOOK_TYPES,
             "test",
             WebhookType(
                 name="test",
-                verify_signature=lambda request, body: False,
+                verify_signature=lambda request, body, secret: False,
                 parse=_FAKE_TYPE.parse,
             ),
         )
@@ -98,7 +142,9 @@ class TestRouteStatusCodes:
         )
         assert r.status_code == 401
 
-    def test_no_running_deployment_returns_404(self, client, alice, fake_webhook_type, monkeypatch):
+    def test_no_running_deployment_returns_404(
+        self, client, alice, fake_webhook_type, fake_connection, monkeypatch
+    ):
         fake_bt = BotType(
             name="emailbot",
             feature_flags=[],
@@ -114,7 +160,7 @@ class TestRouteStatusCodes:
         assert r.status_code == 404
 
     def test_running_deployment_forwards_event(
-        self, client, db, alice, fake_webhook_type, monkeypatch
+        self, client, db, alice, fake_webhook_type, fake_connection, monkeypatch
     ):
         fake_bt = BotType(
             name="emailbot",
@@ -162,7 +208,9 @@ class TestRouteStatusCodes:
         assert payload["text"] == "hello world"
         assert payload["event"] == "message"
 
-    def test_bot_rejects_returns_502(self, client, db, alice, fake_webhook_type, monkeypatch):
+    def test_bot_rejects_returns_502(
+        self, client, db, alice, fake_webhook_type, fake_connection, monkeypatch
+    ):
         fake_bt = BotType(
             name="emailbot",
             feature_flags=[],

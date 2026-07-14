@@ -102,8 +102,8 @@ class TestLruBound:
 
 class TestFakeWebhookTypeReplay:
     """A fake WebhookType whose verify_signature uses _check_freshness:
-    replaying the exact same (timestamp, nonce, body) twice returns False
-    the second time."""
+    replaying the exact same (timestamp, nonce) twice returns False
+    the second time (the helper still records a nonce when one is passed)."""
 
     def test_replay_rejected_on_second_call(self):
         from unittest.mock import MagicMock
@@ -113,12 +113,12 @@ class TestFakeWebhookTypeReplay:
         ts, nonce = _NOW, "unique-nonce"
         wh = WebhookType(
             name="fake",
-            verify_signature=lambda _req, _body: _check_freshness(
+            verify_signature=lambda _req, _body, _secret: _check_freshness(
                 timestamp=ts, nonce=nonce, now=ts
             ),
             parse=lambda payload: NormalizedMessage(source="s", text="t"),
         )
 
         req = MagicMock()
-        assert wh.verify_signature(req, b"") is True
-        assert wh.verify_signature(req, b"") is False
+        assert wh.verify_signature(req, b"", "secret") is True
+        assert wh.verify_signature(req, b"", "secret") is False

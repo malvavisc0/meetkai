@@ -123,15 +123,15 @@ def is_encrypted(value: str) -> bool:
 def encrypt_config(service: str, config: dict) -> dict:
     """Return a copy of config with that service's secret fields encrypted.
 
-    Raises ``ValueError`` for non-credential connection types (they're not in
-    ``CREDENTIAL_TYPES``). Already-encrypted fields are left untouched so a
-    re-encrypt is idempotent.
+    Raises ``ValueError`` for connection types in neither
+    ``CREDENTIAL_TYPES`` nor ``WEBHOOK_CONNECTION_TYPES``. Already-encrypted
+    fields are left untouched so a re-encrypt is idempotent.
     """
-    from kai.cockpit.bots import CREDENTIAL_TYPES
+    from kai.cockpit.bots import CREDENTIAL_TYPES, WEBHOOK_CONNECTION_TYPES
 
-    ct = CREDENTIAL_TYPES.get(service)
+    ct = CREDENTIAL_TYPES.get(service) or WEBHOOK_CONNECTION_TYPES.get(service)
     if ct is None:
-        raise ValueError(f"{service!r} is not a credential connection type")
+        raise ValueError(f"{service!r} is not a known connection type")
     out = dict(config)
     for field in ct.secret_fields:
         if field in out and out[field] and not is_encrypted(str(out[field])):
@@ -146,11 +146,11 @@ def decrypt_config(service: str, config: dict) -> dict:
     injection, outbound calls). Never use this for template rendering —
     templates render the masked placeholder.
     """
-    from kai.cockpit.bots import CREDENTIAL_TYPES
+    from kai.cockpit.bots import CREDENTIAL_TYPES, WEBHOOK_CONNECTION_TYPES
 
-    ct = CREDENTIAL_TYPES.get(service)
+    ct = CREDENTIAL_TYPES.get(service) or WEBHOOK_CONNECTION_TYPES.get(service)
     if ct is None:
-        raise ValueError(f"{service!r} is not a credential connection type")
+        raise ValueError(f"{service!r} is not a known connection type")
     out = dict(config)
     for field in ct.secret_fields:
         if field in out and out[field] and is_encrypted(str(out[field])):

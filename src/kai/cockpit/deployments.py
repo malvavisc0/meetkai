@@ -20,7 +20,7 @@ import httpx
 from sqlalchemy.orm import Session
 
 from kai.cockpit import config_writer
-from kai.cockpit.bots import BOT_TYPES, auto_pick_voice
+from kai.cockpit.bots import BOT_TYPES, WEBHOOK_CONNECTION_TYPES, auto_pick_voice
 from kai.cockpit.models import Connection, Deployment, User
 from kai.runs import RunRegistry, pid_alive, runs_path
 from kai.utils.common import compute_hmac, now_iso
@@ -149,6 +149,29 @@ SERVICE_ENV_VARS: dict[str, dict] = {
 }
 
 
+def _is_connected(service: str, conn: Connection | None) -> bool:
+    """Per-family "is this connection ready?" predicate.
+
+    Bespoke (whatsapp) and credential (database, smtp) connections are
+    "connected" when their row reports ``status == "connected"`` (set by a
+    live probe or save). Ingress-only connections (resend) have no live
+    probe — "connected" means the row exists, the status is ``connected``,
+    AND every secret field the connection type declares (e.g. resend's
+    ``signing_secret`` for verification and ``api_key`` for fetching email
+    content) is non-empty. Checking the type's whole ``secret_fields`` list
+    generically — not one hardcoded field name — means a connection type
+    that needs two secrets (like resend) or one is handled the same way,
+    with no per-service branch here.
+    """
+    if conn is None:
+        return False
+    if service in WEBHOOK_CONNECTION_TYPES:
+        wt = WEBHOOK_CONNECTION_TYPES[service]
+        has_all_secrets = all(conn.config.get(f) for f in wt.secret_fields)
+        return has_all_secrets and conn.status == "connected"
+    return conn.status == "connected"
+
+
 def _inject_connection_env(env: dict, service: str, conn: Connection) -> bool:
     """Inject env vars for a supported credential connection into ``env``.
 
@@ -162,6 +185,12 @@ def _inject_connection_env(env: dict, service: str, conn: Connection) -> bool:
     Returns True if at least one field was injected (i.e. the credential
     had data), False if nothing was set (e.g. an empty connection row).
     """
+    # Ingress-only connections inject nothing — the bot receives events
+    # via /ingest, not env vars, and the cockpit verifies webhooks at the
+    # ingress route (never the bot). Early return before SERVICE_ENV_VARS
+    # lookup so an unknown-table lookup is never reached for them.
+    if service in WEBHOOK_CONNECTION_TYPES:
+        return False
     try:
         svc_vars = SERVICE_ENV_VARS.get(service)
         if svc_vars is None:
@@ -206,6 +235,31 @@ class DeploymentsService:
         if user is None:
             user = self._user_for(deployment)
         return _instance_id(deployment.bot_type, user.email)
+
+    def _allocate_control_port(self, db: Session, user: User) -> int:
+        """Pick a free control port from the non-bespoke range (8200-8299).
+
+        A port is "used" if a whatsapp connection holds it as
+        ``waha_webhook_port`` or a non-bespoke deployment (any user) holds it
+        in ``settings["control_port"]`` while running. A crashed bot's stale
+        port is reclaimed by the startup reconciliation pass (which clears
+        ``control_port`` for deployments whose status is not running).
+        """
+        used: set[int] = set()
+        for c in db.query(Connection).filter(Connection.service == "whatsapp").all():
+            port = c.config.get("waha_webhook_port")
+            if isinstance(port, int):
+                used.add(port)
+        for dep in db.query(Deployment).filter(Deployment.status == "running").all():
+            cp = dep.settings.get("control_port")
+            if isinstance(cp, int):
+                used.add(cp)
+        for port in range(8200, 8300):
+            if port not in used:
+                return port
+        raise RuntimeError(
+            f"no available control ports in range 8200-8299 ({len(used)} in use)"
+        )
 
     def _registry(self, deployment: Deployment, *, user: User | None = None) -> RunRegistry:
         from kai.config.settings import get_settings
@@ -320,7 +374,7 @@ class DeploymentsService:
                 )
                 .first()
             )
-            if c is None or c.status != "connected":
+            if not _is_connected(service, c):
                 raise ConnectionRequiredError(f"Connect {service} first at /connections")
 
         existing = (
@@ -476,7 +530,7 @@ class DeploymentsService:
                 )
                 .first()
             )
-            if c is None or c.status != "connected":
+            if c is None or not _is_connected(service, c):
                 raise ConnectionRequiredError(f"Connect {service} first at /connections")
             required_conns[service] = c
 
@@ -539,6 +593,45 @@ class DeploymentsService:
             if voice_map:
                 env["KAI_WAHA_KOKORO_VOICE_MAP"] = voice_map
             env["KAI_CONFIGS_DIR"] = "data/configs/cockpit"
+
+        # Required credential connections (e.g. the email bot's required
+        # smtp): inject their env the same way supported connections do.
+        # Bespoke (whatsapp) is handled by the block above; ingress-only
+        # (resend) is a no-op via _inject_connection_env's early return.
+        # Without this, a bot declaring a required credential other than
+        # whatsapp would start with no env for it (smtp → no send_email
+        # tool and no reply path).
+        for service, c in required_conns.items():
+            if service == "whatsapp":
+                continue
+            try:
+                _inject_connection_env(env, service, c)
+            except DeploymentStartupError as exc:
+                raise ConnectionRequiredError(f"{service} config unreadable: {exc}") from exc
+
+        # Generic non-bespoke control-port + HMAC-key injection. For any bot
+        # type whose required_connections does NOT include whatsapp (i.e. not
+        # bespoke), allocate a control port and inject the KAI_BOT_* env the
+        # bot's EmailSettings (or the next webhook bot's settings) reads.
+        # The port is stored in Deployment.settings["control_port"] (JSON, no
+        # migration) and cleared on stop(). This is the generic path — the
+        # next non-bespoke webhook bot needs zero cockpit changes.
+        is_bespoke = "whatsapp" in bt.required_connections
+        if not is_bespoke:
+            control_port = self._allocate_control_port(self.db, user)
+            env["KAI_BOT_CONTROL_PORT"] = str(control_port)
+            env["KAI_BOT_CONTROL_HOST"] = "0.0.0.0"
+            env["KAI_BOT_HMAC_KEY"] = user.hmac_key
+            env["KAI_CONFIGS_DIR"] = "data/configs/cockpit"
+            deployment.settings = {**deployment.settings, "control_port": control_port}
+            # Deployment vision flag → KAI_EMAIL_VISION (the bot's
+            # _vision_enabled() reads it). Generic mechanism: a bot declares
+            # a feature_flag and the cockpit surfaces it as KAI_EMAIL_VISION
+            # only for the email bot type. This is the one bot-specific env
+            # name here; the control-port/HMAC block above is fully generic.
+            if "image" in bt.feature_flags and deployment.feature_flags.get("image"):
+                env["KAI_EMAIL_VISION"] = "1"
+
         if brain_conn is not None:
             workspace = brain_conn.config["workspace"]
             if deployment.brain_instruction is not None and deployment.brain_instruction.strip():
@@ -676,12 +769,25 @@ class DeploymentsService:
         deployment.updated_at = now_iso()
         self.db.commit()
 
+    def _clear_control_port(self, deployment: Deployment) -> None:
+        """Remove the allocated control port from deployment settings.
+
+        Called from both ``stop()`` exit paths and ``reconcile_deployments()``
+        so the port can be reclaimed. Single implementation so changes apply
+        everywhere.
+        """
+        if "control_port" in deployment.settings:
+            deployment.settings = {
+                k: v for k, v in deployment.settings.items() if k != "control_port"
+            }
+
     def stop(self, deployment: Deployment) -> None:
         """Stop a deployment: SIGTERM → poll → SIGKILL."""
         if not deployment.run_id:
             deployment.status = "stopped"
             deployment.desired_state = "stopped"
             deployment.needs_restart = False
+            self._clear_control_port(deployment)
             deployment.updated_at = now_iso()
             self.db.commit()
             return
@@ -714,6 +820,7 @@ class DeploymentsService:
         deployment.status = "stopped"
         deployment.desired_state = "stopped"
         deployment.needs_restart = False
+        self._clear_control_port(deployment)
         deployment.updated_at = now_iso()
         self.db.commit()
 
@@ -945,6 +1052,23 @@ def reconcile_deployments() -> None:
     db = SessionLocal()
     try:
         svc = DeploymentsService(db)
+
+        # Reclaim stale ports for crashed bots before the restart loop.
+        # A deployment with status="running" whose process is actually dead
+        # (container restart killed it) leaves its control_port reserved
+        # forever — _allocate_control_port trusts the status column. Clear
+        # the port and reset status so the port pool doesn't exhaust across
+        # crashes. This runs for ALL deployments regardless of desired_state.
+        stale = db.query(Deployment).filter(Deployment.status == "running").all()
+        for dep in stale:
+            if svc.fetch_status(dep) is None:
+                dep.status = "stopped"
+                dep.needs_restart = False
+                svc._clear_control_port(dep)
+                dep.updated_at = now_iso()
+                logger.info("reconcile: cleared stale state for crashed deployment %s", dep.id)
+        db.commit()
+
         deployments = db.query(Deployment).filter(Deployment.desired_state == "running").all()
         for dep in deployments:
             try:

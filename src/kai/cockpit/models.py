@@ -95,6 +95,9 @@ class Connection(Base):
     # Mirrors config["waha_webhook_port"] as a real column so the DB can
     # enforce exclusive allocation (see get_or_create_whatsapp). NULL for
     # connections that don't allocate a port.
+    # provider-facing bespoke-transport port (WhatsApp/WAHA only); DO NOT
+    # populate for ingress-only or other connection types — this constraint
+    # is table-wide, not per-service.
     webhook_port: Mapped[int | None] = mapped_column(Integer, nullable=True)
     created_at: Mapped[str] = mapped_column(String, nullable=False)
     updated_at: Mapped[str] = mapped_column(String, nullable=False)

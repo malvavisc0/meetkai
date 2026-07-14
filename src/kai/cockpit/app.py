@@ -113,6 +113,7 @@ def create_app() -> FastAPI:
         database_connections,
         dependencies,
         deployments,
+        email_connections,
         health,
         smtp_connections,
         webhooks,
@@ -124,6 +125,7 @@ def create_app() -> FastAPI:
     app.include_router(deployments.router)
     app.include_router(connections.router)
     app.include_router(database_connections.router)
+    app.include_router(email_connections.router)
     app.include_router(brain.router)
     app.include_router(chat.router)
     app.include_router(health.router)

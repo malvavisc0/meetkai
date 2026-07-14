@@ -1,0 +1,63 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="page stack">
+  <header class="page-header page-header--split">
+    <div class="page-header__copy">
+      <p class="page-eyebrow">Channels</p>
+      <h1 class="page-title">Email connection</h1>
+      <p class="page-subtitle">Connect a Resend webhook so your email bot can receive emails.</p>
+    </div>
+    <div class="page-header__action">
+      <a href="/connections" class="button button--ghost">Back</a>
+    </div>
+  </header>
+
+  <form method="post" action="/connections/resend" class="card">
+    <div class="field">
+      <label class="field__label" for="signing_secret">Signing secret</label>
+      {% if has_secret %}
+        <input id="signing_secret" type="password" name="signing_secret" value="" placeholder="••••••••">
+        <p class="field__help">The Resend webhook signing secret. Find it in your Resend dashboard → Webhooks. Already set. Leave blank to keep.</p>
+      {% else %}
+        <input id="signing_secret" type="password" name="signing_secret" value="" placeholder="whsec_..." required>
+        <p class="field__help">The Resend webhook signing secret. Find it in your Resend dashboard → Webhooks.</p>
+      {% endif %}
+    </div>
+
+    <div class="field">
+      <label class="field__label" for="api_key">API key</label>
+      {% if has_api_key %}
+        <input id="api_key" type="password" name="api_key" value="" placeholder="••••••••">
+        <p class="field__help">The Resend API key. Used to fetch the email body and attachment download URLs (the webhook itself only carries envelope metadata). Already set. Leave blank to keep.</p>
+      {% else %}
+        <input id="api_key" type="password" name="api_key" value="" placeholder="re_..." required>
+        <p class="field__help">The Resend API key. Used to fetch the email body and attachment download URLs (the webhook itself only carries envelope metadata).</p>
+      {% endif %}
+    </div>
+
+    <div class="field">
+      <label class="field__label">Webhook URL</label>
+      <div class="cluster">
+        <input type="text" value="{{ webhook_url }}" readonly class="mono">
+      </div>
+      <p class="field__help">Paste this URL into your Resend webhook settings.</p>
+    </div>
+
+    <div class="cluster">
+      <button type="submit" class="button button--primary"><span class="icon">{% include "icons/check.svg" %}</span> Save connection</button>
+      <button type="submit" formaction="/connections/resend/test" class="button">Test connection</button>
+    </div>
+  </form>
+
+  {% if conn %}
+  <div class="card card--danger mt-2xl">
+    <h3 class="card__title text-danger">Danger zone</h3>
+    <p><strong>Delete email connection</strong></p>
+    <p class="muted">Removes the signing secret. Email bots will stop receiving inbound emails on their next start.</p>
+    <form method="post" action="/connections/resend/delete" data-confirm="Delete the email connection?">
+      <button type="submit" class="button button--danger"><span class="icon">{% include "icons/trash-2.svg" %}</span> Delete connection</button>
+    </form>
+  </div>
+  {% endif %}
+</div>
+{% endblock %}

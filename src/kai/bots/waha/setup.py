@@ -45,3 +45,11 @@ class BotConfig(BaseModel):
     mentions_enabled: bool = True
     media: MediaConfig = Field(default_factory=MediaConfig)
     participation: ParticipationConfig = Field(default_factory=ParticipationConfig)
+    # LLM sampling temperature (passed to agent.set_temperature() in
+    # configure()). Left un-set, the provider's own default applies, which
+    # varies by backend and is often not low — explicitly setting it is what
+    # makes the model reliably follow the prompt's hard rules (emoji ban,
+    # length caps, action protocol) instead of drifting. 0.4 keeps some
+    # warmth/spontaneity for the persona while still being well below a
+    # provider's typical 0.7-1.0 default.
+    temperature: float = 0.4

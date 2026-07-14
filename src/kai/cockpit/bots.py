@@ -47,6 +47,23 @@ BOT_TYPES: dict[str, BotType] = {
         # toggle (disabled until the connection exists).
         supported_connections=["database", "smtp"],
     ),
+    "email": BotType(
+        name="email",
+        feature_flags=["image"],
+        required_settings=["language"],
+        description=(
+            "A support bot that answers questions via email, grounded in "
+            "your Brain — powered by Resend inbound webhooks and an SMTP "
+            "reply path."
+        ),
+        default_goal=(
+            "Answer support questions grounded in the connected Brain. Be "
+            "helpful, concise, and honest about limitations. If the Brain "
+            "doesn't have the answer, say so instead of guessing."
+        ),
+        required_connections=["resend", "smtp"],
+        supported_connections=["database"],
+    ),
 }
 
 LANGUAGE_VOICE_MAP: dict[str, str] = {
@@ -122,13 +139,63 @@ CREDENTIAL_TYPES: dict[str, CredentialType] = {
     ),
 }
 
+
+@dataclass(frozen=True)
+class WebhookConnectionType:
+    """Settings-form shape for an ingress-only connection type.
+
+    A webhook connection carries the secrets the cockpit uses to verify and
+    parse inbound provider webhooks at the centralized ingress route (Path
+    2): a signing secret for ``verify_signature``, and — for providers whose
+    webhook body omits the message content (Resend's inbound webhook carries
+    only envelope metadata, no body/attachments) — an API key ``parse`` uses
+    to fetch it. The bot itself never receives either secret — verification
+    and enrichment happen in the cockpit, not the subprocess — so unlike
+    ``CredentialType`` nothing here is injected as env into the bot.
+    ``secret_fields`` is the same hook Fix 03's encrypt/decrypt and the
+    mask-on-render path use.
+
+    ``webhook_type`` is the key this connection verifies for in
+    ``WEBHOOK_TYPES`` (added in 03): one webhook connection type maps to one
+    webhook verify/parse contract. ``testable`` mirrors ``CredentialType`` so
+    the existing "Test connection" affordance renders (the resend connection
+    has a self-loopback test).
+    """
+
+    service: str
+    label: str
+    fields: list[CredentialField]
+    webhook_type: str  # key in WEBHOOK_TYPES this connection verifies for
+    secret_fields: list[str] = field(default_factory=list)
+    testable: bool = True
+
+
+WEBHOOK_CONNECTION_TYPES: dict[str, WebhookConnectionType] = {
+    "resend": WebhookConnectionType(
+        service="resend",
+        label="Email (Resend)",
+        fields=[
+            CredentialField("signing_secret", "Signing secret", "secret", required=True),
+            # Resend's inbound webhook carries no body/attachment content —
+            # only envelope metadata (see webhooks.py:_parse_resend). The
+            # API key fetches the body via the Received Emails API and
+            # attachment download URLs via the Attachments API.
+            CredentialField("api_key", "API key", "secret", required=True),
+        ],
+        secret_fields=["signing_secret", "api_key"],
+        webhook_type="resend",
+    ),
+}
+
 # Display label for every connection service a BotType can declare in
 # required_connections/supported_connections. WhatsApp isn't a
 # CredentialType (it's provisioned via WAHA, not a generic credential
 # form), so it needs its own entry rather than living in CREDENTIAL_TYPES.
+# Ingress-only connections (resend) come from WEBHOOK_CONNECTION_TYPES.
 CONNECTION_LABELS: dict[str, str] = {
     "whatsapp": "WhatsApp",
     **{service: ct.label for service, ct in CREDENTIAL_TYPES.items()},
+    **{service: wt.label for service, wt in WEBHOOK_CONNECTION_TYPES.items()},
 }
 
 

@@ -12,10 +12,6 @@ and never appears in any tool argument, result, or log record.
 The workflow instruction composes — appended alongside any other workflow
 blocks (the waha bot's web-search, the Brain's, the SQL tool's) rather
 than replacing them (``agent/core.py:set_tool_workflow``).
-
-Neither tool function contains ``logger.info`` call/result logging — that
-is handled generically by ``agent/core.py:_run_with_tools`` for every
-registered tool.
 """
 
 from __future__ import annotations
@@ -103,6 +99,36 @@ def build_email_workflow_instruction(instruction: str) -> str:
     return f"{base}\nUse it when:\n{body}"
 
 
+def send_via_smtp(
+    msg: EmailMessage,
+    *,
+    host: str,
+    port: int,
+    username: str = "",
+    password: str = "",
+    use_tls: bool = True,
+    timeout: int = 30,
+) -> None:
+    """Send a pre-built ``EmailMessage`` via SMTP.
+
+    Shared by ``make_send_email_tool`` (the agent tool) and the email bot's
+    ``_send_reply`` — one implementation of the connect/starttls/auth/send
+    sequence so STARTTLS-availability checks and ordering can't drift.
+
+    Raises on any failure; callers decide how to surface the error.
+    """
+    with smtplib.SMTP(host, int(port), timeout=timeout) as server:
+        server.ehlo()
+        if use_tls:
+            if not server.has_extn("starttls"):
+                raise RuntimeError("SMTP server does not support STARTTLS")
+            server.starttls()
+            server.ehlo()
+        if username and password:
+            server.login(username, password)
+        server.send_message(msg)
+
+
 def make_send_email_tool(
     host: str,
     port: int,
@@ -139,16 +165,14 @@ def make_send_email_tool(
             msg["From"] = formataddr(("Knowledgeable AI", from_address))
             msg["To"] = to
             msg.set_content(body)
-            with smtplib.SMTP(host, int(port), timeout=30) as server:
-                server.ehlo()
-                if use_tls:
-                    if not server.has_extn("starttls"):
-                        return "Error: SMTP server does not support STARTTLS — cannot send securely"
-                    server.starttls()
-                    server.ehlo()
-                if username and password:
-                    server.login(username, password)
-                server.send_message(msg)
+            send_via_smtp(
+                msg,
+                host=host,
+                port=port,
+                username=username,
+                password=password,
+                use_tls=use_tls,
+            )
             return "sent"
         except Exception as exc:  # noqa: BLE001 - surfaced to the model as a tool result
             logger.exception("send_email failed")

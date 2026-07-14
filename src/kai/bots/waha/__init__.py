@@ -194,6 +194,7 @@ class Bot(BaseBot):
             self._config.language = settings.agent_language
         self._prompt = self._load_prompt()
         agent.set_system_prompt(self._prompt)
+        agent.set_temperature(self._config.temperature)
         agent.set_tool_workflow(WEB_WORKFLOW_INSTRUCTIONS)
         agent.set_tool_call_callback(self._render_tool_call)
         agent.set_timezone(self._config.timezone)
@@ -292,6 +293,7 @@ class Bot(BaseBot):
             language=str(data.get("language", "English")),
             timezone=str(data.get("timezone", "")).strip() or None,
             mentions_enabled=bool(data.get("mentions_enabled", True)),
+            temperature=float(data.get("temperature", 0.4)),
             media=MediaConfig(
                 image_enabled=bool(media_data.get("image_enabled", True)),
                 stt_enabled=bool(
