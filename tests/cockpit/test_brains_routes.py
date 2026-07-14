@@ -30,6 +30,19 @@ def fake_crawler_client(monkeypatch):
 
 
 @pytest.fixture(autouse=True)
+def fake_crawler_health(monkeypatch):
+    """Bypass the real crawler health probe in ingest-url — tests don't have
+    a reachable crawl4ai container, and the pre-flight check would block the
+    request before URL validation/crawling runs."""
+    from kai.cockpit.service_health import HealthCheck
+
+    async def _ok():
+        return HealthCheck(label="Crawler", ok=True, detail="responding")
+
+    monkeypatch.setattr("kai.cockpit.routes.brain.check_crawler_health", _ok)
+
+
+@pytest.fixture(autouse=True)
 def fake_dns(monkeypatch):
     """Stub real DNS lookups so ``validate_ingest_url`` tests don't depend on
     live network access, and private/internal hosts can be exercised

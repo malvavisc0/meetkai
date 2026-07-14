@@ -122,15 +122,18 @@
             </div>
           </form>
 
-          <form method="post" action="/brain/ingest-url" class="source-item">
+          <form method="post" action="/brain/ingest-url" class="source-item{% if not crawler_ok %} source-item--unavailable{% endif %}">
             <div class="source-item__copy">
               <strong>Add a website</strong>
               <span>Import public documentation or support pages into the Brain.</span>
+              {% if not crawler_ok %}
+                <span class="text-danger">The Crawler service is unavailable ({{ crawler_detail }}). Check the Crawler container and try again.</span>
+              {% endif %}
             </div>
             <div class="source-item__controls">
               <label class="sr-only" for="url">Website URL</label>
-              <input id="url" type="url" name="url" placeholder="https://example.com/docs" required>
-              <button type="submit" class="button">Add website</button>
+              <input id="url" type="url" name="url" placeholder="https://example.com/docs" required{% if not crawler_ok %} disabled{% endif %}>
+              <button type="submit" class="button"{% if not crawler_ok %} disabled{% endif %}>Add website</button>
             </div>
           </form>
 

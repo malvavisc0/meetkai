@@ -107,6 +107,23 @@ async def _check_crawl4ai(crawler_url: str, token: str) -> HealthCheck:
     return HealthCheck(label="Crawler", ok=ok, detail=detail)
 
 
+async def check_crawler_health() -> HealthCheck | None:
+    """Probe just the crawl4ai crawler, or None if Brain/crawler isn't configured.
+
+    Used by the Brain page to gate the "Add a website" form — if the crawler
+    container is down the operator can still upload/paste sources, but a
+    website ingest would fail at crawl time, so the form is disabled with a
+    message instead of letting the request fail after the fact.
+    """
+    try:
+        bs = get_brain_settings()
+    except Exception:  # noqa: BLE001 - brain not configured
+        return None
+    if not bs.crawler_url:
+        return None
+    return await _check_crawl4ai(bs.crawler_url, bs.crawl4ai_token)
+
+
 async def check_service_health() -> list[HealthCheck]:
     """Probe the external infrastructure the deployment relies on.
 

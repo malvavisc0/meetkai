@@ -11,6 +11,7 @@ from kai.cockpit.auth import require_user
 from kai.cockpit.brains import BrainsService
 from kai.cockpit.db import get_db
 from kai.cockpit.models import User
+from kai.cockpit.service_health import check_crawler_health
 
 router = APIRouter()
 
@@ -32,6 +33,10 @@ async def brains_page(
             docs_error = str(exc)
     any_processing = any(not d.is_terminal for d in docs)
     flash = request.session.pop("flash", None)
+    # Gate the "Add a website" form on crawler availability — crawl4ai is the
+    # only source that needs an external container; uploads/paste still work.
+    crawler_health = await check_crawler_health()
+    crawler_ok = crawler_health.ok if crawler_health else True
     return templates.TemplateResponse(
         request,
         "brain.html",
@@ -41,6 +46,8 @@ async def brains_page(
             "docs": docs,
             "docs_error": docs_error,
             "any_processing": any_processing,
+            "crawler_ok": crawler_ok,
+            "crawler_detail": crawler_health.detail if crawler_health else "",
             "flash": flash,
         },
     )
@@ -111,6 +118,12 @@ async def brains_ingest_url(
     try:
         if not url:
             raise ValueError("URL is required.")
+        crawler = await check_crawler_health()
+        if crawler is not None and not crawler.ok:
+            raise ValueError(
+                f"The Crawler service is unavailable ({crawler.detail}). "
+                "Check the Crawler container and try again."
+            )
         result = await svc.ingest_url(user, url=url)
         request.session["flash"] = f"Added {url}. kAI is saving it to the Brain. ({result.message})"
     except ValueError as exc:

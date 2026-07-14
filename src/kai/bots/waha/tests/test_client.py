@@ -76,6 +76,8 @@ class TestCreateSession:
         body = route.calls[0].request.content
         assert b'"start": true' in body or b'"start":true' in body
         assert b'"webhooks"' in body
+        assert b'"noweb"' in body
+        assert b'"fullSync"' in body
 
     @respx.mock
     @pytest.mark.asyncio
@@ -96,6 +98,7 @@ class TestCreateSession:
         assert put_route.called
         assert start_route.called
         assert b'"webhooks"' in put_route.calls[0].request.content
+        assert b'"noweb"' in put_route.calls[0].request.content
         assert result["name"] == "s1"
 
     @respx.mock
@@ -108,6 +111,7 @@ class TestCreateSession:
         respx.post("/api/sessions/s1/start").mock(return_value=Response(200, json={}))
         await client.create_session("s1")
         assert b'"webhooks"' not in put_route.calls[0].request.content
+        assert b'"noweb"' in put_route.calls[0].request.content
 
     @respx.mock
     @pytest.mark.asyncio

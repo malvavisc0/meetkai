@@ -2167,6 +2167,16 @@
     min-height: 112px;
   }
 
+  /* Crawler container down — disable the "Add a website" form without
+     hiding it, so operators see why website ingest is blocked. */
+  .source-item--unavailable {
+    background: var(--color-surface-alt);
+  }
+
+  .source-item--unavailable .source-item__copy strong {
+    color: var(--color-subtle);
+  }
+
   /* Opt out of the compact inline "input + button" two-column layout above
      for items whose controls are a fuller block (e.g. a chat form with a
      reply panel, or the sleep-panel's own internal divider) rather than a

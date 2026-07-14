@@ -45,18 +45,25 @@ class WahaClient:
         the QR endpoint 422 ("expected SCAN_QR_CODE"). Starting here drives
         the session through STARTING -> SCAN_QR_CODE so the QR is fetchable.
 
+        ``config.noweb.store`` is always set so the chat picker (chats/overview,
+        groups) works on the NOWEB engine — without it, WAHA returns HTTP 400
+        "Enable NOWEB store" for every chats/overview call. fullSync is enabled
+        so contacts/chats are downloaded on first connect; this is a one-time
+        cost per QR-scan and harmless on reconnect (already synced).
+
         If the session already exists (422 — e.g. it survived a WAHA
         container restart while the cockpit Connection row was reset, or the
-        user clicked connect twice), fall back to PUT (update webhook) + start
-        so reconnect is idempotent instead of erroring out.
+        user clicked connect twice), fall back to PUT (update webhook + store
+        config) + start so reconnect is idempotent instead of erroring out.
         """
-        payload: dict = {"name": name, "start": True, "config": {}}
+        noweb_store = {"enabled": True, "fullSync": True}
+        payload: dict = {"name": name, "start": True, "config": {"noweb": {"store": noweb_store}}}
         if webhook_config:
             payload["config"]["webhooks"] = [webhook_config]
         resp = await self._client.post("/api/sessions", json=payload)
         if resp.status_code == 422:
-            # Session already exists — update its webhook config and (re)start.
-            update_payload: dict = {"config": {}}
+            # Session already exists — update its webhook + store config and (re)start.
+            update_payload: dict = {"config": {"noweb": {"store": noweb_store}}}
             if webhook_config:
                 update_payload["config"]["webhooks"] = [webhook_config]
             resp = await self._client.put(f"/api/sessions/{name}", json=update_payload)

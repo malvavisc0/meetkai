@@ -7,11 +7,18 @@ services:
     volumes:
       - ./data/redis:/data
 
+  # WhatsApp HTTP API (WAHA). WEBJS engine (puppeteer-driven headless
+  # Chromium). Requires shm_size for browser stability — without it, the
+  # puppeteer page context can corrupt under memory pressure, breaking
+  # getChats (chats/overview returns 500). mem_limit gives the Chromium
+  # process headroom for the WhatsApp Web multi-page render.
   waha:
     image: devlikeapro/waha
     container_name: waha
     hostname: waha
     restart: unless-stopped
+    shm_size: "2g"
+    mem_limit: "4g"
     expose:
       - 3000
     # ports:
@@ -42,6 +49,12 @@ services:
       WAHA_APPS_ENABLED: ${WAHA_APPS_ENABLED}
     volumes:
       - ./data/waha:/app/.sessions
+      # Patched wwebjs Injected/Utils.js — wraps getChatModel in a
+      # try/catch so a per-chat IDB error (WWeb schema change in
+      # 2.3000.x: "Failed to execute 'get' on 'IDBObjectStore'") returns a
+      # minimal model instead of crashing chats/overview with HTTP 500.
+      # Remove when wwebjs > 1.34.7 ships a fix.
+      - ./docker/waha-patches/Utils.js:/app/node_modules/whatsapp-web.js/src/util/Injected/Utils.js:ro
     depends_on:
       - redis
 
