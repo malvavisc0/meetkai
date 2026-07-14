@@ -23,6 +23,10 @@ class BotType:
     # Deployment.settings["tools"]. A bot may only enable a service listed
     # here — the settings UI never offers a toggle the bot can't use.
     supported_connections: list[str] = field(default_factory=list)
+    # Name of a template under templates/icons/*.svg (without the extension),
+    # shown next to this bot type in the console's bot-type picker,
+    # deployment cards, and the deploy wizard header.
+    icon: str = "bot"
 
 
 BOT_TYPES: dict[str, BotType] = {
@@ -46,6 +50,7 @@ BOT_TYPES: dict[str, BotType] = {
         # the single source of truth so the settings form can offer the
         # toggle (disabled until the connection exists).
         supported_connections=["database", "smtp"],
+        icon="message-circle",
     ),
     "email": BotType(
         name="email",
@@ -63,6 +68,7 @@ BOT_TYPES: dict[str, BotType] = {
         ),
         required_connections=["resend", "smtp"],
         supported_connections=["database"],
+        icon="mail",
     ),
 }
 
@@ -173,7 +179,7 @@ class WebhookConnectionType:
 WEBHOOK_CONNECTION_TYPES: dict[str, WebhookConnectionType] = {
     "resend": WebhookConnectionType(
         service="resend",
-        label="Email (Resend)",
+        label="Email Inbox (Resend)",
         fields=[
             CredentialField("signing_secret", "Signing secret", "secret", required=True),
             # Resend's inbound webhook carries no body/attachment content —

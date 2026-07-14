@@ -54,7 +54,7 @@ def _whatsapp_conn(user_id: int) -> Connection:
 _FAKE_TYPE = WebhookType(
     name="test",
     verify_signature=lambda request, body, secret: True,
-    parse=lambda payload: NormalizedMessage(
+    parse=lambda payload, cfg: NormalizedMessage(
         source="test-provider", text=payload.get("text", ""), event="message"
     ),
 )

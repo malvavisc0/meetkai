@@ -63,12 +63,14 @@ class TestIngestEvent:
         bot = _make_bot(tmp_path)
         bot._agent = AsyncMock()
         bot._agent.chat = AsyncMock(return_value=_chat_result("silent"))
-        result = await bot.ingest_event({
-            "event": "email.inbound",
-            "source": "sender@example.com",
-            "text": "what is KAI?",
-            "metadata": {"subject": "question"},
-        })
+        result = await bot.ingest_event(
+            {
+                "event": "email.inbound",
+                "source": "sender@example.com",
+                "text": "what is KAI?",
+                "metadata": {"subject": "question"},
+            }
+        )
         assert result == {"ok": True}
 
     @pytest.mark.asyncio
@@ -76,11 +78,13 @@ class TestIngestEvent:
         bot = _make_bot(tmp_path)
         bot._agent = AsyncMock()
         bot._agent.chat = AsyncMock(side_effect=RuntimeError("boom"))
-        result = await bot.ingest_event({
-            "event": "email.inbound",
-            "source": "sender@example.com",
-            "text": "hi",
-        })
+        result = await bot.ingest_event(
+            {
+                "event": "email.inbound",
+                "source": "sender@example.com",
+                "text": "hi",
+            }
+        )
         assert result == {"ok": False}
 
     @pytest.mark.asyncio
@@ -88,12 +92,14 @@ class TestIngestEvent:
         bot = _make_bot(tmp_path)
         bot._agent = AsyncMock()
         bot._agent.chat = AsyncMock(return_value=_chat_result("silent"))
-        await bot.ingest_event({
-            "event": "email.inbound",
-            "source": "alice@example.com",
-            "text": "hello",
-            "metadata": {"subject": "test"},
-        })
+        await bot.ingest_event(
+            {
+                "event": "email.inbound",
+                "source": "alice@example.com",
+                "text": "hello",
+                "metadata": {"subject": "test"},
+            }
+        )
         call_kwargs = bot._agent.chat.call_args
         assert call_kwargs.kwargs["conversation_id"] == "alice@example.com"
         ctx = call_kwargs.kwargs["context"]
@@ -118,12 +124,14 @@ class TestSmtpReply:
             server = MagicMock()
             mock_smtp.return_value.__enter__ = MagicMock(return_value=server)
             mock_smtp.return_value.__exit__ = MagicMock(return_value=False)
-            result = await bot.ingest_event({
-                "event": "email.inbound",
-                "source": "bob@example.com",
-                "text": "how do I deploy?",
-                "metadata": {"subject": "deployment question"},
-            })
+            result = await bot.ingest_event(
+                {
+                    "event": "email.inbound",
+                    "source": "bob@example.com",
+                    "text": "how do I deploy?",
+                    "metadata": {"subject": "deployment question"},
+                }
+            )
 
         assert result == {"ok": True}
         mock_smtp.assert_called_once_with("smtp.example.com", 587, timeout=30)
@@ -146,12 +154,14 @@ class TestSmtpReply:
             server = MagicMock()
             mock_smtp.return_value.__enter__ = MagicMock(return_value=server)
             mock_smtp.return_value.__exit__ = MagicMock(return_value=False)
-            await bot.ingest_event({
-                "event": "email.inbound",
-                "source": "bob@example.com",
-                "text": "hi",
-                "metadata": {"subject": ""},
-            })
+            await bot.ingest_event(
+                {
+                    "event": "email.inbound",
+                    "source": "bob@example.com",
+                    "text": "hi",
+                    "metadata": {"subject": ""},
+                }
+            )
 
         sent_msg = server.send_message.call_args.args[0]
         assert sent_msg["Subject"] == "Re: your email"
@@ -163,12 +173,14 @@ class TestSmtpReply:
         bot._agent = AsyncMock()
         bot._agent.chat = AsyncMock(return_value=_chat_result("reply", text="hi"))
 
-        result = await bot.ingest_event({
-            "event": "email.inbound",
-            "source": "bob@example.com",
-            "text": "hi",
-            "metadata": {"subject": "test"},
-        })
+        result = await bot.ingest_event(
+            {
+                "event": "email.inbound",
+                "source": "bob@example.com",
+                "text": "hi",
+                "metadata": {"subject": "test"},
+            }
+        )
         assert result == {"ok": False}
 
     @pytest.mark.asyncio
@@ -181,12 +193,14 @@ class TestSmtpReply:
             "kai.agent.tools.email.smtplib.SMTP",
             side_effect=ConnectionRefusedError("no SMTP"),
         ):
-            result = await bot.ingest_event({
-                "event": "email.inbound",
-                "source": "bob@example.com",
-                "text": "hi",
-                "metadata": {"subject": "test"},
-            })
+            result = await bot.ingest_event(
+                {
+                    "event": "email.inbound",
+                    "source": "bob@example.com",
+                    "text": "hi",
+                    "metadata": {"subject": "test"},
+                }
+            )
         assert result == {"ok": False}
 
     @pytest.mark.asyncio
@@ -199,12 +213,14 @@ class TestSmtpReply:
             server = MagicMock()
             mock_smtp.return_value.__enter__ = MagicMock(return_value=server)
             mock_smtp.return_value.__exit__ = MagicMock(return_value=False)
-            await bot.ingest_event({
-                "event": "email.inbound",
-                "source": "bob@example.com",
-                "text": "hi",
-                "metadata": {"subject": "test"},
-            })
+            await bot.ingest_event(
+                {
+                    "event": "email.inbound",
+                    "source": "bob@example.com",
+                    "text": "hi",
+                    "metadata": {"subject": "test"},
+                }
+            )
 
         server.starttls.assert_called_once()
         server.login.assert_called_once_with("user@example.com", "pass")
@@ -244,21 +260,23 @@ class TestAttachments:
 
         mock_class, mock_get = self._mock_async_client(b"\x89PNG fake image bytes")
         with patch("kai.bots.email.httpx.AsyncClient", mock_class):
-            await bot.ingest_event({
-                "event": "email.inbound",
-                "source": "a@b.com",
-                "text": "see this image",
-                "metadata": {
-                    "subject": "img",
-                    "attachments": [
-                        {
-                            "url": "https://resend.example/att1",
-                            "content_type": "image/png",
-                            "filename": "shot.png",
-                        }
-                    ],
-                },
-            })
+            await bot.ingest_event(
+                {
+                    "event": "email.inbound",
+                    "source": "a@b.com",
+                    "text": "see this image",
+                    "metadata": {
+                        "subject": "img",
+                        "attachments": [
+                            {
+                                "url": "https://resend.example/att1",
+                                "content_type": "image/png",
+                                "filename": "shot.png",
+                            }
+                        ],
+                    },
+                }
+            )
 
         mock_get.assert_called_once_with("https://resend.example/att1")
         images_arg = bot._agent.chat.call_args.kwargs["images"]
@@ -276,21 +294,23 @@ class TestAttachments:
         with patch("kai.bots.email.httpx.AsyncClient") as mock_class:
             mock_class.return_value.__aenter__ = AsyncMock(return_value=MagicMock())
             mock_class.return_value.__aexit__ = AsyncMock(return_value=False)
-            await bot.ingest_event({
-                "event": "email.inbound",
-                "source": "a@b.com",
-                "text": "see this image",
-                "metadata": {
-                    "subject": "img",
-                    "attachments": [
-                        {
-                            "url": "https://resend.example/att1",
-                            "content_type": "image/png",
-                            "filename": "shot.png",
-                        }
-                    ],
-                },
-            })
+            await bot.ingest_event(
+                {
+                    "event": "email.inbound",
+                    "source": "a@b.com",
+                    "text": "see this image",
+                    "metadata": {
+                        "subject": "img",
+                        "attachments": [
+                            {
+                                "url": "https://resend.example/att1",
+                                "content_type": "image/png",
+                                "filename": "shot.png",
+                            }
+                        ],
+                    },
+                }
+            )
 
         mock_class.return_value.__aenter__.return_value.get.assert_not_called()
         assert bot._agent.chat.call_args.kwargs["images"] is None
@@ -308,21 +328,23 @@ class TestAttachments:
         with patch("kai.bots.email.httpx.AsyncClient") as mock_class:
             mock_class.return_value.__aenter__ = AsyncMock(return_value=MagicMock())
             mock_class.return_value.__aexit__ = AsyncMock(return_value=False)
-            await bot.ingest_event({
-                "event": "email.inbound",
-                "source": "a@b.com",
-                "text": "see attached",
-                "metadata": {
-                    "subject": "doc",
-                    "attachments": [
-                        {
-                            "url": "https://resend.example/doc.pdf",
-                            "content_type": "application/pdf",
-                            "filename": "report.pdf",
-                        }
-                    ],
-                },
-            })
+            await bot.ingest_event(
+                {
+                    "event": "email.inbound",
+                    "source": "a@b.com",
+                    "text": "see attached",
+                    "metadata": {
+                        "subject": "doc",
+                        "attachments": [
+                            {
+                                "url": "https://resend.example/doc.pdf",
+                                "content_type": "application/pdf",
+                                "filename": "report.pdf",
+                            }
+                        ],
+                    },
+                }
+            )
 
         mock_class.return_value.__aenter__.return_value.get.assert_not_called()
         assert bot._agent.chat.call_args.kwargs["images"] is None
@@ -339,21 +361,23 @@ class TestAttachments:
 
         mock_class, mock_get = self._mock_async_client(b"x" * 200)
         with patch("kai.bots.email.httpx.AsyncClient", mock_class):
-            await bot.ingest_event({
-                "event": "email.inbound",
-                "source": "a@b.com",
-                "text": "big image",
-                "metadata": {
-                    "subject": "img",
-                    "attachments": [
-                        {
-                            "url": "https://resend.example/big.png",
-                            "content_type": "image/png",
-                            "filename": "big.png",
-                        }
-                    ],
-                },
-            })
+            await bot.ingest_event(
+                {
+                    "event": "email.inbound",
+                    "source": "a@b.com",
+                    "text": "big image",
+                    "metadata": {
+                        "subject": "img",
+                        "attachments": [
+                            {
+                                "url": "https://resend.example/big.png",
+                                "content_type": "image/png",
+                                "filename": "big.png",
+                            }
+                        ],
+                    },
+                }
+            )
 
         images_arg = bot._agent.chat.call_args.kwargs["images"]
         assert images_arg is None

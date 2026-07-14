@@ -97,10 +97,10 @@ class TestWebhookConnectionCatalog:
         assert wt.webhook_type == "resend"
 
     def test_resend_label(self):
-        assert WEBHOOK_CONNECTION_TYPES["resend"].label == "Email (Resend)"
+        assert WEBHOOK_CONNECTION_TYPES["resend"].label == "Email Inbox (Resend)"
 
     def test_resend_secret_fields(self):
-        assert WEBHOOK_CONNECTION_TYPES["resend"].secret_fields == ["signing_secret"]
+        assert WEBHOOK_CONNECTION_TYPES["resend"].secret_fields == ["signing_secret", "api_key"]
 
     def test_resend_testable_default_true(self):
         # mirrors CredentialType so the existing "Test connection" affordance renders
@@ -109,18 +109,18 @@ class TestWebhookConnectionCatalog:
     def test_resend_fields_reuse_credential_field_shape(self):
         wt = WEBHOOK_CONNECTION_TYPES["resend"]
         names = [f.name for f in wt.fields]
-        assert names == ["signing_secret"]
+        assert names == ["signing_secret", "api_key"]
         assert wt.fields[0].type == "secret"
         assert wt.fields[0].required is True
+        assert wt.fields[1].type == "secret"
+        assert wt.fields[1].required is True
 
     def test_webhook_connection_type_testable_has_default(self):
         # testable defaults to True (the resend connection has a self-loopback test),
         # unlike CredentialType whose default is False.
         from kai.cockpit.bots import WebhookConnectionType
 
-        wt = WebhookConnectionType(
-            service="x", label="x", fields=[], webhook_type="x"
-        )
+        wt = WebhookConnectionType(service="x", label="x", fields=[], webhook_type="x")
         assert wt.testable is True
 
     def test_connection_labels_spreads_both_registries(self):
@@ -164,8 +164,16 @@ class TestIsConnected:
         assert _is_connected("smtp", self._conn("smtp", "disconnected")) is False
 
     def test_ingress_connected_when_status_and_secret(self):
-        c = self._conn("resend", "connected", {"signing_secret": "whsec_live_x"})
+        c = self._conn(
+            "resend", "connected", {"signing_secret": "whsec_live_x", "api_key": "re_live_x"}
+        )
         assert _is_connected("resend", c) is True
+
+    def test_ingress_not_connected_when_api_key_missing(self):
+        # signing_secret alone is not enough -- api_key is required to fetch
+        # email content (the webhook itself carries none).
+        c = self._conn("resend", "connected", {"signing_secret": "whsec_live_x"})
+        assert _is_connected("resend", c) is False
 
     def test_ingress_not_connected_when_secret_empty(self):
         # an ingress row with an empty secret must not be treated as connected,
@@ -372,7 +380,7 @@ class TestStartIngestsRequiredResend(_StartBase):
                 user_id=user.id,
                 service="resend",
                 status="connected",
-                config={"signing_secret": "whsec_live_x"},
+                config={"signing_secret": "whsec_live_x", "api_key": "re_live_x"},
                 created_at="now",
                 updated_at="now",
             )
@@ -387,12 +395,15 @@ class TestStartIngestsRequiredResend(_StartBase):
         _setup_run_registry(monkeypatch, tmp_path, f"{dep.bot_type}-{user.email}")
 
         svc.start(dep)
-        # resend is ingress-only: nothing injected, no signing secret leaked
+        # resend is ingress-only: nothing injected, no secrets leaked
         assert all(
-            not v.endswith("whsec_live_x") if isinstance(v, str) else True
+            not v.endswith("whsec_live_x") and not v.endswith("re_live_x")
+            if isinstance(v, str)
+            else True
             for v in injected_env.values()
         )
         assert "signing_secret" not in injected_env
+        assert "api_key" not in injected_env
 
     def test_start_rejects_resend_when_secret_empty(self, db, user, monkeypatch):
         self._resend_bot(monkeypatch)
@@ -453,7 +464,7 @@ class TestCreateGateUsesIsConnected:
                 user_id=user.id,
                 service="resend",
                 status="connected",
-                config={"signing_secret": "whsec_live_x"},
+                config={"signing_secret": "whsec_live_x", "api_key": "re_live_x"},
                 created_at="now",
                 updated_at="now",
             )

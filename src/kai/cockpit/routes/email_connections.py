@@ -1,4 +1,4 @@
-"""Email (Resend) connection routes: /connections/resend — CRUD + test."""
+"""Email (Resend) Inbox connection routes: /connections/resend — CRUD + test."""
 
 from fastapi import APIRouter, Depends, Form, Request
 from fastapi.responses import RedirectResponse

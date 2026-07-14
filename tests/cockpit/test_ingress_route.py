@@ -456,9 +456,7 @@ class TestRoutePerOpSecretAndNonce:
         )
         assert r.status_code == 404  # no running deployment
 
-    def test_success_returns_202_and_records_nonce(
-        self, client, db, alice, monkeypatch
-    ):
+    def test_success_returns_202_and_records_nonce(self, client, db, alice, monkeypatch):
         _email_bot(monkeypatch)
         secret = base64.b64encode(b"raw-key").decode()
         db.add(_resend_conn(alice.id, secret))
@@ -506,9 +504,7 @@ class TestRoutePerOpSecretAndNonce:
             "svix-timestamp": str(ts),
             "svix-signature": _svix_sign(secret, "msg-dup", ts, body),
         }
-        r1 = client.post(
-            f"/webhook/{alice.kai_slug}/resend", content=body, headers=headers
-        )
+        r1 = client.post(f"/webhook/{alice.kai_slug}/resend", content=body, headers=headers)
         assert r1.status_code == 202
         assert forward_count == 1
 

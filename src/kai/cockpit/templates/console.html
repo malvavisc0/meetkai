@@ -17,6 +17,7 @@
           <div class="deployment-card__main">
             <div class="deployment-card__title">
               <span class="status-dot{% if attention_reasons.get(dep.id) %} status-dot--attention{% elif dep.status == 'running' %} status-dot--running{% else %} status-dot--stopped{% endif %}"></span>
+              <span class="icon icon--lg">{% include "icons/" ~ (bot_type.icon if bot_type else "bot") ~ ".svg" %}</span>
               <h3 class="card__title">{{ dep.bot_type }}</h3>
               {% if attention_reasons.get(dep.id) %}
                 <span class="badge badge--danger">Attention</span>

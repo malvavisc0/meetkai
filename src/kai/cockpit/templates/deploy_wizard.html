@@ -17,7 +17,7 @@
   {% endif %}
 
   <div class="card">
-    <p class="card__eyebrow">Bot type</p>
+    <p class="card__eyebrow"><span class="icon icon--lg">{% include "icons/" ~ bt.icon ~ ".svg" %}</span></p>
     <h3 class="card__title">{{ bt.name }}</h3>
     {% if bt.description %}
       <p class="muted">{{ bt.description }}</p>
@@ -26,7 +26,7 @@
 
   <form method="post" action="/deployments/new" class="card">
     <p class="card__eyebrow">Configuration</p>
-    <h3 class="card__title">Bot identity &amp; voice</h3>
+    <h3 class="card__title">Bot identity</h3>
     <input type="hidden" name="bot_type" value="{{ bot_type }}">
 
     <div class="field">
@@ -47,6 +47,7 @@
       </select>
       <p class="field__help">Defaults to your account language — change it any time.</p>
     </div>
+    {% if "tts" in bt.feature_flags %}
     <div class="field field--narrow">
       <label class="field__label" for="voice">Voice</label>
       <select id="voice" name="voice" {% if missing_connections %}disabled{% endif %}>
@@ -56,6 +57,7 @@
       </select>
       <p class="field__help">Picked from the language. Used when kAI sends voice notes.</p>
     </div>
+    {% endif %}
 
     <div class="cluster">
       {% if missing_connections %}

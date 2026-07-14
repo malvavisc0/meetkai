@@ -257,9 +257,7 @@ class DeploymentsService:
         for port in range(8200, 8300):
             if port not in used:
                 return port
-        raise RuntimeError(
-            f"no available control ports in range 8200-8299 ({len(used)} in use)"
-        )
+        raise RuntimeError(f"no available control ports in range 8200-8299 ({len(used)} in use)")
 
     def _registry(self, deployment: Deployment, *, user: User | None = None) -> RunRegistry:
         from kai.config.settings import get_settings

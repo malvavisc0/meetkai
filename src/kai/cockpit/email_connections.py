@@ -1,4 +1,4 @@
-"""Email (Resend) connection CRUD — one Connection(service="resend") per operator.
+"""Email Inbox (Resend) connection CRUD — one Connection(service="resend") per operator.
 
 The signing secret is encrypted at rest via ``encrypt_config`` /
 ``decrypt_config`` (the ``signing_secret`` field is listed in
@@ -121,22 +121,24 @@ class EmailConnectionsService:
 
         svix_id = f"test-loopback-{uuid.uuid4().hex[:8]}"
         ts = int(time.time())
-        body = json.dumps({
-            "type": "email.received",
-            "created_at": now_iso(),
-            "data": {
-                "email_id": f"test-loopback-{uuid.uuid4()}",
+        body = json.dumps(
+            {
+                "type": "email.received",
                 "created_at": now_iso(),
-                "from": "test@meetk.ai",
-                "to": ["support@meetk.ai"],
-                "bcc": [],
-                "cc": [],
-                "received_for": ["support@meetk.ai"],
-                "message_id": f"<{svix_id}@meetk.ai>",
-                "subject": "connection test",
-                "attachments": [],
-            },
-        }).encode()
+                "data": {
+                    "email_id": f"test-loopback-{uuid.uuid4()}",
+                    "created_at": now_iso(),
+                    "from": "test@meetk.ai",
+                    "to": ["support@meetk.ai"],
+                    "bcc": [],
+                    "cc": [],
+                    "received_for": ["support@meetk.ai"],
+                    "message_id": f"<{svix_id}@meetk.ai>",
+                    "subject": "connection test",
+                    "attachments": [],
+                },
+            }
+        ).encode()
 
         try:
             signature = _sign_resend(svix_id, str(ts), body, secret)

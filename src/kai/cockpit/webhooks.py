@@ -338,9 +338,7 @@ def _parse_resend(payload: dict, cfg: dict) -> NormalizedMessage:
     api_key = cfg.get("api_key", "")
     email_id = data["email_id"]
     email = _fetch_resend_email(email_id, api_key)
-    attachments = (
-        _fetch_resend_attachments(email_id, api_key) if data.get("attachments") else []
-    )
+    attachments = _fetch_resend_attachments(email_id, api_key) if data.get("attachments") else []
 
     return NormalizedMessage(
         source=data["from"],

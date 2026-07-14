@@ -39,9 +39,7 @@ async def connections_page(
     has_smtp = bool(smtp_conn and smtp_conn.config.get("password"))
     email_conn = EmailConnectionsService(db).get(user)
     has_resend = bool(
-        email_conn
-        and email_conn.config.get("signing_secret")
-        and email_conn.config.get("api_key")
+        email_conn and email_conn.config.get("signing_secret") and email_conn.config.get("api_key")
     )
 
     flash = request.session.pop("flash", None)

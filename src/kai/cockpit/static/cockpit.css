@@ -194,6 +194,7 @@
   input[type="url"],
   input[type="number"],
   input[type="search"],
+  input[type="password"],
   textarea,
   select {
     border: 1px solid var(--color-border);
@@ -212,6 +213,7 @@
   input[type="url"]:hover,
   input[type="number"]:hover,
   input[type="search"]:hover,
+  input[type="password"]:hover,
   textarea:hover,
   select:hover {
     border-color: var(--color-border-strong);
@@ -222,6 +224,7 @@
   input[type="url"]:focus,
   input[type="number"]:focus,
   input[type="search"]:focus,
+  input[type="password"]:focus,
   textarea:focus,
   select:focus {
     border-color: var(--color-accent-600);
@@ -1459,6 +1462,7 @@
   .field input[type="url"],
   .field input[type="number"],
   .field input[type="search"],
+  .field input[type="password"],
   .field textarea,
   .field select {
     width: 100%;

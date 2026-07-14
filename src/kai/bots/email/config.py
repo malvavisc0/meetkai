@@ -1,5 +1,4 @@
-"""Email bot transport settings — read from KAI_BOT_* env vars.
-"""
+"""Email bot transport settings — read from KAI_BOT_* env vars."""
 
 from __future__ import annotations
 

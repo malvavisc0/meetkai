@@ -95,7 +95,7 @@ def _make_user(db) -> User:
 def _resend_conn(user_id: int) -> Connection:
     from kai.cockpit.secrets import encrypt_config
 
-    cfg = encrypt_config("resend", {"signing_secret": "dGVzdA=="})
+    cfg = encrypt_config("resend", {"signing_secret": "dGVzdA==", "api_key": "re_test"})
     return Connection(
         user_id=user_id,
         service="resend",
@@ -109,14 +109,17 @@ def _resend_conn(user_id: int) -> Connection:
 def _smtp_conn(user_id: int) -> Connection:
     from kai.cockpit.secrets import encrypt_config
 
-    cfg = encrypt_config("smtp", {
-        "host": "smtp.example.com",
-        "port": 587,
-        "username": "user@example.com",
-        "password": "pass",
-        "from_address": "support@meetk.ai",
-        "use_tls": True,
-    })
+    cfg = encrypt_config(
+        "smtp",
+        {
+            "host": "smtp.example.com",
+            "port": 587,
+            "username": "user@example.com",
+            "password": "pass",
+            "from_address": "support@meetk.ai",
+            "use_tls": True,
+        },
+    )
     return Connection(
         user_id=user_id,
         service="smtp",

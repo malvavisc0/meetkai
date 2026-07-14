@@ -116,7 +116,7 @@ class TestFakeWebhookTypeReplay:
             verify_signature=lambda _req, _body, _secret: _check_freshness(
                 timestamp=ts, nonce=nonce, now=ts
             ),
-            parse=lambda payload: NormalizedMessage(source="s", text="t"),
+            parse=lambda payload, cfg: NormalizedMessage(source="s", text="t"),
         )
 
         req = MagicMock()
