@@ -70,12 +70,25 @@ def attention_reason(
     running deployment and reuses it here and for the card's task count, so
     the route never doubles the number of live status calls.
 
+    ``whatsapp_connected`` is the DB's ``Connection.status`` flag, which is
+    only written once during the pairing/QR-scan flow and never re-verified
+    afterward — it can still read "connected" long after the session (or the
+    host's internet) has actually died. When ``status_data`` is available for
+    a running deployment, its ``connected`` field takes precedence: it comes
+    from ``status_snapshot()`` fetching the bot's own WhatsApp profile, which
+    forces a real round-trip through WAHA to WhatsApp, so it reflects whether
+    the session is reachable *right now* rather than a stale snapshot.
+
     Shared by the console list (per-card badge) and the deployment detail
     page (a banner when a running bot's WhatsApp is disconnected) — both
     routes compute this the same way, from the same inputs, so they can
     never disagree about whether a deployment needs attention.
     """
-    if dep.desired_state == "running" and not whatsapp_connected:
+    live_connected = whatsapp_connected
+    if dep.status == "running" and status_data is not None and "connected" in status_data:
+        live_connected = status_data["connected"]
+
+    if dep.desired_state == "running" and not live_connected:
         return "WhatsApp down, wants running"
     if dep.status == "running":
         if status_data is None:

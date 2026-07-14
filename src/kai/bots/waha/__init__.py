@@ -418,10 +418,20 @@ class Bot(BaseBot):
                 if me and me.get("pushName"):
                     session_info["pushName"] = me.get("pushName")
 
+            # ``session_info["status"]`` above is WAHA's cached belief about
+            # its own WhatsApp Web socket — it's only updated when WAHA's
+            # internal reconnect/heartbeat logic notices a problem, so it can
+            # still read "WORKING" for a while after the underlying
+            # connection (e.g. the host's internet) has actually died.
+            # Fetching the profile forces a real round-trip through WAHA to
+            # WhatsApp, so a failure/timeout here is what actually proves the
+            # session is unreachable right now.
             account: dict | None = None
+            connected = False
             try:
                 profile = await client.get_profile()
                 if profile:
+                    connected = True
                     account = {
                         "name": profile.get("name", ""),
                         "id": profile.get("id", ""),
@@ -437,6 +447,7 @@ class Bot(BaseBot):
             return {
                 "session": session_info,
                 "account": account,
+                "connected": connected,
                 "sleep": self._sleep_state(),
                 "tasks": await self._tasks_state(),
                 "capabilities": self._capabilities_state(),
