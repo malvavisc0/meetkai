@@ -929,17 +929,20 @@
 
   .subcard form {
     display: flex;
+    flex-wrap: wrap;
     gap: var(--space-xs);
   }
 
   .subcard input[type="text"] {
-    flex: 1 1 auto;
+    flex: 1 1 140px;
     min-width: 0;
   }
 
-  /* Without this the button shrinks along with the input at narrow subcard
-     widths, and its label text overflows the shrunk box instead of the
-     input absorbing all the available shrink space. */
+  /* The subcard's minimum track width (220px, set by .subcard-grid) isn't
+     wide enough to fit the input and button on one line once card padding
+     is subtracted. flex-wrap lets the button drop to its own line instead
+     of either shrinking (label overflow) or refusing to shrink (button
+     overflow past the subcard edge). */
   .subcard form .button {
     flex-shrink: 0;
   }
