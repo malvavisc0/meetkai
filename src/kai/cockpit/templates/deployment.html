@@ -23,7 +23,7 @@
     {% set status_class = 'status-card--stopped' %}
     {% set dot_class = 'status-dot--stopped' %}
   {% endif %}
-  <div class="card status-card deployment-status-card {{ status_class }}">
+  <div class="card status-card {{ status_class }}">
     <p class="card__eyebrow"><span class="status-dot {{ dot_class }}"></span> Runtime overview</p>
     <div class="status-card__row">
     <dl class="def-grid">
@@ -89,8 +89,8 @@
   </div>
 
   {# --- Controls cluster --- #}
-  <div class="cluster">
-    {% if dep.status != "running" %}
+  {% if dep.status != "running" %}
+    <div class="cluster">
       {% if whatsapp_connected %}
         <form method="post" action="/deployments/{{ dep.id }}/start">
           <button type="submit" class="button button--primary"><span class="icon">{% include "icons/play.svg" %}</span> Start</button>
@@ -99,50 +99,6 @@
         <p class="muted text-warn">Connect WhatsApp before starting this deployment.</p>
         <a href="/connections" class="button">Connect WhatsApp</a>
       {% endif %}
-    {% endif %}
-  </div>
-
-  {% if dep.status == "running" and status %}
-    {% set sleeping_chats = status.sleep.sleeping %}
-    <div class="card">
-      <p class="card__eyebrow">Sleep mode</p>
-      <h3 class="card__title">Per-chat sleep</h3>
-      <p class="muted">
-        {% if sleeping_chats %}
-          {{ sleeping_chats|length }} chat{{ '' if sleeping_chats|length == 1 else 's' }} currently asleep.
-        {% else %}
-          No chats asleep right now.
-        {% endif %}
-        Put a chat to sleep to pause kAI's replies there, or wake one up below.
-      </p>
-      <div class="subcard-grid">
-        <div class="subcard">
-          <p class="subcard__title"><span class="icon">{% include "icons/moon.svg" %}</span> Put a chat to sleep</p>
-          <form method="post" action="/deployments/{{ dep.id }}/sleep">
-            <label class="sr-only" for="sleep_chat_id">Chat ID</label>
-            <input id="sleep_chat_id" type="text" name="chat_id" placeholder="chat ID">
-            <button type="submit" class="button">Sleep</button>
-          </form>
-        </div>
-        <div class="subcard">
-          <p class="subcard__title"><span class="icon">{% include "icons/sun.svg" %}</span> Sleeping chats</p>
-          {% if sleeping_chats %}
-            <ul class="sleep-list">
-              {% for chat_id in sleeping_chats %}
-                <li class="sleep-list__item">
-                  <span class="mono sleep-list__id">{{ chat_id }}</span>
-                  <form method="post" action="/deployments/{{ dep.id }}/wake">
-                    <input type="hidden" name="chat_id" value="{{ chat_id }}">
-                    <button type="submit" class="button button--sm">Wake</button>
-                  </form>
-                </li>
-              {% endfor %}
-            </ul>
-          {% else %}
-            <p class="muted text-sm mb-0">No chats are asleep.</p>
-          {% endif %}
-        </div>
-      </div>
     </div>
   {% endif %}
 
@@ -155,30 +111,86 @@
     </div>
   {% endif %}
 
-  {# --- Chat --- #}
+  {# --- Control: chat + sleep mode, one card divided like Brain's Sources --- #}
   {% if dep.status == "running" and status %}
-  <div class="card chat-card">
-    <h3 class="card__title">Chat with the bot</h3>
-    <p class="muted">Send a test message as a user would and review kAI's reply.</p>
-    {% if reply %}
-      <div class="log-panel chat-reply">
-        <div class="log-panel__line">
-          <b class="mono">kai&gt;</b>
-          <span class="log-panel__content">{{ reply }}</span>
+    {% set sleeping_chats = status.sleep.sleeping %}
+    <div class="card source-card">
+      <div class="source-card__header">
+        <p class="card__eyebrow">Control</p>
+      </div>
+      <div class="source-list">
+        <div class="source-item source-item--stack">
+          <div class="source-item__copy">
+            <strong>Chat with the bot</strong>
+            <span>Send a test message as a user would and review kAI's reply.</span>
+          </div>
+          <div class="source-item__controls">
+            {% if reply %}
+              <div class="log-panel chat-reply">
+                <div class="log-panel__line">
+                  <b class="mono">kai&gt;</b>
+                  <span class="log-panel__content">{{ reply }}</span>
+                </div>
+              </div>
+            {% endif %}
+            <form method="post" action="/deployments/{{ dep.id }}/chat" class="stack chat-form">
+              <div class="field">
+                <label class="sr-only" for="message">Message</label>
+                <textarea id="message" name="message" rows="3" required data-autosize
+                  placeholder="Try a message kAI might get from a real user…"></textarea>
+              </div>
+              <div class="cluster chat-form__actions">
+                <button type="submit" class="button button--primary"><span class="icon">{% include "icons/send.svg" %}</span> Send</button>
+              </div>
+            </form>
+          </div>
+        </div>
+
+        <div class="source-item source-item--stack">
+          <div class="source-item__copy">
+            <strong>Sleep mode</strong>
+            <span>
+              {% if sleeping_chats %}
+                {{ sleeping_chats|length }} chat{{ '' if sleeping_chats|length == 1 else 's' }} currently asleep.
+              {% else %}
+                No chats asleep right now.
+              {% endif %}
+              Put a chat to sleep to pause kAI's replies there, or wake one up below.
+            </span>
+          </div>
+          <div class="source-item__controls">
+            <div class="sleep-panel">
+              <div class="sleep-panel__section">
+                <p class="sleep-panel__title"><span class="icon">{% include "icons/moon.svg" %}</span> Put a chat to sleep</p>
+                <form method="post" action="/deployments/{{ dep.id }}/sleep">
+                  <label class="sr-only" for="sleep_chat_id">Chat ID</label>
+                  <input id="sleep_chat_id" type="text" name="chat_id" placeholder="chat ID">
+                  <button type="submit" class="button">Sleep</button>
+                </form>
+              </div>
+              <div class="sleep-panel__section">
+                <p class="sleep-panel__title"><span class="icon">{% include "icons/sun.svg" %}</span> Sleeping chats</p>
+                {% if sleeping_chats %}
+                  <ul class="sleep-list">
+                    {% for chat_id in sleeping_chats %}
+                      <li class="sleep-list__item">
+                        <span class="mono sleep-list__id">{{ chat_id }}</span>
+                        <form method="post" action="/deployments/{{ dep.id }}/wake">
+                          <input type="hidden" name="chat_id" value="{{ chat_id }}">
+                          <button type="submit" class="button button--sm">Wake</button>
+                        </form>
+                      </li>
+                    {% endfor %}
+                  </ul>
+                {% else %}
+                  <p class="muted text-sm mb-0">No chats are asleep.</p>
+                {% endif %}
+              </div>
+            </div>
+          </div>
         </div>
       </div>
-    {% endif %}
-    <form method="post" action="/deployments/{{ dep.id }}/chat" class="stack chat-form">
-      <div class="field">
-        <label class="sr-only" for="message">Message</label>
-        <textarea id="message" name="message" rows="3" required data-autosize
-          placeholder="Try a message kAI might get from a real user…"></textarea>
-      </div>
-      <div class="cluster chat-form__actions">
-        <button type="submit" class="button button--primary"><span class="icon">{% include "icons/send.svg" %}</span> Send</button>
-      </div>
-    </form>
-  </div>
+    </div>
   {% endif %}
 </div>
 {% endblock %}

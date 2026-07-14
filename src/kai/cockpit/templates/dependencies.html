@@ -8,7 +8,7 @@
   </header>
 
   {% set healthy = service_health | selectattr("ok") | list %}
-  <div class="card health-card">
+  <div class="card">
     <p class="card__eyebrow">Dependencies</p>
     <div class="health-grid">
       {% for svc in service_health %}

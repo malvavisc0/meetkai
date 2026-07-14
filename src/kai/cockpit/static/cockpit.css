@@ -53,7 +53,7 @@
 
     --color-page: #fafafa;                   /* app background */
     --color-surface: #ffffff;                /* card / panel surface */
-    --color-surface-alt: #f5f6f8;            /* nested surface (subcards, rows) */
+    --color-surface-alt: #f5f6f8;            /* nested surface (hover rows, avatars) */
     --color-surface-hover: #f2f3f5;
 
     --color-panel: #0a0c10;                  /* dark topbar / log panel */
@@ -901,23 +901,27 @@
     flex-shrink: 0;
   }
 
-  /* --- Sub-cards inside a card (Sleep mode's two actions) --- */
-  .subcard-grid {
+  /* --- Sleep panel: one flat card, two halves separated by a divider --- */
+  /* (not two separately-boxed subcards) — matches the Brain page's        */
+  /* source-card pattern of a single surface divided by borders.           */
+  .sleep-panel {
     display: grid;
-    gap: var(--space-md);
+    gap: var(--space-lg);
     grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
   }
 
-  .subcard {
+  .sleep-panel__section {
     display: grid;
     gap: var(--space-xs);
-    padding: var(--space-md);
-    border: 1px solid var(--color-border);
-    border-radius: var(--radius-md);
-    background: var(--color-surface-alt);
+    align-content: start;
   }
 
-  .subcard__title {
+  .sleep-panel__section + .sleep-panel__section {
+    padding-left: var(--space-lg);
+    border-left: 1px solid var(--color-border);
+  }
+
+  .sleep-panel__title {
     display: flex;
     align-items: center;
     gap: var(--space-2xs);
@@ -928,34 +932,44 @@
     margin: 0;
   }
 
-  .subcard form {
+  .sleep-panel__section form {
     display: flex;
     flex-wrap: wrap;
     gap: var(--space-xs);
   }
 
-  .subcard input[type="text"] {
+  .sleep-panel__section input[type="text"] {
     flex: 1 1 140px;
     min-width: 0;
   }
 
-  /* The subcard's minimum track width (220px, set by .subcard-grid) isn't
-     wide enough to fit the input and button on one line once card padding
-     is subtracted. flex-wrap lets the button drop to its own line instead
-     of either shrinking (label overflow) or refusing to shrink (button
-     overflow past the subcard edge). */
-  .subcard form .button {
+  /* The section's minimum track width (220px, set by .sleep-panel) isn't
+     always wide enough to fit the input and button on one line once card
+     padding is subtracted. flex-wrap lets the button drop to its own line
+     instead of either shrinking (label overflow) or refusing to shrink
+     (button overflow past the panel edge). */
+  .sleep-panel__section .button {
     flex-shrink: 0;
+  }
+
+  @media (max-width: 640px) {
+    .sleep-panel__section + .sleep-panel__section {
+      padding-left: 0;
+      padding-top: var(--space-lg);
+      border-left: none;
+      border-top: 1px solid var(--color-border);
+    }
   }
 
   .sleep-list {
     display: grid;
-    gap: var(--space-2xs);
     margin: 0;
     padding: 0;
     list-style: none;
     max-height: 220px;
     overflow-y: auto;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
   }
 
   .sleep-list__item {
@@ -963,10 +977,12 @@
     align-items: center;
     justify-content: space-between;
     gap: var(--space-sm);
-    padding: var(--space-2xs) var(--space-xs);
-    background: var(--color-surface);
-    border: 1px solid var(--color-border);
-    border-radius: var(--radius-sm);
+    padding: var(--space-xs) var(--space-sm);
+    border-bottom: 1px solid var(--color-border);
+  }
+
+  .sleep-list__item:last-child {
+    border-bottom: none;
   }
 
   .sleep-list__id {
@@ -1890,7 +1906,7 @@
     align-items: start;
   }
 
-  .source-item:not(.source-item--text) .source-item__controls {
+  .source-item:not(.source-item--text):not(.source-item--stack) .source-item__controls {
     grid-template-columns: minmax(0, 1fr) auto;
     align-items: center;
   }
@@ -1907,6 +1923,14 @@
 
   .source-item--text textarea {
     min-height: 112px;
+  }
+
+  /* Opt out of the compact inline "input + button" two-column layout above
+     for items whose controls are a fuller block (e.g. a chat form with a
+     reply panel, or the sleep-panel's own internal divider) rather than a
+     single-line input/button pair. */
+  .source-item--stack .source-item__controls {
+    gap: var(--space-md);
   }
 
   /* --- Selectable choices --- */

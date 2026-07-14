@@ -57,6 +57,14 @@ else, use tokens/classes.
   `Chats`); `.card__title` is used for the section name.
 - Subcards, when needed, use a border + `var(--color-surface-alt)` background.
   Nested shadows inside cards are not used.
+- **Prefer a single card divided by borders over multiple boxed subcards**
+  when a card's sections are two halves of one workflow rather than
+  genuinely separate modules (e.g. Sleep mode's "put to sleep" / "sleeping
+  chats" halves, or Brain's `.source-card` list). Use `border-left`
+  (`border-top` on mobile) between sections instead of giving each section
+  its own border + background, mirroring `.source-card`/`.source-list`.
+  Reserve boxed subcards for cases where sections are truly independent,
+  self-contained actions.
 
 ## Buttons
 
@@ -174,6 +182,8 @@ No fifth button variant is introduced without updating this table first.
 | `.checkbox-row--locked` | Dimmed modifier for an unentitled/disabled toggle row |
 | `.chat-picker__spinner` | Spinner for the async chat-picker loading state |
 | `.chat-picker__empty` | Empty-state message when a chat fetch returns zero rows |
+| `.source-item--stack` | Opts a `.source-item` out of the compact inline "input + button" two-column layout for items whose controls are a fuller block (a form with a reply panel, a divided sub-panel) rather than a single-line input/button pair |
+| `.sleep-panel` / `.sleep-panel__section` / `.sleep-panel__title` | Two-halves-of-one-workflow layout divided by a border (`border-left`, `border-top` on mobile) instead of two boxed subcards |
 
 New local icons: `icons/search.svg`, `icons/upload.svg`, `icons/check.svg`,
 `icons/bot.svg`.
