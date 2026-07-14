@@ -392,10 +392,14 @@ async def deployment_chats_json(
     Returns ``{"chats": [{id, name, avatar_initial}], "has_more": bool}``,
     trimmed down from WAHA's ``ChatSummary``. If the user has no WhatsApp
     connection there are genuinely no chats to list, so an empty list with
-    a 200 is returned. If WAHA itself is unreachable/erroring, the response
+    a 200 is returned. If the session-scoped ``chats/overview`` call fails
+    (session-level WAHA/puppeteer error, timeout, etc.) the response
     carries an ``error`` message instead of an empty chat list — the picker
-    JS shows it and links the user to ``/dependencies`` rather than
-    silently rendering nothing.
+    JS shows it and links the user to ``/connections`` rather than
+    silently rendering nothing. This is deliberately *not* pointed at
+    ``/dependencies``: that page only probes WAHA's general ``/health``
+    endpoint and can be perfectly green while this operator's specific
+    session is failing — see ``service_health.py``.
     """
     svc = DeploymentsService(db)
     result = _get_deployment(svc, dep_id, user)
@@ -422,7 +426,11 @@ async def deployment_chats_json(
             conn.config["waha_session"],
         )
         return JSONResponse(
-            {"chats": [], "has_more": False, "error": "WhatsApp API is not reachable"}
+            {
+                "chats": [],
+                "has_more": False,
+                "error": "Could not load chats for this WhatsApp session",
+            }
         )
 
     has_more = len(raw) > limit

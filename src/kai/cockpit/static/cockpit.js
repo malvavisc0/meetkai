@@ -140,7 +140,9 @@
     var res = await fetch(
       "/deployments/" + depId + "/chats.json?limit=" + limit + "&offset=" + offset
     );
-    if (!res.ok) return { chats: [], has_more: false, error: "WhatsApp API is not reachable" };
+    if (!res.ok) {
+      return { chats: [], has_more: false, error: "Could not load chats for this WhatsApp session" };
+    }
     return res.json();
   }
 
@@ -149,7 +151,7 @@
     row.className = "chat-picker__row";
     var copy = document.createElement("span");
     copy.className = "chat-picker__copy";
-    copy.textContent = message + " — see /dependencies";
+    copy.textContent = message + " — see /connections";
     row.appendChild(copy);
     container.appendChild(row);
   }
