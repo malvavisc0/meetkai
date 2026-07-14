@@ -437,10 +437,6 @@
     margin: var(--space-2xl) auto;
   }
 
-  .page--narrow {
-    max-width: 720px;
-  }
-
   .stack {
     display: grid;
     gap: var(--space-lg);
@@ -850,11 +846,6 @@
     box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-danger) 16%, transparent);
   }
 
-  .status-dot--warn {
-    background: var(--color-warn);
-    box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-warn) 16%, transparent);
-  }
-
   .status-dot--stopped {
     background: var(--color-subtle);
   }
@@ -875,7 +866,7 @@
   .def-grid {
     display: grid;
     gap: var(--space-xs) var(--space-lg);
-    grid-template-columns: auto 1fr;
+    grid-template-columns: auto minmax(0, 1fr);
   }
 
   .def-grid dt {
@@ -886,6 +877,7 @@
   .def-grid dd {
     margin: 0;
     color: var(--color-ink);
+    overflow-wrap: break-word;
   }
 
   .status-card__row {
@@ -898,6 +890,15 @@
 
   .status-card__row .def-grid {
     flex: 1 1 auto;
+    min-width: 0;
+  }
+
+  /* The stop/start form must keep its natural size — .def-grid is the
+     element meant to give up space via minmax(0, 1fr) above, not this
+     button. Without this the button could get squeezed in the narrow band
+     of widths just before flex-wrap kicks in and drops it to its own line. */
+  .status-card__row form {
+    flex-shrink: 0;
   }
 
   /* --- Sub-cards inside a card (Sleep mode's two actions) --- */
@@ -1760,8 +1761,8 @@
   .deployment-card__main {
     display: grid;
     gap: var(--space-2xs);
-    flex: 0 1 auto;
-    min-width: 0;
+    flex: 1 1 auto;
+    min-width: 220px;
   }
 
   .deployment-card__main .field__help {
