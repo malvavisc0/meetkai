@@ -119,6 +119,13 @@ services:
     shm_size: "2g"
     expose:
       - 11235
+    # The :latest image occasionally ships without its bundled chromium
+    # (the layer that pre-populates /home/appuser/.cache/ms-playwright is
+    # missing), so crawl4ai's Playwright launch fails with "Executable
+    # doesn't exist". Install the browser at startup — cheap (deps are
+    # already in the image; only the binary downloads) and idempotent.
+    command: >-
+      bash -c "python -m playwright install chromium && exec bash entrypoint.sh"
     environment:
       CRAWL4AI_API_TOKEN: ${KAI_BRAIN_CRAWL4AI_TOKEN}
 
