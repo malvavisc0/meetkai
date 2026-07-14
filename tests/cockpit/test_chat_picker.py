@@ -139,7 +139,7 @@ class TestChatsJson:
         body = r.json()
         assert body["chats"] == []
         assert body["has_more"] is False
-        assert body["error"] == "WhatsApp API is not reachable"
+        assert body["error"] == "Could not load chats for this WhatsApp session"
         assert "waha down" not in body["error"]
 
     def test_client_construction_failure_surfaces_error(
@@ -159,7 +159,7 @@ class TestChatsJson:
         body = r.json()
         assert body["chats"] == []
         assert body["has_more"] is False
-        assert body["error"] == "WhatsApp API is not reachable"
+        assert body["error"] == "Could not load chats for this WhatsApp session"
         assert "bad waha settings" not in body["error"]
 
     def test_no_connection_returns_empty(self, client, db, bob, conn, dep, monkeypatch):
