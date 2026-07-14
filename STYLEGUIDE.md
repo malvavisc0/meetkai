@@ -37,6 +37,29 @@ else, use tokens/classes.
 - No page introduces a font size outside this table without updating this
   table first.
 
+## Product language and hierarchy
+
+- The operator UI calls the product unit an **agent**. `Bot` and `deployment`
+  are reserved for source code, API/resource names, or technical diagnostics
+  where that distinction is necessary.
+- Page headers consistently use `.page-eyebrow`, `.page-title`, and
+  `.page-subtitle` in that order. The subtitle explains the operator outcome,
+  not the implementation detail.
+- Card headers use `.card__eyebrow` only for a grouping label and
+  `.card__title` for the actionable section name. Help text explains a control
+  or its operator impact; it does not repeat the title.
+- `Brain` is the product name for shared knowledge. In explanatory copy,
+  describe it as knowledge that agents consult before replying.
+- `channel` means where work arrives or replies are delivered; `tool` means a
+  connected capability an agent can use; `readiness` means the availability of
+  supporting services.
+- Surface AI capability through observable facts such as connected knowledge,
+  channels, tools, activity, and attention states. Do not add decorative
+  "AI" graphics, fabricated thought traces, or simulated activity.
+- Persist timestamps as ISO-8601 values, but render them with the shared
+  `format_timestamp()` template global. Raw ISO timestamps do not appear in
+  operator-facing copy.
+
 ## Spacing
 
 - Card padding: `var(--space-lg)`, no exceptions per-page.
@@ -184,6 +207,9 @@ No fifth button variant is introduced without updating this table first.
 | `.chat-picker__empty` | Empty-state message when a chat fetch returns zero rows |
 | `.source-item--stack` | Opts a `.source-item` out of the compact inline "input + button" two-column layout for items whose controls are a fuller block (a form with a reply panel, a divided sub-panel) rather than a single-line input/button pair |
 | `.sleep-panel` / `.sleep-panel__section` / `.sleep-panel__title` | Two-halves-of-one-workflow layout divided by a border (`border-left`, `border-top` on mobile) instead of two boxed subcards |
+| `.landing-*` | Pre-auth marketing landing composition: navigation, two-column hero, workflow illustration, and support-demo callout. Scoped to the landing page and built from the shared token system. |
+| `.deployment-card__summary` | Compact, right-aligned operational summary on an agent card; collapses below the card content on mobile. |
+| `.readiness-summary` / `.readiness-summary__section` | Exception-led infrastructure health summary: a concise readiness state followed by divided attention and available-service sections. |
 
 New local icons: `icons/search.svg`, `icons/upload.svg`, `icons/check.svg`,
 `icons/bot.svg`.

@@ -3,9 +3,9 @@
 <div class="page stack">
   <header class="page-header page-header--split">
     <div class="page-header__copy">
-      <p class="page-eyebrow">Channels</p>
+      <p class="page-eyebrow">Tool setup</p>
       <h1 class="page-title">Database connection</h1>
-      <p class="page-subtitle">Connect a database so your bots can run read-only SQL queries.</p>
+      <p class="page-subtitle">Let agents look up live information before replying, with read-only access to your database.</p>
     </div>
     <div class="page-header__action">
       <a href="/connections" class="button button--ghost">Back</a>
@@ -38,7 +38,7 @@
   <div class="card card--danger mt-2xl">
     <h3 class="card__title text-danger">Danger zone</h3>
     <p><strong>Delete database connection</strong></p>
-    <p class="muted">Removes the DSN. Bots with the database tool enabled will lose access on their next start.</p>
+    <p class="muted">Removes the connection. Agents with database access enabled will lose it on their next start.</p>
     <form method="post" action="/connections/database/delete" data-confirm="Delete the database connection?">
       <button type="submit" class="button button--danger"><span class="icon">{% include "icons/trash-2.svg" %}</span> Delete connection</button>
     </form>

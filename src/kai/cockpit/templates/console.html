@@ -2,9 +2,9 @@
 {% block content %}
 <div class="page stack">
   <header class="page-header">
-    <p class="page-eyebrow">Operator console</p>
-    <h1 class="page-title">Running bots</h1>
-    <p class="page-subtitle">Watch your whole team at once — and anything that needs you, you'll see it.</p>
+    <p class="page-eyebrow">Agent operations</p>
+    <h1 class="page-title">Your agents</h1>
+    <p class="page-subtitle">See which agents are available, what they can do, and where attention is needed.</p>
   </header>
 
   {% if deployments %}
@@ -16,7 +16,6 @@
         <a class="card deployment-card{% if attention_reasons.get(dep.id) %} deployment-card--attention{% elif dep.status == 'running' %} deployment-card--running{% else %} deployment-card--stopped{% endif %}" href="/deployments/{{ dep.id }}">
           <div class="deployment-card__main">
             <div class="deployment-card__title">
-              <span class="status-dot{% if attention_reasons.get(dep.id) %} status-dot--attention{% elif dep.status == 'running' %} status-dot--running{% else %} status-dot--stopped{% endif %}"></span>
               <span class="icon icon--lg">{% include "icons/" ~ (bot_type.icon if bot_type else "bot") ~ ".svg" %}</span>
               <h3 class="card__title">{{ dep.bot_type }}</h3>
               {% if attention_reasons.get(dep.id) %}
@@ -32,18 +31,19 @@
             {% elif bot_type and bot_type.description %}
               <p class="field__help">{{ bot_type.description }}</p>
             {% else %}
-              <p class="field__help">Configured bot deployment.</p>
+              <p class="field__help">Configured agent.</p>
             {% endif %}
           </div>
 
-          <div class="deployment-card__stats">
+          <div class="deployment-card__summary">
+            <p class="deployment-card__summary-label">Operating summary</p>
             <p><span class="deployment-card__stat-num">{{ conversation_count }}</span> Conversation{{ '' if conversation_count == 1 else 's' }}</p>
-            <p><span class="deployment-card__stat-num">{{ message_count }}</span> Message{{ '' if message_count == 1 else 's' }}</p>
+            <p><span class="deployment-card__stat-num">{{ message_count }}</span> Message{{ '' if message_count == 1 else 's' }} handled</p>
             <p>
               {% if status_data and status_data.tasks %}
-                <span class="deployment-card__stat-num">{{ status_data.tasks.pending }}</span> Task{{ '' if status_data.tasks.pending == 1 else 's' }}
+                <span class="deployment-card__stat-num">{{ status_data.tasks.pending }}</span> Pending task{{ '' if status_data.tasks.pending == 1 else 's' }}
               {% else %}
-                <span class="deployment-card__stat-num">&mdash;</span> Tasks
+                <span class="deployment-card__stat-num">&mdash;</span> Scheduled work unavailable
               {% endif %}
             </p>
           </div>
@@ -53,14 +53,15 @@
   {% else %}
     <div class="card empty-state empty-state--hero">
       <span class="icon icon--lg empty-state__icon">{% include "icons/bot.svg" %}</span>
-      <p>No bots yet.</p>
-      <p class="empty-state__hint">Pick a role below. Your first bot won't forget a thing.</p>
+      <p>No agents yet.</p>
+      <p class="empty-state__hint">Start with a role, then connect the channels and knowledge it needs to help.</p>
     </div>
   {% endif %}
 
   {% if available_types %}
     <div id="new-deployment" class="card stack">
-      <h3 class="card__title">New deployment</h3>
+      <p class="card__eyebrow">Add an agent</p>
+      <h3 class="card__title">Choose what this agent should own</h3>
       <form method="get" action="/deployments/new" class="stack">
         <div class="choice-list">
         {% for bt in available_types %}
@@ -74,7 +75,7 @@
         {% endfor %}
         </div>
         <div>
-          <button type="submit" class="button button--primary">Continue</button>
+          <button type="submit" class="button button--primary"><span class="icon">{% include "icons/plus.svg" %}</span> Continue</button>
         </div>
       </form>
     </div>

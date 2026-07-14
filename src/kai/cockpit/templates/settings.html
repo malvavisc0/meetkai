@@ -3,9 +3,9 @@
 <div class="page stack">
   <header class="page-header page-header--split">
     <div class="page-header__copy">
-      <p class="page-eyebrow">Bot settings</p>
+      <p class="page-eyebrow">Agent settings</p>
       <h1 class="page-title">{{ dep.bot_type }}</h1>
-      <p class="page-subtitle">Tune how this bot works. Changes take effect on its next start.</p>
+      <p class="page-subtitle">Set how this agent responds, what it can use, and where it is allowed to work. Changes apply on its next start.</p>
     </div>
     <div class="page-header__action">
       <a href="/deployments/{{ dep.id }}" class="button button--ghost">Back</a>
@@ -16,11 +16,11 @@
     {# --- Identity & voice --- #}
     <div class="card">
       <p class="card__eyebrow">Identity</p>
-      <h3 class="card__title">Bot identity &amp; voice</h3>
+      <h3 class="card__title">Agent role &amp; voice</h3>
       <div class="field">
         <label class="field__label" for="goal">Goal *</label>
         <textarea id="goal" name="goal" rows="3" required data-autosize>{{ dep.goal }}</textarea>
-        <p class="field__help">Applies on next start. Edit to nudge what kAI does.</p>
+        <p class="field__help">Describe the role this agent should own. Changes apply on its next start.</p>
       </div>
       <div class="field-grid">
         <div class="field field--narrow">
@@ -64,7 +64,7 @@
     {# --- Triggers & filters --- #}
     <div class="card">
       <p class="card__eyebrow">Triggers</p>
-      <h3 class="card__title">When the bot replies</h3>
+      <h3 class="card__title">When the agent replies</h3>
       <div class="field field--narrow">
         <label class="field__label" for="trigger_keyword">Trigger keyword</label>
         <input id="trigger_keyword" type="text" name="trigger_keyword" value="{{ dep.settings.get('trigger_keyword', '') }}">
@@ -135,12 +135,12 @@
     {# --- Participation --- #}
     <div class="card">
       <p class="card__eyebrow">Participation</p>
-      <h3 class="card__title">Unprompted replies</h3>
+      <h3 class="card__title">Proactive replies</h3>
       {% set part = dep.settings.get('participation', {}) %}
       <div class="field">
         <label class="checkbox-row">
           <input type="checkbox" name="participation_enabled" value="true" {% if part.get('enabled', true) %}checked{% endif %}>
-          Let kAI reply on its own sometimes (participation)
+          Allow this agent to reply without a direct mention when the conversation calls for it
         </label>
       </div>
       <div class="field-grid">
@@ -171,19 +171,19 @@
     {% if has_brain %}
     <div class="card">
       <p class="card__eyebrow">Brain</p>
-      <h3 class="card__title">Memory &amp; grounding</h3>
+      <h3 class="card__title">Knowledge &amp; grounding</h3>
       <div class="field">
         <label class="checkbox-row">
           <input type="checkbox" name="brain_mandatory" value="true"
             {% if dep.brain_mandatory is sameas true %}checked{% endif %}>
-          Require the Brain for factual answers
+          Require shared knowledge for factual answers
         </label>
-        <p class="field__help">When on, this bot must call the Brain before answering factual questions. When off, the bot uses the Brain but may answer from memory.</p>
+        <p class="field__help">When on, this agent checks the Brain before answering factual questions. When off, it may answer from its configured behavior without consulting shared knowledge.</p>
       </div>
       <div class="field">
         <label class="field__label" for="brain_instruction">Override Brain usage rules (optional)</label>
         <textarea id="brain_instruction" name="brain_instruction" rows="4" data-autosize>{{ dep.brain_instruction or '' }}</textarea>
-        <p class="field__help">Overrides the Brain's default usage rules for this bot only. Empty = use the Brain default.</p>
+        <p class="field__help">Overrides the Brain's default usage rules for this agent only. Empty = use the Brain default.</p>
       </div>
     </div>
     {% endif %}
@@ -210,7 +210,7 @@
           <label class="field__label" for="tool_{{ svc }}_instruction">When to use {{ tool_label | lower }}</label>
           <textarea id="tool_{{ svc }}_instruction" name="tool_{{ svc }}_instruction" rows="4"
             data-autosize {% if not ts.get('enabled', false) %}disabled{% endif %}>{{ ts.get('instruction', '') or '' }}</textarea>
-          <p class="field__help">Tell this bot when and how to use {{ tool_label | lower }}. One rule per line. Empty = the tool is available but the bot decides on its own.</p>
+          <p class="field__help">Tell this agent when and how to use {{ tool_label | lower }}. One rule per line. Empty = the tool is available but the agent decides on its own.</p>
         </div>
         {% endif %}
       {% endfor %}
@@ -228,14 +228,14 @@
   {# --- Danger zone --- #}
   <div class="card card--danger mt-2xl">
     <h3 class="card__title text-danger">Danger zone</h3>
-    <p><strong>Delete deployment</strong></p>
-    <p class="muted">This removes the bot config. WhatsApp stays connected — you're not starting over, just retiring this bot.</p>
-    <form method="post" action="/deployments/{{ dep.id }}/delete" data-confirm="Delete this deployment? This stops the bot (if running) and removes the config.">
+    <p><strong>Delete agent</strong></p>
+    <p class="muted">This removes the agent configuration. WhatsApp stays connected, so you can create another agent without reconnecting the channel.</p>
+    <form method="post" action="/deployments/{{ dep.id }}/delete" data-confirm="Delete this agent? This stops it if running and removes its configuration.">
       <label class="checkbox-row text-danger mb-md">
         <input type="checkbox" name="confirm_delete" value="true" required>
-        I understand this stops the bot (if running) and removes the deployment.
+        I understand this stops the agent if it is running and removes its configuration.
       </label>
-      <button type="submit" class="button button--danger"><span class="icon">{% include "icons/trash-2.svg" %}</span> Delete deployment</button>
+      <button type="submit" class="button button--danger"><span class="icon">{% include "icons/trash-2.svg" %}</span> Delete agent</button>
     </form>
   </div>
 </div>

@@ -3,9 +3,9 @@
 <div class="page stack">
   <header class="page-header page-header--split">
     <div class="page-header__copy">
-      <p class="page-eyebrow">Channels</p>
+      <p class="page-eyebrow">Channel setup</p>
       <h1 class="page-title">Email connection</h1>
-      <p class="page-subtitle">Connect a Resend webhook so your email bot can receive emails.</p>
+      <p class="page-subtitle">Turn incoming Resend email into work your agents can receive and respond to.</p>
     </div>
     <div class="page-header__action">
       <a href="/connections" class="button button--ghost">Back</a>
@@ -53,7 +53,7 @@
   <div class="card card--danger mt-2xl">
     <h3 class="card__title text-danger">Danger zone</h3>
     <p><strong>Delete email connection</strong></p>
-    <p class="muted">Removes the signing secret. Email bots will stop receiving inbound emails on their next start.</p>
+    <p class="muted">Removes the signing secret. Agents will stop receiving inbound email after their next start.</p>
     <form method="post" action="/connections/resend/delete" data-confirm="Delete the email connection?">
       <button type="submit" class="button button--danger"><span class="icon">{% include "icons/trash-2.svg" %}</span> Delete connection</button>
     </form>

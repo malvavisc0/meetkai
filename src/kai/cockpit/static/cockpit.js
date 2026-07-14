@@ -295,40 +295,6 @@
 
   document.addEventListener("DOMContentLoaded", initChatPicker);
 
-  // --- Count-up animation ---
-  // Animates any [data-count-up] element's text from 0 to its target value
-  // on load. Purely cosmetic: the server-rendered number is the real value
-  // and is used as both the start markup and the animation target, so this
-  // degrades safely if JS is disabled or fails.
-  function initCountUp() {
-    var els = document.querySelectorAll("[data-count-up]");
-    var reduceMotion =
-      window.matchMedia &&
-      window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-    for (var i = 0; i < els.length; i++) {
-      (function (el) {
-        var target = parseInt(el.dataset.countUp, 10);
-        if (isNaN(target)) return;
-        if (reduceMotion || target === 0) {
-          el.textContent = target;
-          return;
-        }
-        var duration = 500;
-        var start = null;
-        function step(timestamp) {
-          if (start === null) start = timestamp;
-          var progress = Math.min((timestamp - start) / duration, 1);
-          var eased = 1 - Math.pow(1 - progress, 3);
-          el.textContent = Math.round(eased * target);
-          if (progress < 1) window.requestAnimationFrame(step);
-        }
-        window.requestAnimationFrame(step);
-      })(els[i]);
-    }
-  }
-
-  document.addEventListener("DOMContentLoaded", initCountUp);
-
   // --- Live polling without the meta-refresh flash ---
   // Pages that used <meta http-equiv="refresh"> to self-update while
   // waiting on an async backend state (WhatsApp QR scan, Brain document

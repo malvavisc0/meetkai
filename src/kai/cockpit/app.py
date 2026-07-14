@@ -4,6 +4,7 @@ import logging
 import os
 import threading
 from contextlib import asynccontextmanager
+from datetime import UTC, datetime
 from pathlib import Path
 
 from fastapi import FastAPI
@@ -27,6 +28,24 @@ templates.env.globals["topbar_status"] = topbar_status
 # Contact email shown on landing/login pages. Configurable so deployments
 # don't have to edit templates to change the support address.
 templates.env.globals["contact_email"] = os.environ.get("KAI_CONTACT_EMAIL", "hello@meetk.ai")
+
+
+def format_timestamp(timestamp: str | None) -> str:
+    """Render persisted ISO timestamps in the server's local timezone for UI use."""
+    if not timestamp:
+        return ""
+    try:
+        parsed = datetime.fromisoformat(timestamp)
+        if parsed.tzinfo is None:
+            parsed = parsed.replace(tzinfo=UTC)
+        local = parsed.astimezone()
+        timezone = local.strftime("%Z") or "local"
+        return local.strftime(f"%Y-%m-%d %H:%M:%S {timezone}")
+    except ValueError:
+        return timestamp
+
+
+templates.env.globals["format_timestamp"] = format_timestamp
 
 _MEDIA_SERVICES: list = []  # module-level, so _lifespan shutdown can reach it
 

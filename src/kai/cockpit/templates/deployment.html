@@ -3,16 +3,16 @@
 <div class="page stack">
   <header class="page-header page-header--split">
     <div class="page-header__copy">
-      <p class="page-eyebrow">Bot</p>
+      <p class="page-eyebrow">Agent</p>
       <h1 class="page-title">{{ dep.bot_type }}</h1>
-      <p class="page-subtitle">Say hello, check on it, and keep it running.</p>
+      <p class="page-subtitle">Review its availability, test replies, and manage the conversations it handles.</p>
     </div>
     <div class="page-header__action">
       <a href="/deployments/{{ dep.id }}/settings" class="button">Settings</a>
     </div>
   </header>
 
-  {# --- Runtime overview --- #}
+  {# --- Agent status --- #}
   {% if attention_reason %}
     {% set status_class = 'status-card--attention' %}
     {% set dot_class = 'status-dot--attention' %}
@@ -24,7 +24,7 @@
     {% set dot_class = 'status-dot--stopped' %}
   {% endif %}
   <div class="card status-card {{ status_class }}">
-    <p class="card__eyebrow"><span class="status-dot {{ dot_class }}"></span> Runtime overview</p>
+    <p class="card__eyebrow"><span class="status-dot {{ dot_class }}"></span> Agent status</p>
     <div class="status-card__row">
     <dl class="def-grid">
       <dt>Status</dt>
@@ -48,17 +48,17 @@
       {% endif %}
       
       {% if status and status.account %}
-        <dt>Account</dt>
+        <dt>Connected account</dt>
         <dd>{{ status.account.name }} <span class="mono">{{ status.account.id }}</span></dd>
       {% endif %}
 
       {% if status and status.tasks %}
-        <dt>Tasks</dt>
+        <dt>Scheduled work</dt>
         <dd>{{ status.tasks.pending }} pending, {{ status.tasks.recurring }} recurring</dd>
       {% endif %}
 
       {% if status and status.capabilities %}
-        <dt>Capabilities</dt>
+        <dt>Available capabilities</dt>
         <dd>
           {% for k, v in status.capabilities.items() %}
             {% if k in capability_labels %}
@@ -73,11 +73,11 @@
         </dd>
       {% endif %}
 
-      <dt>Interactions</dt>
+      <dt>Activity</dt>
       <dd>
         {{ conversation_count }} conversation{{ '' if conversation_count == 1 else 's' }},
         {{ message_count }} message{{ '' if message_count == 1 else 's' }} total
-        &middot; <a href="/deployments/{{ dep.id }}/history">View full message history</a>
+        &middot; <a href="/deployments/{{ dep.id }}/history">View conversations</a>
       </dd>
     </dl>
     {% if dep.status == "running" %}
@@ -96,7 +96,7 @@
           <button type="submit" class="button button--primary"><span class="icon">{% include "icons/play.svg" %}</span> Start</button>
         </form>
       {% else %}
-        <p class="muted text-warn">Connect WhatsApp before starting this deployment.</p>
+        <p class="muted text-warn">Connect WhatsApp before starting this agent.</p>
         <a href="/connections" class="button">Connect WhatsApp</a>
       {% endif %}
     </div>
@@ -121,8 +121,8 @@
       <div class="source-list">
         <div class="source-item source-item--stack">
           <div class="source-item__copy">
-            <strong>Chat with the bot</strong>
-            <span>Send a test message as a user would and review kAI's reply.</span>
+            <strong>Test a reply</strong>
+            <span>Send a realistic customer message and review how this agent responds.</span>
           </div>
           <div class="source-item__controls">
             {% if reply %}
@@ -137,7 +137,7 @@
               <div class="field">
                 <label class="sr-only" for="message">Message</label>
                 <textarea id="message" name="message" rows="3" required data-autosize
-                  placeholder="Try a message kAI might get from a real user…"></textarea>
+                  placeholder="Write a message this agent might receive from a real customer…"></textarea>
               </div>
               <div class="cluster chat-form__actions">
                 <button type="submit" class="button button--primary"><span class="icon">{% include "icons/send.svg" %}</span> Send</button>
@@ -148,14 +148,14 @@
 
         <div class="source-item source-item--stack">
           <div class="source-item__copy">
-            <strong>Sleep mode</strong>
+            <strong>Pause conversations</strong>
             <span>
               {% if sleeping_chats %}
                 {{ sleeping_chats|length }} chat{{ '' if sleeping_chats|length == 1 else 's' }} currently asleep.
               {% else %}
                 No chats asleep right now.
               {% endif %}
-              Put a chat to sleep to pause kAI's replies there, or wake one up below.
+              Pause an individual chat to stop replies there, or resume one below.
             </span>
           </div>
           <div class="source-item__controls">

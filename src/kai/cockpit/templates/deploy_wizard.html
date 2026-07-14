@@ -3,9 +3,9 @@
 <div class="page stack">
   <header class="page-header page-header--split">
     <div class="page-header__copy">
-      <p class="page-eyebrow">New bot</p>
-      <h1 class="page-title">Set up a new bot</h1>
-      <p class="page-subtitle">Tell it what its job is. You can adjust everything else later.</p>
+      <p class="page-eyebrow">New agent</p>
+      <h1 class="page-title">Set up an agent</h1>
+      <p class="page-subtitle">Define the role it owns. You can connect more knowledge, channels, and tools later.</p>
     </div>
     <div class="page-header__action">
       <a href="/console" class="button button--ghost">Back</a>
@@ -13,7 +13,7 @@
   </header>
 
   {% if error %}
-    <p class="card card--danger text-danger"><strong>Could not create deployment:</strong> {{ error }}</p>
+    <p class="card card--danger text-danger"><strong>Could not create agent:</strong> {{ error }}</p>
   {% endif %}
 
   <div class="card">
@@ -26,13 +26,13 @@
 
   <form method="post" action="/deployments/new" class="card">
     <p class="card__eyebrow">Configuration</p>
-    <h3 class="card__title">Bot identity</h3>
+    <h3 class="card__title">Agent role</h3>
     <input type="hidden" name="bot_type" value="{{ bot_type }}">
 
     <div class="field">
-      <label class="field__label" for="goal">What should this bot do?</label>
+      <label class="field__label" for="goal">What should this agent do?</label>
       <textarea id="goal" name="goal" rows="4" required data-autosize {% if missing_connections %}disabled{% endif %}>{{ goal or "" }}</textarea>
-      <p class="field__help">A working starting point is filled in — edit it so it fits your situation, or leave it. kAI follows whatever you write here.</p>
+      <p class="field__help">Start with the suggested role, then tailor it to your team. This guides how the agent handles its work.</p>
     </div>
 
     <div class="field field--narrow">
@@ -61,10 +61,10 @@
 
     <div class="cluster">
       {% if missing_connections %}
-        <p class="muted text-warn">Connect {{ missing_connections|join(", ") }} before creating this bot.</p>
+        <p class="muted text-warn">Connect {{ missing_connections|join(", ") }} before creating this agent.</p>
         <a href="/connections" class="button">Connect {{ missing_connections|join(", ") }}</a>
       {% else %}
-        <button type="submit" class="button button--primary"><span class="icon">{% include "icons/plus.svg" %}</span> Create deployment</button>
+        <button type="submit" class="button button--primary"><span class="icon">{% include "icons/plus.svg" %}</span> Create agent</button>
         <a href="/console" class="button">Cancel</a>
       {% endif %}
     </div>

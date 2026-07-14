@@ -3,24 +3,47 @@
 <div class="page stack">
   <header class="page-header">
     <p class="page-eyebrow">Infrastructure</p>
-    <h1 class="page-title">Service health</h1>
-    <p class="page-subtitle">Live health checks for everything your bots rely on.</p>
+    <h1 class="page-title">System readiness</h1>
+    <p class="page-subtitle">The services your agents need to receive, understand, and respond to work.</p>
   </header>
 
   {% set healthy = service_health | selectattr("ok") | list %}
-  <div class="card">
-    <p class="card__eyebrow">Dependencies</p>
-    <div class="health-grid">
-      {% for svc in service_health %}
+  {% set unavailable = service_health | rejectattr("ok") | list %}
+  <div class="card readiness-summary">
+    <div class="readiness-summary__section">
+      {% if unavailable %}
+        <span class="badge badge--danger">{{ unavailable|length }} service{{ '' if unavailable|length == 1 else 's' }} {{ 'needs' if unavailable|length == 1 else 'need' }} attention</span>
+        <p class="field__help">Some agent capabilities may be unavailable until these services are restored.</p>
+      {% else %}
+        <span class="badge badge--live">All systems ready</span>
+        <p class="field__help">Agents can receive work and use every configured capability.</p>
+      {% endif %}
+    </div>
+
+    {% if unavailable %}
+    <div class="readiness-summary__section">
+      <p class="card__eyebrow">Needs attention</p>
+      <div class="health-grid">
+        {% for svc in unavailable %}
+          <div class="health-grid__row">
+            <span class="badge badge--danger" title="{{ svc.detail }}">Unavailable</span>
+            <span>{{ svc.label }}</span>
+          </div>
+        {% endfor %}
+      </div>
+    </div>
+    {% endif %}
+
+    <div class="readiness-summary__section">
+      <p class="card__eyebrow">Available services</p>
+      <div class="health-grid">
+        {% for svc in healthy %}
         <div class="health-grid__row">
-          {% if svc.ok %}
-            <span class="badge badge--live">Healthy</span>
-          {% else %}
-            <span class="badge badge--danger" title="{{ svc.detail }}">Down</span>
-          {% endif %}
+          <span class="status-dot status-dot--running" aria-hidden="true"></span>
           <span>{{ svc.label }}</span>
         </div>
-      {% endfor %}
+        {% endfor %}
+      </div>
     </div>
   </div>
 </div>

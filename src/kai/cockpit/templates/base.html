@@ -4,10 +4,10 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>kAI - Your Knowledgeable Artificial Intelligence</title>
-  <meta name="description" content="Hire an AI bot for every webhook, email, and event. They remember every conversation, never miss a message, and you manage them all from one console.">
+  <meta name="description" content="Put an AI agent behind every webhook, email, and event. Give agents the knowledge, channels, and tools to handle important work.">
   <meta property="og:type" content="website">
-  <meta property="og:title" content="kAI — Your AI staff for every webhook, email, and event">
-  <meta property="og:description" content="Hire an AI bot for every webhook, email, and event. They remember every conversation, never miss a message, and you manage them all from one console.">
+  <meta property="og:title" content="kAI — AI agents for every webhook, email, and event">
+  <meta property="og:description" content="Put an AI agent behind every webhook, email, and event. Give agents the knowledge, channels, and tools to handle important work.">
   <meta property="og:url" content="http://meetk.ai/">
   <meta property="og:image" content="http://meetk.ai/static/icon-512.png">
   <meta name="twitter:card" content="summary_large_image">
@@ -24,10 +24,10 @@
     <a class="topbar__brand topbar__brand--{{ topbar_status(request, user) }}" href="{{ '/console' if user else '/' }}"> </a>
     {% if user %}
       <span class="topbar__nav">
-        <a href="/console"><span class="icon">{% include "icons/layout-dashboard.svg" %}</span><span class="topbar__label">console</span></a>
+        <a href="/console"><span class="icon">{% include "icons/layout-dashboard.svg" %}</span><span class="topbar__label">agents</span></a>
         <a href="/brain"><span class="icon">{% include "icons/brain.svg" %}</span><span class="topbar__label">brain</span></a>
         <a href="/connections"><span class="icon">{% include "icons/plug.svg" %}</span><span class="topbar__label">connections</span></a>
-        <a href="/dependencies"><span class="icon">{% include "icons/package.svg" %}</span><span class="topbar__label">dependencies</span></a>
+        <a href="/dependencies"><span class="icon">{% include "icons/package.svg" %}</span><span class="topbar__label">readiness</span></a>
       </span>
       <span class="topbar__user">
         <span class="topbar__email">{{ user.email }}</span>

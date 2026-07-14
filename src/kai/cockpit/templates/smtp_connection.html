@@ -3,9 +3,9 @@
 <div class="page stack">
   <header class="page-header page-header--split">
     <div class="page-header__copy">
-      <p class="page-eyebrow">Channels</p>
+      <p class="page-eyebrow">Tool setup</p>
       <h1 class="page-title">SMTP connection</h1>
-      <p class="page-subtitle">Connect an email account so your bots can send emails.</p>
+      <p class="page-subtitle">Let agents send follow-ups and resolutions from your team inbox.</p>
     </div>
     <div class="page-header__action">
       <a href="/connections" class="button button--ghost">Back</a>
@@ -42,7 +42,7 @@
     <div class="field">
       <label class="field__label" for="from_address">From address</label>
       <input id="from_address" type="email" name="from_address" value="{{ c.get('from_address', '') }}" required>
-      <p class="field__help">The email address emails are sent from. Fixed per-deployment — the agent cannot override it.</p>
+      <p class="field__help">The email address messages are sent from. This address is fixed for each agent.</p>
     </div>
     <div class="field">
       <label class="checkbox-row">
@@ -62,7 +62,7 @@
   <div class="card card--danger mt-2xl">
     <h3 class="card__title text-danger">Danger zone</h3>
     <p><strong>Delete SMTP connection</strong></p>
-    <p class="muted">Removes the SMTP credentials. Bots with the email tool enabled will lose the ability to send emails on their next start.</p>
+    <p class="muted">Removes the SMTP credentials. Agents with email access enabled will lose the ability to send email on their next start.</p>
     <form method="post" action="/connections/smtp/delete" data-confirm="Delete the SMTP connection?">
       <button type="submit" class="button button--danger"><span class="icon">{% include "icons/trash-2.svg" %}</span> Delete connection</button>
     </form>

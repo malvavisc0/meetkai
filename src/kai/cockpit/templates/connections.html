@@ -2,9 +2,9 @@
 {% block content %}
 <div class="page stack">
   <header class="page-header">
-    <p class="page-eyebrow">Channels</p>
+    <p class="page-eyebrow">Channels and tools</p>
     <h1 class="page-title">Connections</h1>
-    <p class="page-subtitle">Connect channels so your bots can reach people where they already are.</p>
+    <p class="page-subtitle">Give agents the channels and connected tools they need to receive work and take action.</p>
   </header>
 
   {% if conn and conn.status == "connected" %}
@@ -20,7 +20,7 @@
           <dd><span class="mono">{{ conn.config.get('waha_session', '?') }}</span></dd>
         {% endif %}
         <dt>Connected since</dt>
-        <dd><span class="mono">{{ conn.updated_at }}</span></dd>
+        <dd><span class="mono">{{ format_timestamp(conn.updated_at) }}</span></dd>
       </dl>
       <div class="cluster">
         <form method="post" action="/connections/whatsapp/refresh">
@@ -40,7 +40,7 @@
         <h3 class="card__title">WhatsApp</h3>
         <span class="badge badge--warn">Connecting</span>
       </div>
-      <p class="field__help">Waiting for WhatsApp — scan the QR and this page updates itself when it connects.</p>
+      <p class="field__help">Scan the QR code to let agents receive and reply to WhatsApp conversations. This page updates when the connection is ready.</p>
 
       {% if qr_url %}
         <div class="card card--center qr-panel">
@@ -61,7 +61,7 @@
         <h3 class="card__title">WhatsApp</h3>
         <span class="badge badge--warn">Not connected</span>
       </div>
-      <p class="field__help">Connect WhatsApp before starting a deployment that should answer real conversations.</p>
+      <p class="field__help">Connect WhatsApp to let agents receive and reply to customer conversations.</p>
       <form method="post" action="/connections/whatsapp/connect">
         <button type="submit" class="button"><span class="icon">{% include "icons/plus.svg" %}</span> Connect</button>
       </form>
@@ -78,7 +78,7 @@
         <span class="badge badge--warn">Not connected</span>
       {% endif %}
     </div>
-    <p class="field__help">Connect a database so your bots can run read-only SQL queries against it.</p>
+    <p class="field__help">Let agents look up live customer data before replying. Database access remains read-only.</p>
     <div class="cluster">
       <a href="/connections/database" class="button"><span class="icon">{% include "icons/plus.svg" %}</span>Configure</a>
     </div>
@@ -94,7 +94,7 @@
         <span class="badge badge--warn">Not connected</span>
       {% endif %}
     </div>
-    <p class="field__help">Connect an email account so your bots can send emails.</p>
+    <p class="field__help">Let agents send follow-ups and resolutions from your team inbox.</p>
     <div class="cluster">
       <a href="/connections/smtp" class="button"><span class="icon">{% include "icons/plus.svg" %}</span> Setup</a>
     </div>
@@ -110,7 +110,7 @@
         <span class="badge badge--warn">Not connected</span>
       {% endif %}
     </div>
-    <p class="field__help">Connect a Resend webhook so your email bot can receive inbound emails.</p>
+    <p class="field__help">Turn incoming email into agent conversations and follow-up work.</p>
     <div class="cluster">
       <a href="/connections/resend" class="button"><span class="icon">{% include "icons/plus.svg" %}</span> Setup</a>
     </div>

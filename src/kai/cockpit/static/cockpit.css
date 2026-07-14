@@ -1933,10 +1933,6 @@
     background: var(--color-warn-bg);
   }
 
-  .count-up {
-    font-variant-numeric: tabular-nums;
-  }
-
   @media (max-width: 640px) {
     .health .badge {
       flex: 1 1 calc(50% - var(--space-sm));
@@ -2020,7 +2016,7 @@
     font-size: var(--text-sm);
   }
 
-  .deployment-card__stats {
+  .deployment-card__summary {
     display: grid;
     gap: var(--space-2xs);
     flex: 0 0 auto;
@@ -2030,9 +2026,17 @@
     font-size: var(--text-sm);
   }
 
-  .deployment-card__stats p {
+  .deployment-card__summary p {
     margin: 0;
     text-align: left;
+  }
+
+  .deployment-card__summary-label {
+    color: var(--color-subtle);
+    font-size: var(--text-xs);
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
   }
 
   .deployment-card__stat-num {
@@ -2049,12 +2053,32 @@
       gap: var(--space-md);
     }
 
-    .deployment-card__stats {
+    .deployment-card__summary {
       padding-left: 0;
       border-left: none;
       border-top: 1px solid var(--color-border);
       padding-top: var(--space-md);
     }
+  }
+
+  /* --- Readiness summary: quiet healthy state, detailed exceptions --- */
+  .readiness-summary {
+    display: grid;
+    gap: var(--space-lg);
+  }
+
+  .readiness-summary__section {
+    display: grid;
+    gap: var(--space-sm);
+  }
+
+  .readiness-summary__section + .readiness-summary__section {
+    padding-top: var(--space-lg);
+    border-top: 1px solid var(--color-divider);
+  }
+
+  .readiness-summary .field__help {
+    margin: 0;
   }
 
   /* --- Brain teach workspace --- */

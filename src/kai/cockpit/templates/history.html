@@ -4,8 +4,8 @@
   <header class="page-header page-header--split">
     <div class="page-header__copy">
       <p class="page-eyebrow">Conversations</p>
-      <h1 class="page-title">History — {{ dep.bot_type }}</h1>
-      <p class="page-subtitle">{{ history|length }} conversation{{ '' if history|length == 1 else 's' }}, {{ total }} message{{ '' if total == 1 else 's' }} total. Latest first.</p>
+      <h1 class="page-title">Conversations — {{ dep.bot_type }}</h1>
+      <p class="page-subtitle">{{ history|length }} conversation{{ '' if history|length == 1 else 's' }}, {{ total }} message{{ '' if total == 1 else 's' }} total. Most recent first.</p>
     </div>
     <div class="page-header__action">
       <a href="/deployments/{{ dep.id }}" class="button button--ghost">Back</a>
@@ -32,7 +32,7 @@
   {% else %}
     <div class="card empty-state">
       <span class="icon icon--lg empty-state__icon">{% include "icons/message-circle.svg" %}</span>
-      <p class="empty-state__hint">No history yet.</p>
+      <p class="empty-state__hint">No conversations yet. Messages this agent handles will appear here.</p>
     </div>
   {% endif %}
 </div>
