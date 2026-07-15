@@ -38,6 +38,17 @@
     {% include "settings/_brain.html" %}
     {% include "settings/_tools.html" %}
 
+    {# --- Senders (blocklist) --- #}
+    <div class="card">
+      <p class="card__eyebrow">Senders</p>
+      <h3 class="card__title">Blocked addresses</h3>
+      <div class="field">
+        <label class="field__label" for="blacklist">Blocklist (email addresses, one per line)</label>
+        <textarea id="blacklist" name="blacklist" rows="6" data-autosize>{{ dep.settings.get('blacklist', [])|join('\n') }}</textarea>
+        <p class="field__help">Inbound emails from these addresses are silently ignored before the agent ever sees them.</p>
+      </div>
+    </div>
+
     {# --- Actions --- #}
     <div class="cluster">
       <button type="submit" class="button button--primary"><span class="icon">{% include "icons/check.svg" %}</span> Save changes</button>

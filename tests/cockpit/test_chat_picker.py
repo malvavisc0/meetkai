@@ -76,7 +76,7 @@ def _mock_waha(monkeypatch, *, overview=None, raises=None):
         mock.get_chats_overview = AsyncMock(side_effect=raises)
     else:
         mock.get_chats_overview = AsyncMock(return_value=overview or [])
-    monkeypatch.setattr("kai.cockpit.routes.deployments.WahaClient", lambda settings: mock)
+    monkeypatch.setattr("kai.cockpit.routes.deployments.chats.WahaClient", lambda settings: mock)
     return mock
 
 
@@ -153,7 +153,7 @@ class TestChatsJson:
         def _boom(settings):
             raise RuntimeError("bad waha settings: hmac_key not configured")
 
-        monkeypatch.setattr("kai.cockpit.routes.deployments.WahaClient", _boom)
+        monkeypatch.setattr("kai.cockpit.routes.deployments.chats.WahaClient", _boom)
         r = client.get(f"/deployments/{dep.id}/chats.json")
         assert r.status_code == 200
         body = r.json()

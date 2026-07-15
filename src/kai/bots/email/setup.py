@@ -3,10 +3,13 @@
 Distinct from ``kai.bots.email.config`` which holds the transport settings
 (``KAI_BOT_*`` env). This is the packaged/overridable config (language,
 timezone) — a minimal subset of the waha bot's ``BotConfig`` (no media, no
-participation, no trigger_keyword/whitelist/blacklist).
+participation, no trigger_keyword/whitelist). ``blacklist`` is the one
+list-type setting the email bot does support: unlike waha's chat
+whitelist/blacklist, there's no "allow only these senders" concept here —
+only a blocklist of sender addresses to silently ignore.
 """
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class BotConfig(BaseModel):
@@ -14,6 +17,10 @@ class BotConfig(BaseModel):
 
     language: str = "English"
     timezone: str | None = None
+    # Sender email addresses to silently ignore in ingest_event, before any
+    # attachment download or agent turn. Checked fresh from this list on
+    # every inbound email — no block history is persisted.
+    blacklist: list[str] = Field(default_factory=list)
     # LLM sampling temperature (passed to agent.set_temperature() in
     # configure()). Left un-set, the provider's own default applies, which
     # varies by backend and is often not low. A support bot answering from a

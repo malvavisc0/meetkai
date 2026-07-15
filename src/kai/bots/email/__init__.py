@@ -34,10 +34,28 @@ from kai.bots.base import BaseBot, TellResult
 from kai.bots.email.config import EmailSettings, get_email_settings
 from kai.bots.email.setup import BotConfig
 from kai.bots.waha.webhook import create_webhook_app
+from kai.config.filters import should_process_chat_message
 from kai.config.prompts import load_system_prompt
 from kai.config.settings import Settings
 
 logger = logging.getLogger(__name__)
+
+
+def _parse_email_list(raw: object) -> list[str]:
+    """Parse a config.json list field into normalized email addresses.
+
+    Mirrors ``bots/waha/__init__.py``'s ``_parse_id_list`` helper. Entries
+    are lowercased and stripped so blacklist comparisons in ``ingest_event``
+    are case-insensitive (email addresses are conventionally compared
+    case-insensitively, unlike WAHA's chat/author IDs).
+    """
+    if not isinstance(raw, list):
+        if raw:
+            logger.warning(
+                "config.json blacklist must be a list, got %s — ignoring", type(raw).__name__
+            )
+        return []
+    return [str(entry).strip().lower() for entry in raw if isinstance(entry, str) and entry.strip()]
 
 
 class EmailAction(ActionResult):
@@ -95,6 +113,7 @@ class Bot(BaseBot):
             language=str(data.get("language", "English")),
             timezone=str(data.get("timezone", "")).strip() or None,
             temperature=float(data.get("temperature", 0.2)),
+            blacklist=_parse_email_list(data.get("blacklist")),
         )
 
     def _load_prompt(self) -> str:
@@ -158,9 +177,23 @@ class Bot(BaseBot):
         if event.get("event") != "email.inbound":
             return {"ok": False}
 
+        source = event.get("source", "")
+        # Drop blacklisted senders before any attachment download or agent
+        # turn — no block history is persisted, the list is re-checked from
+        # config on every inbound email. should_process_chat_message treats
+        # a bare email address the same as a non-group chat_id (no "@g.us"),
+        # so passing it as both chat_id and author with an empty whitelist
+        # reduces to a plain blacklist membership check. Compare
+        # case-insensitively, matching the lowercased entries loaded in
+        # _load_config.
+        if not should_process_chat_message(
+            source.strip().lower(), source.strip().lower(), set(), set(self._config.blacklist)
+        ):
+            logger.info("Ignoring blacklisted sender: %s", source)
+            return {"ok": True}
+
         try:
             assert self._agent is not None
-            source = event["source"]
             text = event["text"]
             metadata = event.get("metadata", {})
             subject = metadata.get("subject", "")
