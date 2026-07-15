@@ -930,9 +930,7 @@ class DeploymentsService:
             return None
         return result
 
-    def send_message(
-        self, deployment: Deployment, message: str, persist: bool = False
-    ) -> dict:
+    def send_message(self, deployment: Deployment, message: str, persist: bool = False) -> dict:
         """Forward an operator message to the running bot's /tell route.
 
         The delivery target is decided by the agent itself through its

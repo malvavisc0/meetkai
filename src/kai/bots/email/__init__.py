@@ -283,11 +283,11 @@ class Bot(BaseBot):
         "IMPORTANT: action values (reply, console, silent) are NOT tools. "
         'Never call them as functions. They are values for the "action" '
         "field in your JSON response.\n"
-        "- To send an email to someone, set action to \"reply\" with BOTH "
+        '- To send an email to someone, set action to "reply" with BOTH '
         '"target" = the exact email address taken from the instruction '
-        "(never invent or guess one) and \"text\" = the full email body to "
+        '(never invent or guess one) and "text" = the full email body to '
         "send (plain prose, no action tokens or field names in it). "
-        "Returning a reply with an empty \"target\" or \"text\" is never "
+        'Returning a reply with an empty "target" or "text" is never '
         "correct — if the instruction gives you both, copy them verbatim "
         "into the fields.\n"
         "- To answer the operator ONLY (answer a question the operator "
@@ -305,9 +305,7 @@ class Bot(BaseBot):
         "something there, the answer is always a reply action, not console."
     )
 
-    async def handle_operator(
-        self, message: str, *, persist: bool = False
-    ) -> TellResult:
+    async def handle_operator(self, message: str, *, persist: bool = False) -> TellResult:
         """Run an operator turn under the isolated ``operator`` history bucket.
 
         Mirrors the waha bot's operator console: the agent decides what to do

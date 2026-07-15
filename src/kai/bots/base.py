@@ -247,9 +247,7 @@ class BaseBot(ABC):
         """HMAC algorithm (``sha256`` / ``sha512``) the ``/tell`` route verifies with."""
         return "sha512"
 
-    async def handle_operator(
-        self, message: str, *, persist: bool = False
-    ) -> TellResult:
+    async def handle_operator(self, message: str, *, persist: bool = False) -> TellResult:
         """Run an operator instruction as an agent turn and return a structured result.
 
         Override in a bot that supports ``tell``. The agent decides the

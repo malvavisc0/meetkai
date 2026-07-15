@@ -71,6 +71,7 @@ console = Console()
 _SEEN_IDS_MAX = 2048
 _ROSTER_MAX_CHATS = 1024
 _CHAT_LOCKS_MAX = 1024
+_VOICE_LANG_MAX = 1024
 # Group participant lists are refreshed on inbound group messages but cached
 # per chat so we don't hammer WAHA on every message in a fast chat.
 _ROSTER_REFRESH_TTL = 300.0
@@ -173,6 +174,7 @@ class Bot(BaseBot):
         self._last_reply_at: dict[str, float] = {}
         self._consecutive_replies: dict[str, int] = {}
         self._last_voice_at: dict[str, float] = {}
+        self._last_voice_lang: OrderedDict[str, str] = OrderedDict()
         self._server: uvicorn.Server | None = None
         self._shutting_down = asyncio.Event()
         self._stt: STTProvider | None = None
@@ -1334,9 +1336,7 @@ class Bot(BaseBot):
         "set_goal tool, call it to permanize the goal."
     )
 
-    async def handle_operator(
-        self, message: str, *, persist: bool = False
-    ) -> TellResult:
+    async def handle_operator(self, message: str, *, persist: bool = False) -> TellResult:
         if self._agent is None:
             return TellResult(ok=False, reply="bot has no agent")
         suffix = "  [dim](goal)[/dim]" if persist else ""
@@ -1739,6 +1739,19 @@ class Bot(BaseBot):
         language is not supported by Kokoro v1.0 (e.g. Cyrillic, Arabic,
         Korean), synthesis is skipped and the caller falls back to text.
 
+        The prompt instructs the model to match the incoming message's
+        language per turn (see ``prompt.md``), so a single chat can move
+        between languages — the bot's static configured language is not
+        necessarily *this* reply's language. ``detect_kokoro_lang`` only
+        needs a fallback when the reply text itself is too short/ambiguous
+        to score any language's stopwords (e.g. "OK!", "Listo."); for those,
+        the *conversation's own* last confidently-detected language is a far
+        better guess than the deployment's static default — a short ack in
+        an otherwise-Spanish chat is far more likely to still be Spanish than
+        to have switched to the bot's configured English. The static
+        ``self._tts_lang`` is only used as the final fallback for a chat with
+        no voice history yet.
+
         Returns ``True`` on success. Returns ``False`` when TTS is
         unavailable, the text exceeds ``kokoro_max_chars``, the language is
         unsupported, or synthesis / delivery fails — the caller should fall
@@ -1749,7 +1762,7 @@ class Bot(BaseBot):
         clean = strip_mention_markup(text).strip()
         if not clean or len(clean) > self._waha.kokoro_max_chars:
             return False
-        lang = detect_kokoro_lang(clean, fallback=self._tts_lang)
+        lang = self._detect_voice_lang(chat_id, clean)
         if lang is None:
             logger.info("Skipping voice reply: unsupported language in %r", clean[:60])
             return False
@@ -1781,6 +1794,47 @@ class Bot(BaseBot):
             except Exception as exc:
                 logger.warning("Voice send failed, falling back to text: %s", exc)
                 return False
+
+    def _detect_voice_lang(self, chat_id: str, clean_text: str) -> str | None:
+        """Resolve the Kokoro lang code to synthesize *clean_text* in.
+
+        First checks whether *clean_text* itself confidently identifies a
+        language (script detection or a stopword match) with no fallback
+        bias at all. Only when that's inconclusive does it fall back — to
+        this chat's own last confidently-detected voice language first, then
+        to the bot's static configured language. A confident detection here
+        is remembered for the chat so the next ambiguous reply in the same
+        conversation inherits it too.
+
+        Han text without kana (kanji-only) is deliberately excluded from the
+        "no fallback bias" pass: it's genuinely ambiguous between Japanese
+        and Mandarin, and ``detect_kokoro_lang`` resolves that ambiguity
+        entirely via its ``fallback`` argument (see its Han branch and
+        ``test_kanji_only_japanese_honors_configured_lang``). Calling it with
+        ``fallback=None`` doesn't make that branch unbiased — it just forces
+        the internal default fallback to ``"en-us"``, which always loses the
+        ja/cmn tie-break to ``"cmn"``. Treating that as a "confident" result
+        would silently overwrite a chat correctly remembered as Japanese
+        (e.g. from an earlier kana-containing reply) the next time it sends
+        a kanji-only ack.
+        """
+        has_kana = any(0x3040 <= ord(ch) < 0x3100 for ch in clean_text)
+        has_han = any(0x4E00 <= ord(ch) < 0x9FFF for ch in clean_text)
+        if has_han and not has_kana:
+            chat_fallback = self._last_voice_lang.get(chat_id, self._tts_lang)
+            lang = detect_kokoro_lang(clean_text, fallback=chat_fallback)
+            if lang is not None:
+                _bounded_dict_set(self._last_voice_lang, chat_id, lang, _VOICE_LANG_MAX)
+            return lang
+        confident = detect_kokoro_lang(clean_text, fallback=None)
+        if confident is not None:
+            _bounded_dict_set(self._last_voice_lang, chat_id, confident, _VOICE_LANG_MAX)
+            return confident
+        chat_fallback = self._last_voice_lang.get(chat_id, self._tts_lang)
+        lang = detect_kokoro_lang(clean_text, fallback=chat_fallback)
+        if lang is not None:
+            _bounded_dict_set(self._last_voice_lang, chat_id, lang, _VOICE_LANG_MAX)
+        return lang
 
     async def _resolve_media_bytes(self, media: MediaAttachment) -> bytes | None:
         if media.data is not None:

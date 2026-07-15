@@ -46,9 +46,7 @@ def _make_bot(
     return bot
 
 
-def _chat_result(
-    action: str, text: str | None = None, target: str | None = None
-) -> ChatResult:
+def _chat_result(action: str, text: str | None = None, target: str | None = None) -> ChatResult:
     """Build a ChatResult whose .action has the given action/text/target."""
     return ChatResult(
         action=EmailAction(action=action, text=text, target=target),  # type: ignore[arg-type]
@@ -429,9 +427,7 @@ class TestHandleOperator:
         """console = answer the operator directly, no email sent."""
         bot = _make_bot(tmp_path)
         bot._agent = AsyncMock()
-        bot._agent.chat = AsyncMock(
-            return_value=_chat_result("console", text="here's your answer")
-        )
+        bot._agent.chat = AsyncMock(return_value=_chat_result("console", text="here's your answer"))
 
         with patch("kai.agent.tools.email.smtplib.SMTP") as mock_smtp:
             result = await bot.handle_operator("what's the status?")
@@ -448,9 +444,7 @@ class TestHandleOperator:
         bot = _make_bot(tmp_path)
         bot._agent = AsyncMock()
         bot._agent.chat = AsyncMock(
-            return_value=_chat_result(
-                "reply", text="a real answer", target="alice@example.com"
-            )
+            return_value=_chat_result("reply", text="a real answer", target="alice@example.com")
         )
 
         with patch("kai.agent.tools.email.smtplib.SMTP") as mock_smtp:
@@ -495,9 +489,7 @@ class TestHandleOperator:
         bot = _make_bot(tmp_path)
         bot._agent = AsyncMock()
         bot._agent.chat = AsyncMock(
-            return_value=_chat_result(
-                "reply", text="a real answer", target="alice@example.com"
-            )
+            return_value=_chat_result("reply", text="a real answer", target="alice@example.com")
         )
 
         with patch(

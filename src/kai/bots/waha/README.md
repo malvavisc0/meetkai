@@ -135,6 +135,22 @@ At startup, Kai checks that the venv, model, and voices are present and that
 `kokoro_onnx` imports cleanly. If anything is missing, TTS is disabled with a
 warning — the bot still runs, replying with text only.
 
+### Per-Reply Language Detection
+
+Kai matches the incoming message's language per turn (see the persona's
+Language rule), so a single chat can move between languages over time. Voice
+notes detect the reply's own language independently of the deployment's
+static `language` setting, so the voice matches whatever language *that*
+reply is actually written in, not just the bot's configured default.
+
+For a reply with no detectable signal (too short/ambiguous for script or
+stopword matching — an ack like "OK!" or "Listo."), Kai falls back to the
+same chat's own last confidently-detected voice language rather than the
+deployment's static default: a short ack in an otherwise-Spanish chat stays
+Spanish instead of reverting to English just because that one reply had no
+Spanish stopwords in it. The static `language`/`KAI_WAHA_KOKORO_LANG` is only
+used as the very first fallback for a chat with no voice history yet.
+
 ## Bot Configuration
 
 Config is loaded **external-first**: Kai looks for `configs/waha.json` (relative

@@ -1405,6 +1405,99 @@ class TestVoiceFollowup:
         bot._send_voice_reply.assert_awaited_once()
 
 
+class TestDetectVoiceLang:
+    """``_detect_voice_lang`` — per-chat language memory for ambiguous replies.
+
+    The model matches the incoming message's language per turn (see
+    prompt.md), so a single chat can move between languages. An ambiguous
+    reply (no script/stopword signal, e.g. "OK!") must inherit *this chat's*
+    last confidently-detected language rather than the bot's static
+    configured ``_tts_lang`` — otherwise a short ack in an otherwise-Spanish
+    chat gets synthesized with the bot's default English voice.
+    """
+
+    def test_confident_text_is_used_directly_and_remembered(self):
+        bot = _make_bot(BotConfig(trigger_keyword="kai"))
+        bot._tts_lang = "en-us"
+
+        lang = bot._detect_voice_lang("chat@c.us", "Hola, ¿cómo estás? Que bueno verte.")
+
+        assert lang == "es"
+        assert bot._last_voice_lang["chat@c.us"] == "es"
+
+    def test_ambiguous_reply_inherits_chat_history_over_static_default(self):
+        bot = _make_bot(BotConfig(trigger_keyword="kai"))
+        bot._tts_lang = "en-us"
+        # Chat was previously confidently detected as Spanish.
+        bot._detect_voice_lang("chat@c.us", "Hola, ¿cómo estás? Que bueno verte.")
+
+        lang = bot._detect_voice_lang("chat@c.us", "OK!")
+
+        assert lang == "es"
+
+    def test_ambiguous_reply_with_no_chat_history_uses_static_default(self):
+        bot = _make_bot(BotConfig(trigger_keyword="kai"))
+        bot._tts_lang = "en-us"
+
+        lang = bot._detect_voice_lang("new-chat@c.us", "OK!")
+
+        assert lang == "en-us"
+
+    def test_ambiguous_reply_updates_chat_memory(self):
+        bot = _make_bot(BotConfig(trigger_keyword="kai"))
+        bot._tts_lang = "fr-fr"
+
+        bot._detect_voice_lang("chat@c.us", "OK!")
+
+        assert bot._last_voice_lang["chat@c.us"] == "fr-fr"
+
+    def test_different_chats_keep_independent_language_memory(self):
+        bot = _make_bot(BotConfig(trigger_keyword="kai"))
+        bot._tts_lang = "en-us"
+        bot._detect_voice_lang("es-chat@c.us", "Hola, ¿cómo estás? Que bueno verte.")
+        bot._detect_voice_lang("fr-chat@c.us", "Bonjour, comment ça va? C'est très bien.")
+
+        assert bot._detect_voice_lang("es-chat@c.us", "OK!") == "es"
+        assert bot._detect_voice_lang("fr-chat@c.us", "OK!") == "fr-fr"
+
+    def test_unsupported_script_returns_none_and_does_not_poison_memory(self):
+        bot = _make_bot(BotConfig(trigger_keyword="kai"))
+        bot._tts_lang = "en-us"
+        bot._detect_voice_lang("chat@c.us", "Hola, ¿cómo estás? Que bueno verte.")
+
+        lang = bot._detect_voice_lang("chat@c.us", "Привет, как дела?")
+
+        assert lang is None
+        # Chat memory still holds the last real signal (Spanish), not
+        # clobbered by an unsupported-script turn that returned None.
+        assert bot._last_voice_lang["chat@c.us"] == "es"
+
+    def test_kanji_only_reply_honors_chat_remembered_as_japanese(self):
+        # Han-only text (kanji, no kana) is genuinely ambiguous between
+        # Japanese and Mandarin — detect_kokoro_lang resolves that via its
+        # fallback, not via script alone. A chat previously established as
+        # Japanese (e.g. from an earlier kana-containing reply) must keep
+        # using "ja" for a terse kanji-only ack like "了解", not silently
+        # flip to "cmn" because the ack itself has no kana.
+        bot = _make_bot(BotConfig(trigger_keyword="kai"))
+        bot._tts_lang = "en-us"
+        bot._detect_voice_lang("chat@c.us", "こんにちは、元気ですか?")
+        assert bot._last_voice_lang["chat@c.us"] == "ja"
+
+        lang = bot._detect_voice_lang("chat@c.us", "了解")
+
+        assert lang == "ja"
+        assert bot._last_voice_lang["chat@c.us"] == "ja"
+
+    def test_kanji_only_reply_with_no_chat_history_uses_static_default(self):
+        bot = _make_bot(BotConfig(trigger_keyword="kai"))
+        bot._tts_lang = "ja"
+
+        lang = bot._detect_voice_lang("new-chat@c.us", "了解")
+
+        assert lang == "ja"
+
+
 class TestGroupRosterRefresh:
     @pytest.mark.asyncio
     async def test_group_message_triggers_roster_refresh(self, monkeypatch):

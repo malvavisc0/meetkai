@@ -1,4 +1,3 @@
-from kai.agent.tools import get_tools
 from kai.agent.tools import web as tools_web
 
 

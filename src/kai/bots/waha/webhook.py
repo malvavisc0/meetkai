@@ -16,9 +16,7 @@ IngestHandler = Callable[[dict], Awaitable[dict]]
 class TellHandler(Protocol):
     """Matches ``Bot.handle_operator``: ``persist`` is keyword-only."""
 
-    def __call__(
-        self, message: str, *, persist: bool = False
-    ) -> Awaitable[TellResult]: ...
+    def __call__(self, message: str, *, persist: bool = False) -> Awaitable[TellResult]: ...
 
 
 StatusHandler = Callable[[], Awaitable[dict]]
