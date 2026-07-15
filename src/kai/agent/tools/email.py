@@ -97,6 +97,39 @@ def format_from_header(display_name: str, address: str) -> str:
     return formataddr((display_name, address))
 
 
+def _markdown_to_html(text: str) -> str:
+    """Convert markdown to HTML for the email body.
+
+    The LLM produces markdown (``**bold**``, ``# heading``, ``- list``,
+    ``[link](url)``) even when told to write plain prose. Sending it raw
+    means the recipient sees literal asterisks and hashes. This converts to
+    HTML so the email renders properly; ``set_email_body`` keeps the original
+    markdown as the plain-text fallback for clients that don't render HTML.
+
+    Uses ``markdown-it-py`` (already in the dep tree via ``rich``; declared
+    as a direct dependency so that's explicit). ``html=True`` allows inline
+    HTML in the markdown to pass through — the body is the bot's own output,
+    not untrusted user input, so this is safe.
+    """
+    from markdown_it import MarkdownIt
+
+    return MarkdownIt("commonmark", {"html": True}).render(text)
+
+
+def set_email_body(msg: EmailMessage, body: str) -> None:
+    """Set both plain-text and HTML alternatives on an ``EmailMessage``.
+
+    Shared by ``make_send_email_tool`` (the agent tool) and the email bot's
+    ``_send_reply``. The plain-text part is the original markdown (readable
+    enough as-is and degrades gracefully); the HTML part is the rendered
+    markdown for clients that support it. This is the standard MIME
+    multipart/alternative pattern — the recipient's client picks whichever
+    it can render.
+    """
+    msg.set_content(body)
+    msg.add_alternative(_markdown_to_html(body), subtype="html")
+
+
 def build_email_workflow_instruction(instruction: str) -> str:
     """Render the operator's email usage rules into a workflow prompt block.
 
@@ -185,7 +218,7 @@ def make_send_email_tool(
             msg["Subject"] = subject
             msg["From"] = format_from_header(display_name, from_address)
             msg["To"] = to
-            msg.set_content(body)
+            set_email_body(msg, body)
             send_via_smtp(
                 msg,
                 host=host,

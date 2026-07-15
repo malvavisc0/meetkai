@@ -19,6 +19,7 @@ dependencies = [
     "pillow",
     "ddgs",
     "markdownify",
+    "markdown-it-py",
     "curl-cffi",
     "beautifulsoup4",
     "jinja2",

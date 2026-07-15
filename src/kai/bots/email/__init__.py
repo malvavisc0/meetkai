@@ -38,6 +38,7 @@ from kai.agent.tools.email import (
     format_from_header,
     get_smtp_settings,
     send_via_smtp,
+    set_email_body,
 )
 from kai.bots.base import BaseBot, TellResult
 from kai.bots.email.config import EmailSettings, get_email_settings
@@ -476,7 +477,7 @@ class Bot(BaseBot):
         msg["Subject"] = f"Re: {subject}" if subject else "Re: your email"
         msg["From"] = format_from_header(self._config.display_name, self._smtp.from_address)
         msg["To"] = to
-        msg.set_content(body)
+        set_email_body(msg, body)
 
         send_via_smtp(
             msg,
