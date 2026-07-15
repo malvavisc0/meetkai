@@ -1369,8 +1369,13 @@ class Bot(BaseBot):
         # Read-target wrinkle: ``get_whatsapp_history`` reads its chat_id
         # from ToolContext. If the instruction mentions an explicit JID, set
         # the context to it so the agent can read that chat's history;
-        # otherwise fall back to the operator bucket.
-        read_target = self._extract_chat_id(message) or "operator"
+        # otherwise leave it empty. Do NOT fall back to "operator" here:
+        # "operator" isn't a real WhatsApp JID (``get_whatsapp_history``
+        # errors on it regardless), and a non-empty chat_id makes
+        # ``get_conversation_messages("")`` resolve to that value instead of
+        # listing every conversation — which is exactly the recall behavior
+        # the operator needs when the instruction names no specific chat.
+        read_target = self._extract_chat_id(message) or ""
         self.set_task_context(
             chat_id=read_target, owner_id="<operator>", tz_hint=self._config.timezone
         )
@@ -1523,15 +1528,22 @@ class Bot(BaseBot):
         available when the operator opted in to persistence
         (``persist=True``) — without it the agent cannot permanize anything,
         so the dangerous direction (one-off -> permanent) is structurally
-        impossible. ``get_whatsapp_history`` is included when registered
-        so the agent can recap a chat the instruction references.
+        impossible. ``get_whatsapp_history``, ``get_conversation_messages``
+        and ``record_note`` are included when registered: ``conversation_messages``
+        with an empty id lists every conversation (the recall path on operator
+        turns with no JID), and ``record_note`` lets the operator pin a fact
+        to a recipient.
         """
         tools: list[FunctionTool] = []
         if self._agent is not None:
+            operator_tool_names = {
+                "get_whatsapp_history",
+                "get_conversation_messages",
+                "record_note",
+            }
             for tool in self._agent.get_tools():
-                if tool.metadata.name == "get_whatsapp_history":
+                if tool.metadata.name in operator_tool_names:
                     tools.append(tool)
-                    break
         if persist:
             tools.append(self._build_set_goal_tool())
         return tools
@@ -1597,7 +1609,7 @@ class Bot(BaseBot):
         reads the right chat. Returns the first JID-looking
         token, or ``None``.
         """
-        match = re.search(r"\b\d{6,}@(?:g\.us|c\.us|lid)\b", text or "")
+        match = re.search(r"\b\d{6,}(?:-\d+)?@(?:g\.us|c\.us|lid)\b", text or "")
         return match.group(0) if match else None
 
     @asynccontextmanager

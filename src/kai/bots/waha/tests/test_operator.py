@@ -192,8 +192,58 @@ class TestOperatorTools:
         names = [t.metadata.name for t in tools]
         assert "get_whatsapp_history" in names
 
+    def test_includes_conversation_tools_when_registered(self):
+        bot = _make_bot()
+        hist = MagicMock()
+        hist.metadata.name = "get_whatsapp_history"
+        get_msgs = MagicMock()
+        get_msgs.metadata.name = "get_conversation_messages"
+        note = MagicMock()
+        note.metadata.name = "record_note"
+        bot._agent = MagicMock()
+        bot._agent.get_tools.return_value = [hist, get_msgs, note]
+        tools = bot._operator_tools(persist=False)
+        names = [t.metadata.name for t in tools]
+        assert "get_conversation_messages" in names
+        assert "record_note" in names
+
 
 class TestHandleOperator:
+    @pytest.mark.asyncio
+    async def test_no_jid_leaves_chat_context_empty_for_listing(self):
+        """An operator turn with no JID in the instruction must leave the
+        tool context's chat_id empty (not "operator") so that
+        ``get_conversation_messages("")`` lists every conversation instead
+        of resolving to the operator bucket. Regression for the recall bug
+        where the model could only see its operator history."""
+        bot = _make_bot()
+        agent = MagicMock()
+        agent.get_tools.return_value = []
+        agent.chat = AsyncMock(return_value=_operator_result("ack"))
+        agent.record_assistant_message = AsyncMock()
+        bot._agent = agent
+
+        await bot.handle_operator("who was the last person you talked to?", persist=False)
+
+        assert bot._tool_context is not None
+        assert bot._tool_context.current().chat_id == ""
+
+    @pytest.mark.asyncio
+    async def test_jid_in_instruction_sets_chat_context(self):
+        """When the operator names an explicit JID, the tool context's
+        chat_id is set to it so ``get_whatsapp_history`` reads that chat."""
+        bot = _make_bot()
+        agent = MagicMock()
+        agent.get_tools.return_value = []
+        agent.chat = AsyncMock(return_value=_operator_result("ack"))
+        agent.record_assistant_message = AsyncMock()
+        bot._agent = agent
+
+        await bot.handle_operator("recap 11235677890-1111111111@g.us", persist=False)
+
+        assert bot._tool_context is not None
+        assert bot._tool_context.current().chat_id == "11235677890-1111111111@g.us"
+
     @pytest.mark.asyncio
     async def test_runs_operator_turn_under_operator_bucket(self):
         bot = _make_bot()
