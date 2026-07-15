@@ -316,11 +316,11 @@ class TestLoadConfig:
         config = bot._load_config(config_path=config_file)
         assert config.timezone is None
 
-    def test_missing_config_file_raises(self, tmp_path):
+    def test_missing_config_returns_defaults(self, tmp_path):
         missing = tmp_path / "config.json"
         bot = _make_bot(bot_dir=tmp_path)
-        with pytest.raises(FileNotFoundError):
-            bot._load_config(config_path=missing)
+        config = bot._load_config(config_path=missing)
+        assert config == BotConfig()
 
     def test_whitelist_string_treated_as_empty(self, tmp_path):
         config_file = tmp_path / "config.json"
@@ -389,13 +389,15 @@ class TestConfigResolution:
         path = bot.resolve_config_path()
         assert path == external
 
-    def test_falls_back_to_packaged_default(self, tmp_path, monkeypatch):
+    def test_no_packaged_fallback_returns_none(self, tmp_path, monkeypatch):
+        """There is no packaged-default fallback — only the external override
+        is ever resolved; anything else (e.g. a config.json shipped
+        alongside the bot) is ignored."""
         from kai.config.settings import Settings
 
         configs_dir = tmp_path / "configs"
         configs_dir.mkdir()
-        packaged = tmp_path / "config.json"
-        packaged.write_text('{"trigger_keyword": "kai"}')
+        (tmp_path / "config.json").write_text('{"trigger_keyword": "kai"}')
 
         monkeypatch.setattr(
             "kai.bots.base.get_settings",
@@ -403,7 +405,7 @@ class TestConfigResolution:
         )
         bot = _make_bot(bot_dir=tmp_path)
         path = bot.resolve_config_path()
-        assert path == packaged
+        assert path is None
 
     def test_returns_none_when_no_config_exists(self, tmp_path, monkeypatch):
         from kai.config.settings import Settings

@@ -1,7 +1,7 @@
 """Bot-level configuration model for the email support bot.
 
 Distinct from ``kai.bots.email.config`` which holds the transport settings
-(``KAI_BOT_*`` env). This is the packaged/overridable config (language,
+(``KAI_BOT_*`` env). This is the operator-overridable config (language,
 timezone) — a minimal subset of the waha bot's ``BotConfig`` (no media, no
 participation, no trigger_keyword/whitelist). ``blacklist`` is the one
 list-type setting the email bot does support: unlike waha's chat
@@ -18,7 +18,7 @@ class BotConfig(BaseModel):
     model_config = ConfigDict(frozen=True)
 
     language: str = "English"
-    timezone: str | None = None
+    timezone: str | None = "Europe/Berlin"
     # The sender identity shown in the "From" header of outbound replies
     # (see agent/tools/email.py::format_from_header). Per-deployment rather
     # than on the shared SMTP connection, since one operator's SMTP

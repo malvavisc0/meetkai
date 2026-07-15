@@ -24,8 +24,7 @@ src/kai/bots/email/
 ├── __init__.py     # Bot class, EmailAction, ingest_event, operator console
 ├── config.py       # EmailSettings (KAI_BOT_* / KAI_EMAIL_* env vars)
 ├── setup.py        # BotConfig (language, timezone, blacklist, display_name)
-├── prompt.md       # support-bot persona / system prompt
-└── config.json     # packaged default config
+└── prompt.md       # support-bot persona / system prompt
 ```
 
 The transport client, HMAC webhook server, and inbound-event normalization
@@ -78,10 +77,10 @@ KAI_SMTP_TOOL_FROM_ADDRESS=bot@example.com
 
 ## Bot Configuration
 
-Config is loaded **external-first**, same as `waha`: Kai looks for
-`configs/email.json` (relative to the working directory, configurable via
-`KAI_CONFIGS_DIR`) and falls back to the packaged default in
-`src/kai/bots/email/config.json`.
+Config is loaded from `configs/email.json` (relative to the working
+directory, configurable via `KAI_CONFIGS_DIR`), same as `waha`. There is no
+packaged fallback — if it's missing, the bot runs on `BotConfig()`'s own
+field defaults (see `src/kai/bots/email/setup.py`).
 
 `configs/email.json`:
 

@@ -83,26 +83,21 @@ class BaseBot(ABC):
         return self.instance if self.instance else self.name
 
     def resolve_config_path(self) -> Path | None:
-        """Resolve the config file to load, external-first.
+        """Resolve the operator's config override for this bot instance.
 
-        Order:
-        1. ``<configs_dir>/<name>.json`` — operator override at the repo/cwd
-           root (e.g. ``configs/waha.json``). This is where deployment-specific
-           settings (whitelists, language, …) belong, outside package source.
-        2. ``<bot_dir>/config.json`` — the packaged default shipped with the
-           bot, used as a fallback so the bot works out of the box.
+        Looks only at ``<configs_dir>/<name>.json`` — the deployment-specific
+        override (e.g. ``configs/waha.json``). There is no packaged fallback:
+        a bot with no override configured should fail loudly on missing
+        settings (whitelist, language, SMTP, …) rather than silently run with
+        made-up defaults.
 
-        Returns the first existing path, or ``None`` if neither exists.
+        Returns the path if it exists, or ``None`` if it doesn't.
         """
         settings = get_settings()
         external = settings.configs_dir / f"{self.instance_id}.json"
         if external.is_file():
             logger.info("Loading bot config from external override: %s", external)
             return external
-        packaged = self.bot_dir / "config.json"
-        if packaged.is_file():
-            logger.info("Loading bot config from packaged default: %s", packaged)
-            return packaged
         return None
 
     def configure(self, agent: KaiAgent, settings: Settings, *, voice: str | None = None) -> None:

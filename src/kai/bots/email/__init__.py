@@ -168,7 +168,10 @@ class Bot(BaseBot):
     def _load_prompt(self) -> str:
         return load_system_prompt(
             str(self.bot_dir / "prompt.md"),
-            variables={"language": self._config.language},
+            variables={
+                "language": self._config.language,
+                "display_name": self._config.display_name,
+            },
         )
 
     async def run(self) -> None:
@@ -269,17 +272,41 @@ class Bot(BaseBot):
             )
 
             action = result.action
-            if action.action == "reply" and action.text:
+            if action.action == "reply" and action.text and not self._sent_via_tool(result, source):
                 await self._send_reply(source, subject, action.text)
             return {"ok": True}
         except Exception:
             logger.exception("ingest_event failed for %s", event.get("source", "<unknown>"))
             return {"ok": False}
 
+    @staticmethod
+    def _sent_via_tool(result: ChatResult, target: str) -> bool:
+        """True if a ``send_email`` tool call already delivered to ``target``.
+
+        The generic ``send_email`` tool (``kai.agent.tools.email``) is
+        registered on every bot's agent whenever SMTP is configured — the
+        email bot included — alongside this bot's own action-based send
+        path (``reply`` -> :meth:`_send_reply`). Nothing stops the model
+        from using both in the same turn (e.g. calling the tool, then still
+        returning ``action="reply"`` in its structured output), which would
+        otherwise deliver the same message twice. Checking the turn's
+        recorded tool calls here — rather than trying to prompt the model
+        out of ever using the tool — is what actually prevents the double
+        send regardless of which path the model picks.
+        """
+        target_norm = target.strip().lower()
+        for tc in result.tool_calls:
+            if tc.name != "send_email" or not tc.ok:
+                continue
+            to = str(tc.args.get("to", "")).strip().lower()
+            if to == target_norm:
+                return True
+        return False
+
     _OPERATOR_TURN_CONTEXT = (
         "You received an instruction from the operator (the person who runs "
-        "you). You express your decision through the structured action object "
-        "you return — there is no tool for sending emails.\n"
+        "you). Express your decision through the structured action object "
+        "you return.\n"
         "IMPORTANT: action values (reply, console, silent) are NOT tools. "
         'Never call them as functions. They are values for the "action" '
         "field in your JSON response.\n"
@@ -289,7 +316,11 @@ class Bot(BaseBot):
         "send (plain prose, no action tokens or field names in it). "
         'Returning a reply with an empty "target" or "text" is never '
         "correct — if the instruction gives you both, copy them verbatim "
-        "into the fields.\n"
+        "into the fields. You may also have a send_email tool available; "
+        "if you use it to deliver the message, still return action "
+        '"reply" with the same target/text so the send is recorded — the '
+        "framework detects the tool already delivered it and will not send "
+        "a second copy, so you never need to worry about double-sending.\n"
         "- To answer the operator ONLY (answer a question the operator "
         "asked you directly, confirm a steering directive), set action to "
         '"console" and put your reply in "text". The console reply goes to '
@@ -310,10 +341,12 @@ class Bot(BaseBot):
 
         Mirrors the waha bot's operator console: the agent decides what to do
         (send an email, answer the operator, stay silent) through its
-        structured ``EmailAction``. The bot dispatches it — there is no send
-        tool. ``reply`` delivers the email via SMTP and records it in the
-        target's history; ``console`` returns the reply to the operator only;
-        ``silent`` is a no-op.
+        structured ``EmailAction``. The bot dispatches it — see
+        :meth:`_sent_via_tool` for why a tool call and a ``reply`` action in
+        the same turn don't cause a double send. ``reply`` delivers the
+        email via SMTP (unless already delivered by the tool) and records it
+        in the target's history; ``console`` returns the reply to the
+        operator only; ``silent`` is a no-op.
         """
         if self._agent is None:
             return TellResult(ok=False, reply="bot has no agent")
@@ -360,16 +393,24 @@ class Bot(BaseBot):
             out_text = action.text or ""
             sent_ok = True
             if target and out_text:
-                console.print(f"[green]>[/green]  {out_text[:60]}  [dim](email to {target})[/dim]")
-                try:
-                    await self._send_reply(target, "", out_text)
-                except Exception as exc:
-                    logger.error("Failed to send email to %s: %s", target, exc)
-                    console.print(f"[red]send failed: {target}: {exc}[/red]")
-                    sent_ok = False
+                already_sent = self._sent_via_tool(result, target)
+                if already_sent:
+                    console.print(
+                        f"[green]>[/green]  {out_text[:60]}  "
+                        f"[dim](sent via send_email tool to {target})[/dim]"
+                    )
                 else:
-                    if self._agent is not None:
-                        await self._agent.record_assistant_message(target, out_text)
+                    console.print(
+                        f"[green]>[/green]  {out_text[:60]}  [dim](email to {target})[/dim]"
+                    )
+                    try:
+                        await self._send_reply(target, "", out_text)
+                    except Exception as exc:
+                        logger.error("Failed to send email to %s: %s", target, exc)
+                        console.print(f"[red]send failed: {target}: {exc}[/red]")
+                        sent_ok = False
+                if sent_ok and self._agent is not None:
+                    await self._agent.record_assistant_message(target, out_text)
                 snippet = out_text if len(out_text) <= 60 else out_text[:57] + "..."
                 reply = f"sent to {target}: {snippet}" if sent_ok else f"failed to send to {target}"
             else:

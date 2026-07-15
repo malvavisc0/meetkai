@@ -268,10 +268,8 @@ class Bot(BaseBot):
     def _load_config(self, config_path: Path | None = None) -> BotConfig:
         path = config_path or self.resolve_config_path()
         if path is None or not path.exists():
-            raise FileNotFoundError(
-                f"No bot config found for '{self.name}'. Looked for "
-                f"external override and packaged default in {self.bot_dir}."
-            )
+            logger.info("No config override for bot '%s'; using BotConfig() defaults", self.name)
+            return BotConfig()
         try:
             data = json.loads(path.read_text(encoding="utf-8"))
         except json.JSONDecodeError as exc:

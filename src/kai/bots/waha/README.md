@@ -153,12 +153,13 @@ used as the very first fallback for a chat with no voice history yet.
 
 ## Bot Configuration
 
-Config is loaded **external-first**: Kai looks for `configs/waha.json` (relative
-to the working directory, configurable via `KAI_CONFIGS_DIR`) and falls back to
-the packaged default in `src/kai/bots/waha/config.json`. Put your
-deployment-specific settings — whitelists, language, participation tuning — in
-`configs/waha.json` so they live outside package source and aren't overwritten
-on updates.
+Config is loaded from `configs/waha.json` (relative to the working
+directory, configurable via `KAI_CONFIGS_DIR`). There is no packaged
+fallback — if it's missing, the bot runs on `BotConfig()`'s own field
+defaults (see `src/kai/bots/waha/__init__.py`), not a duplicate config file.
+Put your deployment-specific settings — whitelists, language, participation
+tuning — in `configs/waha.json` so they live outside package source and
+aren't overwritten on updates.
 
 `configs/waha.json`:
 
