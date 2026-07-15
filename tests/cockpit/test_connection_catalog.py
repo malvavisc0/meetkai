@@ -404,9 +404,9 @@ class TestInjectConnectionEnv:
             assert injected is True
             assert env["KAI_SMTP_TOOL_HOST"] == "smtp.example.com"
             assert env["KAI_SMTP_TOOL_PORT"] == "587"
-            assert env["KAI_SMTP_TOOL_USER"] == "user"
+            assert env["KAI_SMTP_TOOL_USERNAME"] == "user"
             assert env["KAI_SMTP_TOOL_PASSWORD"] == "secret123"
-            assert env["KAI_SMTP_TOOL_FROM"] == "user@example.com"
+            assert env["KAI_SMTP_TOOL_FROM_ADDRESS"] == "user@example.com"
             assert env["KAI_SMTP_TOOL_USE_TLS"] == "true"
         finally:
             secrets._clear_key_cache()

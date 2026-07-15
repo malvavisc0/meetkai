@@ -432,7 +432,7 @@ class TestTellHmacSigning:
 
     @pytest.mark.asyncio
     async def test_signed_tell_body_verifies(self):
-        async def on_tell(message: str, *, persist: bool = False) -> TellResult:
+        async def on_tell(message: str, *, persist: bool = False, to: str = "") -> TellResult:
             return TellResult(ok=True, reply=message)
 
         app = create_webhook_app(hmac_key=_KEY, on_tell=on_tell)

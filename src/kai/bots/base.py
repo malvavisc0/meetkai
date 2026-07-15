@@ -10,6 +10,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from kai.agent.context import ToolContext
 from kai.agent.core import ActionResult, KaiAgent
 from kai.agent.scheduler import TaskScheduler, TaskStore, build_task_tools
+from kai.agent.tools.email import DEFAULT_DISPLAY_NAME
 from kai.config.settings import Settings, get_settings
 
 logger = logging.getLogger(__name__)
@@ -246,14 +247,28 @@ class BaseBot(ABC):
         """HMAC algorithm (``sha256`` / ``sha512``) the ``/tell`` route verifies with."""
         return "sha512"
 
-    async def handle_operator(self, message: str, *, persist: bool = False) -> TellResult:
+    async def handle_operator(
+        self, message: str, *, persist: bool = False, to: str = ""
+    ) -> TellResult:
         """Run an operator instruction as an agent turn and return a structured result.
 
-        Override in a bot that supports ``tell``. The default raises so a
-        misconfigured ``/tell`` route (endpoint wired but no handler) fails
-        loudly rather than silently no-oping.
+        Override in a bot that supports ``tell``. ``to`` is an optional
+        real-world delivery target the operator supplied alongside the
+        console message (e.g. the email bot's "send as real email to"
+        field); bots with no such concept ignore it. The default raises so
+        a misconfigured ``/tell`` route (endpoint wired but no handler)
+        fails loudly rather than silently no-oping.
         """
         raise NotImplementedError(f"{self.name} does not implement handle_operator()")
+
+    def display_name(self) -> str:
+        """The identity this bot presents as in outbound email ``From`` headers.
+
+        Overridden by bots whose ``BotConfig`` carries a ``display_name``
+        (waha, email) to return their own configured value; the default
+        covers bots with no such concept.
+        """
+        return DEFAULT_DISPLAY_NAME
 
     async def _judge_goal_clarity(self, goal: str) -> bool:
         """LLM-backed check that a goal is clear enough to act on autonomously.

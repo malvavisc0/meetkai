@@ -15,6 +15,7 @@ from fastapi import APIRouter, Depends, Form, Request
 from fastapi.responses import RedirectResponse
 from sqlalchemy.orm import Session
 
+from kai.agent.tools.email import DEFAULT_DISPLAY_NAME
 from kai.cockpit.app import templates
 from kai.cockpit.auth import require_user
 from kai.cockpit.bots import BOT_TYPES, CAPABILITY_LABELS, CREDENTIAL_TYPES
@@ -100,6 +101,7 @@ def _parse_waha_settings(dep_id: int, request: Request, form_fields: dict) -> Se
             "voice_note_cooldown": _form_int("voice_note_cooldown", 300),
         },
         "kokoro_voice_map": kokoro_voice_map,
+        "display_name": (form_fields.get("display_name", "") or "").strip() or DEFAULT_DISPLAY_NAME,
     }
     return updates, voice
 
@@ -116,7 +118,8 @@ def _parse_email_settings(dep_id: int, request: Request, form_fields: dict) -> S
             line.strip().lower()
             for line in (form_fields.get("blacklist", "") or "").splitlines()
             if line.strip()
-        ]
+        ],
+        "display_name": (form_fields.get("display_name", "") or "").strip() or DEFAULT_DISPLAY_NAME,
     }
     return updates, ""
 
@@ -209,6 +212,7 @@ async def deployment_settings_page(
             "supported_tools": supported_tools,
             "tools_state": tools_state,
             "flash": flash,
+            "default_display_name": DEFAULT_DISPLAY_NAME,
         },
     )
 

@@ -16,6 +16,7 @@ from rich.console import Console
 from kai.agent.context import MessageContext
 from kai.agent.core import ChatResult, KaiAgent
 from kai.agent.tools import WEB_WORKFLOW_INSTRUCTIONS
+from kai.agent.tools.email import DEFAULT_DISPLAY_NAME
 from kai.bots.base import BaseBot, TellResult
 from kai.bots.waha.actions import action_cls_for_turn
 from kai.bots.waha.client import WahaClient
@@ -298,6 +299,7 @@ class Bot(BaseBot):
             timezone=str(data.get("timezone", "")).strip() or None,
             mentions_enabled=bool(data.get("mentions_enabled", True)),
             temperature=float(data.get("temperature", 0.4)),
+            display_name=str(data.get("display_name", "")).strip() or DEFAULT_DISPLAY_NAME,
             media=MediaConfig(
                 image_enabled=bool(media_data.get("image_enabled", True)),
                 stt_enabled=bool(
@@ -327,6 +329,9 @@ class Bot(BaseBot):
             str(self.bot_dir / "prompt.md"),
             variables={"language": self._config.language},
         )
+
+    def display_name(self) -> str:
+        return self._config.display_name
 
     async def run(self) -> None:
         assert self._waha is not None, "configure() must be called before run()"
@@ -1331,7 +1336,14 @@ class Bot(BaseBot):
         "set_goal tool, call it to permanize the goal."
     )
 
-    async def handle_operator(self, message: str, *, persist: bool = False) -> TellResult:
+    async def handle_operator(
+        self, message: str, *, persist: bool = False, to: str = ""
+    ) -> TellResult:
+        # ``to`` is part of the shared TellHandler protocol (the email
+        # bot's console send-to-real-address field) — WAHA has no
+        # equivalent concept, since a send target is always a chat JID
+        # extracted from the instruction itself (see ``send_to_group``/
+        # ``send_dm`` below), so it's accepted but unused here.
         if self._agent is None:
             return TellResult(ok=False, reply="bot has no agent")
         suffix = "  [dim](goal)[/dim]" if persist else ""

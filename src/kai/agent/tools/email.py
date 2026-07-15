@@ -31,6 +31,14 @@ logger = logging.getLogger(__name__)
 _NO_REPLY = re.compile(r"^(no[-_]?reply|donotreply)@", re.IGNORECASE)
 _EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 
+# Single source of truth for the fallback sender identity — every
+# BotConfig.display_name field default, each bot's own _load_config
+# fallback, and the cockpit settings form's fallback all derive from this
+# one constant instead of repeating the literal (see bots/email/setup.py,
+# bots/waha/setup.py, bots/base.py::BaseBot.display_name(), and
+# cockpit/routes/deployments/settings.py).
+DEFAULT_DISPLAY_NAME = "Knowledgeable AI"
+
 
 class SmtpSettings(BaseSettings):
     """SMTP tool settings — read from KAI_SMTP_TOOL_* env vars.
@@ -77,6 +85,16 @@ def _valid_recipient(addr: str) -> bool:
     if _NO_REPLY.match(a):
         return False
     return True
+
+
+def format_from_header(display_name: str, address: str) -> str:
+    """Render an RFC 2822 ``From`` header value for an outbound email.
+
+    Shared by ``make_send_email_tool`` (the agent tool) and the email bot's
+    ``_send_reply`` — one implementation so the two call sites can't drift
+    the way the hardcoded "Knowledgeable AI" literal already had.
+    """
+    return formataddr((display_name, address))
 
 
 def build_email_workflow_instruction(instruction: str) -> str:
@@ -137,12 +155,15 @@ def make_send_email_tool(
     from_address: str,
     *,
     use_tls: bool = True,
+    display_name: str = DEFAULT_DISPLAY_NAME,
 ) -> FunctionTool:
     """Build the ``send_email`` tool bound to the operator's SMTP config.
 
     The ``from_address``, ``host``, ``port``, ``username``, and ``password``
     are closed over — the LLM cannot override any of them. The tool's
     signature is ``send_email(to, subject, body)`` with no ``from``.
+    ``display_name`` is the calling bot's own configured identity (its
+    ``BotConfig.display_name``), not the shared SMTP credential's.
     """
 
     def send_email(to: str, subject: str, body: str) -> str:
@@ -162,7 +183,7 @@ def make_send_email_tool(
         try:
             msg = EmailMessage()
             msg["Subject"] = subject
-            msg["From"] = formataddr(("Knowledgeable AI", from_address))
+            msg["From"] = format_from_header(display_name, from_address)
             msg["To"] = to
             msg.set_content(body)
             send_via_smtp(
@@ -198,6 +219,7 @@ def register_email_tool(
     from_address: str,
     use_tls: bool = True,
     instruction: str = "",
+    display_name: str = DEFAULT_DISPLAY_NAME,
 ) -> None:
     """Register send_email on agent and inject the workflow prompt.
 
@@ -205,6 +227,14 @@ def register_email_tool(
     tool and appends a workflow instruction block to the system prompt.
     No persistent resource to return (smtplib connections are short-lived).
     """
-    tool = make_send_email_tool(host, int(port), username, password, from_address, use_tls=use_tls)
+    tool = make_send_email_tool(
+        host,
+        int(port),
+        username,
+        password,
+        from_address,
+        use_tls=use_tls,
+        display_name=display_name,
+    )
     agent.register_tool(tool)
     agent.set_tool_workflow(build_email_workflow_instruction(instruction))

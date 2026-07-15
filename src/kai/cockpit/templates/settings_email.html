@@ -32,7 +32,12 @@
           <label class="field__label" for="timezone">Timezone</label>
           <input id="timezone" type="text" name="timezone" value="{{ dep.settings.get('timezone', '') or '' }}">
         </div>
+        <div class="field field--narrow">
+          <label class="field__label" for="display_name">Display name</label>
+          <input id="display_name" type="text" name="display_name" value="{{ dep.settings.get('display_name', '') or default_display_name }}">
+        </div>
       </div>
+      <p class="field__help">Display name is the sender name recipients see on outbound replies.</p>
     </div>
 
     {% include "settings/_brain.html" %}

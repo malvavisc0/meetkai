@@ -169,7 +169,7 @@ class TestFullDeploymentFlow:
         monkeypatch.setattr(
             dep_mod.DeploymentsService,
             "send_message",
-            lambda self, d, message, persist=False: {"ok": True, "reply": "sure thing"},
+            lambda self, d, message, persist=False, to="": {"ok": True, "reply": "sure thing"},
         )
         r = client.post(
             f"/deployments/{dep.id}/chat", data={"message": "hello"}, follow_redirects=False

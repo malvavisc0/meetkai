@@ -6,6 +6,8 @@ WAHA *transport* settings (API URL, webhook, whisper, etc.).
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from kai.agent.tools.email import DEFAULT_DISPLAY_NAME
+
 _DEFAULT_PARTICIPATION_RATE = 0.15
 _DEFAULT_PARTICIPATION_COOLDOWN = 90
 _DEFAULT_PARTICIPATION_STREAK_MAX = 2
@@ -42,6 +44,12 @@ class BotConfig(BaseModel):
     blacklist: list[str] = Field(default_factory=list)
     language: str = "English"
     timezone: str | None = None
+    # The sender identity shown in the "From" header when this deployment
+    # uses the bot-agnostic send_email tool (agent/tools/email.py). Mirrors
+    # the email bot's own BotConfig.display_name for symmetry — a WAHA
+    # deployment sending email presents as its own configured identity
+    # rather than a hardcoded literal.
+    display_name: str = DEFAULT_DISPLAY_NAME
     mentions_enabled: bool = True
     media: MediaConfig = Field(default_factory=MediaConfig)
     participation: ParticipationConfig = Field(default_factory=ParticipationConfig)

@@ -412,6 +412,7 @@ def _start(
                     from_address=smtp_settings.from_address,
                     use_tls=smtp_settings.use_tls,
                     instruction=smtp_settings.instruction,
+                    display_name=bot.display_name(),
                 )
                 logger.info("send_email tool registered")
             except Exception:

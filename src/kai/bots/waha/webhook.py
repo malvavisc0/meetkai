@@ -14,9 +14,11 @@ IngestHandler = Callable[[dict], Awaitable[dict]]
 
 
 class TellHandler(Protocol):
-    """Matches ``Bot.handle_operator``: ``persist`` is keyword-only."""
+    """Matches ``Bot.handle_operator``: ``persist``/``to`` are keyword-only."""
 
-    def __call__(self, message: str, *, persist: bool = False) -> Awaitable[TellResult]: ...
+    def __call__(
+        self, message: str, *, persist: bool = False, to: str = ""
+    ) -> Awaitable[TellResult]: ...
 
 
 StatusHandler = Callable[[], Awaitable[dict]]
@@ -110,10 +112,12 @@ def create_webhook_app(
         """Operator control route.
 
         HMAC-verified with the same key as the inbound webhook. The body is
-        ``{"message": str, "persist": bool}``; the route relays it to the
-        bot's ``handle_operator`` and returns the bot's structured
-        :class:`TellResult` verbatim. The framework does not interpret the
-        result.
+        ``{"message": str, "persist": bool, "to": str}``; the route relays
+        it to the bot's ``handle_operator`` and returns the bot's
+        structured :class:`TellResult` verbatim. ``to`` is optional and
+        empty by default — only the email bot's console currently gives it
+        meaning (a real address to also send to); other bots ignore it.
+        The framework does not interpret the result.
         """
         if on_tell is None:
             raise HTTPException(status_code=404, detail="tell not supported by this bot")
@@ -137,11 +141,12 @@ def create_webhook_app(
         if not isinstance(persist_raw, bool):
             raise HTTPException(status_code=400, detail="persist must be a boolean")
         persist = persist_raw
+        to = str(payload.get("to", "")).strip()
         if not message:
             raise HTTPException(status_code=400, detail="message is required")
 
         try:
-            result = await on_tell(message, persist=persist)
+            result = await on_tell(message, persist=persist, to=to)
         except Exception:
             logger.exception("on_tell handler error")
             return TellResult(ok=False, reply="operator turn failed").model_dump()

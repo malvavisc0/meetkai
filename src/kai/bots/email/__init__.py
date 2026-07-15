@@ -20,16 +20,24 @@ import asyncio
 import json
 import logging
 from email.message import EmailMessage
-from email.utils import formataddr
 from pathlib import Path
 from typing import Literal
 
 import httpx
 import uvicorn
+from pydantic import Field
 
 from kai.agent.context import MessageContext
 from kai.agent.core import ActionResult, ChatResult, KaiAgent
-from kai.agent.tools.email import SmtpSettings, _valid_recipient, get_smtp_settings, send_via_smtp
+from kai.agent.tools import WEB_WORKFLOW_INSTRUCTIONS
+from kai.agent.tools.email import (
+    DEFAULT_DISPLAY_NAME,
+    SmtpSettings,
+    _valid_recipient,
+    format_from_header,
+    get_smtp_settings,
+    send_via_smtp,
+)
 from kai.bots.base import BaseBot, TellResult
 from kai.bots.email.config import EmailSettings, get_email_settings
 from kai.bots.email.setup import BotConfig
@@ -67,7 +75,18 @@ class EmailAction(ActionResult):
     ``output_cls``; this is the intended extension point.
     """
 
-    action: Literal["reply", "silent"]  # type: ignore[assignment]
+    action: Literal["reply", "silent"] = Field(  # type: ignore[assignment]
+        description=(
+            "'reply' to send an email back to the sender (fill `text` with "
+            "the full message body); this is the default for any genuine "
+            "question, even a short or hard one. 'silent' ONLY for "
+            "content-free connectivity tests, automated/system-generated "
+            "mail (out-of-office, bounces, calendar responses, "
+            "unsubscribe confirmations), pure spam, or empty/unreadable "
+            "content — never silent just because a question is ambiguous "
+            "or you don't know the answer; say so in a reply instead."
+        )
+    )
     text: str | None = None
 
 
@@ -96,6 +115,11 @@ class Bot(BaseBot):
         agent.set_system_prompt(self._prompt)
         agent.set_temperature(self._config.temperature)
         agent.set_timezone(self._config.timezone)
+        # The default tool set (web_search / get_webpage_content, registered
+        # for every KaiAgent by get_tools()) needs the same fetch-before-cite
+        # / cross-check-sources protocol the waha bot gets via this same
+        # constant — without it the model has tools but no usage guidance.
+        agent.set_tool_workflow(WEB_WORKFLOW_INSTRUCTIONS)
         self.setup_task_scheduler(agent, settings)
         # SMTP settings for the reply path (KAI_SMTP_TOOL_* env, injected by
         # the cockpit's required-credential env-injection loop added in 01).
@@ -114,7 +138,11 @@ class Bot(BaseBot):
             timezone=str(data.get("timezone", "")).strip() or None,
             temperature=float(data.get("temperature", 0.2)),
             blacklist=_parse_email_list(data.get("blacklist")),
+            display_name=str(data.get("display_name", "")).strip() or DEFAULT_DISPLAY_NAME,
         )
+
+    def display_name(self) -> str:
+        return self._config.display_name
 
     def _load_prompt(self) -> str:
         return load_system_prompt(
@@ -227,7 +255,19 @@ class Bot(BaseBot):
             logger.exception("ingest_event failed for %s", event.get("source", "<unknown>"))
             return {"ok": False}
 
-    async def handle_operator(self, message: str, *, persist: bool = False) -> TellResult:
+    async def handle_operator(
+        self, message: str, *, persist: bool = False, to: str = ""
+    ) -> TellResult:
+        """Run a console turn under the isolated ``operator`` history bucket.
+
+        Mirrors the waha bot's console send parity: when the model decides
+        to reply *and* the operator supplied a real ``to`` address (a
+        "send as real email to" field in the console UI, never inferred),
+        the reply is actually emailed and recorded in that address's own
+        history bucket — exactly like a genuine inbound-email round trip —
+        in addition to the normal ``operator`` transcript. Omitting ``to``
+        keeps the turn local/no-send, as before.
+        """
         if self._agent is None:
             return TellResult(ok=False, reply="bot has no agent")
 
@@ -241,7 +281,33 @@ class Bot(BaseBot):
                 addressed_to_bot=True,
             ),
         )
-        return TellResult(ok=True, reply=result.action.text or "")
+        action = result.action
+        reply = action.text or ""
+
+        to_addr = to.strip()
+        if action.action == "reply" and to_addr and action.text:
+            try:
+                await self._send_reply(to_addr, "", action.text)
+            except Exception as exc:
+                logger.error("Console send to %s failed: %s", to_addr, exc)
+                return TellResult(ok=False, reply=f"{reply}\n\n(send to {to_addr} failed: {exc})")
+            await self._agent.record_assistant_message(to_addr, action.text)
+            # An explicit action entry, not just the ``ok`` flag, lets the
+            # cockpit confirm a real send happened (mirroring WahaAction's
+            # send_to_group/send_dm actions). A bot process still running
+            # pre-``to``-aware code (restart-pending) has no way to
+            # populate this — it silently ignores the unrecognized field —
+            # so its response carries no confirmation entry, and the
+            # console correctly shows no "sent" claim instead of a false one.
+            return TellResult(
+                ok=True,
+                actions=[
+                    {"tool": "send_reply", "target": to_addr, "text": action.text, "ok": True}
+                ],
+                reply=reply,
+            )
+
+        return TellResult(ok=True, reply=reply)
 
     async def status_snapshot(self) -> dict:
         return {"bot": "email", "language": self._config.language}
@@ -270,7 +336,7 @@ class Bot(BaseBot):
 
         msg = EmailMessage()
         msg["Subject"] = f"Re: {subject}" if subject else "Re: your email"
-        msg["From"] = formataddr(("Knowledgeable AI", self._smtp.from_address))
+        msg["From"] = format_from_header(self._config.display_name, self._smtp.from_address)
         msg["To"] = to
         msg.set_content(body)
 

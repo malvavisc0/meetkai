@@ -138,9 +138,9 @@ SERVICE_ENV_VARS: dict[str, dict] = {
         "fields": {
             "host": "KAI_SMTP_TOOL_HOST",
             "port": "KAI_SMTP_TOOL_PORT",
-            "username": "KAI_SMTP_TOOL_USER",
+            "username": "KAI_SMTP_TOOL_USERNAME",
             "password": "KAI_SMTP_TOOL_PASSWORD",
-            "from_address": "KAI_SMTP_TOOL_FROM",
+            "from_address": "KAI_SMTP_TOOL_FROM_ADDRESS",
             "use_tls": "KAI_SMTP_TOOL_USE_TLS",
         },
         "instruction": "KAI_SMTP_TOOL_INSTRUCTION",
@@ -930,13 +930,19 @@ class DeploymentsService:
             return None
         return result
 
-    def send_message(self, deployment: Deployment, message: str, persist: bool = False) -> dict:
-        """Forward an operator message to the running bot's /tell route."""
+    def send_message(
+        self, deployment: Deployment, message: str, persist: bool = False, to: str = ""
+    ) -> dict:
+        """Forward an operator message to the running bot's /tell route.
+
+        ``to`` is an optional real delivery address (email bot console send
+        parity — see ``Bot.handle_operator``); other bot types ignore it.
+        """
         record = self._resolve_run(deployment)
         if record is None:
             return {"ok": False, "reply": "bot is not running"}
 
-        body = json.dumps({"message": message, "persist": persist}).encode()
+        body = json.dumps({"message": message, "persist": persist, "to": to}).encode()
         return self._call_bot(record, "POST", "/tell", body, timeout=120.0)
 
     def sleep_chat(self, deployment: Deployment, chat_id: str) -> dict:

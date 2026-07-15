@@ -33,6 +33,7 @@ async def chat_send(
     request: Request,
     dep_id: int,
     message: str = Form(...),
+    to: str = Form(""),
     user: User = Depends(require_user),
     db: Session = Depends(get_db),
 ):
@@ -45,10 +46,26 @@ async def chat_send(
     # persist=False always: a permanent goal change (the only thing this
     # flag gates, see Bot._operator_tools) should only ever happen through
     # the explicit Goal field on the Settings page, never as a side effect
-    # of a casual test message here.
-    result_dict = svc.send_message(dep, message, persist=False)
+    # of a casual test message here. ``to`` is optional and only meaningful
+    # to the email bot's console (a real address to also send to); other
+    # bot types ignore it server-side.
+    result_dict = svc.send_message(dep, message, persist=False, to=to.strip())
     reply = result_dict.get("reply", "(no reply)")
     request.session["chat_reply"] = reply
+    # Only show a "sent as a real email" confirmation when the bot's own
+    # response actually confirms it dispatched the send (a ``send_reply``
+    # action entry) — a bot process still running old code silently drops
+    # an unrecognized ``to`` field, so its response has no such entry and
+    # the console correctly shows no confirmation instead of a false one.
+    sent_to = next(
+        (
+            a.get("target")
+            for a in result_dict.get("actions", [])
+            if a.get("tool") == "send_reply" and a.get("ok")
+        ),
+        None,
+    )
+    request.session["chat_sent_to"] = sent_to
     return RedirectResponse(f"/deployments/{dep_id}", status_code=302)
 
 

@@ -11,6 +11,7 @@ import pytest
 from kai.agent.tools.email import (
     _valid_recipient,
     build_email_workflow_instruction,
+    format_from_header,
     make_send_email_tool,
     register_email_tool,
 )
@@ -117,6 +118,42 @@ class TestToolSignatureNoFrom:
         assert "body" in param_names
         assert "from" not in param_names
         assert "from_address" not in param_names
+
+
+class TestFormatFromHeader:
+    def test_default_display_name(self):
+        header = format_from_header("Knowledgeable AI", "from@test.com")
+        assert header == "Knowledgeable AI <from@test.com>"
+
+    def test_custom_display_name(self):
+        header = format_from_header("Acme Support", "support@acme.com")
+        assert header == "Acme Support <support@acme.com>"
+
+
+class TestSendEmailDisplayName:
+    def test_default_display_name_used(self):
+        tool = make_send_email_tool("smtp.test.com", 587, "user", "pass", "from@test.com")
+        with patch("kai.agent.tools.email.smtplib.SMTP") as mock_smtp:
+            mock_server = MagicMock()
+            mock_smtp.return_value.__enter__ = MagicMock(return_value=mock_server)
+            mock_smtp.return_value.__exit__ = MagicMock(return_value=False)
+            mock_server.has_extn.return_value = True
+            _call_tool(tool, to="alice@example.com", subject="Hi", body="Hello")
+        sent_msg = mock_server.send_message.call_args.args[0]
+        assert sent_msg["From"] == "Knowledgeable AI <from@test.com>"
+
+    def test_custom_display_name_used(self):
+        tool = make_send_email_tool(
+            "smtp.test.com", 587, "user", "pass", "from@test.com", display_name="Acme Support"
+        )
+        with patch("kai.agent.tools.email.smtplib.SMTP") as mock_smtp:
+            mock_server = MagicMock()
+            mock_smtp.return_value.__enter__ = MagicMock(return_value=mock_server)
+            mock_smtp.return_value.__exit__ = MagicMock(return_value=False)
+            mock_server.has_extn.return_value = True
+            _call_tool(tool, to="alice@example.com", subject="Hi", body="Hello")
+        sent_msg = mock_server.send_message.call_args.args[0]
+        assert sent_msg["From"] == "Acme Support <from@test.com>"
 
 
 class TestBuildEmailWorkflowInstruction:

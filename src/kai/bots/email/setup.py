@@ -11,12 +11,19 @@ only a blocklist of sender addresses to silently ignore.
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from kai.agent.tools.email import DEFAULT_DISPLAY_NAME
+
 
 class BotConfig(BaseModel):
     model_config = ConfigDict(frozen=True)
 
     language: str = "English"
     timezone: str | None = None
+    # The sender identity shown in the "From" header of outbound replies
+    # (see agent/tools/email.py::format_from_header). Per-deployment rather
+    # than on the shared SMTP connection, since one operator's SMTP
+    # credential can back multiple deployments with different personas.
+    display_name: str = DEFAULT_DISPLAY_NAME
     # Sender email addresses to silently ignore in ingest_event, before any
     # attachment download or agent turn. Checked fresh from this list on
     # every inbound email — no block history is persisted.

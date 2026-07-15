@@ -137,8 +137,18 @@
                   <span class="log-panel__content">{{ reply }}</span>
                 </div>
               </div>
+              {% if sent_to %}
+                <p class="muted text-sm mb-0">Sent as a real email to <span class="mono">{{ sent_to }}</span>.</p>
+              {% endif %}
             {% endif %}
             <form method="post" action="/deployments/{{ dep.id }}/chat" class="stack chat-form">
+              {% if dep.bot_type == "email" %}
+              <div class="field">
+                <label class="field__label" for="chat_to">Send as real email to (optional)</label>
+                <input id="chat_to" type="email" name="to" placeholder="test@example.com">
+                <p class="field__help">Filled in: the reply is actually emailed there and recorded under that address's own conversation. Left blank: this stays a local test, nothing is sent.</p>
+              </div>
+              {% endif %}
               <div class="field">
                 <label class="sr-only" for="message">Message</label>
                 <textarea id="message" name="message" rows="3" required data-autosize

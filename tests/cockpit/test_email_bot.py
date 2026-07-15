@@ -154,6 +154,31 @@ class TestSmtpReply:
         assert "Here is the answer." in sent_msg.get_content()
         # From address is the operator's, not the LLM's
         assert "support@meetk.ai" in sent_msg["From"]
+        # Default display name when the deployment hasn't configured one
+        assert sent_msg["From"] == "Knowledgeable AI <support@meetk.ai>"
+
+    @pytest.mark.asyncio
+    async def test_reply_uses_configured_display_name(self, tmp_path):
+        bot = _make_bot(tmp_path)
+        bot._config = BotConfig(language="English", timezone="UTC", display_name="Acme Support")
+        bot._agent = AsyncMock()
+        bot._agent.chat = AsyncMock(return_value=_chat_result("reply", text="Here is the answer."))
+
+        with patch("kai.agent.tools.email.smtplib.SMTP") as mock_smtp:
+            server = MagicMock()
+            mock_smtp.return_value.__enter__ = MagicMock(return_value=server)
+            mock_smtp.return_value.__exit__ = MagicMock(return_value=False)
+            await bot.ingest_event(
+                {
+                    "event": "email.inbound",
+                    "source": "bob@example.com",
+                    "text": "hi",
+                    "metadata": {"subject": "hi"},
+                }
+            )
+
+        sent_msg = server.send_message.call_args.args[0]
+        assert sent_msg["From"] == "Acme Support <support@meetk.ai>"
 
     @pytest.mark.asyncio
     async def test_reply_empty_subject_uses_default(self, tmp_path):
@@ -389,6 +414,102 @@ class TestAttachments:
         assert images_arg is None
         enriched = bot._agent.chat.call_args.args[0]
         assert "failed to download" in enriched
+
+
+# ---------------------------------------------------------------------------
+# handle_operator (console) — WAHA-style real-send parity, and display_name
+# ---------------------------------------------------------------------------
+
+
+class TestHandleOperator:
+    @pytest.mark.asyncio
+    async def test_reply_without_to_stays_local(self, tmp_path):
+        bot = _make_bot(tmp_path)
+        bot._agent = AsyncMock()
+        bot._agent.chat = AsyncMock(return_value=_chat_result("reply", text="local test reply"))
+
+        result = await bot.handle_operator("test message")
+
+        assert result.ok is True
+        assert result.reply == "local test reply"
+        assert result.actions == []
+        bot._agent.record_assistant_message.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_reply_with_to_sends_for_real_and_records_history(self, tmp_path):
+        bot = _make_bot(tmp_path)
+        bot._agent = AsyncMock()
+        bot._agent.chat = AsyncMock(return_value=_chat_result("reply", text="a real answer"))
+
+        with patch("kai.agent.tools.email.smtplib.SMTP") as mock_smtp:
+            server = MagicMock()
+            mock_smtp.return_value.__enter__ = MagicMock(return_value=server)
+            mock_smtp.return_value.__exit__ = MagicMock(return_value=False)
+            result = await bot.handle_operator("test message", to="alice@example.com")
+
+        server.send_message.assert_called_once()
+        sent_msg = server.send_message.call_args.args[0]
+        assert sent_msg["To"] == "alice@example.com"
+        bot._agent.record_assistant_message.assert_awaited_once_with(
+            "alice@example.com", "a real answer"
+        )
+        assert result.ok is True
+        assert result.actions == [
+            {
+                "tool": "send_reply",
+                "target": "alice@example.com",
+                "text": "a real answer",
+                "ok": True,
+            }
+        ]
+        assert result.reply == "a real answer"
+
+    @pytest.mark.asyncio
+    async def test_silent_action_never_sends_even_with_to(self, tmp_path):
+        bot = _make_bot(tmp_path)
+        bot._agent = AsyncMock()
+        bot._agent.chat = AsyncMock(return_value=_chat_result("silent"))
+
+        with patch("kai.agent.tools.email.smtplib.SMTP") as mock_smtp:
+            result = await bot.handle_operator("test message", to="alice@example.com")
+
+        mock_smtp.assert_not_called()
+        bot._agent.record_assistant_message.assert_not_called()
+        assert result.ok is True
+
+    @pytest.mark.asyncio
+    async def test_send_failure_reported_without_crashing(self, tmp_path):
+        bot = _make_bot(tmp_path)
+        bot._agent = AsyncMock()
+        bot._agent.chat = AsyncMock(return_value=_chat_result("reply", text="a real answer"))
+
+        with patch(
+            "kai.agent.tools.email.smtplib.SMTP",
+            side_effect=ConnectionRefusedError("no SMTP"),
+        ):
+            result = await bot.handle_operator("test message", to="alice@example.com")
+
+        assert result.ok is False
+        assert "alice@example.com" in result.reply
+        bot._agent.record_assistant_message.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_no_agent_returns_error(self, tmp_path):
+        bot = _make_bot(tmp_path)
+        bot._agent = None
+        result = await bot.handle_operator("test message")
+        assert result.ok is False
+
+
+class TestDisplayName:
+    def test_returns_configured_value(self, tmp_path):
+        bot = _make_bot(tmp_path)
+        bot._config = BotConfig(display_name="Acme Support")
+        assert bot.display_name() == "Acme Support"
+
+    def test_returns_default_when_unconfigured(self, tmp_path):
+        bot = Bot(bot_dir=tmp_path)
+        assert bot.display_name() == "Knowledgeable AI"
 
 
 # ---------------------------------------------------------------------------
