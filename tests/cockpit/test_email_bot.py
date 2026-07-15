@@ -46,10 +46,12 @@ def _make_bot(
     return bot
 
 
-def _chat_result(action: str, text: str | None = None) -> ChatResult:
-    """Build a ChatResult whose .action has the given action/text."""
+def _chat_result(
+    action: str, text: str | None = None, target: str | None = None
+) -> ChatResult:
+    """Build a ChatResult whose .action has the given action/text/target."""
     return ChatResult(
-        action=EmailAction(action=action, text=text),  # type: ignore[arg-type]
+        action=EmailAction(action=action, text=text, target=target),  # type: ignore[arg-type]
         reply=text or "",
         tool_calls=[],
     )
@@ -417,35 +419,47 @@ class TestAttachments:
 
 
 # ---------------------------------------------------------------------------
-# handle_operator (console) — WAHA-style real-send parity, and display_name
+# handle_operator — agent decides via structured action (like the waha bot)
 # ---------------------------------------------------------------------------
 
 
 class TestHandleOperator:
     @pytest.mark.asyncio
-    async def test_reply_without_to_stays_local(self, tmp_path):
+    async def test_console_action_returns_reply_without_sending(self, tmp_path):
+        """console = answer the operator directly, no email sent."""
         bot = _make_bot(tmp_path)
         bot._agent = AsyncMock()
-        bot._agent.chat = AsyncMock(return_value=_chat_result("reply", text="local test reply"))
+        bot._agent.chat = AsyncMock(
+            return_value=_chat_result("console", text="here's your answer")
+        )
 
-        result = await bot.handle_operator("test message")
+        with patch("kai.agent.tools.email.smtplib.SMTP") as mock_smtp:
+            result = await bot.handle_operator("what's the status?")
 
-        assert result.ok is True
-        assert result.reply == "local test reply"
-        assert result.actions == []
+        mock_smtp.assert_not_called()
         bot._agent.record_assistant_message.assert_not_called()
+        assert result.ok is True
+        assert result.reply == "here's your answer"
+        assert result.actions == []
 
     @pytest.mark.asyncio
-    async def test_reply_with_to_sends_for_real_and_records_history(self, tmp_path):
+    async def test_reply_action_sends_email_and_records_history(self, tmp_path):
+        """reply = agent picked the target from the instruction; bot delivers."""
         bot = _make_bot(tmp_path)
         bot._agent = AsyncMock()
-        bot._agent.chat = AsyncMock(return_value=_chat_result("reply", text="a real answer"))
+        bot._agent.chat = AsyncMock(
+            return_value=_chat_result(
+                "reply", text="a real answer", target="alice@example.com"
+            )
+        )
 
         with patch("kai.agent.tools.email.smtplib.SMTP") as mock_smtp:
             server = MagicMock()
             mock_smtp.return_value.__enter__ = MagicMock(return_value=server)
             mock_smtp.return_value.__exit__ = MagicMock(return_value=False)
-            result = await bot.handle_operator("test message", to="alice@example.com")
+            result = await bot.handle_operator(
+                "send an email to alice@example.com saying a real answer"
+            )
 
         server.send_message.assert_called_once()
         sent_msg = server.send_message.call_args.args[0]
@@ -462,16 +476,15 @@ class TestHandleOperator:
                 "ok": True,
             }
         ]
-        assert result.reply == "a real answer"
 
     @pytest.mark.asyncio
-    async def test_silent_action_never_sends_even_with_to(self, tmp_path):
+    async def test_silent_action_never_sends(self, tmp_path):
         bot = _make_bot(tmp_path)
         bot._agent = AsyncMock()
         bot._agent.chat = AsyncMock(return_value=_chat_result("silent"))
 
         with patch("kai.agent.tools.email.smtplib.SMTP") as mock_smtp:
-            result = await bot.handle_operator("test message", to="alice@example.com")
+            result = await bot.handle_operator("test message")
 
         mock_smtp.assert_not_called()
         bot._agent.record_assistant_message.assert_not_called()
@@ -481,17 +494,48 @@ class TestHandleOperator:
     async def test_send_failure_reported_without_crashing(self, tmp_path):
         bot = _make_bot(tmp_path)
         bot._agent = AsyncMock()
-        bot._agent.chat = AsyncMock(return_value=_chat_result("reply", text="a real answer"))
+        bot._agent.chat = AsyncMock(
+            return_value=_chat_result(
+                "reply", text="a real answer", target="alice@example.com"
+            )
+        )
 
         with patch(
             "kai.agent.tools.email.smtplib.SMTP",
             side_effect=ConnectionRefusedError("no SMTP"),
         ):
-            result = await bot.handle_operator("test message", to="alice@example.com")
+            result = await bot.handle_operator("send to alice@example.com")
 
         assert result.ok is False
         assert "alice@example.com" in result.reply
         bot._agent.record_assistant_message.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_reply_without_target_reports_missing_target(self, tmp_path):
+        """Agent chose reply but didn't fill target — can't send, report it."""
+        bot = _make_bot(tmp_path)
+        bot._agent = AsyncMock()
+        bot._agent.chat = AsyncMock(
+            return_value=_chat_result("reply", text="some text", target=None)
+        )
+
+        result = await bot.handle_operator("send an email")
+
+        assert result.ok is False
+        assert result.reply == "reply action missing target"
+
+    @pytest.mark.asyncio
+    async def test_reply_without_text_reports_missing_text(self, tmp_path):
+        bot = _make_bot(tmp_path)
+        bot._agent = AsyncMock()
+        bot._agent.chat = AsyncMock(
+            return_value=_chat_result("reply", text=None, target="alice@example.com")
+        )
+
+        result = await bot.handle_operator("send to alice@example.com")
+
+        assert result.ok is False
+        assert result.reply == "reply action missing text"
 
     @pytest.mark.asyncio
     async def test_no_agent_returns_error(self, tmp_path):

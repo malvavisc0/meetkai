@@ -931,18 +931,19 @@ class DeploymentsService:
         return result
 
     def send_message(
-        self, deployment: Deployment, message: str, persist: bool = False, to: str = ""
+        self, deployment: Deployment, message: str, persist: bool = False
     ) -> dict:
         """Forward an operator message to the running bot's /tell route.
 
-        ``to`` is an optional real delivery address (email bot console send
-        parity — see ``Bot.handle_operator``); other bot types ignore it.
+        The delivery target is decided by the agent itself through its
+        structured action output (e.g. ``action.target``), not by the
+        caller — same design as the waha bot's operator console.
         """
         record = self._resolve_run(deployment)
         if record is None:
             return {"ok": False, "reply": "bot is not running"}
 
-        body = json.dumps({"message": message, "persist": persist, "to": to}).encode()
+        body = json.dumps({"message": message, "persist": persist}).encode()
         return self._call_bot(record, "POST", "/tell", body, timeout=120.0)
 
     def sleep_chat(self, deployment: Deployment, chat_id: str) -> dict:

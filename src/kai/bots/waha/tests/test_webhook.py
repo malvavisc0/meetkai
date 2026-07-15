@@ -162,7 +162,7 @@ class TestWebhookHandlerErrors:
 class TestTellRoute:
     @pytest.mark.asyncio
     async def test_tell_returns_structured_envelope(self):
-        async def on_tell(message: str, *, persist: bool = False, to: str = "") -> TellResult:
+        async def on_tell(message: str, *, persist: bool = False) -> TellResult:
             return TellResult(
                 ok=True,
                 actions=[{"tool": "send_to_group", "chat_id": "g@g.us", "ok": True}],
@@ -184,7 +184,7 @@ class TestTellRoute:
     async def test_tell_relays_persist_flag(self):
         captured = {}
 
-        async def on_tell(message: str, *, persist: bool = False, to: str = "") -> TellResult:
+        async def on_tell(message: str, *, persist: bool = False) -> TellResult:
             captured["persist"] = persist
             return TellResult(ok=True, reply="ack")
 
@@ -197,40 +197,8 @@ class TestTellRoute:
             assert captured["persist"] is True
 
     @pytest.mark.asyncio
-    async def test_tell_relays_to_field(self):
-        captured = {}
-
-        async def on_tell(message: str, *, persist: bool = False, to: str = "") -> TellResult:
-            captured["to"] = to
-            return TellResult(ok=True, reply="ack")
-
-        app = create_webhook_app(hmac_key=_KEY, on_tell=on_tell)
-        transport = ASGITransport(app=app)
-        async with AsyncClient(transport=transport, base_url="http://test") as client:
-            body = b'{"message":"hi","persist":false,"to":"alice@example.com"}'
-            resp = await client.post("/tell", content=body, headers=_headers(body))
-            assert resp.status_code == 200
-            assert captured["to"] == "alice@example.com"
-
-    @pytest.mark.asyncio
-    async def test_tell_to_defaults_to_empty(self):
-        captured = {}
-
-        async def on_tell(message: str, *, persist: bool = False, to: str = "") -> TellResult:
-            captured["to"] = to
-            return TellResult(ok=True, reply="ack")
-
-        app = create_webhook_app(hmac_key=_KEY, on_tell=on_tell)
-        transport = ASGITransport(app=app)
-        async with AsyncClient(transport=transport, base_url="http://test") as client:
-            body = b'{"message":"hi","persist":false}'
-            resp = await client.post("/tell", content=body, headers=_headers(body))
-            assert resp.status_code == 200
-            assert captured["to"] == ""
-
-    @pytest.mark.asyncio
     async def test_tell_rejects_invalid_signature(self):
-        async def on_tell(message, *, persist: bool = False, to: str = ""):
+        async def on_tell(message, *, persist: bool = False):
             return TellResult(ok=True)
 
         app = create_webhook_app(hmac_key=_KEY, on_tell=on_tell)
@@ -248,7 +216,7 @@ class TestTellRoute:
 
     @pytest.mark.asyncio
     async def test_tell_requires_message(self):
-        async def on_tell(message, *, persist: bool = False, to: str = ""):
+        async def on_tell(message, *, persist: bool = False):
             return TellResult(ok=True)
 
         app = create_webhook_app(hmac_key=_KEY, on_tell=on_tell)

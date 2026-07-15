@@ -26,6 +26,7 @@ from typing import Literal
 import httpx
 import uvicorn
 from pydantic import Field
+from rich.console import Console
 
 from kai.agent.context import MessageContext
 from kai.agent.core import ActionResult, ChatResult, KaiAgent
@@ -47,6 +48,7 @@ from kai.config.prompts import load_system_prompt
 from kai.config.settings import Settings
 
 logger = logging.getLogger(__name__)
+console = Console()
 
 
 def _parse_email_list(raw: object) -> list[str]:
@@ -69,25 +71,44 @@ def _parse_email_list(raw: object) -> list[str]:
 class EmailAction(ActionResult):
     """Action vocabulary for the email support bot.
 
-    One reply target (the sender) and one decision (reply or stay silent).
-    No ``send_to_group``/``send_dm``/``send_voice_note``/``sleep`` — the
+    - ``reply``    — send ``text`` as an email to ``target`` (the recipient
+                     address). On an inbound turn ``target`` is the sender;
+                     on an operator turn it's whichever address the operator
+                     named in the instruction.
+    - ``console``  — operator turns only: don't send an email, just return
+                     ``text`` to the operator's console (answering a question
+                     the operator asked, confirming a directive).
+    - ``silent``   — don't reply at all (automated mail, spam, empty content).
+
+    No ``send_voice_note``/``sleep``/``send_dm``/``send_to_group`` — the
     framework's ``agent.chat`` accepts any ``ActionResult`` subclass as
     ``output_cls``; this is the intended extension point.
     """
 
-    action: Literal["reply", "silent"] = Field(  # type: ignore[assignment]
+    action: Literal["reply", "console", "silent"] = Field(  # type: ignore[assignment]
         description=(
-            "'reply' to send an email back to the sender (fill `text` with "
-            "the full message body); this is the default for any genuine "
-            "question, even a short or hard one. 'silent' ONLY for "
-            "content-free connectivity tests, automated/system-generated "
-            "mail (out-of-office, bounces, calendar responses, "
-            "unsubscribe confirmations), pure spam, or empty/unreadable "
-            "content — never silent just because a question is ambiguous "
-            "or you don't know the answer; say so in a reply instead."
+            "'reply' to send an email back (fill `text` with the full message "
+            "body and `target` with the recipient address). This is the "
+            "default for any genuine question, even a short or hard one. "
+            "'console' is operator-only: answer the operator directly without "
+            "sending any email. 'silent' ONLY for content-free connectivity "
+            "tests, automated/system-generated mail (out-of-office, bounces, "
+            "calendar responses, unsubscribe confirmations), pure spam, or "
+            "empty/unreadable content — never silent just because a question "
+            "is ambiguous or you don't know the answer; say so in a reply "
+            "instead."
         )
     )
     text: str | None = None
+    target: str | None = Field(
+        default=None,
+        description=(
+            "Recipient email address for 'reply'. On an inbound turn this is "
+            "the sender's address. On an operator turn, copy the exact "
+            "address from the instruction (never invent or guess one). Leave "
+            "empty for 'console' and 'silent'."
+        ),
+    )
 
 
 class Bot(BaseBot):
@@ -255,59 +276,137 @@ class Bot(BaseBot):
             logger.exception("ingest_event failed for %s", event.get("source", "<unknown>"))
             return {"ok": False}
 
-    async def handle_operator(
-        self, message: str, *, persist: bool = False, to: str = ""
-    ) -> TellResult:
-        """Run a console turn under the isolated ``operator`` history bucket.
+    _OPERATOR_TURN_CONTEXT = (
+        "You received an instruction from the operator (the person who runs "
+        "you). You express your decision through the structured action object "
+        "you return — there is no tool for sending emails.\n"
+        "IMPORTANT: action values (reply, console, silent) are NOT tools. "
+        'Never call them as functions. They are values for the "action" '
+        "field in your JSON response.\n"
+        "- To send an email to someone, set action to \"reply\" with BOTH "
+        '"target" = the exact email address taken from the instruction '
+        "(never invent or guess one) and \"text\" = the full email body to "
+        "send (plain prose, no action tokens or field names in it). "
+        "Returning a reply with an empty \"target\" or \"text\" is never "
+        "correct — if the instruction gives you both, copy them verbatim "
+        "into the fields.\n"
+        "- To answer the operator ONLY (answer a question the operator "
+        "asked you directly, confirm a steering directive), set action to "
+        '"console" and put your reply in "text". The console reply goes to '
+        "the operator's chat interface, NOT to any email — the recipient "
+        "never sees it.\n"
+        "CRITICAL: when the instruction tells you to email, reply, send, or "
+        "respond to a specific address (e.g. 'send an email to "
+        "alice@example.com', 'reply to bob'), you MUST use action \"reply\" "
+        "with that address as the target — NEVER console. console is only "
+        "for when the operator themselves is asking you a question and "
+        "wants the answer back in this console, not delivered by email. If "
+        "the instruction mentions an email address and asks you to say "
+        "something there, the answer is always a reply action, not console."
+    )
 
-        Mirrors the waha bot's console send parity: when the model decides
-        to reply *and* the operator supplied a real ``to`` address (a
-        "send as real email to" field in the console UI, never inferred),
-        the reply is actually emailed and recorded in that address's own
-        history bucket — exactly like a genuine inbound-email round trip —
-        in addition to the normal ``operator`` transcript. Omitting ``to``
-        keeps the turn local/no-send, as before.
+    async def handle_operator(
+        self, message: str, *, persist: bool = False
+    ) -> TellResult:
+        """Run an operator turn under the isolated ``operator`` history bucket.
+
+        Mirrors the waha bot's operator console: the agent decides what to do
+        (send an email, answer the operator, stay silent) through its
+        structured ``EmailAction``. The bot dispatches it — there is no send
+        tool. ``reply`` delivers the email via SMTP and records it in the
+        target's history; ``console`` returns the reply to the operator only;
+        ``silent`` is a no-op.
         """
         if self._agent is None:
             return TellResult(ok=False, reply="bot has no agent")
 
-        result: ChatResult = await self._agent.chat(
-            message,
-            output_cls=EmailAction,
-            conversation_id="operator",
-            context=MessageContext(
-                sender_name="operator",
-                sender_id="<operator>",
-                addressed_to_bot=True,
-            ),
-        )
-        action = result.action
-        reply = action.text or ""
+        console.print(f"[magenta]< operator[/magenta]  {message}")
 
-        to_addr = to.strip()
-        if action.action == "reply" and to_addr and action.text:
-            try:
-                await self._send_reply(to_addr, "", action.text)
-            except Exception as exc:
-                logger.error("Console send to %s failed: %s", to_addr, exc)
-                return TellResult(ok=False, reply=f"{reply}\n\n(send to {to_addr} failed: {exc})")
-            await self._agent.record_assistant_message(to_addr, action.text)
-            # An explicit action entry, not just the ``ok`` flag, lets the
-            # cockpit confirm a real send happened (mirroring WahaAction's
-            # send_to_group/send_dm actions). A bot process still running
-            # pre-``to``-aware code (restart-pending) has no way to
-            # populate this — it silently ignores the unrecognized field —
-            # so its response carries no confirmation entry, and the
-            # console correctly shows no "sent" claim instead of a false one.
+        try:
+            result = await self._agent.chat(
+                message,
+                output_cls=EmailAction,
+                conversation_id="operator",
+                context=MessageContext(
+                    sender_name="operator",
+                    sender_id="<operator>",
+                    addressed_to_bot=True,
+                ),
+                extra_system_context=self._OPERATOR_TURN_CONTEXT,
+                # ``reply`` text is addressed to the *target* email, not the
+                # operator — don't record it as an assistant reply in the
+                # operator's own history bucket. ``_dispatch_operator_action``
+                # records it in the target's history once delivery is confirmed.
+                is_delegated_action=lambda a: a.action == "reply",
+            )
+        except Exception:
+            logger.exception("operator turn failed")
+            return TellResult(ok=False, reply="operator turn failed")
+
+        return await self._dispatch_operator_action(result)
+
+    async def _dispatch_operator_action(self, result: ChatResult) -> TellResult:
+        """Dispatch the agent's structured action for an operator turn.
+
+        ``reply`` sends an email to ``action.target`` via SMTP and records it
+        in that address's conversation history (mirroring the inbound path);
+        ``console`` returns the reply text to the operator verbatim; ``silent``
+        is a no-op.
+        """
+        action = result.action
+        kind = action.action
+
+        if kind == "reply":
+            reply = ""
+            target = (action.target or "").strip()
+            out_text = action.text or ""
+            sent_ok = True
+            if target and out_text:
+                console.print(f"[green]>[/green]  {out_text[:60]}  [dim](email to {target})[/dim]")
+                try:
+                    await self._send_reply(target, "", out_text)
+                except Exception as exc:
+                    logger.error("Failed to send email to %s: %s", target, exc)
+                    console.print(f"[red]send failed: {target}: {exc}[/red]")
+                    sent_ok = False
+                else:
+                    if self._agent is not None:
+                        await self._agent.record_assistant_message(target, out_text)
+                snippet = out_text if len(out_text) <= 60 else out_text[:57] + "..."
+                reply = f"sent to {target}: {snippet}" if sent_ok else f"failed to send to {target}"
+            else:
+                if not target:
+                    sent_ok = False
+                    reply = "reply action missing target"
+                elif not out_text:
+                    sent_ok = False
+                    reply = "reply action missing text"
             return TellResult(
-                ok=True,
-                actions=[
-                    {"tool": "send_reply", "target": to_addr, "text": action.text, "ok": True}
-                ],
+                ok=sent_ok and result.error is None,
+                actions=[{"tool": "send_reply", "target": target, "text": out_text, "ok": sent_ok}],
                 reply=reply,
             )
 
-        return TellResult(ok=True, reply=reply)
+        if kind == "silent":
+            return TellResult(ok=True, reply="", actions=[{"tool": kind, "ok": True}])
+
+        # ``console`` and any other action: return the reply text to the
+        # operator (the agent's own words) without delivering anywhere.
+        actions: list[dict] = []
+        for tc in result.tool_calls:
+            entry: dict = {"tool": tc.name, "ok": tc.ok}
+            for key in ("target", "text"):
+                if key in tc.args:
+                    value = tc.args[key]
+                    if isinstance(value, str) and len(value) > 200:
+                        value = value[:197] + "..."
+                    entry[key] = value
+            actions.append(entry)
+        reply = action.text or ""
+        ok = result.error is None
+        if result.error:
+            reply = f"error: {result.error}"
+        return TellResult(ok=ok, actions=actions, reply=reply)
 
     async def status_snapshot(self) -> dict:
         return {"bot": "email", "language": self._config.language}

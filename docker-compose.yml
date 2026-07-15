@@ -55,6 +55,13 @@ services:
       # minimal model instead of crashing chats/overview with HTTP 500.
       # Remove when wwebjs > 1.34.7 ships a fix.
       - ./docker/waha-patches/Utils.js:/app/node_modules/whatsapp-web.js/src/util/Injected/Utils.js:ro
+      # Patched WAHA session.webjs.core.js toWAMessage — wwebjs leaves
+      # message.id._serialized undefined for group messages whose participant
+      # is a LID ("@lid"), so parseMessageIdSerialized throws and WAHA drops
+      # every incoming group message before the webhook fires. Fall back to
+      # id.$1 (WWeb raw serialized) or rebuild via SerializeMsgKey. Remove
+      # when devlikeapro/waha ships a LID-aware fix.
+      - ./docker/waha-patches/session.webjs.core.js:/app/dist/core/engines/webjs/session.webjs.core.js:ro
     depends_on:
       - redis
 

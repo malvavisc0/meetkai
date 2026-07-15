@@ -33,7 +33,6 @@ async def chat_send(
     request: Request,
     dep_id: int,
     message: str = Form(...),
-    to: str = Form(""),
     user: User = Depends(require_user),
     db: Session = Depends(get_db),
 ):
@@ -46,17 +45,14 @@ async def chat_send(
     # persist=False always: a permanent goal change (the only thing this
     # flag gates, see Bot._operator_tools) should only ever happen through
     # the explicit Goal field on the Settings page, never as a side effect
-    # of a casual test message here. ``to`` is optional and only meaningful
-    # to the email bot's console (a real address to also send to); other
-    # bot types ignore it server-side.
-    result_dict = svc.send_message(dep, message, persist=False, to=to.strip())
+    # of a casual instruction here. The delivery target is decided by the
+    # agent itself through its structured action (action.target), not a
+    # form field — same as the waha bot's operator console.
+    result_dict = svc.send_message(dep, message, persist=False)
     reply = result_dict.get("reply", "(no reply)")
     request.session["chat_reply"] = reply
-    # Only show a "sent as a real email" confirmation when the bot's own
-    # response actually confirms it dispatched the send (a ``send_reply``
-    # action entry) — a bot process still running old code silently drops
-    # an unrecognized ``to`` field, so its response has no such entry and
-    # the console correctly shows no confirmation instead of a false one.
+    # Show a "sent to" confirmation when the bot's own response actually
+    # confirms it dispatched the send (a ``send_reply`` action entry).
     sent_to = next(
         (
             a.get("target")

@@ -150,6 +150,24 @@ class TestSendMessage:
         body = route.calls[0].request.content
         assert b"mentions" not in body
 
+    @respx.mock
+    @pytest.mark.asyncio
+    async def test_empty_body_200_is_success(self, client):
+        """WAHA returns HTTP 200 with an empty body for @lid sends — the
+        message was delivered but the response can't be parsed as JSON.
+        Treat it as success, not a failure.
+        """
+        respx.post("/api/sendText").mock(return_value=Response(200, text=""))
+        result = await client.send_message("1234567890@lid", "hello")
+        assert result == {}
+
+    @respx.mock
+    @pytest.mark.asyncio
+    async def test_non_json_body_200_is_success(self, client):
+        respx.post("/api/sendText").mock(return_value=Response(200, text="not json"))
+        result = await client.send_message("1234567890@lid", "hello")
+        assert result == {}
+
 
 class TestGetChatParticipants:
     @respx.mock

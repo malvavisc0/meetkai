@@ -8,7 +8,6 @@ from typing import Any
 from llama_index.core.tools import FunctionTool
 
 from kai.agent.tools.calculator import calculate
-from kai.agent.tools.hardware import get_hardware_info
 from kai.agent.tools.time import get_current_datetime, get_weather
 from kai.agent.tools.web import _get_webpage_content, _web_search
 
@@ -76,13 +75,6 @@ def get_tools() -> list[FunctionTool]:
             "Safely evaluate a math expression (+ - * / // % **, parentheses, "
             "and functions like sqrt, abs, round, min, max). Use for any "
             "arithmetic or unit conversion.",
-        ),
-        (
-            get_hardware_info,
-            "get_hardware_info",
-            "Get information about the host machine's hardware and OS: CPU "
-            "architecture and count, memory and disk usage, and OS details. "
-            "Use when asked about the server's specs or available resources.",
         ),
     ]
 

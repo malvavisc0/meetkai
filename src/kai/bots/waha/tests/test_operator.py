@@ -197,7 +197,7 @@ class TestHandleOperator:
     @pytest.mark.asyncio
     async def test_runs_operator_turn_under_operator_bucket(self):
         bot = _make_bot()
-        bot._send_with_retry = AsyncMock()
+        bot._send = AsyncMock()
         agent = MagicMock()
         agent.get_tools.return_value = []
         agent.chat = AsyncMock(return_value=_operator_result("ack"))
@@ -303,7 +303,7 @@ class TestHandleOperator:
     @pytest.mark.asyncio
     async def test_dispatch_send_to_group_sends_and_records(self):
         bot = _make_bot()
-        bot._send_with_retry = AsyncMock()
+        bot._send = AsyncMock()
         agent = MagicMock()
         agent.get_tools.return_value = []
         agent.record_assistant_message = AsyncMock()
@@ -312,7 +312,7 @@ class TestHandleOperator:
         result = _operator_result("hola mundo", action="send_to_group", target="group@g.us")
         env = await bot._dispatch_operator_action(result, persist=False)
 
-        bot._send_with_retry.assert_awaited_once_with("group@g.us", "hola mundo")
+        bot._send.assert_awaited_once_with("group@g.us", "hola mundo")
         agent.record_assistant_message.assert_awaited_once_with("group@g.us", "hola mundo")
         assert env.ok is True
         assert "sent to" in env.reply
@@ -321,7 +321,7 @@ class TestHandleOperator:
     @pytest.mark.asyncio
     async def test_dispatch_send_to_group_failure(self):
         bot = _make_bot()
-        bot._send_with_retry = AsyncMock(side_effect=RuntimeError("waha down"))
+        bot._send = AsyncMock(side_effect=RuntimeError("waha down"))
         agent = MagicMock()
         agent.get_tools.return_value = []
         agent.record_assistant_message = AsyncMock()
@@ -337,7 +337,7 @@ class TestHandleOperator:
     @pytest.mark.asyncio
     async def test_dispatch_console_returns_reply(self):
         bot = _make_bot()
-        bot._send_with_retry = AsyncMock()
+        bot._send = AsyncMock()
         agent = MagicMock()
         agent.get_tools.return_value = []
         bot._agent = agent
@@ -345,7 +345,7 @@ class TestHandleOperator:
         result = _operator_result("noted, will do", action="console")
         env = await bot._dispatch_operator_action(result, persist=False)
 
-        bot._send_with_retry.assert_not_awaited()
+        bot._send.assert_not_awaited()
         assert env.ok is True
         assert env.reply == "noted, will do"
 

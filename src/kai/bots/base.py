@@ -248,16 +248,15 @@ class BaseBot(ABC):
         return "sha512"
 
     async def handle_operator(
-        self, message: str, *, persist: bool = False, to: str = ""
+        self, message: str, *, persist: bool = False
     ) -> TellResult:
         """Run an operator instruction as an agent turn and return a structured result.
 
-        Override in a bot that supports ``tell``. ``to`` is an optional
-        real-world delivery target the operator supplied alongside the
-        console message (e.g. the email bot's "send as real email to"
-        field); bots with no such concept ignore it. The default raises so
-        a misconfigured ``/tell`` route (endpoint wired but no handler)
-        fails loudly rather than silently no-oping.
+        Override in a bot that supports ``tell``. The agent decides the
+        delivery target through its structured action output (e.g.
+        ``action.target``) — the bot dispatches it, there is no send tool.
+        The default raises so a misconfigured ``/tell`` route (endpoint
+        wired but no handler) fails loudly rather than silently no-oping.
         """
         raise NotImplementedError(f"{self.name} does not implement handle_operator()")
 

@@ -541,12 +541,12 @@ class TestGetChatHistory:
                 "from": "group@g.us",
                 "_data": {
                     "author": {"_serialized": "12345678901@c.us"},
-                    "notifyName": "Francisco",
+                    "notifyName": "Carlos",
                 },
             },
         ]
         result = await _call_tool(tool)
-        assert result == "[Francisco] hello"
+        assert result == "[Carlos] hello"
 
     @pytest.mark.asyncio
     async def test_falls_back_to_data_author_string(self):
@@ -808,7 +808,7 @@ class TestPerChatLock:
         bot._agent = agent
         bot._bot_ids.add("bot@c.us")
         bot._config.mentions_enabled = False
-        bot._send_with_retry = AsyncMock()
+        bot._send = AsyncMock()
 
         def make_payload(body: str) -> dict:
             return {
@@ -894,7 +894,7 @@ class TestReasoningChannelStripping:
                 ),
             )
         )
-        bot._send_with_retry = AsyncMock()
+        bot._send = AsyncMock()
         agent = MagicMock()
         agent.chat = AsyncMock(return_value=_chat_result(None, action="silent"))
         agent.observe = AsyncMock()
@@ -904,12 +904,12 @@ class TestReasoningChannelStripping:
         await bot._handle_message(_group_payload("just chatting"))
 
         # Silent: nothing sent.
-        bot._send_with_retry.assert_not_awaited()
+        bot._send.assert_not_awaited()
 
     @pytest.mark.asyncio
     async def test_reply_action_carries_clean_prose(self):
         bot = _make_bot(BotConfig(trigger_keyword="kai"))
-        bot._send_with_retry = AsyncMock()
+        bot._send = AsyncMock()
         agent = MagicMock()
         agent.chat = AsyncMock(return_value=_chat_result("hey what's up"))
         agent.observe = AsyncMock()
@@ -917,8 +917,8 @@ class TestReasoningChannelStripping:
 
         await bot._handle_message(_group_payload("hey kai"))
 
-        assert bot._send_with_retry.await_args is not None
-        sent_text = bot._send_with_retry.await_args.args[1]
+        assert bot._send.await_args is not None
+        sent_text = bot._send.await_args.args[1]
         assert "channel" not in sent_text
         assert sent_text == "hey what's up"
 
@@ -929,7 +929,7 @@ class TestSleepToken:
     @pytest.mark.asyncio
     async def test_sleep_action_sets_sleeping_and_sends_reply(self):
         bot = _make_bot(BotConfig(trigger_keyword="kai"))
-        bot._send_with_retry = AsyncMock()
+        bot._send = AsyncMock()
         agent = MagicMock()
         agent.chat = AsyncMock(return_value=_chat_result("ok, heading off", action="sleep"))
         agent.observe = AsyncMock()
@@ -939,14 +939,14 @@ class TestSleepToken:
 
         assert bot._sleep_store is not None
         assert bot._sleep_store.is_sleeping("group@g.us") is True
-        bot._send_with_retry.assert_awaited_once()
-        sent = bot._send_with_retry.call_args.args[1]
+        bot._send.assert_awaited_once()
+        sent = bot._send.call_args.args[1]
         assert "heading off" in sent
 
     @pytest.mark.asyncio
     async def test_sleep_action_with_no_text_uses_default_ack(self):
         bot = _make_bot(BotConfig(trigger_keyword="kai"))
-        bot._send_with_retry = AsyncMock()
+        bot._send = AsyncMock()
         agent = MagicMock()
         agent.chat = AsyncMock(return_value=_chat_result(None, action="sleep"))
         agent.observe = AsyncMock()
@@ -956,7 +956,7 @@ class TestSleepToken:
 
         assert bot._sleep_store is not None
         assert bot._sleep_store.is_sleeping("group@g.us") is True
-        sent = bot._send_with_retry.call_args.args[1]
+        sent = bot._send.call_args.args[1]
         assert sent == "going quiet, ping me if you need me"
 
     @pytest.mark.asyncio
@@ -981,7 +981,7 @@ class TestSleepToken:
         bot = _make_bot(BotConfig(trigger_keyword="kai"))
         assert bot._sleep_store is not None
         bot._sleep_store.set("group@g.us", True)
-        bot._send_with_retry = AsyncMock()
+        bot._send = AsyncMock()
         bot._bot_ids.add("bot@c.us")
         agent = MagicMock()
         agent.chat = AsyncMock(return_value=_chat_result("hey, I'm back"))
@@ -994,7 +994,7 @@ class TestSleepToken:
 
         assert bot._sleep_store.is_sleeping("group@g.us") is False
         agent.chat.assert_awaited_once()
-        sent = bot._send_with_retry.call_args.args[1]
+        sent = bot._send.call_args.args[1]
         assert sent == "hey, I'm back"
 
     @pytest.mark.asyncio
@@ -1003,7 +1003,7 @@ class TestSleepToken:
         assert bot._sleep_store is not None
         bot._sleep_store.set("group@g.us", True)
         bot._bot_ids.add("bot@c.us")
-        bot._send_with_retry = AsyncMock()
+        bot._send = AsyncMock()
         agent = MagicMock()
         agent.chat = AsyncMock(return_value=_chat_result(None, action="silent"))
         agent.observe = AsyncMock()
@@ -1014,14 +1014,14 @@ class TestSleepToken:
         await bot._handle_message(payload)
 
         assert bot._sleep_store.is_sleeping("group@g.us") is True
-        bot._send_with_retry.assert_not_awaited()
+        bot._send.assert_not_awaited()
 
     @pytest.mark.asyncio
     async def test_sleeping_dm_wakes_bot(self):
         bot = _make_bot(BotConfig(trigger_keyword="kai"))
         assert bot._sleep_store is not None
         bot._sleep_store.set("123@c.us", True)
-        bot._send_with_retry = AsyncMock()
+        bot._send = AsyncMock()
         agent = MagicMock()
         agent.chat = AsyncMock(return_value=_chat_result("hi again"))
         agent.observe = AsyncMock()
@@ -1040,7 +1040,7 @@ class TestSleepToken:
         await bot._handle_message(payload)
 
         assert bot._sleep_store.is_sleeping("123@c.us") is False
-        bot._send_with_retry.assert_awaited_once()
+        bot._send.assert_awaited_once()
 
 
 class TestOrganicParticipation:
@@ -1307,13 +1307,13 @@ class TestVoiceFollowup:
         bot._waha = MagicMock()
         bot._waha.kokoro_enabled = True
         bot._tts_available = True
-        bot._send_with_retry = AsyncMock()
+        bot._send = AsyncMock()
         return bot
 
     @pytest.mark.asyncio
     async def test_text_reply_gets_voice_followup_when_offered(self, monkeypatch):
         bot = self._voice_ready_bot(voice_note_rate=1.0)
-        send_with_retry = cast(AsyncMock, bot._send_with_retry)
+        send_with_retry = cast(AsyncMock, bot._send)
         bot._send_voice_reply = AsyncMock(return_value=True)
         agent = MagicMock()
         agent.chat = AsyncMock(return_value=_chat_result("hi there"))
@@ -1330,7 +1330,7 @@ class TestVoiceFollowup:
     @pytest.mark.asyncio
     async def test_text_reply_skips_voice_followup_when_tts_unavailable(self, monkeypatch):
         bot = self._voice_ready_bot(voice_note_rate=1.0)
-        send_with_retry = cast(AsyncMock, bot._send_with_retry)
+        send_with_retry = cast(AsyncMock, bot._send)
         bot._tts_available = False
         bot._send_voice_reply = AsyncMock(return_value=True)
         agent = MagicMock()
@@ -1366,7 +1366,7 @@ class TestVoiceFollowup:
         # back to text. The probabilistic followup must not fire again for
         # the same reply — that would just retry the same failing synthesis.
         bot = self._voice_ready_bot(voice_note_rate=1.0)
-        send_with_retry = cast(AsyncMock, bot._send_with_retry)
+        send_with_retry = cast(AsyncMock, bot._send)
         bot._send_voice_reply = AsyncMock(return_value=False)
         agent = MagicMock()
         agent.chat = AsyncMock(return_value=_chat_result("hi there", action="send_voice_note"))

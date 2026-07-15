@@ -126,8 +126,8 @@
       <div class="source-list">
         <div class="source-item source-item--stack">
           <div class="source-item__copy">
-            <strong>Test a reply</strong>
-            <span>Send a realistic customer message and review how this agent responds.</span>
+            <strong>Operator console</strong>
+            <span>Talk to the running bot: send instructions, ask for info, or tell it to send a message to a specific recipient.</span>
           </div>
           <div class="source-item__controls">
             {% if reply %}
@@ -138,21 +138,18 @@
                 </div>
               </div>
               {% if sent_to %}
-                <p class="muted text-sm mb-0">Sent as a real email to <span class="mono">{{ sent_to }}</span>.</p>
+                <p class="muted text-sm mb-0">Sent to <span class="mono">{{ sent_to }}</span>.</p>
               {% endif %}
             {% endif %}
             <form method="post" action="/deployments/{{ dep.id }}/chat" class="stack chat-form">
-              {% if dep.bot_type == "email" %}
-              <div class="field">
-                <label class="field__label" for="chat_to">Send as real email to (optional)</label>
-                <input id="chat_to" type="email" name="to" placeholder="test@example.com">
-                <p class="field__help">Filled in: the reply is actually emailed there and recorded under that address's own conversation. Left blank: this stays a local test, nothing is sent.</p>
-              </div>
-              {% endif %}
               <div class="field">
                 <label class="sr-only" for="message">Message</label>
                 <textarea id="message" name="message" rows="3" required data-autosize
-                  placeholder="Write a message this agent might receive from a real customer…"></textarea>
+                  {% if dep.bot_type == "email" %}
+                  placeholder="Send a command to the bot, e.g. &quot;send an email to alice@example.com saying hello&quot;…"
+                  {% else %}
+                  placeholder="Send a command to the bot, e.g. &quot;send hello to 1234567890@lid&quot;…"
+                  {% endif %}></textarea>
               </div>
               <div class="cluster chat-form__actions">
                 <button type="submit" class="button button--primary"><span class="icon">{% include "icons/send.svg" %}</span> Send</button>

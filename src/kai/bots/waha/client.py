@@ -1,4 +1,5 @@
 import base64
+import json
 import logging
 from urllib.parse import quote
 
@@ -298,7 +299,7 @@ class WahaClient:
             body["mentions"] = mentions
         resp = await self._client.post("/api/sendText", json=body)
         resp.raise_for_status()
-        return resp.json()
+        return _parse_send_response(resp)
 
     async def send_voice(
         self, chat_id: str, audio_bytes: bytes, reply_to: str | None = None
@@ -323,4 +324,31 @@ class WahaClient:
             body["reply_to"] = reply_to
         resp = await self._client.post("/api/sendVoice", json=body)
         resp.raise_for_status()
-        return resp.json()
+        return _parse_send_response(resp)
+
+
+def _parse_send_response(resp: httpx.Response) -> dict:
+    """Parse a WAHA send-response body, tolerating empty bodies.
+
+    WAHA accepts sends to ``@lid`` targets (HTTP 200, message delivered) but
+    returns an empty or non-JSON body — likely a wwebjs serialization gap for
+    the LID scheme (same root cause as the ``_serialized`` / ``$1`` patch in
+    ``session.webjs.core.js``). Calling ``resp.json()`` would throw
+    ``JSONDecodeError`` ("Expecting value: line 1 column 1 (char 0)") and the
+    message would appear unsent despite having been delivered.
+
+    Since ``raise_for_status()`` already confirmed the send was accepted, an
+    empty body means success with no payload to return.
+    """
+    if not resp.content:
+        return {}
+    try:
+        data = resp.json()
+    except json.JSONDecodeError:
+        logger.debug(
+            "WAHA send response was non-JSON (status=%d): %r",
+            resp.status_code,
+            resp.content[:100],
+        )
+        return {}
+    return data if isinstance(data, dict) else {}

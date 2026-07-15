@@ -68,8 +68,6 @@ from kai.utils.terminal import render_image_pixelated
 logger = logging.getLogger(__name__)
 console = Console()
 
-_SEND_MAX_RETRIES = 3
-_SEND_RETRY_BASE_DELAY = 1.0
 _SEEN_IDS_MAX = 2048
 _ROSTER_MAX_CHATS = 1024
 _CHAT_LOCKS_MAX = 1024
@@ -1102,7 +1100,7 @@ class Bot(BaseBot):
             else:
                 ack, mentions = strip_mention_markup(ack), []
             try:
-                await self._send_with_retry(meta.chat_id, ack, mentions or None)
+                await self._send(meta.chat_id, ack, mentions or None)
             except Exception as exc:
                 logger.error("Failed to send sleep ack to %s: %s", meta.chat_id, exc)
             return
@@ -1119,7 +1117,7 @@ class Bot(BaseBot):
             else:
                 out_text, mentions = strip_mention_markup(out_text), []
             try:
-                await self._send_with_retry(target, out_text, mentions or None)
+                await self._send(target, out_text, mentions or None)
             except Exception as exc:
                 logger.error("Failed to send to %s: %s", target, exc)
                 console.print(f"[red]send failed: {target}: {exc}[/red]")
@@ -1251,7 +1249,7 @@ class Bot(BaseBot):
             else:
                 out_text, mentions = strip_mention_markup(out_text), []
             try:
-                await self._send_with_retry(target, out_text, mentions or None)
+                await self._send(target, out_text, mentions or None)
             except Exception as exc:
                 logger.error("Failed to send to %s: %s", target, exc)
             self._mark_replied(meta.chat_id)
@@ -1271,7 +1269,7 @@ class Bot(BaseBot):
     async def send_text(self, chat_id: str, text: str) -> None:
         """Send a text message into ``chat_id`` via WAHA (replies, task output, ...)."""
         console.print(f"[green]>[/green]  {text}")
-        await self._send_with_retry(chat_id, text)
+        await self._send(chat_id, text)
 
     # --- Operator (/tell) surface ---------------------------------------
     #
@@ -1337,13 +1335,8 @@ class Bot(BaseBot):
     )
 
     async def handle_operator(
-        self, message: str, *, persist: bool = False, to: str = ""
+        self, message: str, *, persist: bool = False
     ) -> TellResult:
-        # ``to`` is part of the shared TellHandler protocol (the email
-        # bot's console send-to-real-address field) — WAHA has no
-        # equivalent concept, since a send target is always a chat JID
-        # extracted from the instruction itself (see ``send_to_group``/
-        # ``send_dm`` below), so it's accepted but unused here.
         if self._agent is None:
             return TellResult(ok=False, reply="bot has no agent")
         suffix = "  [dim](goal)[/dim]" if persist else ""
@@ -1443,7 +1436,7 @@ class Bot(BaseBot):
             if target and out_text:
                 console.print(f"[green]>[/green]  {out_text}  [dim](to {target})[/dim]")
                 try:
-                    await self._send_with_retry(target, out_text)
+                    await self._send(target, out_text)
                 except Exception as exc:
                     logger.error("Failed to send to %s: %s", target, exc)
                     console.print(f"[red]send failed: {target}: {exc}[/red]")
@@ -1486,7 +1479,7 @@ class Bot(BaseBot):
                     # the message is not lost entirely.
                     logger.info("Operator voice reply fell back to text for %s", target)
                     try:
-                        await self._send_with_retry(target, out_text)
+                        await self._send(target, out_text)
                     except Exception as exc:
                         logger.error("Failed to send voice/text fallback to %s: %s", target, exc)
                         console.print(f"[red]send failed: {target}: {exc}[/red]")
@@ -1630,12 +1623,7 @@ class Bot(BaseBot):
         finally:
             await client.close()
 
-    async def _send_with_retry(
-        self,
-        chat_id: str,
-        text: str,
-        mentions: list[str] | None = None,
-    ) -> None:
+    async def _send(self, chat_id: str, text: str, mentions: list[str] | None = None) -> None:
         async with self._waha_client_ctx() as client:
             if client is None:
                 logger.warning(
@@ -1644,28 +1632,7 @@ class Bot(BaseBot):
                     chat_id,
                 )
                 return
-            last_exc: Exception | None = None
-            for attempt in range(_SEND_MAX_RETRIES):
-                try:
-                    await client.send_message(chat_id, text, mentions=mentions)
-                    return
-                except Exception as exc:
-                    last_exc = exc
-                    response = getattr(exc, "response", None)
-                    status_code = getattr(response, "status_code", None) if response else None
-                    if status_code and 400 <= status_code < 500:
-                        raise
-                    if attempt < _SEND_MAX_RETRIES - 1:
-                        delay = _SEND_RETRY_BASE_DELAY * (2**attempt)
-                        logger.warning(
-                            "Send attempt %d/%d failed, retrying in %.1fs: %s",
-                            attempt + 1,
-                            _SEND_MAX_RETRIES,
-                            delay,
-                            exc,
-                        )
-                        await asyncio.sleep(delay)
-            raise last_exc  # type: ignore[misc]
+            await client.send_message(chat_id, text, mentions=mentions)
 
     async def _send_reply(self, meta, roster: dict[str, str], reply: str) -> None:
         """Resolve mentions and send a reply, logging send failures."""
@@ -1679,7 +1646,7 @@ class Bot(BaseBot):
         if mentions:
             logger.info("Mentions applied: %d", len(mentions))
         try:
-            await self._send_with_retry(meta.chat_id, out_text, mentions or None)
+            await self._send(meta.chat_id, out_text, mentions or None)
         except Exception as exc:
             logger.error("Failed to send reply to %s: %s", meta.chat_id, exc)
             console.print(f"[red]send failed: {meta.chat_id}: {exc}[/red]")

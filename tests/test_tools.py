@@ -1,5 +1,4 @@
 from kai.agent.tools import get_tools
-from kai.agent.tools import hardware as tools_hw
 from kai.agent.tools import web as tools_web
 
 
@@ -190,36 +189,3 @@ def test_get_webpage_content_truncates_long_body(monkeypatch):
 
     assert len(result) <= tools_web._WEBPAGE_MAX_CHARS + 50
     assert "[content truncated]" in result
-
-
-def test_get_hardware_info_returns_basic_fields():
-    info = tools_hw.get_hardware_info()
-
-    assert "os" in info and info["os"]
-    assert "python_version" in info and info["python_version"]
-    assert "cpu_count" in info and info["cpu_count"].isdigit()
-
-
-def test_get_hardware_info_handles_missing_proc(monkeypatch):
-    def _no_meminfo(*args, **kwargs):
-        raise FileNotFoundError
-
-    monkeypatch.setattr("builtins.open", _no_meminfo)
-    monkeypatch.setattr(tools_hw.os, "getloadavg", _no_meminfo)
-
-    info = tools_hw.get_hardware_info()
-
-    assert "os" in info
-    assert "memory_total" not in info
-    assert "cpu_load" not in info
-
-
-def test_format_bytes_renders_human_units():
-    assert tools_hw._format_bytes(0) == "0.0 B"
-    assert tools_hw._format_bytes(1024) == "1.0 KB"
-    assert tools_hw._format_bytes(1024 * 1024 * 1024 * 16) == "16.0 GB"
-
-
-def test_get_tools_includes_hardware_info():
-    names = [t.metadata.name for t in get_tools()]
-    assert "get_hardware_info" in names
