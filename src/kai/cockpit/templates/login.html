@@ -4,29 +4,29 @@
 <div class="page auth-page">
   <section class="card auth-shell">
     <div class="auth-hero">
-      <div class="auth-hero__brand">
-        <span class="status-dot status-dot--running"></span>
-        <span>Cockpit</span>
-      </div>
+      <a class="auth-hero__brand" href="/" aria-label="Back to kAI home">
+        <img class="auth-hero__brand-mark" src="/static/icon-192.png" alt="">
+        <span>kAI</span>
+      </a>
 
       <div class="auth-hero__copy">
         <p class="page-eyebrow">Operator access</p>
-        <h1 class="auth-title">Get back to your cockpit.</h1>
-        <p>Monitor agents, tune their behavior, and keep their channels and services ready.</p>
+        <h1 class="auth-title">Access your cockpit.</h1>
+        <p>Manage the Agents that make decisions and act on your messages, and events.</p>
       </div>
     </div>
 
     <div class="auth-panel">
       {% if requested %}
         <div class="empty-state auth-confirmation">
-          <span class="icon icon--lg auth-confirmation__icon">{% include "icons/send.svg" %}</span>
+          <span class="icon icon--lg auth-confirmation__icon" aria-hidden="true">{% include "icons/send.svg" %}</span>
           <h2 class="card__title">Check your email</h2>
           <p class="empty-state__hint">A login link was sent if the user exists and is active.</p>
         </div>
       {% else %}
         <div class="auth-panel__header">
           <p class="page-eyebrow">Invite-only beta</p>
-          <p class="page-subtitle">If you've been invited, enter your email and we'll send a one-time login link.</p>
+          <p class="page-subtitle">Enter your email to receive a one-time access link.</p>
         </div>
 
         <form method="post" class="auth-form stack text-left">
@@ -44,13 +44,9 @@
           </div>
           <button type="submit" class="button button--primary button--block">
             <span class="icon">{% include "icons/send.svg" %}</span>
-            Send magic link
+            Send link
           </button>
         </form>
-
-        <p class="auth-invite muted">
-          Want access? Email <a href="mailto:{{ contact_email }}">{{ contact_email }}</a> for an invite.
-        </p>
       {% endif %}
 
       {% if error %}

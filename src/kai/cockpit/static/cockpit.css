@@ -661,8 +661,8 @@
     padding: var(--space-lg);
     border-radius: var(--radius-md);
     background:
-      radial-gradient(circle at 15% 10%, color-mix(in srgb, var(--color-accent-600) 18%, transparent), transparent 32%),
-      var(--color-panel);
+      radial-gradient(circle at 15% 10%, color-mix(in srgb, var(--color-accent-500) 22%, transparent), transparent 32%),
+      var(--color-accent-700);
     color: var(--color-panel-text);
   }
 
@@ -679,6 +679,13 @@
     font-size: var(--text-sm);
     font-weight: 600;
     letter-spacing: -0.01em;
+    text-decoration: none;
+  }
+
+  .auth-hero__brand-mark {
+    width: var(--space-lg);
+    height: var(--space-lg);
+    border-radius: var(--radius-sm);
   }
 
   .auth-hero__copy {
@@ -748,12 +755,6 @@
     border: 1px solid color-mix(in srgb, var(--color-danger) 32%, var(--color-border));
     border-radius: var(--radius-md);
     background: var(--color-danger-bg);
-  }
-
-  .auth-invite {
-    margin: 0;
-    font-size: var(--text-sm);
-    text-align: center;
   }
 
   @media (max-width: 760px) {
@@ -1514,6 +1515,8 @@
 
   .landing-nav {
     display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-sm);
     justify-content: space-between;
     align-items: center;
     padding-bottom: var(--space-md);
@@ -1564,7 +1567,7 @@
   }
 
   .landing-title {
-    max-width: 15ch;
+    max-width: 18ch;
     margin: 0;
     color: var(--color-ink);
     font-family: var(--font-display);

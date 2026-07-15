@@ -30,8 +30,9 @@ else, use tokens/classes.
 | Micro labels / badges | `--text-xs` | 600 |
 
 - `--text-md` (16px) is reserved for genuinely emphasized inline body copy
-  (currently only `.chat-reply`). It is never used for standard labels, help
-  text, or card titles.
+  (`.chat-reply` and the pre-auth `.landing-lede`). It is never used for
+  standard labels, help text, or card titles. `.landing-lede` is a sanctioned
+  pre-auth exception, mirroring the `--text-2xl` carve-out below.
 - `--text-2xl` (the clamp hero token) is not used on any Operator Console
   screen. It stays reserved for pre-auth hero/display use.
 - No page introduces a font size outside this table without updating this
@@ -208,11 +209,12 @@ No fifth button variant is introduced without updating this table first.
 | `.source-item--stack` | Opts a `.source-item` out of the compact inline "input + button" two-column layout for items whose controls are a fuller block (a form with a reply panel, a divided sub-panel) rather than a single-line input/button pair |
 | `.sleep-panel` / `.sleep-panel__section` / `.sleep-panel__title` | Two-halves-of-one-workflow layout divided by a border (`border-left`, `border-top` on mobile) instead of two boxed subcards |
 | `.landing-*` | Pre-auth marketing landing composition: navigation, two-column hero, workflow illustration, and support-demo callout. Scoped to the landing page and built from the shared token system. |
+| `.landing-agent__brain` | Inline leading glyph (`brain.svg`) in the landing workflow card's agent sub-line, marking Brain-grounded knowledge; `aria-hidden`, text carries the meaning. |
 | `.deployment-card__summary` | Compact, right-aligned operational summary on an agent card; collapses below the card content on mobile. |
 | `.readiness-summary` / `.readiness-summary__section` | Exception-led infrastructure health summary: a concise readiness state followed by divided attention and available-service sections. |
 
 New local icons: `icons/search.svg`, `icons/upload.svg`, `icons/check.svg`,
-`icons/bot.svg`.
+`icons/bot.svg`, `icons/brain.svg`.
 
 ## Review guardrails
 
