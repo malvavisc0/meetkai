@@ -75,7 +75,7 @@ class BaseBot(ABC):
         self._agent: KaiAgent | None = None
         self._task_store: TaskStore | None = None
         self._task_scheduler: TaskScheduler | None = None
-        self._tool_context: ToolContext | None = None
+        self._tool_context: ToolContext | None = ToolContext()
 
     @property
     def instance_id(self) -> str:
@@ -143,13 +143,14 @@ class BaseBot(ABC):
             execute=self._execute_task,
             poll_interval=settings.tasks_poll_interval_seconds,
         )
-        self._tool_context = ToolContext()
-        for tool in build_task_tools(
-            self._task_scheduler,
-            context=self._tool_context,
-            clarity_judge=self._judge_goal_clarity,
-        ):
-            agent.register_tool(tool)
+        ctx = self._tool_context
+        if ctx is not None:
+            for tool in build_task_tools(
+                self._task_scheduler,
+                context=ctx,
+                clarity_judge=self._judge_goal_clarity,
+            ):
+                agent.register_tool(tool)
         logger.info("Task scheduler wired for bot %s", self.name)
 
     def set_task_context(

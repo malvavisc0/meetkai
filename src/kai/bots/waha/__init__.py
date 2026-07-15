@@ -16,6 +16,7 @@ from rich.console import Console
 from kai.agent.context import MessageContext
 from kai.agent.core import ChatResult, KaiAgent
 from kai.agent.tools import WEB_WORKFLOW_INSTRUCTIONS
+from kai.agent.tools.conversation import register_conversation_tools
 from kai.agent.tools.email import DEFAULT_DISPLAY_NAME
 from kai.bots.base import BaseBot, TellResult
 from kai.bots.waha.actions import action_cls_for_turn
@@ -205,6 +206,7 @@ class Bot(BaseBot):
         agent.set_timezone(self._config.timezone)
         self.setup_task_scheduler(agent, settings)
         register_chat_history_tool(agent, bot=self)
+        register_conversation_tools(agent, tool_context=self._tool_context)
         self._seen_store = SeenStore(self._seen_store_path(settings), max_size=_SEEN_IDS_MAX)
         self._sleep_store = SleepStore(self._sleep_store_path(settings))
         if self._config.media.stt_enabled:
@@ -1364,7 +1366,7 @@ class Bot(BaseBot):
             tag = f"[youtube transcript:\n  {yt}]"
             enriched = f"{tag}\n{enriched}" if enriched else tag
 
-        # Read-target wrinkle: ``get_chat_history`` reads its chat_id
+        # Read-target wrinkle: ``get_whatsapp_history`` reads its chat_id
         # from ToolContext. If the instruction mentions an explicit JID, set
         # the context to it so the agent can read that chat's history;
         # otherwise fall back to the operator bucket.
@@ -1521,13 +1523,13 @@ class Bot(BaseBot):
         available when the operator opted in to persistence
         (``persist=True``) — without it the agent cannot permanize anything,
         so the dangerous direction (one-off -> permanent) is structurally
-        impossible. ``get_chat_history`` is included when registered
+        impossible. ``get_whatsapp_history`` is included when registered
         so the agent can recap a chat the instruction references.
         """
         tools: list[FunctionTool] = []
         if self._agent is not None:
             for tool in self._agent.get_tools():
-                if tool.metadata.name == "get_chat_history":
+                if tool.metadata.name == "get_whatsapp_history":
                     tools.append(tool)
                     break
         if persist:
@@ -1591,7 +1593,7 @@ class Bot(BaseBot):
     def _extract_chat_id(text: str) -> str | None:
         """Pull an explicit WhatsApp JID out of free text, if present.
 
-        Used to set the operator turn's read-target so ``get_chat_history``
+        Used to set the operator turn's read-target so ``get_whatsapp_history``
         reads the right chat. Returns the first JID-looking
         token, or ``None``.
         """

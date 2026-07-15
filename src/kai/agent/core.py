@@ -645,6 +645,45 @@ class KaiAgent:
             self._timestamps[key] = []
         self._mark_dirty()
 
+    def get_conversation_history(self, conversation_id: str | None = None) -> list[ChatMessage]:
+        """Return the stored messages for a conversation (read-only).
+
+        Public read counterpart to :meth:`record_assistant_message` and
+        :meth:`observe`. Used by the ``get_conversation_messages`` tool so the
+        operator (or the model on an autonomous turn) can recall what was said
+        in a conversation other than the one the current turn is running under.
+        """
+        return list(self._get_history(conversation_id))
+
+    def list_conversations(self) -> list[tuple[str, int, str | None]]:
+        """Return known, non-empty conversations as ``(conversation_id, message_count, last_ts)``.
+
+        Read-only — unlike :meth:`_get_history`, this never creates an entry
+        or triggers eviction; it just snapshots the existing store. IDs are
+        stripped of the agent's namespace prefix (``_history_key``) so they
+        match what :meth:`get_conversation_history`/``record_assistant_message``
+        expect back as ``conversation_id``. Ordered most-recently-active
+        first — ``_history``/``_timestamps`` are ``OrderedDict``s that move a
+        key to the end on every read or write (see :meth:`_get_history`).
+
+        Used by the ``list_conversations`` tool so the operator (or the model
+        on an operator turn) can discover the exact conversation_id to pass to
+        ``get_conversation_messages``/``record_note`` when it only has a name
+        or vague reference — the history store requires an exact key match
+        and has no fuzzy lookup.
+        """
+        prefix = f"{self._namespace}:" if self._namespace else ""
+        results: list[tuple[str, int, str | None]] = []
+        for key, messages in self._history.items():
+            if not messages:
+                continue
+            cid = key[len(prefix) :] if prefix and key.startswith(prefix) else key
+            ts_list = self._timestamps.get(key) or []
+            last_ts = ts_list[-1] if ts_list else None
+            results.append((cid, len(messages), last_ts))
+        results.reverse()
+        return results
+
     async def observe(
         self,
         message: str,

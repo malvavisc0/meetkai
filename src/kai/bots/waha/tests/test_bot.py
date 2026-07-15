@@ -440,7 +440,7 @@ class TestConfigResolution:
 
 
 def _make_chat_history_bot():
-    """Create a bot with a registered get_chat_history tool, return (bot, tool, mock_client)."""
+    """Create a bot with a registered get_whatsapp_history tool, return (bot, tool, mock_client)."""
     bot = _make_bot(BotConfig(trigger_keyword="kai"))
     from kai.agent.context import ToolContext
 

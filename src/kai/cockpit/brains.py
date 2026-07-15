@@ -19,7 +19,7 @@ from kai.brain.validation import (
     validate_upload_filename,
     validate_upload_size,
 )
-from kai.cockpit.models import Connection, User
+from kai.cockpit.models import Connection, Deployment, User
 from kai.utils.common import now_iso, user_slug
 
 _NON_SLUG_CHARS = re.compile(r"[^a-zA-Z0-9]+")
@@ -105,6 +105,12 @@ class BrainsService:
 
         Raises ``ValueError`` if the user has no Brain yet — the website
         should only expose this form once a Brain exists.
+
+        The instruction is injected into bot processes as
+        ``KAI_BRAIN_INSTRUCTION`` at startup (``DeploymentsService.start``).
+        A running bot won't see the new value until it restarts, so any
+        running deployments are flagged ``needs_restart=True`` — the same
+        pattern the deployment-settings edit uses.
         """
         conn = self.get_brain(user)
         if conn is None:
@@ -115,6 +121,19 @@ class BrainsService:
             "instruction": instruction,
         }
         conn.updated_at = now_iso()
+
+        running = (
+            self.db.query(Deployment)
+            .filter(
+                Deployment.user_id == user.id,
+                Deployment.status == "running",
+            )
+            .all()
+        )
+        for dep in running:
+            dep.needs_restart = True
+            dep.updated_at = now_iso()
+
         self.db.commit()
         self.db.refresh(conn)
         return conn

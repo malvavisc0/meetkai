@@ -182,15 +182,15 @@ class TestOperatorTools:
         assert "send_message" not in names
         assert "set_goal" in names
 
-    def test_includes_get_chat_history_when_registered(self):
+    def test_includes_get_whatsapp_history_when_registered(self):
         bot = _make_bot()
         hist = MagicMock()
-        hist.metadata.name = "get_chat_history"
+        hist.metadata.name = "get_whatsapp_history"
         bot._agent = MagicMock()
         bot._agent.get_tools.return_value = [hist]
         tools = bot._operator_tools(persist=False)
         names = [t.metadata.name for t in tools]
-        assert "get_chat_history" in names
+        assert "get_whatsapp_history" in names
 
 
 class TestHandleOperator:

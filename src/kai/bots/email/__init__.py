@@ -31,6 +31,7 @@ from rich.console import Console
 from kai.agent.context import MessageContext
 from kai.agent.core import ActionResult, ChatResult, KaiAgent
 from kai.agent.tools import WEB_WORKFLOW_INSTRUCTIONS
+from kai.agent.tools.conversation import register_conversation_tools
 from kai.agent.tools.email import (
     DEFAULT_DISPLAY_NAME,
     SmtpSettings,
@@ -143,6 +144,11 @@ class Bot(BaseBot):
         # constant — without it the model has tools but no usage guidance.
         agent.set_tool_workflow(WEB_WORKFLOW_INSTRUCTIONS)
         self.setup_task_scheduler(agent, settings)
+        # tool_context is the same ToolContext set on every inbound turn via
+        # set_task_context(chat_id=source, ...) in ingest_event — reusing it
+        # here lets an empty conversation_id fall back to the current sender,
+        # matching the waha bot's wiring (register_chat_history_tool/etc.).
+        register_conversation_tools(agent, tool_context=self._tool_context)
         # SMTP settings for the reply path (KAI_SMTP_TOOL_* env, injected by
         # the cockpit's required-credential env-injection loop added in 01).
         self._smtp = get_smtp_settings()

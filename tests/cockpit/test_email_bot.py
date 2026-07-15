@@ -151,7 +151,7 @@ class TestSmtpReply:
         sent_msg = server.send_message.call_args.args[0]
         assert sent_msg["To"] == "bob@example.com"
         assert sent_msg["Subject"] == "Re: deployment question"
-        assert "Here is the answer." in sent_msg.get_content()
+        assert "Here is the answer." in sent_msg.get_body(preferencelist=("plain",)).get_content()
         # From address is the operator's, not the LLM's
         assert "support@meetk.ai" in sent_msg["From"]
         # Default display name when the deployment hasn't configured one

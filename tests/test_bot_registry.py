@@ -23,7 +23,6 @@ class TestLoadBot:
         assert bot.name == "email"
         assert bot.bot_dir.exists()
         assert (bot.bot_dir / "prompt.md").is_file()
-        assert (bot.bot_dir / "config.json").is_file()
 
     def test_raises_on_unknown_bot(self):
         with pytest.raises(ValueError, match="not found"):

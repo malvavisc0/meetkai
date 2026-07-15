@@ -2,7 +2,7 @@
 
 Extracted from ``__init__.py`` to keep the main bot module lean.  The
 :func:`register_chat_history_tool` function is called once during
-:meth:`Bot.configure` to register the ``get_chat_history`` LLM tool.
+:meth:`Bot.configure` to register the ``get_whatsapp_history`` LLM tool.
 """
 
 from __future__ import annotations
@@ -29,7 +29,7 @@ def register_chat_history_tool(
     *,
     bot: Bot,
 ) -> None:
-    """Register ``get_chat_history``, scoped to the current chat.
+    """Register ``get_whatsapp_history``, scoped to the current chat.
 
     The tool fetches past messages from WAHA's chat-history endpoint so the
     model can summarize or recap a conversation it wasn't online for. It
@@ -48,7 +48,7 @@ def register_chat_history_tool(
         ``_waha_client``, ``_waha``, and ``_rosters`` at call time).
     """
 
-    async def get_chat_history(limit: int = 50, offset: int = 0) -> str:
+    async def get_whatsapp_history(limit: int = 50, offset: int = 0) -> str:
         """Fetch past messages from this chat's history.
 
         Use when asked to summarize or recap a conversation, including
@@ -79,7 +79,7 @@ def register_chat_history_tool(
         try:
             messages = await client.get_chat_messages(chat_id, limit=limit, offset=offset)
         except Exception as exc:
-            logger.warning("get_chat_history fetch failed: %s", exc)
+            logger.warning("get_whatsapp_history fetch failed: %s", exc)
             return f"Error: could not fetch chat history ({exc})"
         finally:
             if should_close:
@@ -110,8 +110,8 @@ def register_chat_history_tool(
 
     agent.register_tool(
         FunctionTool.from_defaults(
-            fn=get_chat_history,
-            name="get_chat_history",
+            fn=get_whatsapp_history,
+            name="get_whatsapp_history",
             description=(
                 "Fetch past messages from this chat's WhatsApp history "
                 "(including from before the bot was online). Returns "

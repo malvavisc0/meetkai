@@ -17,7 +17,7 @@ src/kai/bots/waha/
 ├── actions.py      # WahaAction — the structured decision vocabulary
 ├── client.py       # WahaClient (httpx) — WAHA HTTP API
 ├── config.py       # WahaSettings (KAI_WAHA_* env vars)
-├── history.py      # get_chat_history tool (reads WAHA, not local history)
+├── history.py      # get_whatsapp_history tool (reads WAHA, not local history)
 ├── instagram.py    # Instagram post enrichment
 ├── jid.py          # WhatsApp ID helpers
 ├── media.py        # media attachment extraction
