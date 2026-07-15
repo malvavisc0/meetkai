@@ -1,0 +1,10 @@
+{# Shared "missing connections" gate — included by per-bot-type wizard templates. #}
+<div class="cluster">
+  {% if missing_connections %}
+    <p class="muted text-warn">Connect {{ missing_connections|join(", ") }} before creating this agent.</p>
+    <a href="/connections" class="button">Connect {{ missing_connections|join(", ") }}</a>
+  {% else %}
+    <button type="submit" class="button button--primary"><span class="icon">{% include "icons/plus.svg" %}</span> Create agent</button>
+    <a href="/console" class="button">Cancel</a>
+  {% endif %}
+</div>

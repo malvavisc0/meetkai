@@ -17,6 +17,10 @@ import logging
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import Session
 
+from kai.cockpit.connection_probe import (
+    _is_transient_db_error,
+    reflect_probe_status,
+)
 from kai.cockpit.models import Connection, User
 from kai.cockpit.secrets import decrypt_config, encrypt_config
 from kai.utils.common import now_iso
@@ -59,6 +63,18 @@ class DatabaseConnectionsService:
             conn = existing
         self.db.commit()
         self.db.refresh(conn)
+
+        # Probe the just-saved DSN and reflect the result in ``status``.
+        # Transient failures (network/timeout) preserve the prior status;
+        # auth rejections or invalid DSNs mark the connection
+        # ``disconnected``. Decrypts the just-persisted config to avoid a
+        # redundant SELECT.
+        test_url = decrypt_config("database", conn.config).get("url", "")
+        if test_url:
+            ok, _, transient = self._probe_url(test_url)
+        else:
+            ok, transient = False, False
+        reflect_probe_status(self.db, conn, ok, transient=transient)
         return conn
 
     def delete(self, user: User) -> None:
@@ -73,6 +89,26 @@ class DatabaseConnectionsService:
             return None
         return decrypt_config("database", conn.config).get("url")
 
+    def _probe_url(self, test_url: str) -> tuple[bool, str, bool]:
+        """Connect to ``test_url`` and run ``SELECT 1``. Returns
+        ``(ok, message, transient)`` — ``transient`` is True when the
+        failure is a network/timeout issue (preserve prior status) rather
+        than an auth rejection or invalid DSN (mark ``disconnected``)."""
+        connect_args: dict = {}
+        if not test_url.startswith("sqlite"):
+            connect_args["connect_timeout"] = 5
+        engine = None
+        try:
+            engine = create_engine(test_url, connect_args=connect_args)
+            with engine.connect() as conn:
+                conn.execute(text("SELECT 1"))
+            return True, "ok", False
+        except Exception as exc:
+            return False, str(exc), _is_transient_db_error(exc)
+        finally:
+            if engine:
+                engine.dispose()
+
     def test(self, user: User, *, url: str | None = None) -> tuple[bool, str]:
         """Test connectivity. If ``url`` is provided (non-empty), test that
         ad-hoc value — this lets the operator test a newly-typed DSN before
@@ -83,17 +119,5 @@ class DatabaseConnectionsService:
             test_url = self.decrypt_url(user)
         if not test_url:
             return False, "no connection URL configured"
-        # SQLite (in-memory or file) doesn't support connect_timeout; only
-        # add it for network databases where a dead host could hang.
-        connect_args: dict = {}
-        if not test_url.startswith("sqlite"):
-            connect_args["connect_timeout"] = 5
-        engine = create_engine(test_url, connect_args=connect_args)
-        try:
-            with engine.connect() as conn:
-                conn.execute(text("SELECT 1"))
-            return True, "ok"
-        except Exception as exc:  # noqa: BLE001 - surfaced to the operator
-            return False, str(exc)
-        finally:
-            engine.dispose()
+        ok, msg, _ = self._probe_url(test_url)
+        return ok, msg

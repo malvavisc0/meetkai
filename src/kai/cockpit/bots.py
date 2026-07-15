@@ -212,7 +212,7 @@ def auto_pick_voice(language: str) -> str:
 
 # Single source of truth for capability display names, shared by the
 # Runtime overview badges (deployment.html, keyed by the bot's /status
-# capability names) and the Parameters checkboxes (settings.html, keyed by
+# capability names) and the Parameters checkboxes (settings_waha.html, keyed by
 # BotType.feature_flags names) — one dict covering both vocabularies so the
 # two pages can never show different wording for the same capability.
 CAPABILITY_LABELS: dict[str, str] = {

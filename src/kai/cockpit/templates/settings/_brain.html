@@ -1,0 +1,20 @@
+{# Shared "Brain" settings card — included by per-bot-type settings templates. #}
+{% if has_brain %}
+<div class="card">
+  <p class="card__eyebrow">Brain</p>
+  <h3 class="card__title">Knowledge &amp; grounding</h3>
+  <div class="field">
+    <label class="checkbox-row">
+      <input type="checkbox" name="brain_mandatory" value="true"
+        {% if dep.brain_mandatory is sameas true %}checked{% endif %}>
+      Require shared knowledge for factual answers
+    </label>
+    <p class="field__help">When on, this agent checks the Brain before answering factual questions. When off, it may answer from its configured behavior without consulting shared knowledge.</p>
+  </div>
+  <div class="field">
+    <label class="field__label" for="brain_instruction">Override Brain usage rules (optional)</label>
+    <textarea id="brain_instruction" name="brain_instruction" rows="4" data-autosize>{{ dep.brain_instruction or '' }}</textarea>
+    <p class="field__help">Overrides the Brain's default usage rules for this agent only. Empty = use the Brain default.</p>
+  </div>
+</div>
+{% endif %}

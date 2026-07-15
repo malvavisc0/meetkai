@@ -8,12 +8,16 @@ The signing secret is encrypted at rest via ``encrypt_config`` /
 secret — the form shows ``••••••••`` when a secret is already stored, so
 the operator never re-types it on a no-op edit.
 
-``save`` sets ``status="connected"`` immediately (no probe — the
-self-loopback ``test()`` is an explicit operator action, not a gate).
+``save`` probes the just-saved credentials (signing-secret base64
+validity + API key accepted by Resend's ``GET /domains``) and sets
+``status="connected"`` only when both pass — otherwise
+``status="disconnected"``. The self-loopback ``test()`` remains an
+explicit operator action for exercising the full ingress + bot path.
 """
 
 from __future__ import annotations
 
+import base64
 import json
 import logging
 import time
@@ -22,9 +26,13 @@ import uuid
 import httpx
 from sqlalchemy.orm import Session
 
+from kai.cockpit.connection_probe import (
+    _is_transient_resend_error,
+    reflect_probe_status,
+)
 from kai.cockpit.models import Connection, User
 from kai.cockpit.secrets import decrypt_config, encrypt_config
-from kai.cockpit.webhooks import _sign_resend
+from kai.cockpit.webhooks import _RESEND_API_BASE, _sign_resend, _strip_whsec_prefix
 from kai.utils.common import now_iso
 
 logger = logging.getLogger(__name__)
@@ -52,7 +60,7 @@ class EmailConnectionsService:
             conn = Connection(
                 user_id=user.id,
                 service="resend",
-                status="connected",
+                status="disconnected",
                 config=encrypt_config("resend", secrets) if secrets else {},
                 created_at=now_iso(),
                 updated_at=now_iso(),
@@ -66,6 +74,14 @@ class EmailConnectionsService:
             conn = existing
         self.db.commit()
         self.db.refresh(conn)
+
+        # Probe the just-saved credentials and reflect the result in
+        # ``status``. Transient failures (network/timeout/429) preserve the
+        # prior status; auth rejections mark the connection
+        # ``disconnected``. Passes the already-loaded ``conn`` to
+        # ``_verify_conn`` to avoid a redundant SELECT.
+        ok, _, transient = self._verify_conn(conn)
+        reflect_probe_status(self.db, conn, ok, transient=transient)
         return conn
 
     def delete(self, user: User) -> None:
@@ -85,6 +101,58 @@ class EmailConnectionsService:
         if conn is None:
             return None
         return decrypt_config("resend", conn.config).get("api_key")
+
+    def verify(self, user: User) -> tuple[bool, str]:
+        """Validate the persisted Resend credentials without a running bot.
+
+        Returns ``(ok, message)``. See ``_verify_conn`` for the full
+        ``(ok, message, transient)`` return used by ``save()``.
+        """
+        conn = self.get(user)
+        if conn is None:
+            return False, "no Resend connection configured"
+        ok, msg, _ = self._verify_conn(conn)
+        return ok, msg
+
+    def _verify_conn(self, conn: Connection) -> tuple[bool, str, bool]:
+        """Validate persisted Resend credentials from an already-loaded
+        ``Connection`` row. Returns ``(ok, message, transient)``.
+
+        Two independent checks, both must pass:
+          1. The signing secret is well-formed base64 (after stripping the
+             ``whsec_`` prefix Resend prepends).
+          2. The API key is accepted by Resend's API (``GET /domains``).
+
+        ``transient`` is True when the failure is a network/timeout/429/5xx
+        issue (preserve prior status) rather than an auth rejection (401/403
+        or malformed secret → mark ``disconnected``).
+        """
+        cfg = decrypt_config("resend", conn.config)
+        secret = cfg.get("signing_secret", "")
+        api_key = cfg.get("api_key", "")
+        if not secret:
+            return False, "no signing secret configured", False
+        if not api_key:
+            return False, "no API key configured", False
+        try:
+            base64.b64decode(_strip_whsec_prefix(secret))
+        except Exception as exc:
+            return False, f"signing secret is not valid base64: {exc}", False
+        try:
+            resp = httpx.get(
+                f"{_RESEND_API_BASE}/domains",
+                headers={"Authorization": f"Bearer {api_key}"},
+                params={"limit": 1},
+                timeout=10,
+            )
+        except Exception as exc:  # noqa: BLE001 - surfaced to the operator
+            return False, f"could not reach Resend API: {exc}", True
+        if resp.status_code in (401, 403):
+            return False, f"Resend API rejected the key ({resp.status_code})", False
+        if resp.status_code != 200:
+            transient = _is_transient_resend_error(resp.status_code, None)
+            return False, f"Resend API returned {resp.status_code}", transient
+        return True, "ok", False
 
     def test(
         self,

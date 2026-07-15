@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 from kai.cockpit.app import templates
 from kai.cockpit.auth import require_user
 from kai.cockpit.cli_helpers import public_url
+from kai.cockpit.connection_probe import flash_connection_save
 from kai.cockpit.db import get_db
 from kai.cockpit.email_connections import EmailConnectionsService
 from kai.cockpit.models import User
@@ -44,7 +45,7 @@ async def resend_page(
 
 
 @router.post("/connections/resend")
-async def resend_save(
+def resend_save(
     request: Request,
     signing_secret: str = Form(""),
     api_key: str = Form(""),
@@ -53,8 +54,8 @@ async def resend_save(
 ):
     svc = EmailConnectionsService(db)
     try:
-        svc.save(user, signing_secret=signing_secret.strip(), api_key=api_key.strip())
-        request.session["flash"] = "Email connection saved."
+        conn = svc.save(user, signing_secret=signing_secret.strip(), api_key=api_key.strip())
+        flash_connection_save(request, "Email", conn)
     except Exception as exc:  # noqa: BLE001 - surfaced to the operator
         request.session["flash"] = f"Could not save: {exc}"
     return RedirectResponse("/connections/resend", status_code=302)

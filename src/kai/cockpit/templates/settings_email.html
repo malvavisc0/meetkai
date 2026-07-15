@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="page stack">
+  <header class="page-header page-header--split">
+    <div class="page-header__copy">
+      <p class="page-eyebrow">Agent settings</p>
+      <h1 class="page-title">{{ dep.bot_type }}</h1>
+      <p class="page-subtitle">Set how this agent responds and what it can use. Changes apply on its next start.</p>
+    </div>
+    <div class="page-header__action">
+      <a href="/deployments/{{ dep.id }}" class="button button--ghost">Back</a>
+    </div>
+  </header>
+
+  <form method="post" action="/deployments/{{ dep.id }}/settings" class="stack">
+    {# --- Identity --- #}
+    <div class="card">
+      <p class="card__eyebrow">Identity</p>
+      <h3 class="card__title">Agent role</h3>
+      <div class="field">
+        <label class="field__label" for="goal">Goal *</label>
+        <textarea id="goal" name="goal" rows="3" required data-autosize>{{ dep.goal }}</textarea>
+        <p class="field__help">Describe the role this agent should own. Changes apply on its next start.</p>
+      </div>
+      <div class="field-grid">
+        <div class="field field--narrow">
+          <label class="field__label" for="language">Language *</label>
+          <input id="language" type="text" name="language" value="{{ dep.language }}" required>
+          <p class="field__help">Defaults to your account language — change it any time.</p>
+        </div>
+        <div class="field field--narrow">
+          <label class="field__label" for="timezone">Timezone</label>
+          <input id="timezone" type="text" name="timezone" value="{{ dep.settings.get('timezone', '') or '' }}">
+        </div>
+      </div>
+    </div>
+
+    {% include "settings/_brain.html" %}
+    {% include "settings/_tools.html" %}
+
+    {# --- Actions --- #}
+    <div class="cluster">
+      <button type="submit" class="button button--primary"><span class="icon">{% include "icons/check.svg" %}</span> Save changes</button>
+      <a href="/deployments/{{ dep.id }}" class="button">Cancel</a>
+    </div>
+    <p class="field__help">* required. Changes apply on next start.</p>
+  </form>
+
+  {% include "settings/_danger_zone.html" %}
+</div>
+{% endblock %}

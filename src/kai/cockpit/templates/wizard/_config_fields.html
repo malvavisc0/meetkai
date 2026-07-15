@@ -1,0 +1,21 @@
+{# Shared wizard Configuration form fields (goal + language) — included by
+   per-bot-type wizard templates. Each template can append bot-specific
+   fields (e.g. waha's voice picker) after this partial. #}
+<div class="field">
+  <label class="field__label" for="goal">What should this agent do?</label>
+  <textarea id="goal" name="goal" rows="4" required data-autosize {% if missing_connections %}disabled{% endif %}>{{ goal or "" }}</textarea>
+  <p class="field__help">Start with the suggested role, then tailor it to your team. This guides how the agent handles its work.</p>
+</div>
+
+<div class="field field--narrow">
+  <label class="field__label" for="language">Language</label>
+  <select id="language" name="language" {% if missing_connections %}disabled{% endif %}>
+    {% if language and language not in languages %}
+      <option value="{{ language }}" selected>{{ language }}</option>
+    {% endif %}
+    {% for l in languages %}
+      <option value="{{ l }}" {% if l == language %}selected{% endif %}>{{ l }}</option>
+    {% endfor %}
+  </select>
+  <p class="field__help">Defaults to your account language — change it any time.</p>
+</div>

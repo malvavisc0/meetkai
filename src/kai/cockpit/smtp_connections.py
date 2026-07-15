@@ -20,6 +20,7 @@ import smtplib
 
 from sqlalchemy.orm import Session
 
+from kai.cockpit.connection_probe import reflect_probe_status, run_smtp_probe_with_timeout
 from kai.cockpit.models import Connection, User
 from kai.cockpit.secrets import decrypt_config, encrypt_config
 from kai.utils.common import now_iso
@@ -30,21 +31,25 @@ logger = logging.getLogger(__name__)
 def _smtp_test(
     host: str, port: int, username: str, password: str, use_tls: bool
 ) -> tuple[bool, str]:
-    """Connect + auth + NOOP against an SMTP server."""
-    try:
-        with smtplib.SMTP(host, int(port), timeout=10) as server:
+    """Connect + auth + NOOP against an SMTP server.
+
+    Raises on failure (does NOT catch exceptions) so callers can inspect
+    the exception type to classify transient vs auth errors. The operator-
+    facing ``test()`` wraps this in try/except to produce ``(False, msg)``
+    for the flash message; ``run_smtp_probe_with_timeout`` catches to
+    classify the failure mode.
+    """
+    with smtplib.SMTP(host, int(port), timeout=10) as server:
+        server.ehlo()
+        if use_tls:
+            if not server.has_extn("starttls"):
+                return False, "server does not support STARTTLS"
+            server.starttls()
             server.ehlo()
-            if use_tls:
-                if not server.has_extn("starttls"):
-                    return False, "server does not support STARTTLS"
-                server.starttls()
-                server.ehlo()
-            if username and password:
-                server.login(username, password)
-            server.noop()
-        return True, "ok"
-    except Exception as exc:  # noqa: BLE001 - surfaced to the operator
-        return False, str(exc)
+        if username and password:
+            server.login(username, password)
+        server.noop()
+    return True, "ok"
 
 
 class SmtpConnectionsService:
@@ -103,6 +108,22 @@ class SmtpConnectionsService:
             conn = existing
         self.db.commit()
         self.db.refresh(conn)
+
+        # Probe the just-saved credentials and reflect the result in
+        # ``status``. Transient failures (network/timeout) preserve the
+        # prior status so a blip doesn't block deploys; only auth
+        # rejections mark the connection ``disconnected``. Decrypts the
+        # just-persisted config (avoids a redundant SELECT from
+        # ``self.test(user)``).
+        cfg = decrypt_config("smtp", conn.config)
+        ok, _, transient = run_smtp_probe_with_timeout(
+            cfg.get("host", ""),
+            int(cfg.get("port", 0)),
+            cfg.get("username", ""),
+            cfg.get("password", ""),
+            cfg.get("use_tls", True),
+        )
+        reflect_probe_status(self.db, conn, ok, transient=transient)
         return conn
 
     def delete(self, user: User) -> None:
@@ -154,4 +175,7 @@ class SmtpConnectionsService:
             test_tls = cfg.get("use_tls", True)
         if not test_host:
             return False, "no SMTP host configured"
-        return _smtp_test(test_host, test_port, test_user, test_pass, test_tls)
+        try:
+            return _smtp_test(test_host, test_port, test_user, test_pass, test_tls)
+        except Exception as exc:  # noqa: BLE001 - surfaced to the operator
+            return False, str(exc)

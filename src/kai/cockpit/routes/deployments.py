@@ -42,6 +42,23 @@ router = APIRouter()
 ALL_VOICES = sorted(set(LANGUAGE_VOICE_MAP.values()))
 ALL_LANGUAGES = sorted({*LANGUAGE_VOICE_MAP.keys(), *AGENT_ONLY_LANGUAGES})
 
+# Per-bot-type settings templates. Each bot type renders its own template so
+# waha-specific sections (voice, triggers, chats, capabilities, participation)
+# never appear on the email bot and vice versa. The "default" fallback covers
+# any future bot type that hasn't yet gotten its own template.
+_settings_templates: dict[str, str] = {
+    "waha": "settings_waha.html",
+    "email": "settings_email.html",
+    "default": "settings_waha.html",
+}
+
+# Per-bot-type deploy-wizard templates — same rationale as above.
+_wizard_templates: dict[str, str] = {
+    "waha": "deploy_wizard_waha.html",
+    "email": "deploy_wizard_email.html",
+    "default": "deploy_wizard_waha.html",
+}
+
 # Services that carry an instruction textarea alongside the toggle.
 _TOOLS_WITH_INSTRUCTION = frozenset({"database", "smtp"})
 
@@ -149,9 +166,10 @@ async def deploy_new_get(
         return RedirectResponse(f"/deployments/{existing.id}", status_code=302)
 
     voice = auto_pick_voice(user.language)
+    wizard_template = _wizard_templates.get(bot_type, _wizard_templates["default"])
     return templates.TemplateResponse(
         request,
-        "deploy_wizard.html",
+        wizard_template,
         {
             "user": user,
             "step": "config",
@@ -182,9 +200,10 @@ async def deploy_new_post(
         dep = svc.create(user, bot_type, goal, language, voice or None)
     except (ValueError, ConnectionRequiredError) as exc:
         bt = BOT_TYPES.get(bot_type)
+        wizard_template = _wizard_templates.get(bot_type, _wizard_templates["default"])
         return templates.TemplateResponse(
             request,
-            "deploy_wizard.html",
+            wizard_template,
             {
                 "user": user,
                 "step": "config",
@@ -349,9 +368,11 @@ async def deployment_settings_page(
 
     from kai.bots.waha.tts import SUPPORTED_KOKORO_LANGS
 
+    template_name = _settings_templates.get(dep.bot_type, _settings_templates["default"])
+
     return templates.TemplateResponse(
         request,
-        "settings.html",
+        template_name,
         {
             "user": user,
             "dep": dep,
@@ -622,19 +643,7 @@ async def deployment_settings(
     dep_id: int,
     goal: str = Form(...),
     language: str = Form(...),
-    voice: str = Form(""),
-    trigger_keyword: str = Form(""),
     timezone: str = Form(""),
-    mentions_enabled: str = Form(""),
-    whitelist: str = Form(""),
-    blacklist: str = Form(""),
-    participation_enabled: str = Form(""),
-    participation_rate: float = Form(0.15),
-    participation_cooldown: int = Form(90),
-    participation_streak_max: int = Form(2),
-    voice_note_rate: float = Form(0.25),
-    voice_note_cooldown: int = Form(300),
-    kokoro_voice_map: str = Form(""),
     brain_mandatory: str = Form(""),
     brain_instruction: str = Form(""),
     user: User = Depends(require_user),
@@ -654,7 +663,10 @@ async def deployment_settings(
     # state to a probing attacker. An entitlement is a flag whose value is
     # truthy in the user's feature_flags dict.
     entitlements = {k for k, v in (user.feature_flags or {}).items() if v}
-    form_fields = dict(await request.form())
+    # This form has no file inputs, so every submitted field is text; drop
+    # anything that isn't a str (e.g. UploadFile) rather than mistyping the
+    # dict as dict[str, UploadFile | str] everywhere below.
+    form_fields = {k: v for k, v in (await request.form()).items() if isinstance(v, str)}
     feature_flags = {}
     supported_svcs: list[str] = []
     if bt:
@@ -665,45 +677,73 @@ async def deployment_settings(
             svc for svc in bt.supported_connections if svc not in bt.required_connections
         ]
 
-    from kai.bots.waha.tts import SUPPORTED_KOKORO_LANGS, parse_voice_map
-
-    kokoro_voice_map = kokoro_voice_map.strip()
-    unknown_langs = sorted(
-        lang for lang in parse_voice_map(kokoro_voice_map) if lang not in SUPPORTED_KOKORO_LANGS
-    )
-    if unknown_langs:
-        request.session["flash"] = (
-            f"Unknown Kokoro language code(s) in voice overrides: {', '.join(unknown_langs)}. "
-            f"Supported: {', '.join(SUPPORTED_KOKORO_LANGS)}."
-        )
-        return RedirectResponse(f"/deployments/{dep_id}/settings", status_code=302)
-
-    settings_update = {
-        "trigger_keyword": trigger_keyword,
+    settings_update: dict = {
         "timezone": timezone or None,
-        "mentions_enabled": mentions_enabled == "true",
-        "whitelist": [line.strip() for line in whitelist.splitlines() if line.strip()],
-        "blacklist": [line.strip() for line in blacklist.splitlines() if line.strip()],
-        "participation": {
-            "enabled": participation_enabled == "true",
-            "rate": participation_rate,
-            "cooldown_seconds": participation_cooldown,
-            "streak_max": participation_streak_max,
-            "voice_note_rate": voice_note_rate,
-            "voice_note_cooldown": voice_note_cooldown,
-        },
-        # Per-deployment enable of supported connections. A checkbox the UI
-        # disabled (connection doesn't exist yet) can still be crafted in a
-        # direct POST — that's stored intent, not an executed grant:
-        # start() skips injection when the Connection row is absent. The
-        # full ``settings`` dict is built here because edit()'s shallow merge
-        # (``{**deployment.settings, **value}``) replaces nested keys rather
-        # than deep-merging, so partial updates would clobber siblings.
-        # Tools that carry an instruction (database) store a nested dict;
-        # plain toggles store a bool.
         "tools": _build_tools_update(supported_svcs, form_fields),
-        "kokoro_voice_map": kokoro_voice_map,
     }
+
+    # Waha-only settings: voice, triggers, chats, participation, voice map.
+    # The email bot has none of these — including them would pollute the
+    # deployment's settings dict with waha-specific defaults the email bot
+    # never reads, and the kokoro voice-map validation is waha-specific.
+    # Read these from ``form_fields`` inside the waha branch rather than
+    # declaring them as Form params — the email bot's POST never sends
+    # these fields, so declaring them would silently accept and discard them.
+    voice = ""
+    if dep.bot_type == "waha":
+        from kai.bots.waha.tts import SUPPORTED_KOKORO_LANGS, parse_voice_map
+
+        voice = form_fields.get("voice", "")
+        kokoro_voice_map = (form_fields.get("kokoro_voice_map", "") or "").strip()
+        unknown_langs = sorted(
+            lang for lang in parse_voice_map(kokoro_voice_map) if lang not in SUPPORTED_KOKORO_LANGS
+        )
+        if unknown_langs:
+            request.session["flash"] = (
+                f"Unknown Kokoro language code(s) in voice overrides: {', '.join(unknown_langs)}. "
+                f"Supported: {', '.join(SUPPORTED_KOKORO_LANGS)}."
+            )
+            return RedirectResponse(f"/deployments/{dep_id}/settings", status_code=302)
+
+        def _form_int(key: str, default: int) -> int:
+            val = form_fields.get(key, str(default))
+            try:
+                return int(val)
+            except (ValueError, TypeError):
+                return default
+
+        def _form_float(key: str, default: float) -> float:
+            val = form_fields.get(key, str(default))
+            try:
+                return float(val)
+            except (ValueError, TypeError):
+                return default
+
+        settings_update.update(
+            {
+                "trigger_keyword": form_fields.get("trigger_keyword", ""),
+                "mentions_enabled": form_fields.get("mentions_enabled") == "true",
+                "whitelist": [
+                    line.strip()
+                    for line in (form_fields.get("whitelist", "") or "").splitlines()
+                    if line.strip()
+                ],
+                "blacklist": [
+                    line.strip()
+                    for line in (form_fields.get("blacklist", "") or "").splitlines()
+                    if line.strip()
+                ],
+                "participation": {
+                    "enabled": form_fields.get("participation_enabled") == "true",
+                    "rate": _form_float("participation_rate", 0.15),
+                    "cooldown_seconds": _form_int("participation_cooldown", 90),
+                    "streak_max": _form_int("participation_streak_max", 2),
+                    "voice_note_rate": _form_float("voice_note_rate", 0.25),
+                    "voice_note_cooldown": _form_int("voice_note_cooldown", 300),
+                },
+                "kokoro_voice_map": kokoro_voice_map,
+            }
+        )
 
     try:
         svc.edit(

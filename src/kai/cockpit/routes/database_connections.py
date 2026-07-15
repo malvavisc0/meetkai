@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 
 from kai.cockpit.app import templates
 from kai.cockpit.auth import require_user
+from kai.cockpit.connection_probe import flash_connection_save
 from kai.cockpit.database_connections import DatabaseConnectionsService
 from kai.cockpit.db import get_db
 from kai.cockpit.models import User
@@ -36,7 +37,7 @@ async def db_page(
 
 
 @router.post("/connections/database")
-async def db_save(
+def db_save(
     request: Request,
     label: str = Form(...),
     url: str = Form(""),
@@ -45,8 +46,8 @@ async def db_save(
 ):
     svc = DatabaseConnectionsService(db)
     try:
-        svc.save(user, label=label.strip(), url=url.strip())
-        request.session["flash"] = "Database connection saved."
+        conn = svc.save(user, label=label.strip(), url=url.strip())
+        flash_connection_save(request, "Database", conn)
     except Exception as exc:  # noqa: BLE001 - surfaced to the operator
         request.session["flash"] = f"Could not save: {exc}"
     return RedirectResponse("/connections/database", status_code=302)

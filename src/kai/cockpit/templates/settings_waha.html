@@ -168,54 +168,8 @@
       <p class="field__help">Voice note follow-up: after sending a text reply, kAI sometimes echoes it as a voice note too. Cooldown times are in seconds.</p>
     </div>
 
-    {% if has_brain %}
-    <div class="card">
-      <p class="card__eyebrow">Brain</p>
-      <h3 class="card__title">Knowledge &amp; grounding</h3>
-      <div class="field">
-        <label class="checkbox-row">
-          <input type="checkbox" name="brain_mandatory" value="true"
-            {% if dep.brain_mandatory is sameas true %}checked{% endif %}>
-          Require shared knowledge for factual answers
-        </label>
-        <p class="field__help">When on, this agent checks the Brain before answering factual questions. When off, it may answer from its configured behavior without consulting shared knowledge.</p>
-      </div>
-      <div class="field">
-        <label class="field__label" for="brain_instruction">Override Brain usage rules (optional)</label>
-        <textarea id="brain_instruction" name="brain_instruction" rows="4" data-autosize>{{ dep.brain_instruction or '' }}</textarea>
-        <p class="field__help">Overrides the Brain's default usage rules for this agent only. Empty = use the Brain default.</p>
-      </div>
-    </div>
-    {% endif %}
-
-    {% if supported_tools %}
-    <div class="card">
-      <p class="card__eyebrow">Tools</p>
-      <h3 class="card__title">Optional connections</h3>
-      {% for svc, tool_label, available in supported_tools %}
-        {% set ts = tools_state.get(svc, {}) %}
-        <div class="field">
-          <label class="checkbox-row">
-            <input type="checkbox" name="tool_{{ svc }}" value="true"
-              {% if ts.get('enabled', false) %}checked{% endif %}
-              {% if not available %}disabled{% endif %}>
-            {{ tool_label }}
-          </label>
-          {% if not available %}
-          <p class="field__help">Connect {{ tool_label }} on the Connections page to enable.</p>
-          {% endif %}
-        </div>
-        {% if svc in ("database", "smtp") %}
-        <div class="field">
-          <label class="field__label" for="tool_{{ svc }}_instruction">When to use {{ tool_label | lower }}</label>
-          <textarea id="tool_{{ svc }}_instruction" name="tool_{{ svc }}_instruction" rows="4"
-            data-autosize {% if not ts.get('enabled', false) %}disabled{% endif %}>{{ ts.get('instruction', '') or '' }}</textarea>
-          <p class="field__help">Tell this agent when and how to use {{ tool_label | lower }}. One rule per line. Empty = the tool is available but the agent decides on its own.</p>
-        </div>
-        {% endif %}
-      {% endfor %}
-    </div>
-    {% endif %}
+    {% include "settings/_brain.html" %}
+    {% include "settings/_tools.html" %}
 
     {# --- Actions --- #}
     <div class="cluster">
@@ -225,18 +179,6 @@
     <p class="field__help">* required. Changes apply on next start.</p>
   </form>
 
-  {# --- Danger zone --- #}
-  <div class="card card--danger mt-2xl">
-    <h3 class="card__title text-danger">Danger zone</h3>
-    <p><strong>Delete agent</strong></p>
-    <p class="muted">This removes the agent configuration. WhatsApp stays connected, so you can create another agent without reconnecting the channel.</p>
-    <form method="post" action="/deployments/{{ dep.id }}/delete" data-confirm="Delete this agent? This stops it if running and removes its configuration.">
-      <label class="checkbox-row text-danger mb-md">
-        <input type="checkbox" name="confirm_delete" value="true" required>
-        I understand this stops the agent if it is running and removes its configuration.
-      </label>
-      <button type="submit" class="button button--danger"><span class="icon">{% include "icons/trash-2.svg" %}</span> Delete agent</button>
-    </form>
-  </div>
+  {% include "settings/_danger_zone.html" %}
 </div>
 {% endblock %}

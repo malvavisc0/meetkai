@@ -1,10 +1,12 @@
 """Tests for the EmailConnectionsService (05-ui / 06-tests).
 
-Covers: ``save()`` encrypts the signing secret + API key and sets
-status="connected" (no probe), ``delete()`` round-trip,
-``decrypt_secret()``/``decrypt_api_key()`` round-trip, empty-secret
-preserve-existing, and the start gate treating the ingress-only connection
-as connected only when both secret fields are present.
+Covers: ``save()`` encrypts the signing secret + API key and probes
+the credentials (signing-secret base64 validity + API key accepted by
+Resend's ``GET /domains``), setting status="connected" on success,
+``delete()`` round-trip, ``decrypt_secret()``/``decrypt_api_key()``
+round-trip, empty-secret preserve-existing, and the start gate treating
+the ingress-only connection as connected only when both secret fields
+are present.
 """
 
 from __future__ import annotations
@@ -24,6 +26,16 @@ def _encryption_env(monkeypatch, tmp_path):
     from kai.cockpit import secrets
 
     secrets._clear_key_cache()
+
+    # save() now probes Resend's API (GET /domains) to verify the key.
+    # Mock the HTTP call so tests don't hit the network. Returns 200 =
+    # key accepted, so save() marks the connection "connected".
+    import httpx
+
+    class _FakeResp:
+        status_code = 200
+
+    monkeypatch.setattr(httpx, "get", lambda *a, **kw: _FakeResp())
     yield
     secrets._clear_key_cache()
 
@@ -33,8 +45,8 @@ class TestSave:
         from kai.cockpit.email_connections import EmailConnectionsService
 
         svc = EmailConnectionsService(db)
-        conn = svc.save(user, signing_secret="whsec_live_abc123", api_key="re_live_abc123")
-        assert conn.config.get("signing_secret") != "whsec_live_abc123"
+        conn = svc.save(user, signing_secret="whsec_dGVzdA==", api_key="re_live_abc123")
+        assert conn.config.get("signing_secret") != "whsec_dGVzdA=="
         assert conn.config.get("api_key") != "re_live_abc123"
         assert is_encrypted(conn.config["signing_secret"])
         assert is_encrypted(conn.config["api_key"])
@@ -43,20 +55,20 @@ class TestSave:
         from kai.cockpit.email_connections import EmailConnectionsService
 
         svc = EmailConnectionsService(db)
-        conn = svc.save(user, signing_secret="whsec_live_abc123", api_key="re_live_abc123")
+        conn = svc.save(user, signing_secret="whsec_dGVzdA==", api_key="re_live_abc123")
         assert conn.status == "connected"
 
     def test_save_empty_secret_preserves_existing(self, db, user):
         from kai.cockpit.email_connections import EmailConnectionsService
 
         svc = EmailConnectionsService(db)
-        svc.save(user, signing_secret="whsec_live_abc123", api_key="re_live_abc123")
+        svc.save(user, signing_secret="whsec_dGVzdA==", api_key="re_live_abc123")
         conn = svc.save(user, signing_secret="", api_key="")
         # Both secrets are still the encrypted originals, not wiped
         assert is_encrypted(conn.config["signing_secret"])
         assert is_encrypted(conn.config["api_key"])
         decrypted = decrypt_config("resend", conn.config)
-        assert decrypted["signing_secret"] == "whsec_live_abc123"
+        assert decrypted["signing_secret"] == "whsec_dGVzdA=="
         assert decrypted["api_key"] == "re_live_abc123"
 
     def test_save_new_secret_overwrites(self, db, user):
@@ -86,7 +98,7 @@ class TestDelete:
         from kai.cockpit.email_connections import EmailConnectionsService
 
         svc = EmailConnectionsService(db)
-        svc.save(user, signing_secret="whsec_live_abc123", api_key="re_live_abc123")
+        svc.save(user, signing_secret="whsec_dGVzdA==", api_key="re_live_abc123")
         assert svc.get(user) is not None
 
         svc.delete(user)
@@ -104,8 +116,8 @@ class TestDecryptSecret:
         from kai.cockpit.email_connections import EmailConnectionsService
 
         svc = EmailConnectionsService(db)
-        svc.save(user, signing_secret="whsec_live_abc123", api_key="re_live_abc123")
-        assert svc.decrypt_secret(user) == "whsec_live_abc123"
+        svc.save(user, signing_secret="whsec_dGVzdA==", api_key="re_live_abc123")
+        assert svc.decrypt_secret(user) == "whsec_dGVzdA=="
 
     def test_decrypt_secret_none_when_no_connection(self, db, user):
         from kai.cockpit.email_connections import EmailConnectionsService
@@ -117,7 +129,7 @@ class TestDecryptSecret:
         from kai.cockpit.email_connections import EmailConnectionsService
 
         svc = EmailConnectionsService(db)
-        svc.save(user, signing_secret="whsec_live_abc123", api_key="re_live_abc123")
+        svc.save(user, signing_secret="whsec_dGVzdA==", api_key="re_live_abc123")
         assert svc.decrypt_api_key(user) == "re_live_abc123"
 
     def test_decrypt_api_key_none_when_no_connection(self, db, user):
@@ -132,11 +144,11 @@ class TestSecretEncryptedAtRest:
         from kai.cockpit.email_connections import EmailConnectionsService
 
         svc = EmailConnectionsService(db)
-        svc.save(user, signing_secret="whsec_live_abc123", api_key="re_live_abc123")
+        svc.save(user, signing_secret="whsec_dGVzdA==", api_key="re_live_abc123")
         conn = svc.get(user)
         assert conn is not None
         # The raw config column has ciphertext, not plaintext
-        assert "whsec_live_abc123" not in str(conn.config)
+        assert "whsec_dGVzdA==" not in str(conn.config)
         assert "re_live_abc123" not in str(conn.config)
         assert is_encrypted(conn.config["signing_secret"])
         assert is_encrypted(conn.config["api_key"])

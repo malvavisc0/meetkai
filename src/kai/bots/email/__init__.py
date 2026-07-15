@@ -73,7 +73,7 @@ class Bot(BaseBot):
         self._email = get_email_settings()
         self._config = self._load_config()
         if settings.agent_language_explicit:
-            self._config.language = settings.agent_language
+            self._config = self._config.model_copy(update={"language": settings.agent_language})
         self._prompt = self._load_prompt()
         agent.set_system_prompt(self._prompt)
         agent.set_temperature(self._config.temperature)

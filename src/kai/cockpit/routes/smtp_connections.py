@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 
 from kai.cockpit.app import templates
 from kai.cockpit.auth import require_user
+from kai.cockpit.connection_probe import flash_connection_save
 from kai.cockpit.db import get_db
 from kai.cockpit.models import User
 from kai.cockpit.smtp_connections import SmtpConnectionsService
@@ -36,7 +37,7 @@ async def smtp_page(
 
 
 @router.post("/connections/smtp")
-async def smtp_save(
+def smtp_save(
     request: Request,
     host: str = Form(...),
     port: int = Form(...),
@@ -49,7 +50,7 @@ async def smtp_save(
 ):
     svc = SmtpConnectionsService(db)
     try:
-        svc.save(
+        conn = svc.save(
             user,
             host=host.strip(),
             port=int(port),
@@ -58,7 +59,7 @@ async def smtp_save(
             from_address=from_address.strip(),
             use_tls=use_tls == "true",
         )
-        request.session["flash"] = "SMTP connection saved."
+        flash_connection_save(request, "SMTP", conn)
     except Exception as exc:  # noqa: BLE001 - surfaced to the operator
         request.session["flash"] = f"Could not save: {exc}"
     return RedirectResponse("/connections/smtp", status_code=302)

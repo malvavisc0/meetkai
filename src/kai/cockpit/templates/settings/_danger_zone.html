@@ -1,0 +1,13 @@
+{# Shared "Danger zone" card — included by per-bot-type settings templates. #}
+<div class="card card--danger mt-2xl">
+  <h3 class="card__title text-danger">Danger zone</h3>
+  <p><strong>Delete agent</strong></p>
+  <p class="muted">This removes the agent configuration. You can create another agent of the same type without reconnecting channels.</p>
+  <form method="post" action="/deployments/{{ dep.id }}/delete" data-confirm="Delete this agent? This stops it if running and removes its configuration.">
+    <label class="checkbox-row text-danger mb-md">
+      <input type="checkbox" name="confirm_delete" value="true" required>
+      I understand this stops the agent if it is running and removes its configuration.
+    </label>
+    <button type="submit" class="button button--danger"><span class="icon">{% include "icons/trash-2.svg" %}</span> Delete agent</button>
+  </form>
+</div>

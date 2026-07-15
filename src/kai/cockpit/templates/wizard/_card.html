@@ -1,0 +1,8 @@
+{# Shared bot-type card — included by per-bot-type wizard templates. #}
+<div class="card">
+  <p class="card__eyebrow"><span class="icon icon--lg">{% include "icons/" ~ bt.icon ~ ".svg" %}</span></p>
+  <h3 class="card__title">{{ bt.name }}</h3>
+  {% if bt.description %}
+    <p class="muted">{{ bt.description }}</p>
+  {% endif %}
+</div>

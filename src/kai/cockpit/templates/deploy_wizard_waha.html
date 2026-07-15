@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="page stack">
+  <header class="page-header page-header--split">
+    <div class="page-header__copy">
+      <p class="page-eyebrow">New agent</p>
+      <h1 class="page-title">Set up an agent</h1>
+      <p class="page-subtitle">Define the role it owns. You can connect more knowledge, channels, and tools later.</p>
+    </div>
+    <div class="page-header__action">
+      <a href="/console" class="button button--ghost">Back</a>
+    </div>
+  </header>
+
+  {% if error %}
+    <p class="card card--danger text-danger"><strong>Could not create agent:</strong> {{ error }}</p>
+  {% endif %}
+
+  {% include "wizard/_card.html" %}
+
+  <form method="post" action="/deployments/new" class="card">
+    <p class="card__eyebrow">Configuration</p>
+    <h3 class="card__title">Agent role</h3>
+    <input type="hidden" name="bot_type" value="{{ bot_type }}">
+
+    {% include "wizard/_config_fields.html" %}
+
+    <div class="field field--narrow">
+      <label class="field__label" for="voice">Voice</label>
+      <select id="voice" name="voice" {% if missing_connections %}disabled{% endif %}>
+        {% for v in voices %}
+          <option value="{{ v }}" {% if v == voice %}selected{% endif %}>{{ v }}</option>
+        {% endfor %}
+      </select>
+      <p class="field__help">Picked from the language. Used when kAI sends voice notes.</p>
+    </div>
+
+    {% include "wizard/_gate.html" %}
+  </form>
+</div>
+{% endblock %}
