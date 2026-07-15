@@ -122,8 +122,12 @@ services:
       ENTITY_EXTRACTION_USE_JSON: true
       VLM_PROCESS_ENABLE: false
     volumes:
-      - ./data/lightrag/storage:/app/rag_storage
-      - ./data/lightrag/inputs:/app/inputs
+      # NOTE: LightRAG v1.5.4's real paths are WORKING_DIR=/app/data/rag_storage
+      # and INPUT_DIR=/app/data/inputs (see container env). Mounting under
+      # /app/rag_storage left the host bind-mount unused and all graph/KV
+      # state in the container's ephemeral layer — wiped on `compose down`.
+      - ./data/lightrag/storage:/app/data/rag_storage
+      - ./data/lightrag/inputs:/app/data/inputs
 
   # Brain: crawl4ai — one shared headless-browser crawler for website ingest.
   # Used strictly in non-LLM markdown mode (POST /md with f=fit/raw); the
