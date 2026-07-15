@@ -331,9 +331,8 @@ def _parse_send_response(resp: httpx.Response) -> dict:
     """Parse a WAHA send-response body, tolerating empty bodies.
 
     WAHA accepts sends to ``@lid`` targets (HTTP 200, message delivered) but
-    returns an empty or non-JSON body — likely a wwebjs serialization gap for
-    the LID scheme (same root cause as the ``_serialized`` / ``$1`` patch in
-    ``session.webjs.core.js``). Calling ``resp.json()`` would throw
+    returns an empty or non-JSON body — a wwebjs serialization gap for the
+    LID scheme. Calling ``resp.json()`` would throw
     ``JSONDecodeError`` ("Expecting value: line 1 column 1 (char 0)") and the
     message would appear unsent despite having been delivered.
 

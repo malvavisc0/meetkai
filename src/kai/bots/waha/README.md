@@ -48,13 +48,11 @@ Create and pair a WAHA session in the WAHA dashboard. The default Kai session
 name is `default`. Kai expects the session to already exist and be `WORKING`;
 it only registers the session webhook on startup.
 
-Running WAHA via `docker-compose.yml`? It mounts two upstream patches read-only
-into the container (see the comments next to each in that file):
-`Utils.js` (crash workaround for a wwebjs contact-lookup bug) and
-`session.webjs.core.js` (WAHA drops every inbound group message whose sender
-resolves to an opaque `@lid` instead of raising — this patch falls back to the
-raw serialized ID so those messages actually reach the webhook). Both are
-removable once upstream ships a fix; the comments say exactly when.
+Running WAHA via `docker-compose.yml`? Pin a recent release — older wwebjs
+builds crashed `GET /api/{session}/chats` with HTTP 500 and dropped inbound
+group messages whose sender resolves to an opaque `@lid` (the `_serialized`
+id was undefined). Both were fixed upstream in WAHA `2026.7.1`, so the
+read-only patch mounts that Kai used to carry are no longer needed.
 
 ## Environment
 
