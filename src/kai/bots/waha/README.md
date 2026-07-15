@@ -14,14 +14,25 @@ ghosts a direct message.
 ```text
 src/kai/bots/waha/
 ├── __init__.py     # Bot class, message handling, sleep/wake, participation
+├── actions.py      # WahaAction — the structured decision vocabulary
 ├── client.py       # WahaClient (httpx) — WAHA HTTP API
 ├── config.py       # WahaSettings (KAI_WAHA_* env vars)
+├── history.py      # get_chat_history tool (reads WAHA, not local history)
+├── instagram.py    # Instagram post enrichment
+├── jid.py          # WhatsApp ID helpers
 ├── media.py        # media attachment extraction
 ├── mentions.py     # @[Name] → WhatsApp mention resolution
 ├── payload.py      # inbound message parsing
+├── processing.py   # reply post-processing, organic participation logic
 ├── prompt.md       # Kai persona / system prompt
+├── seen_store.py   # webhook idempotency (seen message IDs)
+├── setup.py        # BotConfig / MediaConfig / ParticipationConfig
+├── sleep_store.py  # per-chat sleep state
 ├── stt.py          # voice note transcription (whisper.cpp)
+├── tts.py          # Kokoro voice-reply synthesis
+├── video.py        # video compression + audio extraction (ffmpeg)
 ├── webhook.py      # FastAPI webhook server (HMAC-verified)
+├── youtube.py      # YouTube transcript enrichment
 └── tests/
 ```
 
@@ -36,6 +47,14 @@ docker run -d -p 3000:3000 devlikeapro/waha
 Create and pair a WAHA session in the WAHA dashboard. The default Kai session
 name is `default`. Kai expects the session to already exist and be `WORKING`;
 it only registers the session webhook on startup.
+
+Running WAHA via `docker-compose.yml`? It mounts two upstream patches read-only
+into the container (see the comments next to each in that file):
+`Utils.js` (crash workaround for a wwebjs contact-lookup bug) and
+`session.webjs.core.js` (WAHA drops every inbound group message whose sender
+resolves to an opaque `@lid` instead of raising — this patch falls back to the
+raw serialized ID so those messages actually reach the webhook). Both are
+removable once upstream ships a fix; the comments say exactly when.
 
 ## Environment
 
@@ -164,8 +183,15 @@ Supported WhatsApp identifiers include `@c.us`, `@g.us`, and `@lid`.
 ### Prompt
 
 `prompt.md` is the Kai persona, loaded with `{{language}}` substituted from
-config. If the model returns `<<silent>>`, Kai sends no reply and stores only
-the observed user turn (not the assistant turn) in history.
+config. Every turn returns a structured `WahaAction` (see `actions.py`), not
+free text — Kai's decision is the typed `action` field
+(`reply`/`silent`/`sleep`/`send_dm`/`send_to_group`/`send_voice_note`/
+`console`), not a string token embedded in the reply. Which values are even
+offered to the model depends on the turn: a DM or a hard direct address never
+offers `silent` at all (see `action_cls_for_turn`), so Kai structurally cannot
+ghost someone who addressed him directly — he can still decide the content is
+"nothing to add" and send a short acknowledgment, but the schema itself
+removes the silent option.
 
 ## When Kai Speaks
 
@@ -175,8 +201,9 @@ Kai is a participant, not a spectator.
 
 - Someone tags him, uses his name, or the trigger keyword.
 - Someone replies to one of his messages (he then *decides* whether to respond
-  — he may still choose `<<silent>>`).
-- A direct (1-to-1) message — DMs never go silent.
+  — he may still choose `silent`).
+- A direct (1-to-1) message — DMs never go silent (the `silent` action isn't
+  offered at all on that turn).
 - He was just woken from sleep.
 - Safety-critical messages (crisis, self-harm, danger) — always.
 
@@ -184,15 +211,15 @@ Kai is a participant, not a spectator.
 chance to speak on messages not aimed at him. This is probabilistic with
 guards so he never dominates a chat. See the `participation` config above.
 
-**Stays silent (`<<silent>>`)** when the message isn't aimed at him and there's
-nothing worth adding (throwaway messages, mid-thought bursts, fast chat,
-hostile bait).
+**Stays silent (`action: "silent"`)** when the message isn't aimed at him and
+there's nothing worth adding (throwaway messages, mid-thought bursts, fast
+chat, hostile bait), and only on turns where `silent` is actually offered.
 
 ### Organic Participation
 
 When `participation.enabled` is true, a non-summoned group message is offered
-to the model with a chance to chime in. The model may still decline via
-`<<silent>>`. Guards:
+to the model with a chance to chime in. The model may still decline via the
+`silent` action. Guards:
 
 - `rate` — probability a given message is offered (default `0.15`), raised by
   ~0.2 when the message contains a question mark.
@@ -218,11 +245,18 @@ keyword (his name) so casual phrases like "goodnight everyone" or "I couldn't
 sleep" never silence him.
 
 - **Sleep:** `kai go to sleep`, `goodnight kai`, `kai shush`, `kai be quiet`,
-  `kai quiet down`, `kai stop talking` → Kai stops speaking in that chat
-  entirely (even if @-tagged) and sends a brief acknowledgment. Messages are
+  `kai quiet down`, `kai stop talking` → the model returns the `sleep` action,
+  Kai stops speaking in that chat entirely (even if @-tagged) and sends a
+  brief acknowledgment (`text`, or a default ack if omitted). Messages are
   still observed so he has context when woken.
-- **Wake:** `wake up kai`, `kai wake up`, `kai rise and shine` → clears the
-  sleep state. A just-woken Kai always replies (never `<<silent>>`).
+- **Wake:** `wake up kai`, `kai wake up`, `kai rise and shine` → a direct
+  address while asleep gives the model one chance to decide whether this is a
+  genuine wake-up (any reply-shaped action wakes the chat; `silent`/`sleep`/
+  `console` keeps it asleep). A just-woken Kai always gets offered a real
+  reply action (never silence) on that same turn.
+- The cockpit's `/sleep` and `/wake` routes (`on_sleep`/`on_wake` on the
+  webhook) let an operator force either state directly, independent of chat
+  content.
 
 ## Mentions
 
@@ -260,15 +294,33 @@ Voice notes are transcribed locally with `whisper.cpp` — no external API calls
 
 Control media behavior via the `media` section of your config (see above).
 
+## Operator Console
+
+The bot exposes a `/tell` HTTP route (see the root README's "Operating A
+Running Bot"). Kai expresses delivery through the same structured
+`WahaAction` used for inbound turns:
+
+- To answer the operator only, Kai returns `console` with `text` — this goes
+  to the operator's console, never to WhatsApp.
+- To deliver a message, Kai returns `send_dm` or `send_to_group` with both
+  `target` (the exact chat JID from the instruction) and `text` filled in.
+  There is no separate "send" tool and no `to` field on the request — the
+  target always comes from what the agent read in the operator's own words.
+- Pass `persist=true` to give the turn the `set_goal` tool, letting the
+  operator permanize a steering directive into the system prompt.
+
 ## Reliability
 
 - **Webhook idempotency:** duplicate webhook deliveries (same message ID) are
   detected and ignored, so WAHA retries never produce duplicate replies.
-- **Send retry:** outbound replies retry with exponential backoff on transient
-  failures (5xx, network). 4xx errors are not retried.
+- **`@lid` send parsing:** WAHA accepts sends to opaque `@lid` targets (HTTP
+  200, message delivered) but sometimes returns an empty or non-JSON body —
+  a wwebjs serialization gap for the LID scheme. The client treats a 2xx with
+  an empty/unparseable body as success rather than raising, so a real send
+  isn't reported as a failure.
 - **HMAC verification:** see Environment above.
 - **Per-chat ordering:** messages in the same chat are processed and replied
-  to in arrival order.
+  to in arrival order (guarded by a per-chat `asyncio.Lock`).
 
 ## CLI
 
