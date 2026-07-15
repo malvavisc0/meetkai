@@ -37,6 +37,17 @@ _SEEN_NONCES_MAX = 10000
 _seen_nonces: OrderedDict[str, float] = OrderedDict()
 
 
+def _strip_whsec_prefix(secret: str) -> str:
+    """Strip the ``whsec_`` prefix Resend/Svix prepends to signing secrets.
+
+    The prefix is metadata identifying the secret type; the actual key bytes
+    are the base64url-encoded suffix. ``base64.b64decode`` chokes on the
+    ``whsec_`` characters, so both the loopback signer and the verifier strip
+    it before decoding. Tolerant of secrets already given without the prefix.
+    """
+    return secret[len("whsec_") :] if secret.startswith("whsec_") else secret
+
+
 class NormalizedMessage(BaseModel):
     """Provider-agnostic inbound event carried to the bot's ingest_event.
 
@@ -177,7 +188,7 @@ def _sign_resend(svix_id: str, svix_timestamp: str, body: bytes, secret: str) ->
     base64.
     """
     signed = f"{svix_id}.{svix_timestamp}.".encode() + body
-    key = base64.b64decode(secret)  # raises on invalid base64
+    key = base64.b64decode(_strip_whsec_prefix(secret))  # raises on invalid base64
     mac = base64.b64encode(hmac.new(key, signed, hashlib.sha256).digest()).decode()
     return f"v1,{mac}"
 
