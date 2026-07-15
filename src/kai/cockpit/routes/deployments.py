@@ -282,7 +282,8 @@ async def deployment_detail(
 
     conversation_count, message_count = svc.interaction_summary(dep)
     reply = request.session.pop("chat_reply", None)
-
+    sleep_supported = bool(BOT_TYPES.get(dep.bot_type) and BOT_TYPES[dep.bot_type].supports_sleep)
+    
     return templates.TemplateResponse(
         request,
         "deployment.html",
@@ -299,6 +300,7 @@ async def deployment_detail(
             "conversation_count": conversation_count,
             "message_count": message_count,
             "capability_labels": CAPABILITY_LABELS,
+            "sleep_supported": sleep_supported,
             "reply": reply,
             "flash": flash,
         },

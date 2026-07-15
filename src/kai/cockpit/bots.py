@@ -27,6 +27,13 @@ class BotType:
     # shown next to this bot type in the console's bot-type picker,
     # deployment cards, and the deploy wizard header.
     icon: str = "bot"
+    # Whether this bot type implements per-chat sleep/wake (waha only: the
+    # bot's webhook wires on_sleep/on_wake and its /status includes a
+    # "sleep" key). Bot types without it 404 on /sleep and /wake and omit
+    # "sleep" from /status entirely — the deployment detail page uses this
+    # flag to hide the pause-conversations panel rather than assume every
+    # bot type has the concept of a per-chat sleep state.
+    supports_sleep: bool = False
 
 
 BOT_TYPES: dict[str, BotType] = {
@@ -51,6 +58,7 @@ BOT_TYPES: dict[str, BotType] = {
         # toggle (disabled until the connection exists).
         supported_connections=["database", "smtp"],
         icon="message-circle",
+        supports_sleep=True,
     ),
     "email": BotType(
         name="email",

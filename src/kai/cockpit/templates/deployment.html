@@ -113,7 +113,12 @@
 
   {# --- Control: chat + sleep mode, one card divided like Brain's Sources --- #}
   {% if dep.status == "running" and status %}
-    {% set sleeping_chats = status.sleep.sleeping %}
+    {# Sleep/pause is waha-only (BotType.supports_sleep in cockpit/bots.py):
+       the email bot has no chat concept and its webhook opts out of /sleep
+       and /wake (404), so status has no "sleep" key at all. sleep_supported
+       comes from the route so the bot-type capability lives in one place
+       (bots.py) instead of being re-checked here. #}
+    {% set sleeping_chats = status.get("sleep", {}).get("sleeping", []) if sleep_supported else [] %}
     <div class="card source-card">
       <div class="source-card__header">
         <p class="card__eyebrow">Control</p>
@@ -146,6 +151,7 @@
           </div>
         </div>
 
+        {% if sleep_supported %}
         <div class="source-item source-item--stack">
           <div class="source-item__copy">
             <strong>Pause conversations</strong>
@@ -189,6 +195,7 @@
             </div>
           </div>
         </div>
+        {% endif %}
       </div>
     </div>
   {% endif %}
