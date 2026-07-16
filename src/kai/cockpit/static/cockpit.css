@@ -1702,9 +1702,10 @@
 
   .landing-reply {
     padding: var(--space-md);
-    border-left: 2px solid var(--color-accent-600);
-    border-radius: 0 var(--radius-md) var(--radius-md) 0;
+    border: 1px solid color-mix(in srgb, var(--color-accent-600) 25%, transparent);
+    border-radius: var(--radius-lg);
     background: var(--color-accent-50);
+    box-shadow: 0 1px 2px color-mix(in srgb, var(--color-accent-600) 12%, transparent);
   }
 
   .landing-reply__label {
