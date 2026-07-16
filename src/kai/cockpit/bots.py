@@ -195,7 +195,7 @@ class WebhookConnectionType:
     service: str
     label: str
     fields: list[CredentialField]
-    webhook_type: str  # key in WEBHOOK_TYPES this connection verifies for
+    webhook_type: str  # which webhook type this connection handles
     secret_fields: list[str] = field(default_factory=list)
     testable: bool = True
 

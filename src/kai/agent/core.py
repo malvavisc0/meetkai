@@ -119,7 +119,7 @@ class ActionResult(BaseModel):
 
     model_config = ConfigDict(extra="allow")
 
-    action: str  # bot-defined vocabulary, e.g. "reply" | "silent" | "sleep"
+    action: str  # e.g. "reply" | "silent" | "sleep"
     text: str | None = None  # what to say, if this action says anything
     target: str | None = None  # destination for actions like send_dm / send_to_group
 
@@ -138,7 +138,7 @@ class ChatResult(BaseModel):
     reply: str = ""
     tool_calls: list[ToolCallRecord] = Field(default_factory=list)
     action: ActionResult
-    error: str | None = None  # None on success; set on timeout/exception/schema failure
+    error: str | None = None  # None on success; set on failure
 
 
 # Reasoning models sometimes emit their chain-of-thought wrapped in "channel"

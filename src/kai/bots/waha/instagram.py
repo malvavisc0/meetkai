@@ -43,7 +43,7 @@ _PAGE_HEADERS = {
 
 _CDN_HEADERS = {"User-Agent": "Mozilla/5.0"}
 
-_MAX_IMAGES = 4  # cap per post to protect LLM token budget
+_MAX_IMAGES = 4  # limit images per post to keep prompt size manageable
 _MAX_IMAGE_BYTES = 10 * 1024 * 1024  # 10 MB, matches MediaConfig.max_size_mb
 
 

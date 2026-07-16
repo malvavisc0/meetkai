@@ -61,12 +61,12 @@ def _is_disallowed_ip(ip: str) -> bool:
     """True if ``ip`` must not be reachable from an Operator-submitted URL."""
     addr = ipaddress.ip_address(ip)
     return (
-        addr.is_private  # RFC1918 (10/8, 172.16/12, 192.168/16) + RFC4193
+        addr.is_private  # private ranges (10.x, 172.16-31.x, 192.168.x)
         or addr.is_loopback  # 127.0.0.0/8, ::1
-        or addr.is_link_local  # 169.254.0.0/16 (incl. cloud metadata), fe80::/10
+        or addr.is_link_local  # link-local (includes cloud metadata endpoints)
         or addr.is_multicast
         or addr.is_reserved
-        or addr.is_unspecified  # 0.0.0.0, ::
+        or addr.is_unspecified  # unset address (0.0.0.0, ::)
     )
 
 

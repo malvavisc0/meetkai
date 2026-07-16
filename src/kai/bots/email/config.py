@@ -18,8 +18,8 @@ class EmailSettings(BaseSettings):
     )
 
     control_host: str = "0.0.0.0"
-    control_port: int  # injected by cockpit at start time
-    hmac_key: str  # /ingest route verifies with this
+    control_port: int  # set by the cockpit when starting the bot
+    hmac_key: str  # used to verify incoming webhooks
     hmac_algorithm: str = "sha512"
 
     # Per-deployment image-vision flag, injected by the cockpit at start time

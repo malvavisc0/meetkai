@@ -47,7 +47,7 @@ def format_timestamp(timestamp: str | None) -> str:
 
 templates.env.globals["format_timestamp"] = format_timestamp
 
-_MEDIA_SERVICES: list = []  # module-level, so _lifespan shutdown can reach it
+_MEDIA_SERVICES: list = []  # module-level so the shutdown handler can reach it
 
 
 def _reconcile_deployments_in_background() -> None:

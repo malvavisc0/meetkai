@@ -4,7 +4,7 @@ from pathlib import Path
 
 from kai.bots.base import BaseBot
 
-_PKG = __name__  # "kai.bots"
+_PKG = __name__
 
 
 def list_bots() -> list[str]:

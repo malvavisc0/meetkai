@@ -18,9 +18,9 @@ class MessageContext(BaseModel, frozen=True):
 
     sender_name: str
     sender_id: str = ""
-    conversation_id: str = ""  # history bucket key (was chat_id)
-    multi_party: bool = False  # was is_group — multi-participant conversation
-    addressed_to_bot: bool = False  # collapsed from mentions_bot + replies_to_bot
+    conversation_id: str = ""  # conversation identifier
+    multi_party: bool = False  # multi-participant conversation
+    addressed_to_bot: bool = False  # whether the message directly addresses the bot
 
 
 class ChatContext(BaseModel):

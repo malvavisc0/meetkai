@@ -119,7 +119,7 @@ class Crawl4aiClient:
         headers: dict[str, str] = {"Authorization": f"Bearer {self.settings.crawl4ai_token}"}
         self._client = httpx.AsyncClient(
             base_url=self.base_url,
-            timeout=60.0,  # headless Chromium render is ~2-5s per page; allow slack for slow sites
+            timeout=60.0,  # pages take ~2-5s to render; allow slack for slow sites
             headers=headers,
         )
 
@@ -142,7 +142,7 @@ class Crawl4aiClient:
         data = resp.json()
         # /md returns {"markdown": "<string>", "success": true, ...}
         md = data.get("markdown", "")
-        if isinstance(md, dict):  # defensive — /md is documented as string
+        if isinstance(md, dict):  # /md should return a string, but handle unexpected dict
             md = md.get("raw_markdown", "") or ""
         return md if isinstance(md, str) else ""
 
