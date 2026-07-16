@@ -56,7 +56,7 @@ BOT_TYPES: dict[str, BotType] = {
         # Fix 05, `smtp` in Fix 06. Declaring them here makes the catalog
         # the single source of truth so the settings form can offer the
         # toggle (disabled until the connection exists).
-        supported_connections=["database", "smtp"],
+        supported_connections=["database", "smtp", "calcom"],
         icon="message-circle",
         supports_sleep=True,
     ),
@@ -75,7 +75,7 @@ BOT_TYPES: dict[str, BotType] = {
             "doesn't have the answer, say so instead of guessing."
         ),
         required_connections=["resend", "smtp"],
-        supported_connections=["database"],
+        supported_connections=["database", "calcom"],
         icon="mail",
     ),
 }
@@ -149,6 +149,22 @@ CREDENTIAL_TYPES: dict[str, CredentialType] = {
             CredentialField("use_tls", "Use TLS", "bool", required=False),
         ],
         secret_fields=["password"],
+        testable=True,
+    ),
+    "calcom": CredentialType(
+        service="calcom",
+        label="Cal.com",
+        fields=[
+            CredentialField("api_key", "API key", "secret", required=True),
+            CredentialField(
+                "base_url",
+                "API base URL",
+                "text",
+                required=False,
+                help="Defaults to https://api.cal.com/v2 — override for a self-hosted instance.",
+            ),
+        ],
+        secret_fields=["api_key"],
         testable=True,
     ),
 }

@@ -126,6 +126,7 @@ def create_app() -> FastAPI:
     from kai.cockpit.routes import (
         auth,
         brain,
+        calcom_connections,
         chat,
         connections,
         console,
@@ -145,6 +146,7 @@ def create_app() -> FastAPI:
     app.include_router(connections.router)
     app.include_router(database_connections.router)
     app.include_router(email_connections.router)
+    app.include_router(calcom_connections.router)
     app.include_router(brain.router)
     app.include_router(chat.router)
     app.include_router(health.router)

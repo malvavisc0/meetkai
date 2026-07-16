@@ -418,6 +418,23 @@ def _start(
             except Exception:
                 logger.exception("failed to register send_email tool; continuing without it")
 
+        from kai.agent.tools.calcom import get_calcom_settings
+
+        calcom_settings = get_calcom_settings()
+        if calcom_settings.calcom_enabled:
+            try:
+                from kai.agent.tools.calcom import register_calcom_tool
+
+                register_calcom_tool(
+                    agent,
+                    api_key=calcom_settings.api_key,
+                    base_url=calcom_settings.base_url,
+                    instruction=calcom_settings.instruction,
+                )
+                logger.info("calcom tools registered")
+            except Exception:
+                logger.exception("failed to register calcom tools; continuing without it")
+
         # Register a run_id so `kai tell` can target this instance.
         # Bots that opt out of tell return None from tell_endpoint().
         endpoint = bot.tell_endpoint()

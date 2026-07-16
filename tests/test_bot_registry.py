@@ -36,7 +36,7 @@ class TestEmailBotType:
 
     def test_supported_connections(self):
         bt = BOT_TYPES["email"]
-        assert bt.supported_connections == ["database"]
+        assert bt.supported_connections == ["database", "calcom"]
 
     def test_feature_flags(self):
         bt = BOT_TYPES["email"]

@@ -27,6 +27,7 @@ from kai.cockpit.models import User
 from kai.cockpit.routes.deployments._shared import (
     ALL_VOICES,
     SETTINGS_TEMPLATES,
+    TOOLS_WITH_INSTRUCTION,
     build_tools_update,
     get_deployment,
 )
@@ -211,6 +212,7 @@ async def deployment_settings_page(
             "has_brain": brain is not None,
             "supported_tools": supported_tools,
             "tools_state": tools_state,
+            "tools_with_instruction": TOOLS_WITH_INSTRUCTION,
             "flash": flash,
             "default_display_name": DEFAULT_DISPLAY_NAME,
         },

@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="page stack">
+  <header class="page-header page-header--split">
+    <div class="page-header__copy">
+      <p class="page-eyebrow">Tool setup</p>
+      <h1 class="page-title">Cal.com connection</h1>
+      <p class="page-subtitle">Let agents list event types, find open slots, and book or cancel appointments on your Cal.com calendar.</p>
+    </div>
+    <div class="page-header__action">
+      <a href="/connections" class="button button--ghost">Back</a>
+    </div>
+  </header>
+
+  <form method="post" action="/connections/calcom" class="card">
+    <div class="field">
+      <label class="field__label" for="api_key">API key</label>
+      {% if has_key %}
+        <input id="api_key" type="password" name="api_key" value="" placeholder="••••••••">
+        <p class="field__help">Already set. Leave blank to keep the current value. A Cal.com API key, prefixed with <span class="mono">cal_</span> — create one at Cal.com → Settings → API.</p>
+      {% else %}
+        <input id="api_key" type="text" name="api_key" value="" placeholder="cal_live_..." required>
+        <p class="field__help">A Cal.com API key, prefixed with <span class="mono">cal_</span> — create one at Cal.com → Settings → API.</p>
+      {% endif %}
+    </div>
+    <div class="field">
+      <label class="field__label" for="base_url">API base URL</label>
+      <input id="base_url" type="text" name="base_url" value="{{ conn.config.get('base_url', '') if conn else '' }}" placeholder="https://api.cal.com/v2">
+      <p class="field__help">Optional. Defaults to <span class="mono">https://api.cal.com/v2</span>. Override only for a self-hosted Cal.com instance.</p>
+    </div>
+    <div class="cluster">
+      <button type="submit" class="button button--primary"><span class="icon">{% include "icons/check.svg" %}</span> Save connection</button>
+      <button type="submit" formaction="/connections/calcom/test" class="button">Test connection</button>
+    </div>
+  </form>
+
+  {% if conn %}
+  <div class="card card--danger mt-2xl">
+    <h3 class="card__title text-danger">Danger zone</h3>
+    <p><strong>Delete Cal.com connection</strong></p>
+    <p class="muted">Removes the connection. Agents with Cal.com access enabled will lose it on their next start.</p>
+    <form method="post" action="/connections/calcom/delete" data-confirm="Delete the Cal.com connection?">
+      <button type="submit" class="button button--danger"><span class="icon">{% include "icons/trash-2.svg" %}</span> Delete connection</button>
+    </form>
+  </div>
+  {% endif %}
+</div>
+{% endblock %}

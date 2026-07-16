@@ -85,13 +85,22 @@ class TestCatalogData:
         assert BOT_TYPES["waha"].required_connections == ["whatsapp"]
 
     def test_waha_supported_connections(self):
-        assert BOT_TYPES["waha"].supported_connections == ["database", "smtp"]
+        assert BOT_TYPES["waha"].supported_connections == ["database", "smtp", "calcom"]
+
+    def test_email_supported_connections(self):
+        assert BOT_TYPES["email"].supported_connections == ["database", "calcom"]
 
     def test_database_secret_fields(self):
         assert CREDENTIAL_TYPES["database"].secret_fields == ["url"]
 
     def test_smtp_secret_fields(self):
         assert CREDENTIAL_TYPES["smtp"].secret_fields == ["password"]
+
+    def test_calcom_secret_fields(self):
+        assert CREDENTIAL_TYPES["calcom"].secret_fields == ["api_key"]
+
+    def test_calcom_testable(self):
+        assert CREDENTIAL_TYPES["calcom"].testable is True
 
     def test_database_testable(self):
         assert CREDENTIAL_TYPES["database"].testable is True

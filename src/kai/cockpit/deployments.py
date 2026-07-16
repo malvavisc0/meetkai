@@ -146,6 +146,11 @@ SERVICE_ENV_VARS: dict[str, dict] = {
         "instruction": "KAI_SMTP_TOOL_INSTRUCTION",
         "bool_fields": {"use_tls"},
     },
+    "calcom": {
+        "fields": {"api_key": "KAI_CALCOM_API_KEY", "base_url": "KAI_CALCOM_BASE_URL"},
+        "instruction": "KAI_CALCOM_INSTRUCTION",
+        "bool_fields": set(),
+    },
 }
 
 

@@ -16,7 +16,7 @@
       <p class="field__help">Connect {{ tool_label }} on the Connections page to enable.</p>
       {% endif %}
     </div>
-    {% if svc in ("database", "smtp") %}
+    {% if svc in tools_with_instruction %}
     <div class="field">
       <label class="field__label" for="tool_{{ svc }}_instruction">When to use {{ tool_label | lower }}</label>
       <textarea id="tool_{{ svc }}_instruction" name="tool_{{ svc }}_instruction" rows="4"

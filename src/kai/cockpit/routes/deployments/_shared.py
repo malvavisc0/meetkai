@@ -38,7 +38,7 @@ WIZARD_TEMPLATES: dict[str, str] = {
 }
 
 # Services that carry an instruction textarea alongside the toggle.
-TOOLS_WITH_INSTRUCTION = frozenset({"database", "smtp"})
+TOOLS_WITH_INSTRUCTION = frozenset({"database", "smtp", "calcom"})
 
 _HOME_REDIRECT = RedirectResponse("/console", status_code=302)
 

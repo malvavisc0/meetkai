@@ -100,6 +100,22 @@
     </div>
   </div>
 
+  {# --- Cal.com connection --- #}
+  <div class="card">
+    <div class="cluster cluster--between">
+      <h3 class="card__title">Cal.com</h3>
+      {% if has_calcom %}
+        <span class="badge badge--live">Connected</span>
+      {% else %}
+        <span class="badge badge--warn">Not connected</span>
+      {% endif %}
+    </div>
+    <p class="field__help">Let agents list event types, find open slots, and book or cancel appointments on your calendar.</p>
+    <div class="cluster">
+      <a href="/connections/calcom" class="button"><span class="icon">{% include "icons/plus.svg" %}</span> Setup</a>
+    </div>
+  </div>
+
   {# --- Email Inbox (Resend) connection --- #}
   <div class="card">
     <div class="cluster cluster--between">

@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 
 from kai.cockpit.app import templates
 from kai.cockpit.auth import require_user
+from kai.cockpit.calcom_connections import CalcomConnectionsService
 from kai.cockpit.connections import ConnectionsService
 from kai.cockpit.database_connections import DatabaseConnectionsService
 from kai.cockpit.db import get_db
@@ -37,6 +38,8 @@ async def connections_page(
     has_database = bool(db_conn and db_conn.config.get("url"))
     smtp_conn = SmtpConnectionsService(db).get(user)
     has_smtp = bool(smtp_conn and smtp_conn.config.get("password"))
+    calcom_conn = CalcomConnectionsService(db).get(user)
+    has_calcom = bool(calcom_conn and calcom_conn.config.get("api_key"))
     email_conn = EmailConnectionsService(db).get(user)
     has_resend = bool(
         email_conn and email_conn.config.get("signing_secret") and email_conn.config.get("api_key")
@@ -52,6 +55,7 @@ async def connections_page(
             "qr_url": qr_url,
             "has_database": has_database,
             "has_smtp": has_smtp,
+            "has_calcom": has_calcom,
             "has_resend": has_resend,
             "flash": flash,
         },
