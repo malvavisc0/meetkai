@@ -207,6 +207,8 @@ class Bot(BaseBot):
         self.setup_task_scheduler(agent, settings)
         register_chat_history_tool(agent, bot=self)
         register_conversation_tools(agent, tool_context=self._tool_context)
+        # Wire escalation and blacklist tools' module-level state to this bot.
+        self._wire_escalation_tools(settings, self._config.blacklist)
         self._seen_store = SeenStore(self._seen_store_path(settings), max_size=_SEEN_IDS_MAX)
         self._sleep_store = SleepStore(self._sleep_store_path(settings))
         if self._config.media.stt_enabled:

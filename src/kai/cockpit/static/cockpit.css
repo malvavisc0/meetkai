@@ -401,6 +401,26 @@
     color: inherit;
   }
 
+  .topbar__escalations--active .icon {
+    color: var(--danger, #ef4444);
+  }
+
+  .topbar__badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 1.1rem;
+    height: 1.1rem;
+    padding: 0 0.3rem;
+    margin-left: 0.15rem;
+    border-radius: 999px;
+    background: var(--danger, #ef4444);
+    color: #fff;
+    font-size: var(--text-2xs, 0.625rem);
+    font-weight: 700;
+    line-height: 1;
+  }
+
   .topbar__user {
     margin-left: auto;
     display: flex;

@@ -149,6 +149,8 @@ class Bot(BaseBot):
         # here lets an empty conversation_id fall back to the current sender,
         # matching the waha bot's wiring (register_chat_history_tool/etc.).
         register_conversation_tools(agent, tool_context=self._tool_context)
+        # Wire escalation and blacklist tools' module-level state to this bot.
+        self._wire_escalation_tools(settings, self._config.blacklist)
         # SMTP settings for the reply path (KAI_SMTP_TOOL_* env, injected by
         # the cockpit's required-credential env-injection loop added in 01).
         self._smtp = get_smtp_settings()

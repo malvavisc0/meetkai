@@ -8,6 +8,7 @@ from typing import Any
 from llama_index.core.tools import FunctionTool
 
 from kai.agent.tools.calculator import calculate
+from kai.agent.tools.escalate import blacklist_contact, escalate
 from kai.agent.tools.time import get_current_datetime, get_weather
 from kai.agent.tools.web import _get_webpage_content, _web_search
 
@@ -75,6 +76,22 @@ def get_tools() -> list[FunctionTool]:
             "Safely evaluate a math expression (+ - * / // % **, parentheses, "
             "and functions like sqrt, abs, round, min, max). Use for any "
             "arithmetic or unit conversion.",
+        ),
+        (
+            escalate,
+            "escalate",
+            "Alert the operator that this conversation needs human attention. "
+            "The bot can reply to the user AND escalate in the same turn. "
+            "Use when the user asks for a human, the conversation involves "
+            "threats or legal issues, or you cannot answer an important question.",
+        ),
+        (
+            blacklist_contact,
+            "blacklist_contact",
+            "Add the current chat's contact to the blacklist to prevent further "
+            "messages. Use for spamming, abusive, or otherwise undesired contacts. "
+            "Only the current conversation's contact can be blacklisted — leave "
+            "contact_id empty to target the current chat.",
         ),
     ]
 

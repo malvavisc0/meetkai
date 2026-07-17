@@ -573,6 +573,14 @@ class DeploymentsService:
         ]
 
         env: dict[str, str] = {**os.environ}
+        # Cockpit URL for bot→cockpit escalation forwarding. The bot's
+        # BaseBot.on_escalation POSTs to {KAI_COCKPIT_URL}/api/escalations.
+        # Sourced from CockpitSettings.cockpit_internal_url (a loopback/
+        # in-container address bots can actually reach), NOT public_url
+        # (the browser-facing external URL bots can't resolve from inside).
+        from kai.cockpit.settings import get_cockpit_settings
+
+        env["KAI_COCKPIT_URL"] = get_cockpit_settings().cockpit_internal_url
         # WAHA-specific env shape — bespoke to the waha bot type.
         # ``conn`` is the whatsapp Connection from the required-connections
         # gate; it's None for a future non-whatsapp bot type, which would

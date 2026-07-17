@@ -11,6 +11,16 @@ from kai.agent.context import ToolContext
 from kai.agent.core import ActionResult, KaiAgent
 from kai.agent.scheduler import TaskScheduler, TaskStore, build_task_tools
 from kai.agent.tools.email import DEFAULT_DISPLAY_NAME
+from kai.agent.tools.escalate import (
+    EscalationStore,
+    forward_to_cockpit,
+    set_blacklist,
+    set_cockpit_url,
+    set_escalation_handler,
+    set_escalation_secret,
+    set_escalation_store,
+    set_tool_context,
+)
 from kai.config.settings import Settings, get_settings
 
 logger = logging.getLogger(__name__)
@@ -75,6 +85,7 @@ class BaseBot(ABC):
         self._agent: KaiAgent | None = None
         self._task_store: TaskStore | None = None
         self._task_scheduler: TaskScheduler | None = None
+        self._escalation_store: EscalationStore | None = None
         self._tool_context: ToolContext | None = ToolContext()
 
     @property
@@ -152,6 +163,46 @@ class BaseBot(ABC):
             ):
                 agent.register_tool(tool)
         logger.info("Task scheduler wired for bot %s", self.name)
+
+    def setup_escalation_store(self, settings: Settings) -> None:
+        """Create the (JSON-persisted) escalation store for this bot.
+
+        The store is created once (idempotent creation — a second call keeps
+        the existing store so escalations aren't lost). The module-level
+        ``_DYN`` state is *re-published* on every call, so a re-``configure()``
+        after another bot overwrote the global restores this bot's store as
+        the active one. (Single-bot-per-process is the production model; the
+        re-publish keeps multi-bot tests and re-configuration correct.)
+
+        Mirrors :meth:`setup_task_scheduler`'s path resolution so escalations
+        survive restarts the same way tasks do.
+        """
+        if self._escalation_store is None:
+            store_path = None
+            if settings.escalations_folder is not None:
+                folder = Path(settings.escalations_folder)
+                if not folder.is_absolute():
+                    folder = self.bot_dir / folder
+                store_path = folder / f"{self.instance_id}.escalations.json"
+                store_path.parent.mkdir(parents=True, exist_ok=True)
+            self._escalation_store = EscalationStore(store_path)
+        set_escalation_store(self._escalation_store)
+        set_cockpit_url(settings.cockpit_url)
+        set_escalation_secret(settings.cockpit_escalation_secret)
+        logger.info("Escalation store wired for bot %s", self.name)
+
+    def _wire_escalation_tools(self, settings: Settings, blacklist: list[str]) -> None:
+        """Wire the escalate/blacklist tools' module-level state to this bot.
+
+        Centralizes the ``setup_escalation_store`` + ``set_escalation_handler``
+        + ``set_blacklist`` + ``set_tool_context`` sequence both bots need, so
+        a wiring change lands in one place rather than drifting between waha
+        and email.
+        """
+        self.setup_escalation_store(settings)
+        set_escalation_handler(self.on_escalation)
+        set_blacklist(blacklist)
+        set_tool_context(self._tool_context)
 
     def set_task_context(
         self, chat_id: str, owner_id: str = "", tz_hint: str | None = None
@@ -324,3 +375,28 @@ class BaseBot(ABC):
         to apply its own bespoke preprocessing and feed the result to its agent.
         """
         raise NotImplementedError(f"{self.name} does not implement ingest_event()")
+
+    async def on_escalation(self, escalation) -> None:
+        """Called when the ``escalate`` tool fires during an agent turn.
+
+        Logs the escalation and forwards it to the cockpit's
+        ``/api/escalations`` webhook (when ``KAI_COCKPIT_URL`` is set, i.e.
+        the bot was spawned by the cockpit). The forwarding is best-effort —
+        the escalation is already persisted locally, so a cockpit that's down
+        just means the dashboard won't show it until the bot is restarted.
+
+        Override to add transport-specific reactions (e.g. a WhatsApp DM to
+        the operator for ``critical`` severity). Call ``await
+        super().on_escalation(escalation)`` first so the cockpit forwarding
+        still fires.
+
+        ``escalation`` is a :class:`~kai.agent.tools.escalate.Escalation`.
+        """
+        level = "CRITICAL" if escalation.severity == "critical" else "WARNING"
+        getattr(logger, level.lower())(
+            "ESCALATION [%s] chat=%s reason=%s",
+            escalation.severity,
+            escalation.chat_id,
+            escalation.reason,
+        )
+        await forward_to_cockpit(escalation)

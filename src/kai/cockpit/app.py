@@ -30,22 +30,36 @@ templates.env.globals["topbar_status"] = topbar_status
 templates.env.globals["contact_email"] = get_cockpit_settings().contact_email
 
 
-def format_timestamp(timestamp: str | None) -> str:
-    """Render persisted ISO timestamps in the server's local timezone for UI use."""
+def format_timestamp(timestamp: str | datetime | None) -> str:
+    """Render persisted ISO timestamps (or datetimes) in the server's local
+    timezone for UI use. Accepts a string (the cockpit DB's string columns),
+    a ``datetime`` (e.g. Pydantic model fields), or ``None``/empty.
+    """
     if not timestamp:
         return ""
-    try:
-        parsed = datetime.fromisoformat(timestamp)
-        if parsed.tzinfo is None:
-            parsed = parsed.replace(tzinfo=UTC)
-        local = parsed.astimezone()
-        timezone = local.strftime("%Z") or "local"
-        return local.strftime(f"%Y-%m-%d %H:%M:%S {timezone}")
-    except ValueError:
-        return timestamp
+    if isinstance(timestamp, datetime):
+        parsed = timestamp
+    else:
+        try:
+            parsed = datetime.fromisoformat(str(timestamp))
+        except ValueError:
+            return str(timestamp)
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=UTC)
+    local = parsed.astimezone()
+    timezone = local.strftime("%Z") or "local"
+    return local.strftime(f"%Y-%m-%d %H:%M:%S {timezone}")
 
 
 templates.env.globals["format_timestamp"] = format_timestamp
+
+# ``active_escalation_count`` reads ``_DYN.store`` lazily at render time, so
+# registering it here (before ``create_app`` sets the cockpit store) is safe.
+# The cockpit's store is created inside ``create_app`` so per-test env
+# redirection of ``KAI_ESCALATIONS_PATH`` (see cockpit conftest) is respected.
+from kai.agent.tools.escalate import active_escalation_count  # noqa: E402
+
+templates.env.globals["active_escalation_count"] = active_escalation_count
 
 _MEDIA_SERVICES: list = []  # module-level so the shutdown handler can reach it
 
@@ -123,6 +137,15 @@ def create_app() -> FastAPI:
 
     create_all()
 
+    # Cockpit's aggregated escalation store. Bots POST to /api/escalations
+    # (via forward_to_cockpit from BaseBot.on_escalation) and this store
+    # holds them so the dashboard + sidebar badge read a single source of
+    # truth. Created here (not at module import) so per-test redirection of
+    # KAI_ESCALATIONS_PATH via the cockpit conftest is respected.
+    from kai.agent.tools.escalate import EscalationStore, set_escalation_store
+
+    set_escalation_store(EscalationStore(get_cockpit_settings().escalations_path))
+
     from kai.cockpit.routes import (
         auth,
         brain,
@@ -134,6 +157,7 @@ def create_app() -> FastAPI:
         dependencies,
         deployments,
         email_connections,
+        escalations,
         health,
         smtp_connections,
         webhooks,
@@ -149,6 +173,7 @@ def create_app() -> FastAPI:
     app.include_router(calcom_connections.router)
     app.include_router(brain.router)
     app.include_router(chat.router)
+    app.include_router(escalations.router)
     app.include_router(health.router)
     app.include_router(smtp_connections.router)
     app.include_router(webhooks.router)

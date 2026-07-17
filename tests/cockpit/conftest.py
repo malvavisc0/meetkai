@@ -43,6 +43,11 @@ def _isolated_configs_dir(tmp_path, monkeypatch):
     from kai.cockpit import config_writer
 
     monkeypatch.setattr(config_writer, "CONFIGS_DIR", tmp_path / "configs" / "cockpit")
+    # Redirect the cockpit's aggregated escalation store to a tmp file so the
+    # escalation routes (which create_app() wires to KAI_ESCALATIONS_PATH)
+    # never touch the real data/ dir. Must be set before create_app() runs
+    # (the ``client`` fixture calls it).
+    monkeypatch.setenv("KAI_ESCALATIONS_PATH", str(tmp_path / "cockpit.escalations.json"))
 
 
 @pytest.fixture(autouse=True)

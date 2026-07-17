@@ -28,6 +28,12 @@
         <a href="/brain"><span class="icon">{% include "icons/brain.svg" %}</span><span class="topbar__label">brain</span></a>
         <a href="/connections"><span class="icon">{% include "icons/plug.svg" %}</span><span class="topbar__label">connections</span></a>
         <a href="/dependencies"><span class="icon">{% include "icons/package.svg" %}</span><span class="topbar__label">readiness</span></a>
+        {% set _esc_count = active_escalation_count() %}
+        <a href="/escalations" class="{{ 'topbar__escalations--active' if _esc_count else '' }}">
+          <span class="icon">{% include "icons/alert-triangle.svg" %}</span>
+          <span class="topbar__label">escalations</span>
+          {% if _esc_count %}<span class="topbar__badge">{{ _esc_count }}</span>{% endif %}
+        </a>
       </span>
       <span class="topbar__user">
         <span class="topbar__email">{{ user.email }}</span>

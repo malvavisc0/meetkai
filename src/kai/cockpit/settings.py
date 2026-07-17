@@ -14,6 +14,8 @@ sending account for the agent's ``send_email`` tool.
 
 from __future__ import annotations
 
+from pathlib import Path
+
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -33,10 +35,29 @@ class CockpitSettings(BaseSettings):
     # request — no manual ``kai cockpit request approve`` needed.
     cockpit_auto_approve_login: bool = False
 
-    # Public base URL the cockpit uses when minting magic-link emails.
-    # Empty when unset — callers decide what to do.
+    # Public base URL the cockpit uses when minting magic-link emails. This is
+    # the browser-facing external URL — NOT used for bot→cockpit comms (bots
+    # are in-container subprocesses; see cockpit_internal_url below).
     public_url: str = ""
     contact_email: str = "hello@meetk.ai"
+
+    # Internal URL bots use to POST escalations back to the cockpit
+    # (/api/escalations). Bots are subprocesses spawned in the cockpit's own
+    # container, so the default loopback address reaches the listener
+    # regardless of the bind host (0.0.0.0 accepts on 127.0.0.1). Override
+    # only for non-standard ports or a separate-bot-container topology.
+    cockpit_internal_url: str = "http://127.0.0.1:8080"
+
+    # Shared secret for the bot→cockpit escalation webhook. When set, the bot
+    # sends it as ``Authorization: Bearer <secret>`` and the cockpit's
+    # POST /api/escalations rejects requests without it. Empty (default) =
+    # no auth — the cockpit is behind a reverse proxy / private network (the
+    # same trust model as the existing read-only /api routes).
+    cockpit_escalation_secret: str = ""
+
+    # Cockpit's aggregated escalation store (bots POST to /api/escalations,
+    # which writes here). Separate from the per-bot escalations_folder.
+    escalations_path: Path = Path("data/cockpit.escalations.json")
 
     # Port range the cockpit allocates per-user WAHA webhook listeners from.
     # Purely internal to the compose network — no host port publishing needed.

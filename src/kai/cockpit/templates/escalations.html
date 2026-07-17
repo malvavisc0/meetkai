@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="page stack">
+  <header class="page-header">
+    <p class="page-eyebrow">Operator</p>
+    <h1 class="page-title">Escalations</h1>
+    <p class="page-subtitle">Conversations flagged by agents for human attention.</p>
+  </header>
+
+  {% if active %}
+    <span class="badge badge--danger">{{ active|length }} active escalation{{ '' if active|length == 1 else 's' }}</span>
+  {% else %}
+    <span class="badge badge--live">No active escalations</span>
+  {% endif %}
+
+  <div class="card stack">
+    <p class="card__eyebrow">Active</p>
+    {% if active %}
+      {% for esc in active %}
+      <div class="health-grid__row">
+        <span class="badge badge--{{ 'danger' if esc.severity in ('high', 'critical') else 'live' }}">{{ esc.severity }}</span>
+        <span>{{ esc.reason }}</span>
+        <span class="field__help">chat: {{ esc.chat_id or '—' }} · {{ format_timestamp(esc.created_at) }}</span>
+        <form method="post" action="/escalations/{{ esc.id }}/resolve">
+          <button type="submit" class="btn btn--small">Resolve</button>
+        </form>
+      </div>
+      {% endfor %}
+    {% else %}
+      <p class="field__help">Nothing needs attention right now.</p>
+    {% endif %}
+  </div>
+
+  <div class="card stack">
+    <p class="card__eyebrow">History</p>
+    {% if resolved %}
+      {% for esc in resolved %}
+      <div class="health-grid__row">
+        <span class="badge">{{ esc.severity }}</span>
+        <span>{{ esc.reason }}</span>
+        <span class="field__help">chat: {{ esc.chat_id or '—' }} · resolved {{ format_timestamp(esc.resolved_at) }}{% if esc.resolved_by %} by {{ esc.resolved_by }}{% endif %}</span>
+      </div>
+      {% endfor %}
+    {% else %}
+      <p class="field__help">No resolved escalations yet.</p>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}
