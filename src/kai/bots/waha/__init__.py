@@ -764,7 +764,7 @@ class Bot(BaseBot):
             enriched_text = self._enrich_message_text(msg, text)
 
             # Voice/audio notes are transcribed on EVERY message — not just turns
-            # where Kai replies — so the spoken content is captured into
+            # where kAI replies — so the spoken content is captured into
             # conversation history regardless of whether the bot responds. A
             # background voice note with an empty body would otherwise be
             # observed as nothing, losing what was said. Only run when STT
@@ -1455,7 +1455,7 @@ class Bot(BaseBot):
                     sent_ok = False
                 else:
                     # Record the assistant turn in the target chat's history
-                    # so the chat sees "Kai: <what it sent>".
+                    # so the chat sees "kAI: <what it sent>".
                     if self._agent is not None:
                         await self._agent.record_assistant_message(target, out_text)
                 snippet = out_text if len(out_text) <= 60 else out_text[:57] + "..."
@@ -1559,10 +1559,10 @@ class Bot(BaseBot):
         bot = self
 
         async def set_goal(goal: str) -> str:
-            """Set a persistent goal that shapes all of Kai's future replies.
+            """Set a persistent goal that shapes all of kAI's future replies.
 
             Only available when the operator passed ``--persist``. Phrase the
-            goal as a directive Kai should follow going forward (it is injected
+            goal as a directive kAI should follow going forward (it is injected
             into the system prompt on every turn).
             """
             goal = (goal or "").strip()

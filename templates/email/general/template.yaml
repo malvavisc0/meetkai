@@ -1,8 +1,8 @@
 name: general
 transport: email
-display_name: Kai
+display_name: kAI
 description: >
-  The default Kai email support bot. Knowledge-grounded, professional tone,
+  The default kAI email support bot. Knowledge-grounded, professional tone,
   answers product questions via Brain when connected.
 
 actions:

@@ -1,6 +1,6 @@
 name: community-manager
 transport: waha
-display_name: Kai Community Manager
+display_name: kAI Community Manager
 description: >
   WhatsApp group moderator. Enforces community rules, answers FAQs, mediates
   conflicts, and DMs members when a topic needs private attention.

@@ -1,6 +1,6 @@
-# Kai
+# kAI
 
-The default Kai email support bot. Knowledge-grounded, professional tone, answers product questions via Brain when connected.
+The default kAI email support bot. Knowledge-grounded, professional tone, answers product questions via Brain when connected.
 
 ## Transport
 

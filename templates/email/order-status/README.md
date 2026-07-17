@@ -1,4 +1,4 @@
-# Kai Orders
+# kAI Orders
 
 Answers order-status emails by querying the order database. Returns tracking info, handles simple return requests, and escalates anything outside its scope.
 

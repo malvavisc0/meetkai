@@ -1,4 +1,4 @@
-# Kai — Email Appointment Manager
+# kAI — Email Appointment Manager
 
 **Display name:** {{display_name}}  
 **Language:** {{language}}

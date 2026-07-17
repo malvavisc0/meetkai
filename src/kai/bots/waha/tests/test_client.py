@@ -290,7 +290,7 @@ class TestGetChatsOverview:
             return_value=Response(
                 200,
                 json=[
-                    {"id": "120363@g.us", "name": "Kai Group", "picture": None},
+                    {"id": "120363@g.us", "name": "kAI Group", "picture": None},
                     {"id": "591123@c.us", "name": "Maria", "picture": None},
                 ],
             )

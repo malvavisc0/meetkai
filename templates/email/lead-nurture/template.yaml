@@ -1,6 +1,6 @@
 name: lead-nurture
 transport: email
-display_name: Kai Lead Nurture
+display_name: kAI Lead Nurture
 description: >
   Email drip campaign assistant. Sends personalized follow-ups based on lead
   stage, nurtures warm leads, and re-engages cold ones — all via email.

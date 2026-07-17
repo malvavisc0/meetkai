@@ -124,14 +124,14 @@ class TestTemplatePreview:
         resp = client.get("/deployments/new/preview?bot_type=waha&template=general")
         assert resp.status_code == 200
         # Should contain the template's display_name
-        assert b"Kai" in resp.content
+        assert b"kAI" in resp.content
 
     def test_preview_shows_display_name(self, client, db):
         user = _create_user(db)
         _login(client, db, user)
         resp = client.get("/deployments/new/preview?bot_type=waha&template=customer-support")
         assert resp.status_code == 200
-        assert b"Kai Support" in resp.content
+        assert b"kAI Support" in resp.content
 
     def test_preview_unknown_template_404(self, client, db):
         user = _create_user(db)

@@ -702,7 +702,7 @@ class KaiAgent:
 
         Used by side-effecting tools — e.g. an operator ``send_message`` tool
         that posts to a *different* chat than the one the turn is running in —
-        so the target chat sees "Kai: <what it sent>" and retains continuity,
+        so the target chat sees "kAI: <what it sent>" and retains continuity,
         without a synthetic user turn polluting it.
         """
         if not text or not text.strip():

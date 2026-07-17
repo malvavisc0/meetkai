@@ -86,7 +86,7 @@ class TestChatsJson:
         _mock_waha(
             monkeypatch,
             overview=[
-                {"id": "120363@g.us", "name": "Kai Group", "picture": None},
+                {"id": "120363@g.us", "name": "kAI Group", "picture": None},
                 {"id": "591123@c.us", "name": "Maria", "picture": None},
                 {"id": "555@lid", "name": None, "picture": None},
             ],
@@ -96,7 +96,7 @@ class TestChatsJson:
         body = r.json()
         assert body["has_more"] is False
         assert len(body["chats"]) == 3
-        assert body["chats"][0] == {"id": "120363@g.us", "name": "Kai Group", "avatar_initial": "K"}
+        assert body["chats"][0] == {"id": "120363@g.us", "name": "kAI Group", "avatar_initial": "K"}
         assert body["chats"][1] == {"id": "591123@c.us", "name": "Maria", "avatar_initial": "M"}
         # No name -> falls back to id's first char.
         assert body["chats"][2]["avatar_initial"] == "5"

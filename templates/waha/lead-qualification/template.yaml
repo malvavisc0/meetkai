@@ -1,6 +1,6 @@
 name: lead-qualification
 transport: waha
-display_name: Kai Leads
+display_name: kAI Leads
 description: >
   Qualifies inbound WhatsApp leads. Asks discovery questions one at a time
   (BANT), schedules follow-ups for warm leads via the task scheduler, and

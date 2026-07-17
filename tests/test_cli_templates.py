@@ -48,13 +48,13 @@ class TestTemplatesShow:
     def test_show_waha_general(self):
         result = runner.invoke(app, ["templates", "show", "waha/general"])
         assert result.exit_code == 0
-        assert "Kai" in result.stdout
+        assert "kAI" in result.stdout
         assert "actions" in result.stdout
 
     def test_show_email_general(self):
         result = runner.invoke(app, ["templates", "show", "email/general"])
         assert result.exit_code == 0
-        assert "Kai" in result.stdout
+        assert "kAI" in result.stdout
 
     def test_show_missing_exits_nonzero(self):
         result = runner.invoke(app, ["templates", "show", "waha/nonexistent"])

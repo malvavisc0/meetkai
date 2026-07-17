@@ -1,4 +1,4 @@
-# Kai — Email Order Status
+# kAI — Email Order Status
 
 **Display name:** {{display_name}}  
 **Language:** {{language}}

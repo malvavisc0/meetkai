@@ -94,7 +94,7 @@ def register_chat_history_tool(
             if not body:
                 continue
             if bool(m.get("fromMe")):
-                name = "Kai"
+                name = "kAI"
             else:
                 sender_id = _extract_sender_id(m)
                 name = roster.get(sender_id)

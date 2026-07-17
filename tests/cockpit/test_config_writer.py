@@ -109,7 +109,7 @@ class TestEmailVisionFlag:
         dep = _make_deployment(
             bot_type="email",
             feature_flags={"image": True},
-            settings={"blacklist": [], "display_name": "Kai"},
+            settings={"blacklist": [], "display_name": "kAI"},
         )
         path = config_writer.write_config(dep, "email-bob@test.com")
         data = json.loads(path.read_text())
@@ -119,7 +119,7 @@ class TestEmailVisionFlag:
         dep = _make_deployment(
             bot_type="email",
             feature_flags={"image": False},
-            settings={"blacklist": [], "display_name": "Kai"},
+            settings={"blacklist": [], "display_name": "kAI"},
         )
         path = config_writer.write_config(dep, "email-bob@test.com")
         data = json.loads(path.read_text())

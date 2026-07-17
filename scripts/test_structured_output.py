@@ -104,7 +104,7 @@ def _select_tools(agent: KaiAgent, names: list[str]) -> list[FunctionTool]:
 async def main() -> int:
     agent = KaiAgent(namespace="structured_output_test")
     agent.set_system_prompt(
-        "You are Kai, a WhatsApp assistant. Follow the operator's "
+        "You are kAI, a WhatsApp assistant. Follow the operator's "
         "instructions precisely and express every decision through the "
         "structured action object. Action values (reply, send_voice_note, "
         "silent, sleep, send_dm, send_to_group, console) are NOT tools — "

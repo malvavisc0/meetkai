@@ -1,6 +1,6 @@
 # waha
 
-The `waha` bot connects the Kai agent runtime to a WhatsApp session through
+The `waha` bot connects the kAI agent runtime to a WhatsApp session through
 [WAHA](https://github.com/devlikeapro/waha) webhooks. It receives inbound
 messages, routes them to the LLM-backed agent, and sends replies through
 WAHA's `/api/sendText`.
@@ -24,7 +24,7 @@ src/kai/bots/waha/
 ├── mentions.py     # @[Name] → WhatsApp mention resolution
 ├── payload.py      # inbound message parsing
 ├── processing.py   # reply post-processing, organic participation logic
-├── prompt.md       # Kai persona / system prompt
+├── prompt.md       # kAI persona / system prompt
 ├── seen_store.py   # webhook idempotency (seen message IDs)
 ├── setup.py        # BotConfig / MediaConfig / ParticipationConfig
 ├── sleep_store.py  # per-chat sleep state
@@ -44,15 +44,15 @@ Start WAHA. For local development:
 docker run -d -p 3000:3000 devlikeapro/waha
 ```
 
-Create and pair a WAHA session in the WAHA dashboard. The default Kai session
-name is `default`. Kai expects the session to already exist and be `WORKING`;
+Create and pair a WAHA session in the WAHA dashboard. The default kAI session
+name is `default`. kAI expects the session to already exist and be `WORKING`;
 it only registers the session webhook on startup.
 
 Running WAHA via `docker-compose.yml`? Pin a recent release — older wwebjs
 builds crashed `GET /api/{session}/chats` with HTTP 500 and dropped inbound
 group messages whose sender resolves to an opaque `@lid` (the `_serialized`
 id was undefined). Both were fixed upstream in WAHA `2026.7.1`, so the
-read-only patch mounts that Kai used to carry are no longer needed.
+read-only patch mounts that kAI used to carry are no longer needed.
 
 ## Environment
 
@@ -82,14 +82,14 @@ bind. Generate one with:
 openssl rand -hex 32
 ```
 
-When HMAC is set, Kai verifies the `X-Webhook-Hmac` header against the raw body
+When HMAC is set, kAI verifies the `X-Webhook-Hmac` header against the raw body
 using the configured algorithm (`sha256` or `sha512`, default `sha512`), and
 registers the same algorithm with WAHA. Starting without an HMAC key on a
 non-loopback bind emits a prominent warning.
 
 ## Text-to-Speech (Kokoro)
 
-Kai can reply with voice notes using [Kokoro-82M](https://huggingface.co/hexgrad/Kokoro-82M)
+kAI can reply with voice notes using [Kokoro-82M](https://huggingface.co/hexgrad/Kokoro-82M)
 via [`kokoro-onnx`](https://github.com/thewh1teagle/kokoro-onnx). The model runs
 on ONNX Runtime (no PyTorch) in an isolated venv — it does not touch the
 project's own dependencies.
@@ -129,20 +129,20 @@ for the full list. Common pairs:
 | Italian | `if_sara`, `im_nicola` | `it` |
 | Portuguese (BR) | `pf_dora`, `pm_alex` | `pt-br` |
 
-At startup, Kai checks that the venv, model, and voices are present and that
+At startup, kAI checks that the venv, model, and voices are present and that
 `kokoro_onnx` imports cleanly. If anything is missing, TTS is disabled with a
 warning — the bot still runs, replying with text only.
 
 ### Per-Reply Language Detection
 
-Kai matches the incoming message's language per turn (see the persona's
+kAI matches the incoming message's language per turn (see the persona's
 Language rule), so a single chat can move between languages over time. Voice
 notes detect the reply's own language independently of the deployment's
 static `language` setting, so the voice matches whatever language *that*
 reply is actually written in, not just the bot's configured default.
 
 For a reply with no detectable signal (too short/ambiguous for script or
-stopword matching — an ack like "OK!" or "Listo."), Kai falls back to the
+stopword matching — an ack like "OK!" or "Listo."), kAI falls back to the
 same chat's own last confidently-detected voice language rather than the
 deployment's static default: a short ack in an otherwise-Spanish chat stays
 Spanish instead of reverting to English just because that one reply had no
@@ -185,7 +185,7 @@ aren't overwritten on updates.
 
 | Field | Description |
 |-------|-------------|
-| `trigger_keyword` | Word that summons Kai in groups (default `kai`). Empty = respond to all group messages. |
+| `trigger_keyword` | Word that summons kAI in groups (default `kai`). Empty = respond to all group messages. |
 | `whitelist` / `blacklist` | Chat IDs and group authors to allow/block. `blacklist` wins. |
 | `language` | Default reply language; overridable per-start with `--language`. |
 | `timezone` | IANA timezone (e.g. `America/Santo_Domingo`) the bot tells the model for "current time". Defaults to the server's local timezone (often UTC in containers). |
@@ -197,20 +197,20 @@ Supported WhatsApp identifiers include `@c.us`, `@g.us`, and `@lid`.
 
 ### Prompt
 
-`prompt.md` is the Kai persona, loaded with `{{language}}` substituted from
+`prompt.md` is the kAI persona, loaded with `{{language}}` substituted from
 config. Every turn returns a structured `WahaAction` (see `actions.py`), not
-free text — Kai's decision is the typed `action` field
+free text — kAI's decision is the typed `action` field
 (`reply`/`silent`/`sleep`/`send_dm`/`send_to_group`/`send_voice_note`/
 `console`), not a string token embedded in the reply. Which values are even
 offered to the model depends on the turn: a DM or a hard direct address never
-offers `silent` at all (see `action_cls_for_turn`), so Kai structurally cannot
+offers `silent` at all (see `action_cls_for_turn`), so kAI structurally cannot
 ghost someone who addressed him directly — he can still decide the content is
 "nothing to add" and send a short acknowledgment, but the schema itself
 removes the silent option.
 
-## When Kai Speaks
+## When kAI Speaks
 
-Kai is a participant, not a spectator.
+kAI is a participant, not a spectator.
 
 **Always replies:**
 
@@ -222,7 +222,7 @@ Kai is a participant, not a spectator.
 - He was just woken from sleep.
 - Safety-critical messages (crisis, self-harm, danger) — always.
 
-**May chime in (organic participation):** in groups, Kai may offer himself a
+**May chime in (organic participation):** in groups, kAI may offer himself a
 chance to speak on messages not aimed at him. This is probabilistic with
 guards so he never dominates a chat. See the `participation` config above.
 
@@ -238,36 +238,36 @@ to the model with a chance to chime in. The model may still decline via the
 
 - `rate` — probability a given message is offered (default `0.15`), raised by
   ~0.2 when the message contains a question mark.
-- `cooldown_seconds` — minimum gap between Kai's replies in a chat (default
+- `cooldown_seconds` — minimum gap between kAI's replies in a chat (default
   `90`). Messages arriving inside the cooldown are observed but never offered.
-- `streak_max` — max consecutive organic replies before Kai forces a pause
+- `streak_max` — max consecutive organic replies before kAI forces a pause
   (default `2`). The streak decays as the chat moves on without him.
 
-**Active exchange:** when Kai's last turn in a chat was a reply (the reply
+**Active exchange:** when kAI's last turn in a chat was a reply (the reply
 streak is still active), a quick human follow-up is treated as a genuine
-continuation rather than Kai dominating. In that state the cooldown is relaxed
+continuation rather than kAI dominating. In that state the cooldown is relaxed
 to ~30% of its configured value and the offer rate gets an extra boost, so
 back-and-forth isn't silenced mid-conversation. The `streak_max` cap still
-applies, so Kai can't machine-gun a fast chat.
+applies, so kAI can't machine-gun a fast chat.
 
 Set `rate: 0` (or `enabled: false`) to disable organic participation and keep
 summon-only behavior.
 
 ## Sleep and Wake
 
-Kai can be told to go quiet per chat. Both commands require his trigger
+kAI can be told to go quiet per chat. Both commands require his trigger
 keyword (his name) so casual phrases like "goodnight everyone" or "I couldn't
 sleep" never silence him.
 
 - **Sleep:** `kai go to sleep`, `goodnight kai`, `kai shush`, `kai be quiet`,
   `kai quiet down`, `kai stop talking` → the model returns the `sleep` action,
-  Kai stops speaking in that chat entirely (even if @-tagged) and sends a
+  kAI stops speaking in that chat entirely (even if @-tagged) and sends a
   brief acknowledgment (`text`, or a default ack if omitted). Messages are
   still observed so he has context when woken.
 - **Wake:** `wake up kai`, `kai wake up`, `kai rise and shine` → a direct
   address while asleep gives the model one chance to decide whether this is a
   genuine wake-up (any reply-shaped action wakes the chat; `silent`/`sleep`/
-  `console` keeps it asleep). A just-woken Kai always gets offered a real
+  `console` keeps it asleep). A just-woken kAI always gets offered a real
   reply action (never silence) on that same turn.
 - The cockpit's `/sleep` and `/wake` routes (`on_sleep`/`on_wake` on the
   webhook) let an operator force either state directly, independent of chat
@@ -275,11 +275,11 @@ sleep" never silence him.
 
 ## Mentions
 
-In group chats, Kai keeps a roster of participants seen since startup. If the
-model replies with `@[Name]`, Kai resolves the name to a known participant and
+In group chats, kAI keeps a roster of participants seen since startup. If the
+model replies with `@[Name]`, kAI resolves the name to a known participant and
 sends a WhatsApp mention payload.
 
-- On every inbound group message (rate-limited per chat) Kai fetches the full
+- On every inbound group message (rate-limited per chat) kAI fetches the full
   participant list from WAHA. This canonicalizes roster entries to the `@c.us`
   phone form (so mentions *send* a valid JID even when a member surfaces as an
   opaque `@lid`), records admins/superadmins for the per-chat prompt, and prunes
@@ -312,12 +312,12 @@ Control media behavior via the `media` section of your config (see above).
 ## Operator Console
 
 The bot exposes a `/tell` HTTP route (see the root README's "Operating A
-Running Bot"). Kai expresses delivery through the same structured
+Running Bot"). kAI expresses delivery through the same structured
 `WahaAction` used for inbound turns:
 
-- To answer the operator only, Kai returns `console` with `text` — this goes
+- To answer the operator only, kAI returns `console` with `text` — this goes
   to the operator's console, never to WhatsApp.
-- To deliver a message, Kai returns `send_dm` or `send_to_group` with both
+- To deliver a message, kAI returns `send_dm` or `send_to_group` with both
   `target` (the exact chat JID from the instruction) and `text` filled in.
   There is no separate "send" tool and no `to` field on the request — the
   target always comes from what the agent read in the operator's own words.

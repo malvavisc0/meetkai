@@ -1,8 +1,8 @@
 name: general
 transport: waha
-display_name: Kai
+display_name: kAI
 description: >
-  The default Kai WhatsApp persona. Casual friend vibe with full media
+  The default kAI WhatsApp persona. Casual friend vibe with full media
   support, organic group participation, and TTS voice notes.
 
 actions:

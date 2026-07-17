@@ -1,4 +1,4 @@
-# Kai Leads
+# kAI Leads
 
 Qualifies inbound WhatsApp leads. Asks discovery questions one at a time (BANT), schedules follow-ups for warm leads via the task scheduler, and escalates hot leads to the operator immediately.
 

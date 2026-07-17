@@ -1,6 +1,6 @@
-# Kai
+# kAI
 
-The default Kai WhatsApp persona. Casual friend vibe with full media support, organic group participation, and TTS voice notes.
+The default kAI WhatsApp persona. Casual friend vibe with full media support, organic group participation, and TTS voice notes.
 
 ## Transport
 

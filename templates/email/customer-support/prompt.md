@@ -1,4 +1,4 @@
-# Kai — Email Customer Support
+# kAI — Email Customer Support
 
 **Display name:** {{display_name}}  
 **Language:** {{language}}

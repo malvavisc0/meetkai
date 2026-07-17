@@ -1,6 +1,6 @@
 name: customer-support
 transport: email
-display_name: Kai Support
+display_name: kAI Support
 description: >
   Knowledge-grounded email support agent. Professional tone, tracks
   conversation state, and escalates to a human when it cannot answer or the

@@ -1,4 +1,4 @@
-# Kai Lead Nurture
+# kAI Lead Nurture
 
 Email drip campaign assistant. Sends personalized follow-ups based on lead stage, nurtures warm leads, and re-engages cold ones — all via email.
 

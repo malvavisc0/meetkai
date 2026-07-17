@@ -1,4 +1,4 @@
-# Kai Brainstorm
+# kAI Brainstorm
 
 Creative collaborator on WhatsApp. Builds on your ideas, asks clarifying questions, and records session notes so follow-ups pick up where you left off.
 

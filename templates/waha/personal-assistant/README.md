@@ -1,4 +1,4 @@
-# Kai Assistant
+# kAI Assistant
 
 Full-featured personal assistant on WhatsApp. Schedules reminders and meetings, manages email, researches topics, and handles day-to-day tasks.
 

@@ -1,4 +1,4 @@
-# Kai Bookings
+# kAI Bookings
 
 Books, reschedules, and cancels appointments via Cal.com. Sends confirmations and handles scheduling requests over email.
 

@@ -1,6 +1,6 @@
 name: personal-assistant
 transport: waha
-display_name: Kai Assistant
+display_name: kAI Assistant
 description: >
   Full-featured personal assistant on WhatsApp. Schedules reminders and
   meetings, manages email, researches topics, and handles day-to-day tasks.

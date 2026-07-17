@@ -1,4 +1,4 @@
-# Kai Support
+# kAI Support
 
 Knowledge-grounded WhatsApp support agent. Answers from the Brain when available, stays concise, tracks conversation state, and escalates to a human operator when it cannot answer or the customer is frustrated.
 

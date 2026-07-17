@@ -89,7 +89,7 @@ field defaults (see `src/kai/bots/email/setup.py`).
     "timezone": "Europe/Berlin",
     "temperature": 0.2,
     "blacklist": ["spam@example.com"],
-    "display_name": "Kai"
+    "display_name": "kAI"
 }
 ```
 

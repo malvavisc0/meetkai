@@ -501,7 +501,7 @@ class TestGetChatHistory:
             {"id": "m0", "body": "hello", "fromMe": False, "participant": "12345678901@c.us"},
         ]
         result = await _call_tool(tool)
-        assert "[Kai] my reply" in result
+        assert "[kAI] my reply" in result
         assert "[12345678901] hello" in result
 
     @pytest.mark.asyncio

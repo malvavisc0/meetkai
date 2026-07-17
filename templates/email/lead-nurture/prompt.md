@@ -1,4 +1,4 @@
-# Kai — Email Lead Nurturing
+# kAI — Email Lead Nurturing
 
 **Display name:** {{display_name}}
 **Language:** {{language}}

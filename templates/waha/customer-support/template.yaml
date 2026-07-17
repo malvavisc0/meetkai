@@ -1,6 +1,6 @@
 name: customer-support
 transport: waha
-display_name: Kai Support
+display_name: kAI Support
 description: >
   Knowledge-grounded WhatsApp support agent. Answers from the Brain when
   available, stays concise, tracks conversation state, and escalates to a

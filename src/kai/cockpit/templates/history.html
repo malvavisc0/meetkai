@@ -20,7 +20,7 @@
           {% for m in messages %}
           <div class="msg-list__item msg-list__item--{{ m.role }}">
             <div class="msg-list__header">
-              <span class="msg-list__role">{% if m.role == "assistant" %}Kai{% else %}{{ m.role|capitalize }}{% endif %}</span>
+              <span class="msg-list__role">{% if m.role == "assistant" %}kAI{% else %}{{ m.role|capitalize }}{% endif %}</span>
               {% if m.ts %}<span class="msg-list__ts mono">{{ m.ts }}</span>{% endif %}
             </div>
             <div class="msg-list__content">{{ m.content }}</div>
