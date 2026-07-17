@@ -464,7 +464,11 @@ class Bot(BaseBot):
         return TellResult(ok=ok, actions=actions, reply=reply)
 
     async def status_snapshot(self) -> dict:
-        return {"bot": "email", "language": self._config.language}
+        return {
+            "bot": "email",
+            "language": self._config.language,
+            "capabilities": {"vision": self._config.vision},
+        }
 
     async def clear_operator_history(self) -> dict:
         if self._agent is None:

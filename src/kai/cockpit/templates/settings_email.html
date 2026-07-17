@@ -55,6 +55,22 @@
       </div>
     </div>
 
+    {# --- Capabilities --- #}
+    <div class="card">
+      <p class="card__eyebrow">Capabilities</p>
+      <h3 class="card__title">Media &amp; processing</h3>
+      <div class="checkbox-grid">
+        {% for flag, label, entitled in feature_flags %}
+          <label class="checkbox-row{% if not entitled %} checkbox-row--locked{% endif %}">
+            <input type="checkbox" name="feature_{{ flag }}" value="true"
+              {% if entitled and dep.feature_flags.get(flag, true) %}checked{% endif %}
+              {% if not entitled %}disabled{% endif %}>
+            {{ label }}
+          </label>
+        {% endfor %}
+      </div>
+    </div>
+
     {# --- Actions --- #}
     <div class="cluster">
       <button type="submit" class="button button--primary"><span class="icon">{% include "icons/check.svg" %}</span> Save changes</button>
