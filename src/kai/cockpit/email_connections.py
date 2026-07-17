@@ -1,19 +1,8 @@
 """Email Inbox (Resend) connection CRUD — one Connection(service="resend") per operator.
 
-The signing secret is encrypted at rest via ``encrypt_config`` /
-``decrypt_config`` (the ``signing_secret`` field is listed in
-``WEBHOOK_CONNECTION_TYPES["resend"].secret_fields``).
-
-``save`` with an empty ``signing_secret`` preserves the existing encrypted
-secret — the form shows ``••••••••`` when a secret is already stored, so
-the operator never re-types it on a no-op edit.
-
-``save`` probes the just-saved credentials (signing-secret base64
-validity + API key accepted by Resend's ``GET /domains``) and sets
-``status="connected"`` only when both pass — otherwise
-``status="disconnected"``. The self-loopback ``test()`` remains an
-explicit operator action for exercising the full ingress + bot path.
-"""
+The signing secret and API key are encrypted at rest. ``save`` with empty
+fields preserves existing secrets. Probes just-saved credentials and sets
+``status="connected"`` only when both sign and API are valid."""
 
 from __future__ import annotations
 
@@ -75,11 +64,8 @@ class EmailConnectionsService:
         self.db.commit()
         self.db.refresh(conn)
 
-        # Probe the just-saved credentials and reflect the result in
-        # ``status``. Transient failures (network/timeout/429) preserve the
-        # prior status; auth rejections mark the connection
-        # ``disconnected``. Passes the already-loaded ``conn`` to
-        # ``_verify_conn`` to avoid a redundant SELECT.
+        # Probe the just-saved credentials and reflect the result in ``status``.
+        # Transient failures preserve the prior status.
         ok, _, transient = self._verify_conn(conn)
         reflect_probe_status(self.db, conn, ok, transient=transient)
         return conn
@@ -103,11 +89,7 @@ class EmailConnectionsService:
         return decrypt_config("resend", conn.config).get("api_key")
 
     def verify(self, user: User) -> tuple[bool, str]:
-        """Validate the persisted Resend credentials without a running bot.
-
-        Returns ``(ok, message)``. See ``_verify_conn`` for the full
-        ``(ok, message, transient)`` return used by ``save()``.
-        """
+        """Validate the persisted Resend credentials. Returns ``(ok, message)``."""
         conn = self.get(user)
         if conn is None:
             return False, "no Resend connection configured"
@@ -115,17 +97,14 @@ class EmailConnectionsService:
         return ok, msg
 
     def _verify_conn(self, conn: Connection) -> tuple[bool, str, bool]:
-        """Validate persisted Resend credentials from an already-loaded
-        ``Connection`` row. Returns ``(ok, message, transient)``.
+        """Validate persisted Resend credentials.
 
-        Two independent checks, both must pass:
-          1. The signing secret is well-formed base64 (after stripping the
-             ``whsec_`` prefix Resend prepends).
-          2. The API key is accepted by Resend's API (``GET /domains``).
+        Two checks, both must pass:
+          1. Signing secret is well-formed base64 (after stripping ``whsec_`` prefix).
+          2. API key is accepted by Resend (``GET /domains``).
 
-        ``transient`` is True when the failure is a network/timeout/429/5xx
-        issue (preserve prior status) rather than an auth rejection (401/403
-        or malformed secret → mark ``disconnected``).
+        Returns ``(ok, message, transient)`` — ``transient`` for
+        network/timeout/429/5xx, False for auth rejection.
         """
         cfg = decrypt_config("resend", conn.config)
         secret = cfg.get("signing_secret", "")
@@ -161,27 +140,21 @@ class EmailConnectionsService:
         base_url: str,
         signing_secret: str | None = None,
     ) -> tuple[bool, str]:
-        """Self-loopback test: sign a sample Resend payload and POST to our own ingress route.
+        """Self-loopback test: sign a sample Resend payload and POST to our own ingress.
 
         Uses the provided ``signing_secret`` (ad-hoc) or the persisted secret.
-        Builds a sample ``email.received`` webhook body (the real envelope
-        shape — ``type``/``created_at``/``data``), signs it with the Svix
-        scheme (reusing the exact signing logic from ``_verify_resend`` in
-        ``webhooks.py``), and POSTs to ``/webhook/{user.kai_slug}/resend``.
+        Builds a sample ``email.received`` webhook body, signs it with the
+        Svix scheme, and POSTs to ``/webhook/{user.kai_slug}/resend``.
 
-        The synthetic payload's ``data.email_id`` isn't a real Resend email,
-        so the route's Resend-API body-fetch (required because the webhook
-        itself never carries the body — see ``_parse_resend``) will 502.
-        That 502 is treated as a **pass**: it proves signature verification,
-        nonce handling, and bot routing all worked — the only thing that
-        can't be exercised locally is fetching a body that doesn't exist.
+        The synthetic payload's ``email_id`` isn't real, so the route's
+        Resend-API body-fetch will 502. That 502 is a **pass**: it proves
+        signature verification, nonce handling, and bot routing all worked.
         Only a real inbound email tests that leg end to end.
 
-        ``base_url`` is the cockpit's own address as seen by the incoming
-        request (``str(request.base_url)``) — the cockpit's bind host/port
-        is only known at process-start time (``cockpit serve --host/--port``),
-        so deriving the loopback target from the request itself is the only
-        way to hit the right address instead of guessing a port.
+        ``base_url`` is the cockpit's address as seen by the incoming request —
+        the bind host/port is only known at process-start time, so deriving
+        the loopback target from the request is the only way to hit the right
+        address instead of guessing a port.
         """
         secret = signing_secret or self.decrypt_secret(user)
         if not secret:

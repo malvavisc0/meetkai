@@ -1,11 +1,7 @@
 """Cockpit-owned lifecycle for shared whisper-server + kokoro server.
 
-``MediaServiceManager`` spawns both services once in the reconcile background
-thread, blocks until every *enabled* service reports healthy, and sets the
-module-level ``MEDIA_READY`` threading event.  Bot-spawn paths gate on it
-so no bot launches before STT/TTS are up.
-
-Bots are pure HTTP clients (health probe + /inference or /synthesize).
+Spawns both services, blocks until healthy, sets ``MEDIA_READY``. Bots gate
+on it so no bot launches before STT/TTS are up. Bots are pure HTTP clients.
 """
 
 from __future__ import annotations
@@ -31,11 +27,7 @@ _HEALTH_POLL_ATTEMPTS = 60
 
 
 class MediaServiceManager:
-    """Cockpit-owned lifecycle for the shared whisper-server + kokoro server.
-
-    Started once in the reconcile background thread (before ``reconcile_deployments``);
-    stopped on cockpit shutdown.  Bots are pure clients (health probe only).
-    """
+    """Lifecycle for shared whisper-server + kokoro server."""
 
     def __init__(self, settings: WahaSettings, vendor_manager: VendorManager) -> None:
         self._settings = settings
@@ -46,8 +38,8 @@ class MediaServiceManager:
     def start_all(self) -> None:
         """Spawn both services, block until healthy, set ``MEDIA_READY``.
 
-        Idempotent: probes ``/health`` first; if already running, reuses.
-        A service intentionally disabled by config is not required for readiness.
+        Idempotent: reuses already-running services. Disabled services aren't
+        required for readiness.
         """
         whisper_ok = self._start_whisper()
         kokoro_ok = self._start_kokoro()
@@ -66,8 +58,7 @@ class MediaServiceManager:
     def stop_all(self) -> None:
         """SIGTERM both, then SIGKILL on timeout, then reap.
 
-        Only stops processes this manager spawned (not a pre-existing one it
-        reused).
+        Only stops processes this manager spawned.
         """
         for name, proc in [
             ("whisper", self._whisper_proc),
@@ -91,10 +82,7 @@ class MediaServiceManager:
         self._kokoro_proc = None
 
     def wait_ready(self, timeout: float) -> bool:
-        """Block until ``MEDIA_READY`` is set or *timeout* elapses.
-
-        Returns ``True`` if ready, ``False`` on timeout.
-        """
+        """Block until ``MEDIA_READY`` is set or timeout elapses."""
         return MEDIA_READY.wait(timeout=timeout)
 
     def status(self) -> dict:
@@ -116,7 +104,7 @@ class MediaServiceManager:
     # ------------------------------------------------------------------
 
     def _probe_health(self, url: str) -> bool:
-        """Single-shot GET /health probe.  Returns True on 200."""
+        """GET /health probe. Returns True on 200."""
         try:
             resp = httpx.get(url, timeout=2)
             return resp.status_code == 200
@@ -124,9 +112,7 @@ class MediaServiceManager:
             return False
 
     def _resolve_path(self, path_str: str) -> Path | None:
-        """Resolve *path_str*, trying it relative to the project root as a
-        fallback.  Returns ``None`` if neither location has the file.
-        """
+        """Resolve path, falling back to the project root."""
         path = Path(path_str)
         if path.is_file():
             return path
@@ -136,10 +122,7 @@ class MediaServiceManager:
     def _spawn_and_wait_healthy(
         self, name: str, argv: list[str], health_url: str
     ) -> subprocess.Popen | None:
-        """Spawn *argv* and poll *health_url* until it responds or the
-        process exits/times out.  Returns the running ``Popen``, or ``None``
-        on failure (already logged).
-        """
+        """Spawn *argv* and poll *health_url* until healthy or failure."""
         proc = subprocess.Popen(argv, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
 
         for _attempt in range(_HEALTH_POLL_ATTEMPTS):
@@ -158,7 +141,7 @@ class MediaServiceManager:
         return None
 
     def _start_whisper(self) -> bool:
-        """Spawn or reuse the whisper-server.  Returns True when healthy."""
+        """Spawn or reuse the whisper-server. Returns True when healthy."""
         settings = self._settings
         host = settings.whisper_server_host
         port = settings.whisper_server_port
@@ -207,7 +190,7 @@ class MediaServiceManager:
         return self._whisper_proc is not None
 
     def _start_kokoro(self) -> bool:
-        """Spawn or reuse the kokoro server.  Returns True when healthy."""
+        """Spawn or reuse the kokoro server. Returns True when healthy."""
         settings = self._settings
         if not settings.kokoro_enabled:
             logger.info("kokoro disabled by config; skipping")

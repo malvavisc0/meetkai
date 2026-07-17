@@ -1,14 +1,7 @@
 """Database connection CRUD — one Connection(service="database") per operator.
 
-The DSN (a SQLAlchemy URL) is encrypted at rest via ``encrypt_config`` /
-``decrypt_config`` (the ``url`` field is listed in
-``CREDENTIAL_TYPES["database"].secret_fields``). The label stays plaintext
-for template rendering.
-
-``save`` with an empty ``url`` preserves the existing encrypted DSN — the
-form shows ``••••••••`` when a URL is already stored, so the operator
-never re-types the DSN on a label-only edit.
-"""
+The DSN is encrypted at rest; the label stays plaintext. ``save`` with an
+empty ``url`` preserves the existing encrypted DSN."""
 
 from __future__ import annotations
 
@@ -65,10 +58,7 @@ class DatabaseConnectionsService:
         self.db.refresh(conn)
 
         # Probe the just-saved DSN and reflect the result in ``status``.
-        # Transient failures (network/timeout) preserve the prior status;
-        # auth rejections or invalid DSNs mark the connection
-        # ``disconnected``. Decrypts the just-persisted config to avoid a
-        # redundant SELECT.
+        # Transient failures preserve the prior status.
         test_url = decrypt_config("database", conn.config).get("url", "")
         if test_url:
             ok, _, transient = self._probe_url(test_url)
@@ -91,9 +81,8 @@ class DatabaseConnectionsService:
 
     def _probe_url(self, test_url: str) -> tuple[bool, str, bool]:
         """Connect to ``test_url`` and run ``SELECT 1``. Returns
-        ``(ok, message, transient)`` — ``transient`` is True when the
-        failure is a network/timeout issue (preserve prior status) rather
-        than an auth rejection or invalid DSN (mark ``disconnected``)."""
+        ``(ok, message, transient)`` — ``transient`` for network/timeout
+        failures, False for auth rejections or invalid DSNs."""
         connect_args: dict = {}
         if not test_url.startswith("sqlite"):
             connect_args["connect_timeout"] = 5
@@ -111,8 +100,7 @@ class DatabaseConnectionsService:
 
     def test(self, user: User, *, url: str | None = None) -> tuple[bool, str]:
         """Test connectivity. If ``url`` is provided (non-empty), test that
-        ad-hoc value — this lets the operator test a newly-typed DSN before
-        saving. If ``url`` is None or empty, test the persisted DSN."""
+        ad-hoc value; otherwise test the persisted DSN."""
         if url:
             test_url = url
         else:

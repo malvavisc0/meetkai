@@ -1,7 +1,6 @@
-"""BotType registry: supported feature flags + settings per bot type.
+"""BotType registry: feature flags, connections, and per-bot-type metadata.
 
-The registry is the single source of truth for what the settings form renders.
-Adding a new bot type later = add an entry here + a settings form schema.
+Adding a bot type: add an entry to BOT_TYPES plus a settings template.
 """
 
 from dataclasses import dataclass, field
@@ -14,25 +13,17 @@ class BotType:
     required_settings: list[str] = field(default_factory=list)
     description: str = ""
     default_goal: str = ""
-    # Connection services a deployment of this type must have to start.
-    # The start gate checks each is present and connected; missing any
-    # raises ConnectionRequiredError.
+    # Connections a deployment of this type must have to start.
     required_connections: list[str] = field(default_factory=list)
-    # Connection services this bot type can optionally use when the
-    # operator enables them on a specific deployment via
-    # Deployment.settings["tools"]. A bot may only enable a service listed
-    # here — the settings UI never offers a toggle the bot can't use.
+    # Optional connections an operator may enable per deployment via
+    # Deployment.settings["tools"]. Only these appear as toggles in the
+    # settings form.
     supported_connections: list[str] = field(default_factory=list)
-    # Name of a template under templates/icons/*.svg (without the extension),
-    # shown next to this bot type in the console's bot-type picker,
-    # deployment cards, and the deploy wizard header.
+    # Icon name under templates/icons/*.svg (no extension).
     icon: str = "bot"
-    # Whether this bot type implements per-chat sleep/wake (waha only: the
-    # bot's webhook wires on_sleep/on_wake and its /status includes a
-    # "sleep" key). Bot types without it 404 on /sleep and /wake and omit
-    # "sleep" from /status entirely — the deployment detail page uses this
-    # flag to hide the pause-conversations panel rather than assume every
-    # bot type has the concept of a per-chat sleep state.
+    # Whether this bot type implements per-chat sleep/wake (waha only).
+    # When False, /sleep and /wake 404 and "sleep" is absent from /status,
+    # so the deployment page hides the pause-conversations panel.
     supports_sleep: bool = False
 
 
@@ -52,10 +43,9 @@ BOT_TYPES: dict[str, BotType] = {
             "know, ask before guessing, and only reply when you add value."
         ),
         required_connections=["whatsapp"],
-        # Forward declaration: the `database` connection service ships in
-        # Fix 05, `smtp` in Fix 06. Declaring them here makes the catalog
-        # the single source of truth so the settings form can offer the
-        # toggle (disabled until the connection exists).
+        # database/smtp/calcom: shipped but optional. Declaring them here
+        # makes the catalog the single source of truth so the settings form
+        # can offer the toggle (disabled until the connection exists).
         supported_connections=["database", "smtp", "calcom"],
         icon="message-circle",
         supports_sleep=True,
@@ -81,9 +71,8 @@ BOT_TYPES: dict[str, BotType] = {
 }
 
 LANGUAGE_VOICES: dict[str, list[str]] = {
-    # Order is [female, male, ...]; index 0 is the language's default voice
-    # (used by auto_pick_voice). French has no male voice in Kokoro v1.0 —
-    # see https://huggingface.co/hexgrad/Kokoro-82M/blob/main/VOICES.md.
+    # Index 0 is the default voice (used by auto_pick_voice). French has no
+    # male voice in Kokoro v1.0.
     "Spanish": ["ef_dora", "em_alex"],
     "English": ["af_heart", "am_michael"],
     "French": ["ff_siwis"],
@@ -91,10 +80,7 @@ LANGUAGE_VOICES: dict[str, list[str]] = {
     "Portuguese": ["pf_dora", "pm_alex"],
 }
 
-# Human-readable name for every voice code in LANGUAGE_VOICES, so the
-# cockpit's voice picker doesn't just print the raw Kokoro code (e.g.
-# "ef_dora"). The voice picker already filters options down to the selected
-# language, so the label only needs the voice's name.
+# Human-readable label per voice code, for the voice picker.
 VOICE_LABELS: dict[str, str] = {
     "af_heart": "Heart",
     "am_michael": "Michael",
@@ -107,28 +93,21 @@ VOICE_LABELS: dict[str, str] = {
     "pm_alex": "Alex",
 }
 
-# Single source of truth for every language a deployment's `language` field
-# may be set to (server-validated in DeploymentsService.create/edit — never
-# trust the wizard/settings <select> alone, a hand-crafted POST can submit
-# anything). Deliberately exactly LANGUAGE_VOICES' keys: a language with no
-# Kokoro voice (e.g. German) is not a supported language at all — there is
-# no "agent replies in text only" mode for an unsupported language. Do NOT
-# add a language here that isn't a key in LANGUAGE_VOICES, and do NOT map a
-# language to a voice from a different language (that previously mapped
-# German to "hf_alpha", a Hindi voice, producing English-phonemized German
-# spoken in a Hindi voice).
+# Every language a deployment's `language` field may take (server-validated
+# in DeploymentsService.create/edit — the form <select> alone is never
+# trusted). Exactly LANGUAGE_VOICES' keys: a language with no Kokoro voice
+# is not supported. Do NOT add a language here without a matching voice,
+# and do NOT map a language to another language's voice.
 ALL_LANGUAGES: tuple[str, ...] = tuple(sorted(LANGUAGE_VOICES.keys()))
 
-# Single source of truth for every voice code a deployment's `voice` field
-# may be set to (server-validated alongside `language`).
+# Every voice code a deployment's `voice` field may take.
 ALL_VOICES: tuple[str, ...] = tuple(
     sorted({voice for voices in LANGUAGE_VOICES.values() for voice in voices})
 )
 
-# Voice code -> the language it belongs to. Used to filter the voice
-# <select> down to the voices matching the selected language, both
-# client-side (initVoiceFilter in cockpit.js) and server-side
-# (DeploymentsService validates voice/language agree).
+# Voice code -> language. Filters the voice <select> to voices matching the
+# selected language (client-side in cockpit.js, server-side in
+# DeploymentsService).
 VOICE_LANGUAGE_BY_CODE: dict[str, str] = {
     voice: lang for lang, voices in LANGUAGE_VOICES.items() for voice in voices
 }
@@ -147,11 +126,9 @@ class CredentialField:
 class CredentialType:
     """Settings-form shape for one credential connection type.
 
-    Pure data: enough for a single generic settings-form renderer + save
-    handler (Fixes 05/06) without generalizing how the bot uses the
-    credential. ``secret_fields`` is the list Fix 03's encrypt/decrypt and
-    R5's mask-on-render hook into — membership is automatic, not per-type
-    opt-in.
+    Pure data: enough for the generic settings-form renderer + save handler
+    without coupling to how the bot uses the credential. ``secret_fields``
+    drives encrypt/decrypt and mask-on-render automatically.
     """
 
     service: str
@@ -209,22 +186,18 @@ CREDENTIAL_TYPES: dict[str, CredentialType] = {
 class WebhookConnectionType:
     """Settings-form shape for an ingress-only connection type.
 
-    A webhook connection carries the secrets the cockpit uses to verify and
-    parse inbound provider webhooks at the centralized ingress route (Path
-    2): a signing secret for ``verify_signature``, and — for providers whose
-    webhook body omits the message content (Resend's inbound webhook carries
-    only envelope metadata, no body/attachments) — an API key ``parse`` uses
-    to fetch it. The bot itself never receives either secret — verification
-    and enrichment happen in the cockpit, not the subprocess — so unlike
-    ``CredentialType`` nothing here is injected as env into the bot.
-    ``secret_fields`` is the same hook Fix 03's encrypt/decrypt and the
-    mask-on-render path use.
+    Carries secrets the cockpit uses to verify and parse inbound provider
+    webhooks at the centralized ingress route: a signing secret for
+    ``verify_signature`` and, for providers whose webhook body omits message
+    content (Resend's inbound webhook carries only envelope metadata), an
+    API key ``parse`` uses to fetch it. The bot itself never receives
+    either secret — verification and enrichment happen in the cockpit, not
+    the subprocess. ``secret_fields`` drives encrypt/decrypt and
+    mask-on-render, same as CredentialType.
 
     ``webhook_type`` is the key this connection verifies for in
-    ``WEBHOOK_TYPES`` (added in 03): one webhook connection type maps to one
-    webhook verify/parse contract. ``testable`` mirrors ``CredentialType`` so
-    the existing "Test connection" affordance renders (the resend connection
-    has a self-loopback test).
+    ``WEBHOOK_TYPES``: one connection type maps to one webhook verify/parse
+    contract.
     """
 
     service: str
@@ -241,10 +214,9 @@ WEBHOOK_CONNECTION_TYPES: dict[str, WebhookConnectionType] = {
         label="Email Inbox (Resend)",
         fields=[
             CredentialField("signing_secret", "Signing secret", "secret", required=True),
-            # Resend's inbound webhook carries no body/attachment content —
-            # only envelope metadata (see webhooks.py:_parse_resend). The
-            # API key fetches the body via the Received Emails API and
-            # attachment download URLs via the Attachments API.
+            # Resend's inbound webhook carries only envelope metadata, no
+            # body/attachments. The API key fetches the body via the
+            # Received Emails API and attachments via the Attachments API.
             CredentialField("api_key", "API key", "secret", required=True),
         ],
         secret_fields=["signing_secret", "api_key"],
@@ -252,10 +224,8 @@ WEBHOOK_CONNECTION_TYPES: dict[str, WebhookConnectionType] = {
     ),
 }
 
-# Display label for every connection service a BotType can declare in
-# required_connections/supported_connections. WhatsApp isn't a
-# CredentialType (it's provisioned via WAHA, not a generic credential
-# form), so it needs its own entry rather than living in CREDENTIAL_TYPES.
+# Display label per connection service. WhatsApp isn't a CredentialType
+# (provisioned via WAHA, not a credential form), so it has its own entry.
 # Ingress-only connections (resend) come from WEBHOOK_CONNECTION_TYPES.
 CONNECTION_LABELS: dict[str, str] = {
     "whatsapp": "WhatsApp",
@@ -267,21 +237,18 @@ CONNECTION_LABELS: dict[str, str] = {
 def auto_pick_voice(language: str) -> str:
     """Return the default (first-listed) Kokoro voice for *language*.
 
-    Raises ``ValueError`` for a language that isn't in ``ALL_LANGUAGES`` —
-    callers must validate/normalize the language before calling this;
-    silently substituting an unrelated voice for an unsupported language
-    is exactly the bug this function must not reintroduce.
+    Raises ValueError for an unsupported language; callers must validate
+    the language first.
     """
     if language not in LANGUAGE_VOICES:
         raise ValueError(f"unsupported language: {language!r}. Supported: {ALL_LANGUAGES}")
     return LANGUAGE_VOICES[language][0]
 
 
-# Single source of truth for capability display names, shared by the
-# Runtime overview badges (deployment.html, keyed by the bot's /status
-# capability names) and the Parameters checkboxes (settings_waha.html, keyed by
-# BotType.feature_flags names) — one dict covering both vocabularies so the
-# two pages can never show different wording for the same capability.
+# Capability display names, shared by the Runtime overview badges
+# (deployment.html, keyed by /status capability names) and the settings
+# checkboxes (settings_waha.html, keyed by BotType.feature_flags). One dict
+# so both pages can never show different wording for the same capability.
 CAPABILITY_LABELS: dict[str, str] = {
     "vision": "Vision",
     "image": "Vision",

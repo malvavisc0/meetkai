@@ -1,17 +1,17 @@
 """Application-layer encryption for credential Connection secrets.
 
-Sits between the credential services (Fixes 05/06) and the
-``Connection.config`` JSON column. Provides Fernet symmetric authenticated
-encryption, uniform across SQLite dev and Postgres prod (a string in the
-existing JSON column — no schema change, no DB-native column type).
+Provides Fernet symmetric authenticated encryption, uniform across SQLite
+dev and Postgres prod (stored as a string in the existing JSON column — no
+schema change, no DB-native column type).
 
-The encryption key is derived from ``KAI_CREDENTIAL_ENCRYPTION_KEY`` (a new,
+The encryption key is derived from ``KAI_CREDENTIAL_ENCRYPTION_KEY`` (a
 deployment-wide root secret) via a versioned HKDF context. The version tag
 lives inside the ciphertext string (``"v1:gAAAAA..."``) so a rotation can
 re-encrypt every row in place without a schema migration or a lookup table.
 
-Only the fields declared in ``CREDENTIAL_TYPES[...].secret_fields`` (Fix 02)
-are encrypted — everything else in ``Connection.config`` stays plaintext.
+Only the fields declared in ``CREDENTIAL_TYPES[...].secret_fields`` (or
+``WEBHOOK_CONNECTION_TYPES``) are encrypted; everything else in
+``Connection.config`` stays plaintext.
 """
 
 from __future__ import annotations
@@ -28,10 +28,10 @@ _VERSION_SEP = ":"
 _key_cache: dict[str, Fernet] = {}
 
 # Active key version for new encrypt() calls. Set by key rotation so the
-# running process encrypts new secrets under the new version without mutating
-# the process environment; the version is also persisted to ``.env`` by the
-# rotation command for the next process start. ``None`` means "read the
-# version from ``KAI_CREDENTIAL_KEY_VERSION`` (env / .env) on each call".
+# running process encrypts new secrets under the new version without
+# mutating the process environment; the rotation command persists it to
+# ``.env`` for the next process start. ``None`` means read from
+# ``KAI_CREDENTIAL_KEY_VERSION`` on each call.
 _active_version_override: str | None = None
 
 
@@ -74,11 +74,9 @@ def set_active_version(version: str) -> None:
     """Set the active encryption key version for subsequent ``encrypt()`` calls.
 
     Used by key rotation: after re-encrypting every credential under a new
-    version, the running process must encrypt any *new* credentials under that
-    same new version. Rather than mutating ``os.environ`` (which would also
-    require ``get_encryption_settings()`` to re-read it), the active version is
-    held here as explicit module state and persisted to ``.env`` for the next
-    process start by the rotation command.
+    version, new credentials must encrypt under that same version. Held here
+    as explicit module state (and persisted to ``.env`` by the rotation
+    command) rather than mutating ``os.environ``.
     """
     global _active_version_override
     _active_version_override = version
@@ -87,8 +85,8 @@ def set_active_version(version: str) -> None:
 def _derive_fernet(version: str) -> Fernet:
     """Derive (and cache) the Fernet key for a given version.
 
-    The cache is bounded by the number of versions ever used — one entry per
-    rotation, so tiny. Avoids re-running HKDF on every decrypt.
+    One cache entry per version ever used, so tiny. Avoids re-running HKDF
+    on every decrypt.
     """
     if version in _key_cache:
         return _key_cache[version]
@@ -106,10 +104,10 @@ def _derive_fernet(version: str) -> Fernet:
 
 
 def _clear_key_cache() -> None:
-    """Drop all cached Fernet instances and reset the active-version override.
+    """Drop cached Fernet instances and reset the active-version override.
 
-    Test/rotation use only: clears derived Fernet keys (keyed by version) and
-    the in-memory active-version override so a fresh key/version is picked up
+    Test/rotation use only: clears derived Fernet keys (keyed by version)
+    and the active-version override so a fresh key/version is picked up
     from env on the next call.
     """
     global _active_version_override

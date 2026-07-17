@@ -2,11 +2,8 @@
 
 The save-time probe pattern (commit config → probe → reflect status) is
 identical across SMTP, Database, and Resend connection services. These
-helpers centralize the status-reflection logic and the distinction between
-auth-rejection (credentials are wrong → set ``disconnected``) and
-transient failures (network/timeout/rate-limit → preserve prior status so
-a blip doesn't block deploys).
-"""
+helpers centralize status-reflection and the transient-vs-auth-rejection
+distinction."""
 
 from __future__ import annotations
 
@@ -24,15 +21,14 @@ from kai.utils.common import now_iso
 logger = logging.getLogger(__name__)
 
 # Overall wall-clock budget for a save-time SMTP probe. smtplib's per-
-# socket-operation timeout (10s) doesn't cover DNS resolution or the full
-# handshake sequence, so a dead host can block 50s+. This caps the total.
+# socket-operation timeout doesn't cover DNS resolution or the full
+# handshake, so a dead host can block 50s+.
 _SMTP_PROBE_TIMEOUT = 15
 
 
 def _is_transient_smtp_error(exc: Exception) -> bool:
-    """True if the SMTP failure is a network/timeout issue, not an auth
-    rejection. Transient errors should preserve the prior status rather
-    than marking the connection ``disconnected``."""
+    """True if the SMTP failure is transient (network/timeout), not an
+    auth rejection."""
     if isinstance(exc, smtplib.SMTPAuthenticationError):
         return False
     if isinstance(exc, smtplib.SMTPConnectError):
@@ -47,8 +43,8 @@ def _is_transient_smtp_error(exc: Exception) -> bool:
 
 
 def _is_transient_db_error(exc: Exception) -> bool:
-    """True if the database failure is a network/timeout issue, not an auth
-    rejection or invalid DSN."""
+    """True if the database failure is transient (network/timeout), not an
+    auth rejection or invalid DSN."""
     exc_name = type(exc).__name__
     if exc_name in ("OperationalError",):
         msg = str(exc).lower()
@@ -61,8 +57,8 @@ def _is_transient_db_error(exc: Exception) -> bool:
 
 
 def _is_transient_resend_error(status_code: int | None, exc: Exception | None) -> bool:
-    """True if the Resend API failure is transient (network/429/5xx), not an
-    auth rejection (401/403)."""
+    """True if the Resend API failure is transient (network/429/5xx), not
+    an auth rejection (401/403)."""
     if exc is not None:
         return True  # httpx.ConnectError, TimeoutException, etc.
     if status_code == 429:
@@ -79,16 +75,11 @@ def reflect_probe_status(
     *,
     transient: bool = False,
 ) -> Connection:
-    """Set ``conn.status`` based on the probe result and commit.
+    """Set ``conn.status`` based on probe result and commit.
 
-    - ``ok=True`` → ``status="connected"``
-    - ``ok=False, transient=False`` → ``status="disconnected"`` (auth
-      rejection or invalid credentials — the credential is genuinely wrong)
-    - ``ok=False, transient=True`` → preserve the prior ``status`` (network
-      blip, timeout, rate-limit — the credential may be valid; don't
-      downgrade a previously-``connected`` row)
-
-    Always updates ``updated_at`` and commits + refreshes.
+    - ``ok=True`` → ``connected``
+    - ``ok=False, transient=False`` → ``disconnected`` (auth rejection)
+    - ``ok=False, transient=True`` → preserve prior status (transient failure)
     """
     if ok:
         conn.status = "connected"
@@ -110,14 +101,8 @@ def run_smtp_probe_with_timeout(
 ) -> tuple[bool, str, bool]:
     """Run the SMTP handshake probe with an overall wall-clock timeout.
 
-    Returns ``(ok, message, transient)``. ``transient`` is True when the
-    failure is a network/timeout issue (not an auth rejection), so the
-    caller can preserve the prior connection status instead of downgrading.
-
-    Uses a manual ThreadPoolExecutor (not a ``with`` block) so that on
-    timeout the pool can be shut down with ``wait=False`` — the running
-    probe's orphaned worker continues until its socket op times out, but
-    the calling thread is not blocked past the 15s cap.
+    Returns ``(ok, message, transient)``. Uses a manual ThreadPoolExecutor
+    so on timeout the pool shuts down without blocking the calling thread.
     """
     from kai.cockpit.smtp_connections import _smtp_test
 
@@ -136,9 +121,7 @@ def run_smtp_probe_with_timeout(
 
 
 def flash_connection_save(request, service_label: str, conn: Connection) -> None:
-    """Set the flash message for a connection save based on the probe
-    result reflected in ``conn.status``. Shared by the SMTP, Database,
-    and Resend save routes so the wording stays consistent."""
+    """Set the flash message for a connection save based on ``conn.status``."""
     if conn.status == "connected":
         request.session["flash"] = f"{service_label} connection saved and verified."
     else:

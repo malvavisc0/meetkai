@@ -1,21 +1,4 @@
-"""Webhook-type catalog for cockpit-level provider ingress.
-
-A small, hardcoded dict of ``WebhookType`` entries — not a generic plugin
-system. Each entry has a hand-written ``verify_signature`` (per-provider
-scheme + replay guard) and ``parse`` (per-provider payload shape). The
-catalog starts empty; the first real entry (e.g. ``email`` via Resend) ships
-with the first bot type that consumes it.
-
-Replay protection for the centralized ingress is provided by
-``_check_freshness``: a freshness window (±5 min from the server clock) plus
-nonce deduplication. Every ``verify_signature`` implementation MUST call it
-after its own signature comparison. A type whose provider supplies neither a
-timestamp nor a nonce cannot be added to ``WEBHOOK_TYPES`` — the helper
-rejects a call with both ``None``, surfacing the problem immediately.
-
-The nonce cache is per-process state, correct for the single uvicorn process
-the cockpit runs today. Multi-worker scaling would move it to Redis/DB.
-"""
+"""Webhook-type catalog for cockpit-level provider ingress."""
 
 from __future__ import annotations
 
@@ -38,36 +21,12 @@ _seen_nonces: OrderedDict[str, float] = OrderedDict()
 
 
 def _strip_whsec_prefix(secret: str) -> str:
-    """Strip the ``whsec_`` prefix Resend/Svix prepends to signing secrets.
-
-    The prefix is metadata identifying the secret type; the actual key bytes
-    are the base64url-encoded suffix. ``base64.b64decode`` chokes on the
-    ``whsec_`` characters, so both the loopback signer and the verifier strip
-    it before decoding. Tolerant of secrets already given without the prefix.
-    """
+    """Strip the ``whsec_`` prefix Resend/Svix prepends to signing secrets."""
     return secret[len("whsec_") :] if secret.startswith("whsec_") else secret
 
 
 class NormalizedMessage(BaseModel):
-    """Provider-agnostic inbound event carried to the bot's ingest_event.
-
-    This is the contract between the cockpit (normalize) and the bot
-    (consume). Every ``WebhookType.parse()`` produces one; every bot's
-    ``ingest_event()`` consumes one.
-
-    Fields:
-        source: The sender's identifier in the provider's system
-                (email address, phone number, username). Used as the
-                conversation_id for history tracking.
-        text:   The message body, plaintext. HTML stripped if no text part.
-        metadata: Provider-specific fields the bot may need:
-                  - message_id, subject, to (email-specific)
-                  - attachments: list of {"url", "content_type", "filename"}
-                    (URLs only — the bot downloads bytes)
-        event:  The event type (e.g. "email.inbound"). Bots use this to
-                decide whether to act or return {"ok": False} for
-                unsupported events.
-    """
+    """Provider-agnostic inbound event passed from the cockpit to the bot."""
 
     source: str
     text: str
@@ -78,41 +37,17 @@ class NormalizedMessage(BaseModel):
 @dataclass(frozen=True)
 class WebhookType:
     name: str
-    # Implementations MUST:
-    #   1. Verify the provider's signature against the body (bespoke scheme),
-    #      using the decrypted per-operator ``secret`` (third arg).
-    #   2. Extract the provider-native timestamp (epoch seconds) and/or nonce
-    #      from the request headers/body.
-    #   3. Call _check_freshness(timestamp=..., nonce=None) and return False if
-    #      it rejects. verify_signature records NO nonce — the route owns the
-    #      nonce dedup set via is_nonce_seen/record_nonce (see nonce_header).
-    # A type whose provider supplies neither a timestamp nor a nonce cannot
-    # be added to WEBHOOK_TYPES.
+    # Verify the provider's signature; call _check_freshness after.
     verify_signature: Callable[[Request, bytes, str], bool]
-    # ``parse`` takes the raw webhook JSON and the *decrypted connection
-    # config dict* (whatever secret fields that WebhookConnectionType
-    # declares — e.g. Resend needs both a signing secret, already used by
-    # verify_signature, and a separate API key to fetch email content).
-    # Passing the whole config dict (not a single named field) keeps this
-    # generic: the next provider reads whatever keys it declared without a
-    # signature change here.
+    # Parse raw webhook JSON + decrypted connection config dict into NormalizedMessage.
     parse: Callable[[dict, dict], NormalizedMessage]
-    # The request header that carries the provider's idempotency nonce
-    # (e.g. Svix's "svix-id"). The centralized ingress route reads this header
-    # after verification and dedups on it — keeping the per-provider header name
-    # on the WebhookType means the route stays generic for the next provider
-    # (no if-branch per type). Empty = no nonce dedup (timestamp-only).
+    # Request header carrying the provider's idempotency nonce (e.g. "svix-id").
+    # Empty = no nonce dedup (timestamp-only).
     nonce_header: str = ""
 
 
 def _prune_seen(now: float) -> None:
-    """Evict nonce entries older than the freshness window.
-
-    Relies on insertion order matching timestamp order: in production
-    ``_check_freshness`` stores ``time.time()`` (monotonic-ish), so the
-    oldest-inserted entry is also the oldest by value. Pop from the front
-    until the front entry is still fresh.
-    """
+    """Evict nonce entries older than the freshness window."""
     cutoff = now - FRESHNESS_WINDOW_SECONDS
     while _seen_nonces and next(iter(_seen_nonces.values())) < cutoff:
         _seen_nonces.popitem(last=False)
@@ -121,15 +56,11 @@ def _prune_seen(now: float) -> None:
 def _check_freshness(
     *, timestamp: float | None = None, nonce: str | None = None, now: float | None = None
 ) -> bool:
-    """Reject stale and replayed webhook requests.
+    """Reject stale (past freshness window) and replayed (duplicate nonce) requests.
 
-    Returns True if the request is fresh and not a replay, False otherwise.
-    At least one of ``timestamp`` or ``nonce`` must be provided — a call with
-    both ``None`` returns False (fail closed), because a type whose provider
-    supplies neither is unprotectable and must not be in ``WEBHOOK_TYPES``.
-
-    ``now`` is a test seam; production callers omit it (the helper uses
-    ``time.time()``).
+    Returns True if fresh and not a replay. Fails closed when both
+    ``timestamp`` and ``nonce`` are None — a type without either is unprotectable.
+    ``now`` is a test seam; production callers omit it.
     """
     if timestamp is None and nonce is None:
         return False
@@ -152,24 +83,16 @@ def _clear_seen_nonces() -> None:
 
 
 def is_nonce_seen(nonce: str) -> bool:
-    """True if ``nonce`` was recorded by a prior successful forward.
-
-    Used by the centralized ingress route after signature verification:
-    a seen nonce means the provider is retrying an event already delivered,
-    so the route answers 202 ``{"deduped": true}`` instead of re-forwarding.
-    """
+    """Return True if ``nonce`` was recorded by a prior successful forward."""
     _prune_seen(time.time())
     return nonce in _seen_nonces
 
 
 def record_nonce(nonce: str, now: float | None = None) -> None:
-    """Record a nonce after a successful forward, so provider retries dedup.
+    """Record a nonce after a successful forward for retry dedup.
 
-    Records ``now`` (defaulting to ``time.time()``), prunes stale entries, and
-    bounds the cache to ``_SEEN_NONCES_MAX``. Called by the route ONLY after
-    ``forward_event`` returns True — a transient bot failure (502) leaves the
-    nonce unrecorded so the provider's retry of the same id gets a clean
-    re-forward attempt rather than a permanent 202 dedup.
+    Only called by the route after ``forward_event`` returns True — a transient
+    bot failure leaves the nonce unrecorded so retries get a clean re-forward.
     """
     t = now if now is not None else time.time()
     _prune_seen(t)
@@ -181,11 +104,9 @@ def record_nonce(nonce: str, now: float | None = None) -> None:
 def _sign_resend(svix_id: str, svix_timestamp: str, body: bytes, secret: str) -> str:
     """Produce the ``v1,<base64-mac>`` signature for a Resend/Svix payload.
 
-    Shared between ``_verify_resend`` (verifier) and
-    ``EmailConnectionsService.test()`` (self-loopback signer) so the
-    producer and verifier can never drift. Returns the full candidate
-    string (``v1,<mac>``). Raises ``ValueError`` if the secret isn't valid
-    base64.
+    Shared between ``_verify_resend`` and ``EmailConnectionsService.test()``
+    so producer and verifier can never drift. Raises ``ValueError`` on
+    invalid base64 secret.
     """
     signed = f"{svix_id}.{svix_timestamp}.".encode() + body
     key = base64.b64decode(_strip_whsec_prefix(secret))  # raises on invalid base64
@@ -196,16 +117,10 @@ def _sign_resend(svix_id: str, svix_timestamp: str, body: bytes, secret: str) ->
 def _verify_resend(request: Request, body: bytes, secret: str) -> bool:
     """Verify a Resend (Svix-signed) inbound webhook.
 
-    Svix scheme: header ``svix-signature`` is a space-separated list of
-    ``v1,<base64-mac>`` candidates; the signing secret (from the
-    Resend/Svix dashboard) is **base64-encoded** and must be decoded before
-    use as the HMAC key; the signed message is
-    ``{svix-id}.{svix-timestamp}.{raw_body}``; the MAC is HMAC-SHA256 →
-    base64-encode → compare (stripping the ``v1,`` prefix) with
-    ``hmac.compare_digest``. The body bytes are the **raw** request body.
-
-    Checks the timestamp window via ``_check_freshness(timestamp=...,
-    nonce=None)`` — no nonce is recorded here; the route owns nonce dedup.
+    Decodes the base64 signing secret, computes HMAC-SHA256 over
+    ``{svix-id}.{svix-timestamp}.{raw_body}``, and compares against the
+    ``svix-signature`` header candidates. Timestamp freshness is checked via
+    ``_check_freshness``; nonce dedup is owned by the route.
     """
     svix_id = request.headers.get("svix-id", "")
     svix_ts = request.headers.get("svix-timestamp", "")
@@ -232,13 +147,10 @@ def _verify_resend(request: Request, body: bytes, secret: str) -> bool:
 
 
 class WebhookUpstreamError(Exception):
-    """A provider's ``parse`` needed an upstream API call and it failed.
+    """Provider's ``parse`` needed an upstream API call and it failed.
 
-    Distinct from a malformed webhook payload — this is an upstream
-    dependency failure (e.g. Resend's Received-Emails/Attachments API being
-    unreachable or erroring), not an attacker-controlled input problem. The
-    route surfaces it as 502, not 400. Generic across providers so the route
-    doesn't need a per-provider except clause.
+    Distinct from a malformed payload — this is an upstream dependency failure.
+    The route surfaces it as 502.
     """
 
 
@@ -246,12 +158,7 @@ _RESEND_API_BASE = "https://api.resend.com"
 
 
 def _fetch_resend_email(email_id: str, api_key: str) -> dict:
-    """GET /emails/receiving/{id} — the only source of body text/HTML.
-
-    Resend's inbound webhook carries envelope metadata only (no body, no
-    headers, no attachment content) — the docs are explicit about this. The
-    body must be fetched separately with the operator's Resend API key.
-    """
+    """GET /emails/receiving/{id} — the only source of body text/HTML."""
     try:
         resp = httpx.get(
             f"{_RESEND_API_BASE}/emails/receiving/{email_id}",
@@ -270,12 +177,7 @@ def _fetch_resend_email(email_id: str, api_key: str) -> dict:
 
 
 def _fetch_resend_attachments(email_id: str, api_key: str) -> list[dict]:
-    """GET /emails/receiving/{id}/attachments — the only source of download URLs.
-
-    The webhook's ``data.attachments`` and the email-fetch's ``attachments``
-    both omit a download URL (id/filename/content_type/content_disposition/
-    content_id only) — only this dedicated endpoint returns ``download_url``.
-    """
+    """GET /emails/receiving/{id}/attachments — the only source of download URLs."""
     try:
         resp = httpx.get(
             f"{_RESEND_API_BASE}/emails/receiving/{email_id}/attachments",
@@ -294,13 +196,7 @@ def _fetch_resend_attachments(email_id: str, api_key: str) -> list[dict]:
 
 
 def _extract_attachments(attachments: list[dict]) -> list[dict]:
-    """Map the Attachments API's list response to the URL-only contract.
-
-    ``attachments`` here is the ``data`` list from
-    ``_fetch_resend_attachments`` (each item has ``download_url``) — not the
-    webhook's or the email-fetch's attachment stubs, neither of which carry
-    a URL. Returns ``[{"url", "content_type", "filename"}, ...]``.
-    """
+    """Map the Attachments API response to the URL-only contract."""
     return [
         {
             "url": att.get("download_url", ""),
@@ -324,22 +220,12 @@ def _extract_email_body(email: dict) -> str:
 
 
 def _parse_resend(payload: dict, cfg: dict) -> NormalizedMessage:
-    """Map a Resend webhook event to NormalizedMessage.
+    """Map a Resend ``email.received`` event to NormalizedMessage.
 
-    The webhook body shape is ``{"type": ..., "created_at": ..., "data":
-    {...}}`` — inbound email fields (``email_id``, ``from``, ``to``,
-    ``subject``, ``message_id``, ``attachments`` stubs) live under ``data``.
-    Per Resend's docs, the webhook never carries the body text/HTML or an
-    attachment download URL; both require follow-up calls to the Received
-    Emails / Attachments REST APIs using the operator's Resend API key
-    (``cfg["api_key"]``, decrypted by the route from the connection row).
-
-    Only ``type == "email.received"`` is an inbound message the bot acts
-    on — a Resend webhook endpoint can also receive delivery/bounce events
-    if the operator subscribes to more than inbound. Those pass through
-    with their own ``event`` (not ``"email.inbound"``) and no API calls, so
-    the bot's ``ingest_event`` can reject them without spending an API
-    round-trip on content it will discard.
+    The webhook carries only envelope metadata; body text/HTML and attachment
+    URLs require separate REST API calls via ``cfg["api_key"]``. Non-inbound
+    event types (delivery/bounce) pass through without API calls so the bot
+    can reject them cheaply.
     """
     event_type = payload.get("type", "")
     data = payload.get("data", {})

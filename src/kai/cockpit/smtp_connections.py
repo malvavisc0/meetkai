@@ -1,16 +1,8 @@
 """SMTP connection CRUD — one Connection(service="smtp") per operator.
 
-The password is encrypted at rest via ``encrypt_config`` /
-``decrypt_config`` (the ``password`` field is listed in
-``CREDENTIAL_TYPES["smtp"].secret_fields``). All other fields (host, port,
-username, from_address, use_tls) stay plaintext for template rendering.
-
-``save`` with an empty ``password`` preserves the existing encrypted
-password — the form shows ``••••••••`` when a password is already stored,
-so the operator never re-types the password on a host-only edit.
-
-Distinct from ``cockpit/mailer.py``'s ``KAI_SMTP_*`` (the cockpit's own
-login-link relay).
+The password is encrypted at rest; all other fields stay plaintext.
+``save`` with an empty ``password`` preserves the existing password.
+Distinct from ``cockpit/mailer.py``'s ``KAI_SMTP_*`` (the cockpit's login-link relay).
 """
 
 from __future__ import annotations
@@ -33,11 +25,8 @@ def _smtp_test(
 ) -> tuple[bool, str]:
     """Connect + auth + NOOP against an SMTP server.
 
-    Raises on failure (does NOT catch exceptions) so callers can inspect
-    the exception type to classify transient vs auth errors. The operator-
-    facing ``test()`` wraps this in try/except to produce ``(False, msg)``
-    for the flash message; ``run_smtp_probe_with_timeout`` catches to
-    classify the failure mode.
+    Raises on failure so callers can inspect the exception type to classify
+    transient vs auth errors.
     """
     with smtplib.SMTP(host, int(port), timeout=10) as server:
         server.ehlo()
@@ -109,12 +98,8 @@ class SmtpConnectionsService:
         self.db.commit()
         self.db.refresh(conn)
 
-        # Probe the just-saved credentials and reflect the result in
-        # ``status``. Transient failures (network/timeout) preserve the
-        # prior status so a blip doesn't block deploys; only auth
-        # rejections mark the connection ``disconnected``. Decrypts the
-        # just-persisted config (avoids a redundant SELECT from
-        # ``self.test(user)``).
+        # Probe the just-saved credentials and reflect the result in ``status``.
+        # Transient failures preserve the prior status.
         cfg = decrypt_config("smtp", conn.config)
         ok, _, transient = run_smtp_probe_with_timeout(
             cfg.get("host", ""),
@@ -149,14 +134,7 @@ class SmtpConnectionsService:
         use_tls: bool | None = None,
     ) -> tuple[bool, str]:
         """Test connectivity. If ``password`` is provided (non-empty), test
-        those ad-hoc values — this lets the operator test a freshly-typed
-        config before saving. If ``password`` is empty/None, test the
-        persisted config (which decrypts the real password).
-
-        Ad-hoc detection is gated on the secret field (password) only, not
-        the plaintext fields — the template pre-fills host/port/username
-        for existing connections, so checking those would always trigger
-        ad-hoc mode and bypass the persisted password.
+        those ad-hoc values; otherwise test the persisted config.
         """
         if password:
             test_host = host or ""

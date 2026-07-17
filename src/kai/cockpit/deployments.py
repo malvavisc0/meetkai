@@ -1,7 +1,7 @@
-"""Shared deployments service — single code path for CLI and web.
+"""Deployments service: shared code path for CLI and web.
 
-Only authorization scope differs between CLI (admin, any user) and web
-(self only). Both call the same methods.
+Authorization scope differs (CLI: admin/any user; web: self only), but both
+call the same methods.
 """
 
 from __future__ import annotations
@@ -46,12 +46,11 @@ def _require_valid_voice(voice: str) -> None:
 
 
 def _require_voice_matches_language(language: str, voice: str) -> None:
-    """Reject a voice/language pair Kokoro can't actually speak together.
+    """Reject a voice/language pair Kokoro can't speak together.
 
-    Every deployment's ``voice`` column must name a voice belonging to its
-    ``language`` — including bot types with no TTS concept (email): the
-    column is never allowed to drift out of sync with the language, so
-    there is no bot-type-specific carve-out here.
+    The ``voice`` column must always belong to the deployment's ``language``,
+    including for bot types with no TTS concept (email), so it never drifts
+    out of sync. No bot-type carve-out.
     """
     if VOICE_LANGUAGE_BY_CODE.get(voice) != language:
         raise ValueError(f"voice {voice!r} does not match language {language!r}")
@@ -60,12 +59,11 @@ def _require_voice_matches_language(language: str, voice: str) -> None:
 def _kai_argv_prefix() -> list[str]:
     """Resolve the `kai` executable for spawning bot subprocesses.
 
-    Inside the Docker image (and any install where the package is
-    installed into the venv) the `kai` console script is on PATH — use it
-    directly, with no `uv run` wrapper, so each spawn is fast and doesn't
-    re-resolve dependencies. In a bare-metal dev checkout run via
-    ``uv run kai cockpit serve`` the console script may be absent, so fall
-    back to ``["uv", "run", "kai"]``.
+    When the package is installed in the venv (Docker image, or any
+    install), the `kai` console script is on PATH — use it directly for
+    fast spawns. In a bare-metal dev checkout run via ``uv run kai cockpit
+    serve`` the console script may be absent, so fall back to
+    ``["uv", "run", "kai"]``.
     """
     if shutil.which("kai"):
         return ["kai"]
@@ -84,34 +82,29 @@ class DeploymentStartupError(Exception):
 def attention_reason(
     dep: Deployment, status_data: dict | None, whatsapp_connected: bool
 ) -> str | None:
-    """Why a deployment needs the operator's action *now*, or None if it doesn't.
+    """Why a deployment needs operator action now, or None if it doesn't.
 
-    - WhatsApp disconnected while the bot is meant to be running (intent unmet).
-    - A ``running`` row whose live status probe comes back empty (process died
-      but the row wasn't reconciled — reconciliation only runs at startup).
+    Triggers:
+    - WhatsApp disconnected while the bot should be running.
+    - A ``running`` row whose live /status probe comes back empty (process
+      died; reconciliation only runs at startup).
     - A running deployment with unapplied settings changes (needs_restart).
 
-    A failed start decays to the neutral ``stopped`` state on the next load
-    rather than staying red — red is reserved for states needing action now.
+    A failed start decays to ``stopped`` on next load — red is reserved
+    for states needing action now.
 
-    ``status_data`` is the live ``/status`` probe result for ``dep`` (``None``
-    if it isn't running or the probe failed) — the caller fetches it once per
-    running deployment and reuses it here and for the card's task count, so
-    the route never doubles the number of live status calls.
+    ``status_data`` is the live ``/status`` probe result (``None`` if not
+    running or probe failed). The caller fetches it once per running
+    deployment and reuses it here and for the card's task count.
 
-    ``whatsapp_connected`` is the DB's ``Connection.status`` flag, which is
-    only written once during the pairing/QR-scan flow and never re-verified
-    afterward — it can still read "connected" long after the session (or the
-    host's internet) has actually died. When ``status_data`` is available for
-    a running deployment, its ``connected`` field takes precedence: it comes
-    from ``status_snapshot()`` fetching the bot's own WhatsApp profile, which
-    forces a real round-trip through WAHA to WhatsApp, so it reflects whether
-    the session is reachable *right now* rather than a stale snapshot.
+    ``whatsapp_connected`` is the DB ``Connection.status`` flag, written
+    once during the QR-scan flow and never re-verified — it can read
+    "connected" long after the session died. When ``status_data`` is
+    available, its ``connected`` field takes precedence: it comes from
+    ``status_snapshot()`` forcing a real WAHA round-trip.
 
-    Shared by the console list (per-card badge) and the deployment detail
-    page (a banner when a running bot's WhatsApp is disconnected) — both
-    routes compute this the same way, from the same inputs, so they can
-    never disagree about whether a deployment needs attention.
+    Shared by the console list and the deployment detail page so both
+    render the same verdict from the same inputs.
     """
     live_connected = whatsapp_connected
     if dep.status == "running" and status_data is not None and "connected" in status_data:
@@ -135,9 +128,8 @@ def _instance_id(bot_type: str, email: str) -> str:
 def _tool_enabled(value: dict) -> bool:
     """Read the ``enabled`` flag from a stored tool toggle.
 
-    Every tool toggle is stored as ``{"enabled": bool, "instruction": str}``
-    (see ``build_tools_update``) — there is no other stored shape to
-    handle.
+    Tool toggles are stored as ``{"enabled": bool, "instruction": str}``
+    (see ``build_tools_update``).
     """
     return bool(value.get("enabled", False))
 
@@ -147,13 +139,13 @@ def _tool_instruction(value: dict) -> str:
     return str(value.get("instruction", ""))
 
 
-# Maps each supported-connection service to its env-var names. ``fields``
-# maps config_key → env_var_name for credential fields. ``instruction``
-# is the env var that carries the operator's per-deployment usage rules.
-# ``bool_fields`` lists config keys whose values should be stringified as
+# Env-var layout per supported-connection service: ``fields`` maps
+# config_key → env_var_name for credential fields, ``instruction`` is the
+# env var carrying the operator's per-deployment usage rules, and
+# ``bool_fields`` lists config keys whose values stringify as
 # "true"/"false". Adding a service here wires injection (start() loop),
 # the instruction guard, and storage (via _TOOLS_WITH_INSTRUCTION in the
-# routes) — a single source of truth.
+# routes).
 SERVICE_ENV_VARS: dict[str, dict] = {
     "database": {
         "fields": {"url": "KAI_SQL_DSN"},
@@ -184,15 +176,11 @@ def _is_connected(service: str, conn: Connection | None) -> bool:
     """Per-family "is this connection ready?" predicate.
 
     Bespoke (whatsapp) and credential (database, smtp) connections are
-    "connected" when their row reports ``status == "connected"`` (set by a
-    live probe or save). Ingress-only connections (resend) have no live
-    probe — "connected" means the row exists, the status is ``connected``,
-    AND every secret field the connection type declares (e.g. resend's
-    ``signing_secret`` for verification and ``api_key`` for fetching email
-    content) is non-empty. Checking the type's whole ``secret_fields`` list
-    generically — not one hardcoded field name — means a connection type
-    that needs two secrets (like resend) or one is handled the same way,
-    with no per-service branch here.
+    connected when ``status == "connected"``. Ingress-only connections
+    (resend) have no live probe — connected means the row exists,
+    ``status == "connected"``, and every secret field the type declares is
+    non-empty. Checking the whole ``secret_fields`` list generically
+    handles a type needing one or two secrets with no per-service branch.
     """
     if conn is None:
         return False
@@ -206,20 +194,19 @@ def _is_connected(service: str, conn: Connection | None) -> bool:
 def _inject_connection_env(env: dict, service: str, conn: Connection) -> bool:
     """Inject env vars for a supported credential connection into ``env``.
 
-    Each service has a bespoke env shape, driven by ``SERVICE_ENV_VARS``.
-    A service not listed there raises ``NotImplementedError`` so a
-    misconfiguration surfaces immediately at start. A decryption failure
-    (wrong key, tampered ciphertext) is converted to
-    ``DeploymentStartupError`` so the route handler surfaces a flash
-    message instead of a bare 500.
+    Driven by ``SERVICE_ENV_VARS``. A service not listed raises
+    ``NotImplementedError`` so a misconfiguration surfaces at start. A
+    decryption failure (wrong key, tampered ciphertext) becomes
+    ``DeploymentStartupError`` so the route surfaces a flash message
+    instead of a bare 500.
 
-    Returns True if at least one field was injected (i.e. the credential
-    had data), False if nothing was set (e.g. an empty connection row).
+    Returns True if at least one field was injected, False if nothing was
+    set (e.g. an empty connection row).
     """
     # Ingress-only connections inject nothing — the bot receives events
     # via /ingest, not env vars, and the cockpit verifies webhooks at the
-    # ingress route (never the bot). Early return before SERVICE_ENV_VARS
-    # lookup so an unknown-table lookup is never reached for them.
+    # ingress route. Early return before the SERVICE_ENV_VARS lookup so it
+    # never reaches the unknown-table branch.
     if service in WEBHOOK_CONNECTION_TYPES:
         return False
     try:
@@ -389,14 +376,11 @@ class DeploymentsService:
         bt = BOT_TYPES[bot_type]
 
         # Catalog-driven creation gate: every connection this bot type
-        # declares as required must be present and connected *before* the
-        # deployment can even be created — not just before it starts.
-        # Letting an operator configure a bot it can never run is a source
-        # of confusion (a "ready" looking deployment that silently can't
-        # start), so the requirement is enforced at the earliest point
-        # instead of deferred to start(). Mirrors the same catalog read
-        # start() uses below, so the two can never disagree about what a
-        # bot type requires.
+        # declares as required must be present and connected before the
+        # deployment can be created. Letting an operator configure a bot it
+        # can never run is confusing (a "ready" deployment that can't
+        # start), so enforce at the earliest point rather than deferring to
+        # start(). Mirrors the same catalog read start() uses below.
         for service in bt.required_connections:
             c = (
                 self.db.query(Connection)
@@ -514,32 +498,28 @@ class DeploymentsService:
                 }
 
         # Resolve any language conflict: an explicit ``language`` argument
-        # always wins over a value inside ``settings["language"]``. Without
-        # this, ``edit(language="English", settings={"language": "Spanish"})``
-        # would leave the column ("English") and the config file ("Spanish")
-        # disagreeing — and the bot reads language from the CLI flag (column)
-        # while the config file is what gets written to disk.
+        # always wins over ``settings["language"]``. Without this,
+        # ``edit(language="English", settings={"language": "Spanish"})``
+        # would leave the column ("English") and config file ("Spanish")
+        # disagreeing — the bot reads language from the CLI flag (column)
+        # while the config file is written to disk.
         if "language" in fields:
             deployment.settings["language"] = deployment.language
         elif settings_changed:
-            # Defensive: only reachable if a future caller passes ``settings``
-            # without ``language``. Current callers (web routes, CLI) always
-            # pass ``language`` explicitly.
+            # Only reachable if a future caller passes ``settings`` without
+            # ``language``. Current callers always pass ``language``.
             deployment.language = deployment.settings.get("language", deployment.language)
 
-        # Whenever either field changed, the resulting (language, voice)
-        # pair must still agree — a caller editing only one of the two
-        # (e.g. just ``language``) must not silently leave a stale voice
-        # from the previous language on the deployment.
+        # If either field changed, the resulting (language, voice) pair must
+        # still agree — editing only one must not leave a stale voice from
+        # the previous language.
         if "language" in fields or "voice" in fields:
             _require_voice_matches_language(deployment.language, deployment.voice)
 
         # A settings/goal/language/voice/feature-flags edit while the bot is
-        # running leaves the live process with stale in-memory config (the
-        # config file is written to disk immediately below). Flag it so the
-        # detail page and console can show a durable "restart to apply"
-        # badge that survives reloads — the prior session-flash signal was
-        # lost on reload/new tab. Cleared on the next start()/stop().
+        # running leaves the live process with stale in-memory config. Flag
+        # it so the detail page and console can show a durable "restart to
+        # apply" badge that survives reloads. Cleared on next start()/stop().
         if deployment.status == "running":
             deployment.needs_restart = True
 
@@ -558,12 +538,12 @@ class DeploymentsService:
         from kai.bots.waha.config import get_waha_settings
         from kai.cockpit.media_services import MEDIA_READY
 
-        # Fetched once and reused both for the media-ready gate below and for
-        # the WAHA env vars injected into the spawned subprocess further down,
-        # so the cockpit's WAHA settings are the single source the bot inherits.
+        # Fetched once for the media-ready gate below and for the WAHA env
+        # vars injected into the spawned subprocess, so the cockpit's WAHA
+        # settings are the single source the bot inherits.
         waha = get_waha_settings()
         # Bounded gate: block briefly for a still-loading media service
-        # rather than failing instantly, but never wedge the request forever.
+        # rather than failing instantly, but never wedge the request.
         timeout = waha.media_ready_timeout
         if not MEDIA_READY.wait(timeout=timeout):
             raise DeploymentStartupError(
@@ -578,10 +558,8 @@ class DeploymentsService:
         if bt is None:
             raise ValueError(f"unknown bot type: {deployment.bot_type}")
 
-        # Catalog-driven start gate: every connection this bot type
-        # declares as required must be present and connected. Replaces the
-        # prior literal ``Connection.service == "whatsapp"`` filter — a
-        # second bot type needing a different connection can now declare it.
+        # Catalog-driven start gate: every connection this bot type declares
+        # as required must be present and connected.
         required_conns: dict[str, Connection] = {}
         for service in bt.required_connections:
             c = (
@@ -598,10 +576,9 @@ class DeploymentsService:
 
         conn = required_conns.get("whatsapp")
 
-        # Brain (lightrag) — a second, NON-fatal connection lookup (unlike
-        # WhatsApp above). A Brain is never a hard prerequisite for a bot to
-        # run: if the Operator has not created the Brain yet, the bot simply
-        # starts without Brain memory enabled.
+        # Brain (lightrag) — non-fatal. A Brain is never a hard prerequisite:
+        # if the Operator hasn't created it, the bot starts without Brain
+        # memory enabled.
         brain_conn = (
             self.db.query(Connection)
             .filter(
@@ -636,16 +613,15 @@ class DeploymentsService:
         env: dict[str, str] = {**os.environ}
         # Cockpit URL for bot→cockpit escalation forwarding. The bot's
         # BaseBot.on_escalation POSTs to {KAI_COCKPIT_URL}/api/escalations.
-        # Sourced from CockpitSettings.cockpit_internal_url (a loopback/
-        # in-container address bots can actually reach), NOT public_url
-        # (the browser-facing external URL bots can't resolve from inside).
+        # Sourced from CockpitSettings.cockpit_internal_url (loopback/
+        # in-container address bots can reach), not public_url (the
+        # browser-facing URL bots can't resolve from inside).
         from kai.cockpit.settings import get_cockpit_settings
 
         env["KAI_COCKPIT_URL"] = get_cockpit_settings().cockpit_internal_url
-        # WAHA-specific env shape — bespoke to the waha bot type.
-        # ``conn`` is the whatsapp Connection from the required-connections
-        # gate; it's None for a future non-whatsapp bot type, which would
-        # have its own bespoke env block here instead.
+        # WAHA-specific env shape (waha bot type only). ``conn`` is the
+        # whatsapp Connection from the required-connections gate; None for a
+        # future non-whatsapp bot type, which would have its own env block.
         if conn is not None:
             env["KAI_WAHA_SESSION"] = conn.config["waha_session"]
             env["KAI_WAHA_HMAC_KEY"] = user.hmac_key
@@ -661,18 +637,13 @@ class DeploymentsService:
             if voice_map:
                 env["KAI_WAHA_KOKORO_VOICE_MAP"] = voice_map
             # The bot reads its external config from KAI_CONFIGS_DIR; the
-            # cockpit writes those configs to config_writer.CONFIGS_DIR, so
-            # the injected value is sourced from there (single source of
-            # truth) rather than re-hardcoded here.
+            # cockpit writes those configs to config_writer.CONFIGS_DIR.
             env["KAI_CONFIGS_DIR"] = str(config_writer.CONFIGS_DIR)
 
-        # Required credential connections (e.g. the email bot's required
-        # smtp): inject their env the same way supported connections do.
-        # Bespoke (whatsapp) is handled by the block above; ingress-only
-        # (resend) is a no-op via _inject_connection_env's early return.
-        # Without this, a bot declaring a required credential other than
-        # whatsapp would start with no env for it (smtp → no send_email
-        # tool and no reply path).
+        # Required credential connections (e.g. the email bot's smtp):
+        # inject their env the same way supported connections do. Bespoke
+        # (whatsapp) is handled above; ingress-only (resend) is a no-op via
+        # _inject_connection_env's early return.
         for service, c in required_conns.items():
             if service == "whatsapp":
                 continue
@@ -682,12 +653,11 @@ class DeploymentsService:
                 raise ConnectionRequiredError(f"{service} config unreadable: {exc}") from exc
 
         # Generic non-bespoke control-port + HMAC-key injection. For any bot
-        # type whose required_connections does NOT include whatsapp (i.e. not
-        # bespoke), allocate a control port and inject the KAI_BOT_* env the
-        # bot's EmailSettings (or the next webhook bot's settings) reads.
-        # The port is stored in Deployment.settings["control_port"] (JSON, no
-        # migration) and cleared on stop(). This is the generic path — the
-        # next non-bespoke webhook bot needs zero cockpit changes.
+        # type whose required_connections does NOT include whatsapp, allocate
+        # a control port and inject the KAI_BOT_* env the bot's settings
+        # reads. The port is stored in Deployment.settings["control_port"]
+        # (JSON, no migration) and cleared on stop(). This is the generic
+        # path — the next non-bespoke webhook bot needs zero cockpit changes.
         is_bespoke = "whatsapp" in bt.required_connections
         if not is_bespoke:
             control_port = self._allocate_control_port(self.db, user)
@@ -709,12 +679,11 @@ class DeploymentsService:
             env["KAI_BRAIN_MANDATORY"] = "true" if mandatory else "false"
 
         # Supported-connection injection: for each optional connection this
-        # bot type declares, inject its env vars only when both the operator
-        # has toggled it on for this deployment (settings["tools"]) AND the
-        # Connection row exists. Never "on for every bot just because the
-        # operator connected it once." Every stored toggle is a nested dict
-        # (see ``build_tools_update``/``_tool_enabled``); ``{}`` is the
-        # default for a service the operator hasn't touched yet.
+        # bot type declares, inject env vars only when the operator has
+        # toggled it on for this deployment (settings["tools"]) AND the
+        # Connection row exists. Every stored toggle is a nested dict (see
+        # build_tools_update/_tool_enabled); ``{}`` is the default for an
+        # untouched service.
         tools_cfg = deployment.settings.get("tools", {})
         for service in bt.supported_connections:
             if service in bt.required_connections:
@@ -742,8 +711,8 @@ class DeploymentsService:
                 )
                 continue
             # Per-tool instruction. Only inject if at least one credential
-            # field was actually set — a connection with no data shouldn't
-            # produce a ghost instruction the bot will silently ignore.
+            # field was actually set — an empty connection shouldn't produce
+            # a ghost instruction the bot will ignore.
             svc_vars = SERVICE_ENV_VARS.get(service, {})
             instr_var = svc_vars.get("instruction")
             if instr_var and any(ev in env for ev in svc_vars.get("fields", {}).values()):
@@ -766,13 +735,13 @@ class DeploymentsService:
         stdout = proc.stdout
         assert stdout is not None, "subprocess.PIPE was set; stdout must be non-None"
 
-        # Drain stdout/stderr for the *entire* subprocess lifetime, not just
-        # during the startup handshake below. Bot output was previously only
-        # read up to the first "KAI_RUN_ID=" line, then abandoned — once the
-        # bot's own logging filled the OS pipe buffer (typically 64KB), its
-        # next write() would block forever, hanging the bot. Forwarding every
-        # line (prefixed with the instance id) also makes bot logs (message
-        # received, tool calls, etc.) visible in `docker compose logs cockpit`.
+        # Drain stdout/stderr for the entire subprocess lifetime. Bot output
+        # was previously only read up to the first "KAI_RUN_ID=" line, then
+        # abandoned — once the bot's own logging filled the OS pipe buffer
+        # (typically 64KB), its next write() would block forever, hanging
+        # the bot. Forwarding every line (prefixed with the instance id)
+        # also makes bot logs (message received, tool calls, etc.) visible
+        # in `docker compose logs cockpit`.
         instance_id_for_logs = self._instance_id(deployment, user=user)
 
         def _pump_output() -> None:
@@ -783,13 +752,13 @@ class DeploymentsService:
                         run_id_box.append(line.strip().split("KAI_RUN_ID=")[1].split()[0])
                         run_id_found.set()
                     if line:
-                        # Print raw rather than through this logger: the bot
-                        # subprocess already formats its own lines (it calls
-                        # setup_logging() itself), so re-logging here would
-                        # double up the timestamp/level/logger-name prefix.
+                        # Print raw: the bot subprocess already formats its
+                        # own lines (it calls setup_logging() itself), so
+                        # re-logging here would double the timestamp/level
+                        # prefix.
                         print(f"[{instance_id_for_logs}] {line}", flush=True)
             except (ValueError, OSError):
-                # Pipe closed underneath us (process killed) — fine to stop.
+                # Pipe closed underneath us (process killed).
                 pass
 
         pump_thread = threading.Thread(
@@ -838,9 +807,8 @@ class DeploymentsService:
     def _clear_control_port(self, deployment: Deployment) -> None:
         """Remove the allocated control port from deployment settings.
 
-        Called from both ``stop()`` exit paths and ``reconcile_deployments()``
-        so the port can be reclaimed. Single implementation so changes apply
-        everywhere.
+        Called from both ``stop()`` and ``reconcile_deployments()`` so the
+        port can be reclaimed.
         """
         if "control_port" in deployment.settings:
             deployment.settings = {
@@ -891,15 +859,13 @@ class DeploymentsService:
         self.db.commit()
 
     def delete(self, deployment: Deployment) -> None:
-        """Delete a deployment: stop it if running, purge all per-bot state,
-        then remove the DB row.
+        """Delete a deployment: stop if running, purge per-bot state, remove row.
 
-        Deleting a deployment does NOT disconnect WhatsApp — the
-        account-level Connection (and its WAHA session) is left intact so
-        the operator can redeploy without re-scanning the QR. Everything
-        else tied to this deployment instance — config file, chat history,
-        goal, runs, seen-IDs, sleep-state, and tasks — is purged so no
-        orphaned state survives.
+        Does NOT disconnect WhatsApp — the account-level Connection (and its
+        WAHA session) is left intact so the operator can redeploy without
+        re-scanning the QR. Everything else tied to this deployment
+        instance — config file, chat history, goal, runs, seen-IDs,
+        sleep-state, and tasks — is purged so no orphaned state survives.
         """
         if deployment.status == "running" or deployment.run_id:
             self.stop(deployment)
@@ -913,9 +879,9 @@ class DeploymentsService:
         """Remove every per-bot state file for this deployment instance.
 
         Unlinks the cockpit-managed config, chat history, goal, runs,
-        seen-IDs, sleep-state, and tasks stores. Missing files are
-        silently skipped. The WhatsApp connection and WAHA session are
-        NOT touched (account-level, not deployment-level).
+        seen-IDs, sleep-state, and tasks stores. Missing files are silently
+        skipped. The WhatsApp connection and WAHA session are NOT touched
+        (account-level, not deployment-level).
         """
         instance_id = self._instance_id(deployment)
 
@@ -926,20 +892,19 @@ class DeploymentsService:
 
         # agent_history_folder (history/goal/runs) is resolved by core.py
         # relative to the process CWD. tasks_folder (seen/sleep/tasks) is
-        # resolved by base.py/waha's Bot relative to the *bot's own package
-        # directory* instead — see kai.bots.base.Bot._resolve_store_path and
-        # TaskScheduler setup. Mirror both exactly or a relative tasks_folder
-        # (the default, "data") silently purges the wrong directory.
+        # resolved by base.py/waha's Bot relative to the bot's own package
+        # directory — see kai.bots.base.Bot._resolve_store_path. Mirror
+        # both exactly or a relative tasks_folder (the default, "data")
+        # silently purges the wrong directory.
         #
-        # The exact filenames below are hardcoded to match four independent
+        # The filenames below are hardcoded to match four independent
         # producers (kai.agent.core.KaiAgent._resolve_history_file for
         # history/goal, kai.runs.runs_path for runs, kai.bots.waha.Bot's
-        # seen/sleep suffixes, and kai.bots.base.Bot's tasks suffix) — there
-        # is no single shared naming helper. runs_path is reused directly
-        # below since it's already a public function; the others have no
-        # public equivalent to call. If any of those naming rules ever
-        # changes, update the suffixes here too, or purge will silently
-        # leave orphaned files behind (unlink uses missing_ok=True).
+        # seen/sleep suffixes, and kai.bots.base.Bot's tasks suffix) —
+        # there is no shared naming helper. runs_path is reused directly
+        # since it's already public; the others have no public equivalent.
+        # If any naming rule changes, update the suffixes here too, or
+        # purge will silently leave orphaned files behind.
         history_suffixes = [
             f"{instance_id}.json",
             f"{instance_id}.json.goal",
@@ -1032,15 +997,14 @@ class DeploymentsService:
         """Load the per-bot history file and return ``{chat_id: [messages]}``.
 
         Each message is ``{"role": str, "content": str, "ts": str | None}``.
-        The ``ts`` field is the ISO-8601 UTC timestamp recorded when the
-        message was stored; older history files (pre-timestamp) have
-        ``None``. Returns ``{}`` when the file is missing or unreadable.
-        The history file is
+        ``ts`` is the ISO-8601 UTC timestamp recorded when the message was
+        stored; older history files (pre-timestamp) have ``None``. Returns
+        ``{}`` when the file is missing or unreadable. The history file is
         written atomically by the bot process (a ``.tmp`` replace), so
         reading it from the cockpit is safe.
 
-        The on-disk keys are namespaced as ``{instance_id}:{conversation_id}``
-        (see :meth:`KaiAgent._history_key`); the returned dict strips the
+        On-disk keys are namespaced as ``{instance_id}:{conversation_id}``
+        (see :meth:`KaiAgent._history_key``); the returned dict strips the
         instance prefix so the cockpit surfaces the raw conversation id
         (e.g. ``operator``, ``1809...@g.us``).
         """
@@ -1125,11 +1089,11 @@ def reconcile_deployments() -> None:
         svc = DeploymentsService(db)
 
         # Reclaim stale ports for crashed bots before the restart loop.
-        # A deployment with status="running" whose process is actually dead
-        # (container restart killed it) leaves its control_port reserved
-        # forever — _allocate_control_port trusts the status column. Clear
-        # the port and reset status so the port pool doesn't exhaust across
-        # crashes. This runs for ALL deployments regardless of desired_state.
+        # A status="running" deployment whose process is dead (container
+        # restart killed it) leaves its control_port reserved forever —
+        # _allocate_control_port trusts the status column. Clear the port
+        # and reset status so the pool doesn't exhaust across crashes.
+        # Runs for ALL deployments regardless of desired_state.
         stale = db.query(Deployment).filter(Deployment.status == "running").all()
         for dep in stale:
             if svc.fetch_status(dep) is None:
@@ -1147,7 +1111,7 @@ def reconcile_deployments() -> None:
                     continue  # already alive — nothing to do
             except Exception:
                 # fetch_status failed (network error, registry corruption).
-                # Do NOT fall through to start(): if the bot is actually
+                # Don't fall through to start(): if the bot is actually
                 # running but the status check failed, spawning a second
                 # subprocess would leak a duplicate bot.
                 logger.exception("reconcile: fetch_status failed for deployment %s", dep.id)
@@ -1168,30 +1132,26 @@ def reconcile_deployments() -> None:
 
 def topbar_status(request, user) -> str:
     """Overall deployment health for the topbar indicator, shown on every
-    page. Deliberately cheap: only reads the persisted ``status`` and
-    ``desired_state`` columns (no live process probing like
-    ``fetch_status``), so it's safe to call once per template render.
+    page. Cheap: only reads the persisted ``status`` and ``desired_state``
+    columns (no live process probing), so safe to call once per template
+    render.
 
-    Red is reserved for an actual problem — a deployment whose user-chosen
-    ``desired_state`` is ``"running"`` but whose live ``status`` isn't (i.e.
-    it crashed or died unexpectedly). A deployment the user intentionally
-    stopped (``desired_state == "stopped"``) is *not* a problem, so a fleet
-    that's entirely, deliberately stopped is "warn" (idle), not "down".
+    Red is reserved for an actual problem — a deployment whose
+    ``desired_state`` is ``"running"`` but whose live ``status`` isn't
+    (crashed or died). A deployment the user intentionally stopped is not
+    a problem, so a fleet that's entirely, deliberately stopped is "warn"
+    (idle), not "down".
 
-    ``user`` is the already-loaded ``User`` from the template context (every
-    route renders via ``require_user`` / ``get_current_user``). A ``None``
-    user (logged out, or a disabled account that ``get_current_user``
-    filtered out) is treated exactly like being logged out, so no
+    ``user`` is the already-loaded User from the template context. ``None``
+    (logged out, or a disabled account) is treated like logged out, so no
     disabled-account deployment health leaks.
 
-    Reuses the request-scoped DB session that ``get_db`` stashes on
-    ``request.state.db`` for the deployment-status query.
+    Reuses the request-scoped DB session on ``request.state.db``.
 
     Returns one of:
       - ``"none"``  — logged out, disabled account, or zero deployments
-      - ``"ok"``    — no unexpected-down deployments, and at least one running
-      - ``"warn"``  — either a partial problem, or everything intentionally
-                      idle (nothing running, nothing unexpectedly down)
+      - ``"ok"``    — no unexpected-down deployments, at least one running
+      - ``"warn"``  — partial problem, or everything intentionally idle
       - ``"down"``  — nothing running, and at least one deployment that
                       should be running (per ``desired_state``) isn't
     """

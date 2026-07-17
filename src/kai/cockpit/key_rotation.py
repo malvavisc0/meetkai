@@ -1,11 +1,7 @@
 """On-demand credential encryption key rotation.
 
-Rotation is operator-initiated (run ``kai cockpit rotate-credential-key``),
-not tracked or scheduled by the application. The cockpit has a small number
-of credential-bearing Connection rows; building automated rotation-compliance
-tracking for that would be disproportionate machinery with no concrete
-requirement behind it.
-"""
+Rotation is operator-initiated (``kai cockpit rotate-credential-key``),
+not tracked or scheduled by the application."""
 
 from __future__ import annotations
 
@@ -22,14 +18,8 @@ def rotate_credential_key(db: Session) -> tuple[str, bool]:
     """Re-encrypt every credential Connection under a new key version.
 
     Returns ``(new_version, env_written)``. ``env_written`` is ``False`` when
-    ``.env`` doesn't exist (Docker, env-in-compose) so the CLI can print a
-    manual instruction. ``KAI_CREDENTIAL_ENCRYPTION_KEY`` (the root secret) is
-    never touched — only the version is bumped.
-
-    The new version becomes the process's active version (via
-    :func:`set_active_version`) so subsequent ``encrypt()`` calls use it, and
-    is persisted to ``.env`` for the next process start. The process
-    environment is never mutated.
+    ``.env`` doesn't exist (Docker, env-in-compose). The new version becomes
+    the process's active version so subsequent ``encrypt()`` calls use it.
     """
     from kai.cockpit.bots import CREDENTIAL_TYPES
     from kai.cockpit.models import Connection
@@ -66,12 +56,8 @@ def rotate_credential_key(db: Session) -> tuple[str, bool]:
 
 
 def _update_env_file(version: str) -> bool:
-    """Update ``KAI_CREDENTIAL_KEY_VERSION`` in ``.env``.
-
-    Returns ``True`` if the file was written. Returns ``False`` if ``.env``
-    doesn't exist (Docker, env-in-compose) so the caller can print the manual
-    instruction.
-    """
+    """Update ``KAI_CREDENTIAL_KEY_VERSION`` in ``.env``. Returns ``True``
+    if the file was written, ``False`` if it doesn't exist."""
     env_path = Path(".env")
     if not env_path.is_file():
         return False
