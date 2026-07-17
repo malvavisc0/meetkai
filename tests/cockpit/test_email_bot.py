@@ -27,12 +27,11 @@ def _make_bot(
 ) -> Bot:
     """Construct an email bot with minimal wiring for ingest_event tests."""
     bot = Bot(bot_dir=tmp_path)
-    bot._config = BotConfig(language="English", timezone="UTC")
+    bot._config = BotConfig(language="English", timezone="UTC", vision=vision)
     bot._email = EmailSettings(
         control_host="0.0.0.0",
         control_port=8200,
         hmac_key="test-key",
-        vision=vision,
         max_attachment_bytes=max_attachment_bytes,
     )
     bot._smtp = MagicMock()

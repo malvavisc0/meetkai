@@ -3,8 +3,7 @@
 Covers: a non-bespoke bot (email) gets ``KAI_BOT_CONTROL_PORT`` /
 ``KAI_BOT_HMAC_KEY`` / ``KAI_BOT_CONTROL_HOST`` injected into the spawned
 env, ``Deployment.settings["control_port"]`` is set on start and cleared on
-stop, and ``KAI_EMAIL_VISION`` is injected when ``feature_flags["image"]``
-is on. Also confirms the whatsapp (bespoke) path does NOT get the generic
+stop. Also confirms the whatsapp (bespoke) path does NOT get the generic
 ``KAI_BOT_*`` env.
 """
 
@@ -214,7 +213,10 @@ class TestControlPortInjection:
         db.refresh(dep)
         assert "control_port" not in dep.settings
 
-    def test_kai_email_vision_injected_when_image_flag_on(self, db, monkeypatch, tmp_path):
+    def test_vision_not_injected_as_env(self, db, monkeypatch, tmp_path):
+        # Vision capability now flows through config.json (BotConfig.vision),
+        # not KAI_EMAIL_VISION env. Confirm the env name is never set,
+        # regardless of the image feature flag.
         user = _make_user(db)
         db.add(_resend_conn(user.id))
         db.add(_smtp_conn(user.id))
@@ -223,24 +225,6 @@ class TestControlPortInjection:
         svc = DeploymentsService(db)
         dep = _bare_deployment(db, user)
         dep.feature_flags = {"image": True}
-        db.commit()
-
-        injected_env: dict = {}
-        monkeypatch.setattr(subprocess, "Popen", _capture_popen_factory(injected_env))
-        _setup_run_registry(monkeypatch, tmp_path, f"{dep.bot_type}-{user.email}")
-
-        svc.start(dep)
-        assert injected_env.get("KAI_EMAIL_VISION") == "1"
-
-    def test_kai_email_vision_absent_when_image_flag_off(self, db, monkeypatch, tmp_path):
-        user = _make_user(db)
-        db.add(_resend_conn(user.id))
-        db.add(_smtp_conn(user.id))
-        db.commit()
-
-        svc = DeploymentsService(db)
-        dep = _bare_deployment(db, user)
-        dep.feature_flags = {"image": False}
         db.commit()
 
         injected_env: dict = {}

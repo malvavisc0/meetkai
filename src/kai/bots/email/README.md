@@ -62,8 +62,7 @@ KAI_BOT_CONTROL_PORT=8201          # allocated per-deployment by the cockpit
 KAI_BOT_HMAC_KEY=your-secret-key
 KAI_BOT_HMAC_ALGORITHM=sha512
 
-# KAI_EMAIL_* — per-deployment feature flags
-KAI_EMAIL_VISION=true              # image attachments passed to vision
+# KAI_EMAIL_* — per-deployment feature knobs
 KAI_EMAIL_MAX_ATTACHMENT_BYTES=10485760
 
 # KAI_SMTP_TOOL_* — the reply path (from the SMTP connection)
@@ -135,9 +134,10 @@ all.
 ## Attachments
 
 Image attachments are downloaded and passed to the model's vision channel
-when `KAI_EMAIL_VISION` (the deployment's `image` feature flag) is on;
-non-image attachments and images with vision disabled are tagged as
-`[attachment: name (content-type)]` text instead of dropped silently.
+when the deployment's `image` feature flag is on (written to `vision` in
+config.json by the cockpit); non-image attachments and images with vision
+disabled are tagged as `[attachment: name (content-type)]` text instead of
+dropped silently.
 Downloads are capped by `KAI_EMAIL_MAX_ATTACHMENT_BYTES` (default 10 MiB) —
 oversized attachments are skipped with a warning, not retried.
 

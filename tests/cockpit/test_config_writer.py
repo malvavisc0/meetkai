@@ -99,3 +99,38 @@ class TestWriteConfig:
         path = config_writer.write_config(dep, INSTANCE_ID)
         assert path.name == f"{INSTANCE_ID}.json"
         assert path.name != "42.json"
+
+
+class TestEmailVisionFlag:
+    """Email deployments map the ``image`` feature flag to BotConfig.vision
+    via config.json — the same channel waha uses for media.image_enabled."""
+
+    def test_vision_true_when_image_flag_on(self):
+        dep = _make_deployment(
+            bot_type="email",
+            feature_flags={"image": True},
+            settings={"blacklist": [], "display_name": "Kai"},
+        )
+        path = config_writer.write_config(dep, "email-bob@test.com")
+        data = json.loads(path.read_text())
+        assert data["vision"] is True
+
+    def test_vision_false_when_image_flag_off(self):
+        dep = _make_deployment(
+            bot_type="email",
+            feature_flags={"image": False},
+            settings={"blacklist": [], "display_name": "Kai"},
+        )
+        path = config_writer.write_config(dep, "email-bob@test.com")
+        data = json.loads(path.read_text())
+        assert data["vision"] is False
+
+    def test_email_does_not_get_media_block(self):
+        dep = _make_deployment(
+            bot_type="email",
+            feature_flags={"image": True},
+            settings={"blacklist": []},
+        )
+        path = config_writer.write_config(dep, "email-bob@test.com")
+        data = json.loads(path.read_text())
+        assert "media" not in data
