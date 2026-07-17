@@ -44,8 +44,6 @@ tools:
     - record_note
     - get_conversation_messages
 
-web_workflow: true
-
 post_processing:
   profile: custom
   strip_markdown: true

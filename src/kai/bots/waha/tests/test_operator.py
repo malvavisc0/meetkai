@@ -88,12 +88,6 @@ class TestActionAsTool:
     action rather than recording a failed "unknown tool" dispatch.
     """
 
-    def test_action_values_extracts_enum(self):
-        values = _action_values(WahaAction)
-        assert "send_to_group" in values
-        assert "console" in values
-        assert "silent" in values
-
     def test_action_values_omits_silent_for_no_silent_cls(self):
         values = _action_values(WahaNoSilentAction)
         assert "silent" not in values

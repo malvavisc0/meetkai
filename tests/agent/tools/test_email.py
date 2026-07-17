@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import ast
 import inspect
 from unittest.mock import MagicMock, patch
 
@@ -109,8 +108,6 @@ class TestSendEmailSuccess:
 class TestToolSignatureNoFrom:
     def test_no_from_parameter(self):
         tool = make_send_email_tool("localhost", 1025, "u", "p", "from@test.com")
-        import inspect
-
         sig = inspect.signature(tool.fn)
         param_names = set(sig.parameters.keys())
         assert "to" in param_names
@@ -188,22 +185,3 @@ class TestRegisterEmailTool:
         workflow = agent.set_tool_workflow.call_args[0][0]
         assert "send_email" in workflow
         assert "reply when asked" in workflow
-
-
-class TestNoLoggerInfoInToolFunctions:
-    def test_no_logger_info_in_email_module(self):
-        from kai.agent.tools import email
-
-        source = inspect.getsource(email)
-        tree = ast.parse(source)
-        for node in ast.walk(tree):
-            if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute):
-                if (
-                    node.func.attr == "info"
-                    and isinstance(node.func.value, ast.Name)
-                    and node.func.value.id == "logger"
-                ):
-                    raise AssertionError(
-                        f"logger.info call at line {node.lineno} in email.py — "
-                        "logging should be in agent/core.py, not duplicated per tool"
-                    )

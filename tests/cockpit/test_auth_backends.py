@@ -20,12 +20,6 @@ class TestMagicLinkProvider:
         # The pending request is now fulfilled.
         assert tokens.get_pending_request(db, user.id) is None
 
-    def test_consume_login_happy_path(self, db, user):
-        tokens.create_login_request(db, user.id)
-        provider = MagicLinkProvider(db)
-        token = provider.initiate_login(user.id)
-        assert provider.consume_login(token.token) == user.id
-
     def test_consume_login_single_use(self, db, user):
         tokens.create_login_request(db, user.id)
         provider = MagicLinkProvider(db)

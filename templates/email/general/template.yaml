@@ -28,8 +28,6 @@ tools:
     - list_tasks
     - cancel_task
 
-web_workflow: true
-
 post_processing:
   profile: none
 

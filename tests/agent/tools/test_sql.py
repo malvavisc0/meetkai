@@ -49,10 +49,6 @@ class TestSqlQueryRejects:
         assert _call_tool(query_tool, query="") == "Error: query must not be empty"
         assert _call_tool(query_tool, query="   ") == "Error: query must not be empty"
 
-    def test_rejects_select_with_semicolon(self, query_tool):
-        result = _call_tool(query_tool, query="SELECT 1;")
-        assert json.loads(result) == [{"1": 1}]
-
 
 class TestSqlQueryAccepts:
     @pytest.fixture
@@ -71,6 +67,10 @@ class TestSqlQueryAccepts:
 
     def test_select_case_insensitive(self, query_tool):
         result = _call_tool(query_tool, query="select 1")
+        assert json.loads(result) == [{"1": 1}]
+
+    def test_trailing_semicolon(self, query_tool):
+        result = _call_tool(query_tool, query="SELECT 1;")
         assert json.loads(result) == [{"1": 1}]
 
 
@@ -187,28 +187,3 @@ class TestRegisterSqlTool:
             assert "test rules" in workflow
         finally:
             engine.dispose()
-
-
-class TestNoLoggerInfoInToolFunctions:
-    """The tool functions must not call logger.info directly — call/result
-    logging is handled generically by agent/core.py:_run_with_tools."""
-
-    def test_no_logger_info_in_sql_module(self):
-        import ast
-        import inspect
-
-        from kai.agent.tools import sql
-
-        source = inspect.getsource(sql)
-        tree = ast.parse(source)
-        for node in ast.walk(tree):
-            if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute):
-                if (
-                    node.func.attr == "info"
-                    and isinstance(node.func.value, ast.Name)
-                    and node.func.value.id == "logger"
-                ):
-                    raise AssertionError(
-                        f"logger.info call at line {node.lineno} in sql.py — "
-                        "logging should be in agent/core.py, not duplicated per tool"
-                    )

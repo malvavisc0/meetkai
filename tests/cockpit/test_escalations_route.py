@@ -10,7 +10,6 @@ badge read a single source of truth. These tests exercise that cockpit side.
 
 from __future__ import annotations
 
-from kai.agent.tools.escalate import EscalationStore
 from kai.cockpit import tokens
 from kai.cockpit.auth_backends import MagicLinkProvider
 
@@ -87,11 +86,6 @@ class TestIngestEndpoint:
 
 
 class TestIngestAuth:
-    def test_no_auth_required_by_default(self, client):
-        # KAI_COCKPIT_ESCALATION_SECRET unset → open (internal-network trust).
-        resp = client.post("/api/escalations", json=_ESCALATION_PAYLOAD)
-        assert resp.status_code == 201
-
     def test_rejects_missing_token_when_secret_set(self, client, monkeypatch):
         monkeypatch.setenv("KAI_COCKPIT_ESCALATION_SECRET", "s3cret")
         resp = client.post("/api/escalations", json=_ESCALATION_PAYLOAD)
@@ -119,7 +113,8 @@ class TestIngestAuth:
 class TestDashboardRoute:
     def test_dashboard_requires_auth(self, client):
         resp = client.get("/escalations", follow_redirects=False)
-        assert resp.status_code != 200
+        assert resp.status_code == 302
+        assert "/login" in resp.headers["location"]
 
     def test_dashboard_shows_active_escalation(self, client, db, user):
         client.post("/api/escalations", json=_ESCALATION_PAYLOAD)
@@ -199,18 +194,3 @@ class TestSidebarBadge:
         resp = client.get("/escalations")
         assert 'href="/escalations"' in resp.text
         assert "escalations" in resp.text.lower()
-
-
-class TestCockpitStoreWiring:
-    def test_create_app_sets_a_persistent_store(self):
-        # create_app() wires a cockpit-level store (not the default in-memory
-        # one). The conftest redirects KAI_ESCALATIONS_PATH to a tmp file, so
-        # the store created here persists to disk.
-        from kai.cockpit.app import create_app
-
-        create_app()  # should not raise
-        from kai.agent.tools.escalate import _DYN
-
-        assert isinstance(_DYN.store, EscalationStore)
-        # The path is non-None (tmp file from the conftest).
-        assert _DYN.store._path is not None

@@ -28,8 +28,6 @@ tools:
     - escalate
     - send_email
 
-web_workflow: false
-
 post_processing:
   profile: none
 

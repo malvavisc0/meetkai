@@ -718,6 +718,7 @@ class TestKaiAgentToolHistory:
         mock_llm = MagicMock()
         mock_llm.achat_with_tools = AsyncMock(side_effect=[tool_response, final_response])
         mock_llm.get_tool_calls_from_response = MagicMock(side_effect=[[tc], []])
+        _wire_structured(mock_llm, "done")
         agent._llm = mock_llm
 
         def bad_callback(name, kwargs, result):
@@ -725,11 +726,6 @@ class TestKaiAgentToolHistory:
 
         agent.set_tool_call_callback(bad_callback)
         # A faulty callback must not break the agent flow.
-        mock_llm = MagicMock()
-        mock_llm.achat_with_tools = AsyncMock(side_effect=[tool_response, final_response])
-        mock_llm.get_tool_calls_from_response = MagicMock(side_effect=[[tc], []])
-        _wire_structured(mock_llm, "done")
-        agent._llm = mock_llm
         result = await agent.chat("search for test", output_cls=_TestAction)
         assert result.action.text == "done"
 

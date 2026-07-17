@@ -3,6 +3,8 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass, field
 
+from pydantic import BaseModel
+
 from kai.agent.tools import get_tools
 from kai.templates.schema import TemplateDef
 
@@ -11,6 +13,13 @@ logger = logging.getLogger(__name__)
 _DEFAULT_TOOL_NAMES: frozenset[str] = frozenset(
     tool.metadata.name for tool in get_tools() if tool.metadata.name
 )
+
+# Default tools the operator may NOT disable via --disable-tools. These are
+# safety/moderation primitives that must stay available on every deployment
+# regardless of template or operator preference. The remaining default tools
+# (web_search, get_webpage_content, get_current_datetime, get_weather,
+# calculate) are disableable so a focused template can shed them.
+_NON_DISABLEABLE_DEFAULTS: frozenset[str] = frozenset({"escalate", "blacklist_contact"})
 
 # Env vars each tool needs to be configured. A tool is "configured" only when
 # ALL listed vars are set — mirroring the *_enabled gates on each tool's
@@ -100,12 +109,12 @@ class ToolResolution:
     rejected_unknown: list[str] = field(default_factory=list)
 
 
-def resolve_config(
+def resolve_config[T: BaseModel](
     template: TemplateDef,
     config_file_data: dict | None,
     cli_overrides: dict,
-    config_cls: type,
-) -> object:
+    config_cls: type[T],
+) -> T:
     defaults = config_cls().model_dump()
     merged = _deep_merge(defaults, template.config)
     if config_file_data:
@@ -122,12 +131,19 @@ def resolve_tools(
     default_tools = frozenset(_DEFAULT_TOOL_NAMES)
     template_required = frozenset(template.tools.required)
 
-    cannot_disable = set(default_tools) | template_required
+    # Non-disableable: the safety defaults (escalate, blacklist_contact) plus
+    # anything the template marks required. Every other default tool
+    # (web_search, calculate, …) and every optional/template-declared tool
+    # can be shed by the operator via --disable-tools.
+    cannot_disable = _NON_DISABLEABLE_DEFAULTS | template_required
 
     rejected_disable = []
     for tool in operator_disable:
         if tool in cannot_disable:
-            reason = "default" if tool in default_tools else "required by template"
+            if tool in template_required:
+                reason = "required by template"
+            else:
+                reason = "safety tool — cannot be disabled"
             rejected_disable.append(f"{tool} ({reason} — cannot be disabled)")
 
     # ``--enable-tools`` names must exist in the real tool registry, otherwise

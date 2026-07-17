@@ -1,5 +1,6 @@
 import json
 
+import httpx
 import pytest
 import respx
 from httpx import Response
@@ -49,7 +50,7 @@ class TestExtractMarkdown:
     @pytest.mark.asyncio
     async def test_raises_on_http_error(self, client):
         respx.post("/md").mock(return_value=Response(401))
-        with pytest.raises(Exception):
+        with pytest.raises(httpx.HTTPStatusError):
             await client.extract_markdown(url="https://x.com/")
 
 

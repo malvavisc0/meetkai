@@ -1,3 +1,4 @@
+import httpx
 import pytest
 import respx
 from httpx import Response
@@ -33,7 +34,7 @@ class TestGetSessions:
     @pytest.mark.asyncio
     async def test_raises_on_error(self, client):
         respx.get("/api/sessions").mock(return_value=Response(500))
-        with pytest.raises(Exception):
+        with pytest.raises(httpx.HTTPStatusError):
             await client.get_sessions()
 
 
@@ -117,7 +118,7 @@ class TestCreateSession:
     @pytest.mark.asyncio
     async def test_raises_on_other_error(self, client):
         respx.post("/api/sessions").mock(return_value=Response(500))
-        with pytest.raises(Exception):
+        with pytest.raises(httpx.HTTPStatusError):
             await client.create_session("s1")
 
 
@@ -209,7 +210,7 @@ class TestGetChatParticipants:
     @pytest.mark.asyncio
     async def test_raises_on_error(self, client):
         respx.get("/api/default/groups/g%40g.us/participants/v2").mock(return_value=Response(500))
-        with pytest.raises(Exception):
+        with pytest.raises(httpx.HTTPStatusError):
             await client.get_chat_participants("g@g.us")
 
 
@@ -277,7 +278,7 @@ class TestGetChatMessages:
     @pytest.mark.asyncio
     async def test_raises_on_error(self, client):
         respx.get("/api/default/chats/g%40g.us/messages").mock(return_value=Response(500))
-        with pytest.raises(Exception):
+        with pytest.raises(httpx.HTTPStatusError):
             await client.get_chat_messages("g@g.us")
 
 
@@ -329,7 +330,7 @@ class TestGetChatsOverview:
     @pytest.mark.asyncio
     async def test_raises_on_error(self, client):
         respx.get("/api/default/chats/overview").mock(return_value=Response(500))
-        with pytest.raises(Exception):
+        with pytest.raises(httpx.HTTPStatusError):
             await client.get_chats_overview()
 
 

@@ -1,6 +1,7 @@
 import io
 import json
 
+import httpx
 import pytest
 import respx
 from httpx import Response
@@ -53,7 +54,7 @@ class TestIngestText:
     @pytest.mark.asyncio
     async def test_raises_on_http_error(self, client):
         respx.post("/documents/text").mock(return_value=Response(500))
-        with pytest.raises(Exception):
+        with pytest.raises(httpx.HTTPStatusError):
             await client.ingest_text(file_source="x", text="y", workspace="ws")
 
 

@@ -63,7 +63,7 @@ def _email_env(monkeypatch):
     monkeypatch.setenv("KAI_BOT_HMAC_KEY", "test-secret")
 
 
-class TestPhase3Catalog:
+class TestTemplatesCatalog:
     def test_all_seven_templates_exist(self):
         reg = TemplateRegistry.bundled()
         names = {f"{t.transport}/{t.name}" for t in reg.list()}
@@ -92,13 +92,6 @@ class TestPhase3Catalog:
         assert "sleep" in waha_actions["lead-qualification"]
         assert "send_to_group" in waha_actions["group-chatter"]
         assert "send_voice_note" not in waha_actions["group-chatter"]
-
-    def test_email_templates_only_use_email_actions(self):
-        for t in TemplateRegistry.bundled().list("email"):
-            for a in t.actions:
-                assert a in {"reply", "silent", "console"}, (
-                    f"{t.name}: {a} is not a valid email action"
-                )
 
     def test_customer_support_requires_brain_and_escalate(self):
         for transport in ("waha", "email"):

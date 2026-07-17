@@ -2,7 +2,7 @@
 
 Verifies the Phase 2 success criteria:
 - ``configure()`` receives the resolved template + ``ToolResolution`` and drives
-  actions / post-processing / reply_style / web_workflow / tool gating from it.
+  actions / post-processing / reply_style / tool gating from it.
 - Bot-owned tool registration (``get_whatsapp_history``, conversation tools,
   the task scheduler) respects the resolved tool set — a template that omits a
   tool gets it absent.
@@ -115,13 +115,17 @@ class TestWahaGeneralWiring:
 
         assert agent._workflows  # WEB_WORKFLOW_INSTRUCTIONS injected
 
-    def test_web_workflow_false_omits_injection(self):
-        tmpl = _general("waha").model_copy(update={"web_workflow": False})
+    def test_disabling_web_search_omits_workflow(self):
+        # The web-search workflow tracks tool presence, not a template flag:
+        # an operator who disables web_search gets no usage guidance for tools
+        # the bot no longer has.
+        tmpl = _general("waha")
         bot = WahaBot(_waha_dir())
         agent = _fake_agent()
-        tools = resolve_tools(tmpl, [], [])
+        tools = resolve_tools(tmpl, [], ["web_search"])
         bot.configure(agent, _settings(), template=tmpl, tools=tools)
 
+        assert "web_search" not in tools.final_tools
         assert not agent._workflows
 
     def test_action_cls_for_turn_uses_base_actions(self):
@@ -194,20 +198,6 @@ class TestToolGating:
         bot.configure(agent, _settings(), template=tmpl, tools=tools)
 
         assert "get_whatsapp_history" not in set(agent._registered)
-
-    def test_operator_disable_removes_optional_tool(self, monkeypatch):
-        monkeypatch.setenv("KAI_BRAIN_BASE_URL", "http://test")
-        monkeypatch.setenv("KAI_BRAIN_LIGHTRAG_API_KEY", "secret")
-        tmpl = TemplateDef(
-            name="t",
-            transport="waha",
-            display_name="T",
-            description="T",
-            actions=["reply"],
-            tools=TemplateTools(optional=["brain_query"]),
-        )
-        tools = resolve_tools(tmpl, [], ["brain_query"])
-        assert "brain_query" not in tools.final_tools
 
     def test_phantom_enable_rejected(self):
         tmpl = TemplateDef(

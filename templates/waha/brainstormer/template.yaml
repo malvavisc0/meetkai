@@ -35,8 +35,6 @@ tools:
     - get_conversation_messages
     - brain_query
 
-web_workflow: true
-
 post_processing:
   profile: custom
   strip_markdown: true

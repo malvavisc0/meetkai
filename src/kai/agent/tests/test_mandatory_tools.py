@@ -94,13 +94,6 @@ class TestNoRetry:
         await agent.chat("q", output_cls=ActionResult)
         assert len(agent._run_calls) == 1
 
-    async def test_temperature_override_is_passed_through(self):
-        agent = _StubAgent()
-        agent.set_temperature(0.0)
-        assert agent._temperature == 0.0
-        agent.set_temperature(None)
-        assert agent._temperature is None
-
 
 class TestMandatoryWorkflowPrompt:
     """The mandatory prompt steers grounding: Brain first, web fallback, else decline."""

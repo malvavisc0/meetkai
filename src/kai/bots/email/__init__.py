@@ -33,7 +33,6 @@ from kai.agent.core import ActionResult, ChatResult, KaiAgent
 from kai.agent.tools import WEB_WORKFLOW_INSTRUCTIONS
 from kai.agent.tools.conversation import register_conversation_tools
 from kai.agent.tools.email import (
-    DEFAULT_DISPLAY_NAME,
     SmtpSettings,
     _valid_recipient,
     format_from_header,
@@ -49,28 +48,11 @@ from kai.bots.waha.webhook import create_webhook_app
 from kai.config.filters import should_process_chat_message
 from kai.config.prompts import load_system_prompt
 from kai.config.settings import Settings
-from kai.templates.resolver import ToolResolution
+from kai.templates.resolver import ToolResolution, resolve_config
 from kai.templates.schema import PostProcessingConfig, TemplateDef
 
 logger = logging.getLogger(__name__)
 console = Console()
-
-
-def _parse_email_list(raw: object) -> list[str]:
-    """Parse a config.json list field into normalized email addresses.
-
-    Mirrors ``bots/waha/__init__.py``'s ``_parse_id_list`` helper. Entries
-    are lowercased and stripped so blacklist comparisons in ``ingest_event``
-    are case-insensitive (email addresses are conventionally compared
-    case-insensitively, unlike WAHA's chat/author IDs).
-    """
-    if not isinstance(raw, list):
-        if raw:
-            logger.warning(
-                "config.json blacklist must be a list, got %s — ignoring", type(raw).__name__
-            )
-        return []
-    return [str(entry).strip().lower() for entry in raw if isinstance(entry, str) and entry.strip()]
 
 
 class EmailAction(ActionResult):
@@ -147,7 +129,7 @@ class Bot(BaseBot):
         super().configure(agent, settings, voice=voice, template=template, tools=tools)
         self._settings = settings
         self._email = get_email_settings()
-        self._config = self._load_config()
+        self._config = self._load_config(template)
         if settings.agent_language_explicit:
             self._config = self._config.model_copy(update={"language": settings.agent_language})
         # Template-driven reply style + post-processing. ``general`` reproduces
@@ -158,11 +140,7 @@ class Bot(BaseBot):
         agent.set_system_prompt(self._prompt)
         agent.set_temperature(self._config.temperature)
         agent.set_timezone(self._config.timezone)
-        # The default tool set (web_search / get_webpage_content, registered
-        # for every KaiAgent by get_tools()) needs the same fetch-before-cite
-        # / cross-check-sources protocol the waha bot gets via this same
-        # constant — without it the model has tools but no usage guidance.
-        if template.web_workflow:
+        if self._has_tool("web_search"):
             agent.set_tool_workflow(WEB_WORKFLOW_INSTRUCTIONS)
         # Bot-owned tool registration is gated on the resolved tool set.
         if self._has_tool("record_note") or self._has_tool("get_conversation_messages"):
@@ -174,21 +152,18 @@ class Bot(BaseBot):
         # the cockpit's required-credential env-injection loop added in 01).
         self._smtp = get_smtp_settings()
 
-    def _load_config(self, config_path: Path | None = None) -> BotConfig:
+    def _load_config(self, template: TemplateDef, config_path: Path | None = None) -> BotConfig:
+        # Config merge: BotConfig defaults ← template.config ← config.json
+        # (the per-deployment file the cockpit writes). Template values are
+        # the baseline; config.json is the operator's per-deployment override.
         path = config_path or self.resolve_config_path()
-        if path is None or not path.exists():
-            return BotConfig()
-        try:
-            data = json.loads(path.read_text(encoding="utf-8"))
-        except json.JSONDecodeError as exc:
-            raise ValueError(f"Invalid JSON in bot config {path}: {exc}") from exc
-        return BotConfig(
-            language=str(data.get("language", "English")),
-            timezone=str(data.get("timezone", "")).strip() or None,
-            temperature=float(data.get("temperature", 0.2)),
-            blacklist=_parse_email_list(data.get("blacklist")),
-            display_name=str(data.get("display_name", "")).strip() or DEFAULT_DISPLAY_NAME,
-        )
+        config_file_data: dict | None = None
+        if path is not None and path.exists():
+            try:
+                config_file_data = json.loads(path.read_text(encoding="utf-8"))
+            except json.JSONDecodeError as exc:
+                raise ValueError(f"Invalid JSON in bot config {path}: {exc}") from exc
+        return resolve_config(template, config_file_data, {}, BotConfig)
 
     def display_name(self) -> str:
         return self._config.display_name
@@ -272,11 +247,14 @@ class Bot(BaseBot):
         # config on every inbound email. should_process_chat_message treats
         # a bare email address the same as a non-group chat_id (no "@g.us"),
         # so passing it as both chat_id and author with an empty whitelist
-        # reduces to a plain blacklist membership check. Compare
-        # case-insensitively, matching the lowercased entries loaded in
-        # _load_config.
+        # reduces to a plain blacklist membership check. Email addresses are
+        # conventionally compared case-insensitively, so both sides are
+        # lowercased here.
         if not should_process_chat_message(
-            source.strip().lower(), source.strip().lower(), set(), set(self._config.blacklist)
+            source.strip().lower(),
+            source.strip().lower(),
+            set(),
+            {e.lower() for e in self._config.blacklist},
         ):
             logger.info("Ignoring blacklisted sender: %s", source)
             return {"ok": True}

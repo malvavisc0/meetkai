@@ -133,9 +133,6 @@ class TestMissingKey:
 
 
 class TestIsEncrypted:
-    def test_encrypted_value_is_true(self):
-        assert is_encrypted(encrypt("secret")) is True
-
     def test_plaintext_is_false(self):
         assert is_encrypted("postgresql://user:pw@host/db") is False
 

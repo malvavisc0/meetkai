@@ -51,8 +51,6 @@ tools:
     - send_email
     - calcom
 
-web_workflow: true
-
 post_processing:
   profile: custom
   strip_markdown: true

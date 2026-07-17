@@ -126,8 +126,6 @@ def _render_template(tmpl: TemplateDef) -> None:
     if tmpl.tools.optional:
         c.print("  [bold]optional tools[/bold]  " + ", ".join(tmpl.tools.optional))
 
-    c.print(f"  [bold]web_workflow[/bold]  {tmpl.web_workflow}")
-
     if tmpl.config:
         c.print("\n  [bold]config[/bold]")
         temp = tmpl.config.get("temperature")

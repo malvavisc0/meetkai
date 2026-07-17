@@ -104,7 +104,10 @@ class TestResolveTools:
         result = resolve_tools(tmpl, [], ["brain_query"])
         assert "brain_query" not in result.final_tools
 
-    def test_cannot_disable_default_tool(self):
+    def test_can_disable_default_tool(self):
+        # Default tools other than the safety pair (escalate,
+        # blacklist_contact) are disableable so a focused template can shed
+        # web_search / calculate etc.
         tmpl = TemplateDef(
             name="test",
             transport="waha",
@@ -114,8 +117,23 @@ class TestResolveTools:
             tools=TemplateTools(),
         )
         result = resolve_tools(tmpl, [], ["web_search"])
-        assert result.rejected_disable
-        assert "web_search" in result.final_tools
+        assert not result.rejected_disable
+        assert "web_search" not in result.final_tools
+
+    def test_cannot_disable_safety_tool(self):
+        # escalate / blacklist_contact are non-disableable safety defaults.
+        tmpl = TemplateDef(
+            name="test",
+            transport="waha",
+            display_name="T",
+            description="T",
+            actions=["reply"],
+            tools=TemplateTools(),
+        )
+        for tool in ("escalate", "blacklist_contact"):
+            result = resolve_tools(tmpl, [], [tool])
+            assert result.rejected_disable
+            assert tool in result.final_tools
 
     def test_cannot_disable_required_tool(self):
         tmpl = TemplateDef(

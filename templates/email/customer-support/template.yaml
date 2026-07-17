@@ -32,8 +32,6 @@ tools:
     - send_email
     - calcom
 
-web_workflow: true
-
 # Email supports markdown — no post-processing. Professional prose is fine.
 post_processing:
   profile: none

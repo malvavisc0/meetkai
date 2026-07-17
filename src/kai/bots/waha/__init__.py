@@ -17,7 +17,6 @@ from kai.agent.context import MessageContext
 from kai.agent.core import ChatResult, KaiAgent
 from kai.agent.tools import WEB_WORKFLOW_INSTRUCTIONS
 from kai.agent.tools.conversation import register_conversation_tools
-from kai.agent.tools.email import DEFAULT_DISPLAY_NAME
 from kai.bots.base import BaseBot, TellResult
 from kai.bots.processing import PostProcessor
 from kai.bots.waha.actions import _FULL_ACTION_NAMES, action_cls_for_turn
@@ -37,11 +36,6 @@ from kai.bots.waha.processing import (
 )
 from kai.bots.waha.seen_store import SeenStore
 from kai.bots.waha.setup import (
-    _DEFAULT_PARTICIPATION_COOLDOWN,
-    _DEFAULT_PARTICIPATION_RATE,
-    _DEFAULT_PARTICIPATION_STREAK_MAX,
-    _DEFAULT_VOICE_NOTE_COOLDOWN,
-    _DEFAULT_VOICE_NOTE_RATE,
     BotConfig,
     MediaConfig,
     ParticipationConfig,
@@ -64,7 +58,7 @@ from kai.cli import BotStartupError
 from kai.config.filters import should_process_chat_message
 from kai.config.prompts import load_system_prompt
 from kai.config.settings import Settings
-from kai.templates.resolver import ToolResolution
+from kai.templates.resolver import ToolResolution, resolve_config
 from kai.templates.schema import PostProcessingConfig, TemplateDef
 from kai.utils.terminal import render_image_pixelated
 
@@ -211,7 +205,7 @@ class Bot(BaseBot):
         if voice:
             waha = waha.model_copy(update={"kokoro_voice": voice})
         self._waha = waha
-        self._config = self._load_config()
+        self._config = self._load_config(template)
         if settings.agent_language_explicit:
             self._config = self._config.model_copy(update={"language": settings.agent_language})
         # Template-driven behavior: action vocabulary, reply style,
@@ -223,7 +217,7 @@ class Bot(BaseBot):
         self._prompt = self._load_prompt(template)
         agent.set_system_prompt(self._prompt)
         agent.set_temperature(self._config.temperature)
-        if template.web_workflow:
+        if self._has_tool("web_search"):
             agent.set_tool_workflow(WEB_WORKFLOW_INSTRUCTIONS)
         agent.set_tool_call_callback(self._render_tool_call)
         agent.set_timezone(self._config.timezone)
@@ -296,62 +290,24 @@ class Bot(BaseBot):
             self._tts_available = False
             self._voice_map = {}
 
-    def _load_config(self, config_path: Path | None = None) -> BotConfig:
+    def _load_config(self, template: TemplateDef, config_path: Path | None = None) -> BotConfig:
+        # Config merge: BotConfig defaults ← template.config ← config.json
+        # (the per-deployment file the cockpit writes). Template values
+        # (e.g. group-chatter's temperature/participation) are the baseline;
+        # config.json is the operator's per-deployment override on top.
         path = config_path or self.resolve_config_path()
-        if path is None or not path.exists():
-            logger.info("No config override for bot '%s'; using BotConfig() defaults", self.name)
-            return BotConfig()
-        try:
-            data = json.loads(path.read_text(encoding="utf-8"))
-        except json.JSONDecodeError as exc:
-            raise ValueError(f"Invalid JSON in bot config {path}: {exc}") from exc
-
-        def _parse_id_list(raw: object, field_name: str) -> list[str]:
-            if not isinstance(raw, list):
-                if raw:
-                    logger.warning(
-                        "config.json %s must be a list, got %s — ignoring",
-                        field_name,
-                        type(raw).__name__,
-                    )
-                return []
-            return [str(entry).strip() for entry in raw if isinstance(entry, str) and entry.strip()]
-
-        media_data = data.get("media", {})
-        participation_data = data.get("participation", {})
-
-        return BotConfig(
-            trigger_keyword=str(data.get("trigger_keyword", "kai")).strip(),
-            whitelist=_parse_id_list(data.get("whitelist"), "whitelist"),
-            blacklist=_parse_id_list(data.get("blacklist"), "blacklist"),
-            language=str(data.get("language", "English")),
-            timezone=str(data.get("timezone", "")).strip() or None,
-            mentions_enabled=bool(data.get("mentions_enabled", True)),
-            temperature=float(data.get("temperature", 0.4)),
-            display_name=str(data.get("display_name", "")).strip() or DEFAULT_DISPLAY_NAME,
-            media=MediaConfig(
-                image_enabled=bool(media_data.get("image_enabled", True)),
-                stt_enabled=bool(
-                    media_data.get("stt_enabled", media_data.get("voice_enabled", True))
-                ),
-                tts_enabled=bool(media_data.get("tts_enabled", True)),
-                video_enabled=bool(media_data.get("video_enabled", True)),
-                instagram_enabled=bool(media_data.get("instagram_enabled", True)),
-                max_size_mb=media_data.get("max_size_mb", 10),
-            ),
-            participation=ParticipationConfig(
-                enabled=bool(participation_data.get("enabled", True)),
-                rate=participation_data.get("rate", _DEFAULT_PARTICIPATION_RATE),
-                cooldown_seconds=participation_data.get(
-                    "cooldown_seconds", _DEFAULT_PARTICIPATION_COOLDOWN
-                ),
-                streak_max=participation_data.get("streak_max", _DEFAULT_PARTICIPATION_STREAK_MAX),
-                voice_note_rate=participation_data.get("voice_note_rate", _DEFAULT_VOICE_NOTE_RATE),
-                voice_note_cooldown=participation_data.get(
-                    "voice_note_cooldown", _DEFAULT_VOICE_NOTE_COOLDOWN
-                ),
-            ),
-        )
+        config_file_data: dict | None = None
+        if path is not None and path.exists():
+            logger.info("Loading bot config from external override: %s", path)
+            try:
+                config_file_data = json.loads(path.read_text(encoding="utf-8"))
+            except json.JSONDecodeError as exc:
+                raise ValueError(f"Invalid JSON in bot config {path}: {exc}") from exc
+        else:
+            logger.info(
+                "No config override for bot '%s'; using template + BotConfig defaults", self.name
+            )
+        return resolve_config(template, config_file_data, {}, BotConfig)
 
     def _load_prompt(self, template: TemplateDef) -> str:
         # Resolve the template's prompt.md; fall back to the bot's bundled

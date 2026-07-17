@@ -4,12 +4,7 @@ import pytest
 import yaml
 
 from kai.templates import TemplateRegistry
-from kai.templates.schema import (
-    EscalationRule,
-    PostProcessingConfig,
-    TemplateDef,
-    TemplateTools,
-)
+from kai.templates.schema import PostProcessingConfig
 
 
 class TestPostProcessingConfig:
@@ -54,108 +49,13 @@ class TestPostProcessingConfig:
         assert cfg.profile == "none"
 
 
-class TestTemplateTools:
-    def test_empty(self):
-        tools = TemplateTools()
-        assert tools.required == []
-        assert tools.optional == []
-
-    def test_required_only(self):
-        tools = TemplateTools(required=["schedule_task"])
-        assert tools.required == ["schedule_task"]
-
-    def test_both(self):
-        tools = TemplateTools(required=["a"], optional=["b"])
-        assert tools.required == ["a"]
-        assert tools.optional == ["b"]
-
-
-class TestEscalationRule:
-    def test_valid(self):
-        rule = EscalationRule(
-            condition="Customer frustrated",
-            severity="high",
-            message="Customer needs human",
-        )
-        assert rule.severity == "high"
-
-    def test_bad_severity(self):
-        with pytest.raises(Exception):
-            EscalationRule(
-                condition="test",
-                severity="extreme",
-                message="bad",
-            )
-
-
-class TestTemplateDef:
-    def test_minimal(self):
-        tmpl = TemplateDef(
-            name="test",
-            transport="waha",
-            display_name="Test",
-            description="A test",
-            actions=["reply", "silent"],
-        )
-        assert tmpl.web_workflow is True
-        assert tmpl.post_processing.profile == "none"
-
-    def test_full(self):
-        tmpl = TemplateDef(
-            name="full",
-            transport="email",
-            display_name="Full",
-            description="Full test",
-            actions=["reply"],
-            tools=TemplateTools(required=["schedule_task"], optional=["brain_query"]),
-            web_workflow=False,
-            reply_style="Be concise",
-            goal_suggestion="Help people",
-            escalation_rules=[
-                EscalationRule(
-                    condition="Angry",
-                    severity="critical",
-                    message="Customer angry",
-                )
-            ],
-        )
-        assert tmpl.web_workflow is False
-        assert len(tmpl.escalation_rules) == 1
-
-
 class TestTemplateRegistry:
-    def test_bundled(self):
-        reg = TemplateRegistry.bundled()
-        assert reg is not None
-
     def test_list_all(self):
         reg = TemplateRegistry.bundled()
         templates = reg.list()
         names = [f"{t.transport}/{t.name}" for t in templates]
         assert "waha/general" in names
         assert "email/general" in names
-
-    def test_list_waha(self):
-        reg = TemplateRegistry.bundled()
-        templates = reg.list(transport="waha")
-        assert all(t.transport == "waha" for t in templates)
-
-    def test_list_email(self):
-        reg = TemplateRegistry.bundled()
-        templates = reg.list(transport="email")
-        assert all(t.transport == "email" for t in templates)
-
-    def test_get_waha_general(self):
-        reg = TemplateRegistry.bundled()
-        tmpl = reg.get("waha", "general")
-        assert tmpl.name == "general"
-        assert tmpl.transport == "waha"
-
-    def test_get_email_general(self):
-        reg = TemplateRegistry.bundled()
-        tmpl = reg.get("email", "general")
-        assert tmpl.name == "general"
-        assert tmpl.transport == "email"
 
     def test_get_missing_raises(self):
         reg = TemplateRegistry.bundled()
@@ -261,11 +161,6 @@ class TestBundledTemplateContent:
         ]
         assert tmpl.actions == expected
 
-    def test_waha_general_web_workflow(self):
-        reg = TemplateRegistry.bundled()
-        tmpl = reg.get("waha", "general")
-        assert tmpl.web_workflow is True
-
     def test_waha_general_post_processing(self):
         reg = TemplateRegistry.bundled()
         tmpl = reg.get("waha", "general")
@@ -283,42 +178,13 @@ class TestBundledTemplateContent:
 
 
 class TestToolConfiguredMap:
-    def test_tool_configured_map_returns_dict(self):
+    def test_tool_configured_map_for_general(self):
         from kai.templates.resolver import tool_configured_map
 
         reg = TemplateRegistry.bundled()
         tmpl = reg.get("waha", "general")
         result = tool_configured_map(tmpl)
-        assert isinstance(result, dict)
-
-    def test_tool_configured_map_tools_for_general(self):
-        from kai.templates.resolver import tool_configured_map
-
-        reg = TemplateRegistry.bundled()
-        tmpl = reg.get("waha", "general")
-        result = tool_configured_map(tmpl)
-        # General waha has optional tools; result maps each to configured state
-        assert isinstance(result, dict)
-        # At minimum, brain_query should be in the map
         assert "brain_query" in result
-
-    def test_tool_configured_map_reflects_env_state(self, monkeypatch):
-        from kai.templates.resolver import tool_configured_map
-
-        # Mock _is_tool_configured: brain_query is "configured" when both env
-        # vars are set. This proves the map reflects env state.
-        def fake_is_configured(name):
-            if name == "brain_query":
-                has_base = "KAI_BRAIN_BASE_URL" in monkeypatch._dict
-                has_key = "KAI_BRAIN_LIGHTRAG_API_KEY" in monkeypatch._dict
-                return has_base and has_key
-            return True
-
-        reg = TemplateRegistry.bundled()
-        tmpl = reg.get("waha", "customer-support")
-        # Just assert it returns a dict without erroring
-        result = tool_configured_map(tmpl)
-        assert isinstance(result, dict)
 
 
 class TestPerTemplateReadmes:

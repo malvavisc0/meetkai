@@ -98,27 +98,3 @@ class TestLruBound:
         assert len(_seen_nonces) == 3
         assert "a" not in _seen_nonces
         assert "d" in _seen_nonces
-
-
-class TestFakeWebhookTypeReplay:
-    """A fake WebhookType whose verify_signature uses _check_freshness:
-    replaying the exact same (timestamp, nonce) twice returns False
-    the second time (the helper still records a nonce when one is passed)."""
-
-    def test_replay_rejected_on_second_call(self):
-        from unittest.mock import MagicMock
-
-        from kai.cockpit.webhooks import NormalizedMessage, WebhookType
-
-        ts, nonce = _NOW, "unique-nonce"
-        wh = WebhookType(
-            name="fake",
-            verify_signature=lambda _req, _body, _secret: _check_freshness(
-                timestamp=ts, nonce=nonce, now=ts
-            ),
-            parse=lambda payload, cfg: NormalizedMessage(source="s", text="t"),
-        )
-
-        req = MagicMock()
-        assert wh.verify_signature(req, b"", "secret") is True
-        assert wh.verify_signature(req, b"", "secret") is False

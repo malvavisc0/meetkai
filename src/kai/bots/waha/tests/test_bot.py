@@ -1,4 +1,5 @@
 import asyncio
+import time
 from pathlib import Path
 from typing import cast
 from unittest.mock import AsyncMock, MagicMock
@@ -17,6 +18,7 @@ from kai.bots.waha.history import register_chat_history_tool
 from kai.bots.waha.processing import should_send_voice_followup
 from kai.bots.waha.seen_store import SeenStore
 from kai.bots.waha.sleep_store import SleepStore
+from kai.templates.schema import TemplateDef
 
 
 def _chat_result(text: str | None = "reply", *, action: str = "reply", target: str | None = None):
@@ -35,6 +37,18 @@ def _make_bot(config: BotConfig | None = None, bot_dir: Path | None = None) -> B
     bot._seen_store = SeenStore(None, max_size=2048)
     bot._sleep_store = SleepStore(None)
     return bot
+
+
+def _plain_template(config: dict | None = None) -> TemplateDef:
+    """A minimal waha template — empty config unless given (BotConfig defaults apply)."""
+    return TemplateDef(
+        name="test",
+        transport="waha",
+        display_name="T",
+        description="T",
+        actions=["reply"],
+        config=config or {},
+    )
 
 
 class TestShouldRespond:
@@ -291,7 +305,7 @@ class TestLoadConfig:
         config_file = tmp_path / "config.json"
         config_file.write_text('{"trigger_keyword": "kai", "language": "Spanish"}')
         bot = _make_bot(bot_dir=tmp_path)
-        config = bot._load_config(config_path=config_file)
+        config = bot._load_config(_plain_template(), config_path=config_file)
         assert config.trigger_keyword == "kai"
         assert config.language == "Spanish"
 
@@ -299,48 +313,27 @@ class TestLoadConfig:
         config_file = tmp_path / "config.json"
         config_file.write_text('{"trigger_keyword": "kai", "timezone": "America/Santo_Domingo"}')
         bot = _make_bot(bot_dir=tmp_path)
-        config = bot._load_config(config_path=config_file)
+        config = bot._load_config(_plain_template(), config_path=config_file)
         assert config.timezone == "America/Santo_Domingo"
 
     def test_timezone_defaults_none(self, tmp_path):
         config_file = tmp_path / "config.json"
         config_file.write_text('{"trigger_keyword": "kai"}')
         bot = _make_bot(bot_dir=tmp_path)
-        config = bot._load_config(config_path=config_file)
-        assert config.timezone is None
-
-    def test_empty_timezone_treated_as_none(self, tmp_path):
-        config_file = tmp_path / "config.json"
-        config_file.write_text('{"trigger_keyword": "kai", "timezone": "  "}')
-        bot = _make_bot(bot_dir=tmp_path)
-        config = bot._load_config(config_path=config_file)
+        config = bot._load_config(_plain_template(), config_path=config_file)
         assert config.timezone is None
 
     def test_missing_config_returns_defaults(self, tmp_path):
         missing = tmp_path / "config.json"
         bot = _make_bot(bot_dir=tmp_path)
-        config = bot._load_config(config_path=missing)
+        config = bot._load_config(_plain_template(), config_path=missing)
         assert config == BotConfig()
-
-    def test_whitelist_string_treated_as_empty(self, tmp_path):
-        config_file = tmp_path / "config.json"
-        config_file.write_text('{"whitelist": "123@c.us"}')
-        bot = _make_bot(bot_dir=tmp_path)
-        config = bot._load_config(config_path=config_file)
-        assert config.whitelist == []
-
-    def test_whitelist_invalid_entries_skipped(self, tmp_path):
-        config_file = tmp_path / "config.json"
-        config_file.write_text('{"whitelist": ["123@c.us", 42, "", "456@g.us"]}')
-        bot = _make_bot(bot_dir=tmp_path)
-        config = bot._load_config(config_path=config_file)
-        assert config.whitelist == ["123@c.us", "456@g.us"]
 
     def test_media_config_defaults(self, tmp_path):
         config_file = tmp_path / "config.json"
         config_file.write_text('{"trigger_keyword": "kai"}')
         bot = _make_bot(bot_dir=tmp_path)
-        config = bot._load_config(config_path=config_file)
+        config = bot._load_config(_plain_template(), config_path=config_file)
         assert config.media.image_enabled is True
         assert config.media.stt_enabled is True
         assert config.media.tts_enabled is True
@@ -354,19 +347,40 @@ class TestLoadConfig:
             '"tts_enabled": true, "max_size_mb": 5}}'
         )
         bot = _make_bot(bot_dir=tmp_path)
-        config = bot._load_config(config_path=config_file)
+        config = bot._load_config(_plain_template(), config_path=config_file)
         assert config.media.image_enabled is False
         assert config.media.stt_enabled is False
         assert config.media.tts_enabled is True
         assert config.media.max_size_mb == 5
 
-    def test_media_config_legacy_voice_enabled_maps_to_stt(self, tmp_path):
-        """Old config files with voice_enabled (no stt_enabled) map to stt."""
-        config_file = tmp_path / "config.json"
-        config_file.write_text('{"trigger_keyword": "kai", "media": {"voice_enabled": false}}')
+    def test_template_config_applies_when_no_config_file(self, tmp_path):
+        # No config.json → BotConfig defaults ← template.config. A template
+        # setting temperature/participation shapes the baseline config.
+        tmpl = _plain_template(config={"temperature": 0.7, "participation": {"rate": 0.45}})
         bot = _make_bot(bot_dir=tmp_path)
-        config = bot._load_config(config_path=config_file)
-        assert config.media.stt_enabled is False
+        config = bot._load_config(tmpl, config_path=tmp_path / "missing.json")
+        assert config.temperature == 0.7
+        assert config.participation.rate == 0.45
+
+    def test_config_file_overrides_template(self, tmp_path):
+        # config.json wins over template.config (per-deployment override).
+        tmpl = _plain_template(config={"temperature": 0.7})
+        config_file = tmp_path / "config.json"
+        config_file.write_text('{"temperature": 0.2}')
+        bot = _make_bot(bot_dir=tmp_path)
+        config = bot._load_config(tmpl, config_path=config_file)
+        assert config.temperature == 0.2
+
+    def test_config_file_partial_merge_keeps_template(self, tmp_path):
+        # A config.json that sets only one nested field keeps the template's
+        # other nested fields (deep merge, not replace).
+        tmpl = _plain_template(config={"participation": {"rate": 0.45, "cooldown_seconds": 45}})
+        config_file = tmp_path / "config.json"
+        config_file.write_text('{"participation": {"rate": 0.9}}')
+        bot = _make_bot(bot_dir=tmp_path)
+        config = bot._load_config(tmpl, config_path=config_file)
+        assert config.participation.rate == 0.9
+        assert config.participation.cooldown_seconds == 45
 
 
 class TestConfigResolution:
@@ -434,7 +448,7 @@ class TestConfigResolution:
             lambda: Settings.for_test(configs_dir=configs_dir),
         )
         bot = _make_bot(bot_dir=tmp_path)
-        config = bot._load_config()
+        config = bot._load_config(_plain_template())
         assert config.whitelist == ["group@g.us"]
         assert config.language == "Spanish"
 
@@ -1064,11 +1078,8 @@ class TestOrganicParticipation:
                 ),
             )
         )
-        bot._last_reply_at["g@g.us"] = 0.0  # monotonic, far in the past-ish
         # Force a recent reply.
-        import time as _time
-
-        bot._last_reply_at["g@g.us"] = _time.monotonic()
+        bot._last_reply_at["g@g.us"] = time.monotonic()
         assert bot._should_organically_participate("g@g.us", "anything", is_group=True) is False
 
     def test_streak_max_blocks_offer(self):
@@ -1114,9 +1125,7 @@ class TestOrganicParticipation:
                 ),
             )
         )
-        import time as _time
-
-        bot._last_reply_at["g@g.us"] = _time.monotonic() - 50.0
+        bot._last_reply_at["g@g.us"] = time.monotonic() - 50.0
         # streak stays 0 (last turn was a skip / never replied)
         assert bot._should_organically_participate("g@g.us", "anything", is_group=True) is False
 
@@ -1131,10 +1140,8 @@ class TestOrganicParticipation:
                 ),
             )
         )
-        import time as _time
-
         bot._consecutive_replies["g@g.us"] = 1
-        bot._last_reply_at["g@g.us"] = _time.monotonic() - 50.0  # 30 < 50 < 100
+        bot._last_reply_at["g@g.us"] = time.monotonic() - 50.0  # 30 < 50 < 100
         assert bot._should_organically_participate("g@g.us", "anything", is_group=True) is True
 
     def test_active_exchange_still_blocks_within_relaxed_cooldown(self):
@@ -1147,10 +1154,8 @@ class TestOrganicParticipation:
                 ),
             )
         )
-        import time as _time
-
         bot._consecutive_replies["g@g.us"] = 1
-        bot._last_reply_at["g@g.us"] = _time.monotonic() - 10.0  # 10 < 30 relaxed
+        bot._last_reply_at["g@g.us"] = time.monotonic() - 10.0  # 10 < 30 relaxed
         assert bot._should_organically_participate("g@g.us", "anything", is_group=True) is False
 
     def test_active_exchange_rate_boost_applies(self, monkeypatch):
@@ -1164,10 +1169,8 @@ class TestOrganicParticipation:
                 ),
             )
         )
-        import time as _time
-
         bot._consecutive_replies["g@g.us"] = 1
-        bot._last_reply_at["g@g.us"] = _time.monotonic() - 50.0  # within normal window
+        bot._last_reply_at["g@g.us"] = time.monotonic() - 50.0  # within normal window
         monkeypatch.setattr("random.random", lambda: 0.3)
         assert bot._should_organically_participate("g@g.us", "anything", is_group=True) is True
 
@@ -1182,10 +1185,8 @@ class TestOrganicParticipation:
                 ),
             )
         )
-        import time as _time
-
         bot._consecutive_replies["g@g.us"] = 1
-        bot._last_reply_at["g@g.us"] = _time.monotonic() - 200.0  # past normal cooldown
+        bot._last_reply_at["g@g.us"] = time.monotonic() - 200.0  # past normal cooldown
         monkeypatch.setattr("random.random", lambda: 0.3)
         assert bot._should_organically_participate("g@g.us", "anything", is_group=True) is False
 
@@ -1244,9 +1245,7 @@ class TestShouldSendVoiceFollowup:
         )
 
     def test_cooldown_blocks_offer(self):
-        import time as _time
-
-        last_voice_at = {"g@g.us": _time.monotonic()}
+        last_voice_at = {"g@g.us": time.monotonic()}
         assert (
             should_send_voice_followup(
                 "g@g.us",
@@ -1258,9 +1257,7 @@ class TestShouldSendVoiceFollowup:
         )
 
     def test_cooldown_elapsed_allows_offer(self, monkeypatch):
-        import time as _time
-
-        last_voice_at = {"g@g.us": _time.monotonic() - 301.0}
+        last_voice_at = {"g@g.us": time.monotonic() - 301.0}
         monkeypatch.setattr("random.random", lambda: 0.5)
         assert (
             should_send_voice_followup(
@@ -1646,10 +1643,8 @@ class TestGroupRosterRefresh:
 
     @pytest.mark.asyncio
     async def test_refresh_respects_ttl(self, monkeypatch):
-        import time as _time
-
         bot = _make_bot(BotConfig(trigger_keyword="kai"))
-        bot._roster_refreshed_at["g@g.us"] = _time.monotonic()  # just refreshed
+        bot._roster_refreshed_at["g@g.us"] = time.monotonic()  # just refreshed
         client = MagicMock()
         client.get_chat_participants = AsyncMock(return_value=[])
         bot._waha_client = client

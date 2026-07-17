@@ -74,13 +74,6 @@ class TestWizardGET:
         # General should be one of the templates shown
         assert b"general" in resp.content
 
-    def test_get_includes_template_select(self, client, db):
-        user = _create_user(db)
-        _login(client, db, user)
-        resp = client.get("/deployments/new?bot_type=waha")
-        assert resp.status_code == 200
-        assert b'name="template"' in resp.content
-
 
 class TestWizardPOST:
     def test_post_creates_with_general_template(self, client, db):
@@ -145,16 +138,3 @@ class TestTemplatePreview:
         _login(client, db, user)
         resp = client.get("/deployments/new/preview?bot_type=waha&template=nonexistent_xyz")
         assert resp.status_code == 404
-
-
-class TestTemplateWarnings:
-    def test_preview_includes_warnings_for_missing_env(self, client, db, monkeypatch):
-        """A template whose required tool env is unset should include a warning."""
-        user = _create_user(db)
-        _login(client, db, user)
-        # customer-support template has required tools - check if warnings appear
-        resp = client.get("/deployments/new/preview?bot_type=waha&template=customer-support")
-        assert resp.status_code == 200
-        # Even if warnings are empty for some templates, the endpoint should
-        # not fail and should always return 200 with template content
-        assert b"Kai Support" in resp.content

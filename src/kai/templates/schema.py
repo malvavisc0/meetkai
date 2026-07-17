@@ -55,7 +55,6 @@ class TemplateDef(BaseModel):
     actions: list[str]
     config: dict[str, Any] = Field(default_factory=dict)
     tools: TemplateTools = Field(default_factory=TemplateTools)
-    web_workflow: bool = True
     post_processing: PostProcessingConfig = Field(default_factory=PostProcessingConfig)
     reply_style: str = ""
     goal_suggestion: str = ""

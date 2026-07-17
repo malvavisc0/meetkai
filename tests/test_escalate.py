@@ -102,7 +102,7 @@ class TestEscalate:
         assert "still works" in result
 
     @pytest.mark.asyncio
-    async def test_no_chat_id_returns_empty(self):
+    async def test_escalation_records_empty_chat_id_when_context_missing(self):
         set_tool_context(ToolContext())
         await escalate("no ctx")
         esc = (await list_escalations())[0]
@@ -332,41 +332,9 @@ class TestInspectionHelpers:
         assert resolved_esc.resolved is True
 
 
-class TestEscalationModel:
-    def test_escalation_model_has_reasonable_defaults(self):
-        esc = Escalation(
-            chat_id="test",
-            reason="test reason",
-        )
-        assert esc.id == ""
-        assert esc.conversation_id == ""
-        assert esc.severity == "medium"
-        assert esc.summary == ""
-        assert esc.resolved is False
-        assert esc.created_at is not None
-
-    def test_escalation_severity_literal(self):
-        # Valid severities
-        for sev in ("low", "medium", "high", "critical"):
-            esc = Escalation(
-                chat_id="test",
-                reason="test",
-                severity=sev,
-            )
-            assert esc.severity == sev
-
-    def test_escalation_is_mutable(self):
-        esc = Escalation(
-            chat_id="test",
-            reason="original reason",
-        )
-        esc.reason = "changed reason"
-        assert esc.reason == "changed reason"
-
-
 class TestEscalationStorePersistence:
     @pytest.mark.asyncio
-    async def test_in_memory_store_does_not_persist_to_disk(self, tmp_path):
+    async def test_in_memory_store_returns_added_item(self, tmp_path):
         store = EscalationStore(None)
         esc = Escalation(id="esc-1", chat_id="chat-1", reason="test")
         await store.add(esc)

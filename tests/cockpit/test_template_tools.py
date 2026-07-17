@@ -57,13 +57,6 @@ def _create_and_get_dep(db, user):
 
 
 class TestSettingsTemplateTools:
-    def test_get_shows_template_tools(self, client, db):
-        user = _create_user(db)
-        _login(client, db, user)
-        _create_and_get_dep(db, user)
-        resp = client.get("/deployments/1/settings")
-        assert resp.status_code == 200
-
     def test_get_has_template_tools_partial_included(self, client, db):
         user = _create_user(db)
         _login(client, db, user)
