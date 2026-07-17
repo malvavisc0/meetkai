@@ -210,7 +210,9 @@ the model answered with one of the values your `Literal` allows.
 ## Development
 
 ```bash
-uv run pytest
+uv run pytest            # runs across all available CPU cores via pytest-xdist
+uv run pytest -n 0       # disable parallelism (single process)
+uv run pytest -n 4       # pin worker count
 uv run ruff format .
 uv run ruff check --fix .
 uv run ruff check .

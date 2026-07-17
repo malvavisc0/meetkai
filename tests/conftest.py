@@ -24,7 +24,11 @@ def _clean_kai_env(monkeypatch):
     for key in list(os.environ):
         if key.startswith("KAI_"):
             monkeypatch.delenv(key, raising=False)
-    monkeypatch.setenv("KAI_LOG_DIR", "/tmp/kai")
+    # Redirect logging to a per-worker, per-test-run directory so xdist
+    # workers don't interleave writes into /tmp/kai/kai.log. ``worker_id`` is
+    # injected by xdist; without xdist it is "master".
+    worker_id = os.environ.get("PYTEST_XDIST_WORKER", "master")
+    monkeypatch.setenv("KAI_LOG_DIR", f"/tmp/kai-{worker_id}")
 
     # setup_logging() is guarded by a module-level _configured flag, so the
     # FIRST call in the process wins and later calls are no-ops. Reset it per
