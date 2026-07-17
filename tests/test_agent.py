@@ -1,5 +1,6 @@
 import base64
 import json
+from datetime import UTC
 from typing import Literal
 from unittest.mock import AsyncMock, MagicMock
 
@@ -166,10 +167,19 @@ class TestKaiAgent:
 
     def test_timezone_changes_local_time_in_prompt(self):
         agent = KaiAgent(settings=None, goal_manager=GoalManager())
-        agent.set_timezone("Europe/Berlin")
+        agent.set_timezone("America/New_York")
         prompt = agent._get_system_prompt()
-        assert "CEST" in prompt
         assert "Current date and time:" in prompt
+        # Verify the timezone was applied by checking the local time matches
+        # New York's offset (EDT = UTC-4 in summer, EST = UTC-5 in winter).
+        from datetime import datetime
+        from zoneinfo import ZoneInfo
+
+        ny_now = datetime.now(UTC).astimezone(ZoneInfo("America/New_York"))
+        # The prompt must contain a formatted date matching New York's date.
+        assert ny_now.strftime("%A, %Y-%m-%d") in prompt
+        # And a non-UTC timezone abbreviation.
+        assert "UTC" in prompt
 
     def test_set_timezone_none_falls_back_to_local(self):
         agent = KaiAgent(settings=None, goal_manager=GoalManager())

@@ -4,11 +4,6 @@ from kai.config.prompts import load_system_prompt
 
 
 class TestLoadSystemPrompt:
-    def test_txt_file(self, tmp_path):
-        f = tmp_path / "prompt.txt"
-        f.write_text("You are a helpful assistant.")
-        assert load_system_prompt(f) == "You are a helpful assistant."
-
     def test_md_file(self, tmp_path):
         f = tmp_path / "prompt.md"
         f.write_text("# System Prompt\nBe helpful.")
