@@ -8,7 +8,11 @@
         <img class="landing-brand__mark" src="/static/icon-192.png" alt="">
         <span>kAI</span>
       </a>
+      {% if user %}
+      <a class="button" href="/console">Open the Cockpit</a>
+      {% else %}
       <a class="button" href="/login">Log in to Beta</a>
+      {% endif %}
     </header>
 
     <div class="landing-hero__grid">
