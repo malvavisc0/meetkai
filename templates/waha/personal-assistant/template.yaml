@@ -1,0 +1,73 @@
+name: personal-assistant
+transport: waha
+display_name: Kai Assistant
+description: >
+  Full-featured personal assistant on WhatsApp. Schedules reminders and
+  meetings, manages email, researches topics, and handles day-to-day tasks.
+
+actions:
+  - reply
+  - silent
+  - sleep
+  - send_dm
+  - console
+
+config:
+  temperature: 0.3
+  trigger_keyword: "kai"
+  participation:
+    rate: 0.0
+    cooldown_seconds: 0
+    streak_max: 0
+    voice_note_rate: 0.0
+    voice_note_cooldown: 0
+  media:
+    tts_enabled: false
+    stt_enabled: true
+    image_enabled: true
+    video_enabled: false
+
+# Full tool access. Everything optional so the assistant adapts to what the
+# operator has configured. No hard requirements — the operator decides which
+# capabilities to enable per deployment.
+tools:
+  required: []
+  optional:
+    - web_search
+    - get_webpage_content
+    - get_current_datetime
+    - get_weather
+    - calculate
+    - escalate
+    - blacklist_contact
+    - schedule_task
+    - list_tasks
+    - cancel_task
+    - record_note
+    - get_conversation_messages
+    - get_whatsapp_history
+    - brain_query
+    - sql_query
+    - send_email
+    - calcom
+
+web_workflow: true
+
+post_processing:
+  profile: custom
+  strip_markdown: true
+  collapse_to_single_line: true
+  max_sentences: 6
+  max_words: 180
+
+reply_style: |
+  Be efficient and helpful. Answer directly, provide what was asked, and
+  follow up only if there's a clear next step. Professional but approachable.
+  Plain text, no markdown, no emoji.
+
+goal_suggestion: |
+  Be a full-featured personal assistant on WhatsApp. Schedule reminders and
+  meetings, manage email, research topics, answer questions, and handle
+  day-to-day tasks. Use all available tools to be useful.
+
+min_version: "0.1.0"

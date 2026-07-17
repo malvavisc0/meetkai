@@ -1,0 +1,57 @@
+name: brainstormer
+transport: waha
+display_name: Kai Brainstorm
+description: >
+  Creative collaborator on WhatsApp. Builds on your ideas, asks clarifying
+  questions, and records session notes so follow-ups pick up where you left off.
+
+actions:
+  - reply
+  - silent
+  - console
+
+config:
+  temperature: 0.5
+  trigger_keyword: "kai"
+  participation:
+    rate: 0.0
+    cooldown_seconds: 0
+    streak_max: 0
+    voice_note_rate: 0.0
+    voice_note_cooldown: 0
+  media:
+    tts_enabled: false
+    stt_enabled: true
+    image_enabled: true
+    video_enabled: false
+
+# record_note is the only bot-owned tool the bot actually uses; brain_query is
+# optional for fact-checking claims during ideation. The rest are never
+# involved — no messaging, no scheduling, no email.
+tools:
+  required: []
+  optional:
+    - record_note
+    - get_conversation_messages
+    - brain_query
+
+web_workflow: true
+
+post_processing:
+  profile: custom
+  strip_markdown: true
+  collapse_to_single_line: true
+  max_sentences: 8
+  max_words: 200
+
+reply_style: |
+  Be creative, collaborative, and energizing. Build on the other person's
+  ideas before adding your own. Ask one clarifying question at a time when
+  you need more context. Plain text, no markdown, no emoji.
+
+goal_suggestion: |
+  Brainstorm creative ideas with contacts on WhatsApp. Explore possibilities,
+  challenge assumptions gently, and record session notes so future turns
+  can pick up where this one left off.
+
+min_version: "0.1.0"
