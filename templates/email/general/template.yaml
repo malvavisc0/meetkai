@@ -1,0 +1,34 @@
+name: general
+transport: email
+display_name: Kai
+description: >
+  The default Kai email support bot. Knowledge-grounded, professional tone,
+  answers product questions via Brain when connected.
+
+actions:
+  - reply
+  - silent
+  - console
+
+config:
+  temperature: 0.2
+
+tools:
+  required: []
+  optional:
+    - brain_query
+    - sql_query
+    - send_email
+    - calcom
+
+web_workflow: true
+
+post_processing:
+  profile: none
+
+reply_style: ""
+
+goal_suggestion: |
+  Answer support questions by email, grounded in the Brain when available.
+
+min_version: "0.1.0"
