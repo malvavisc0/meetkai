@@ -1,0 +1,41 @@
+{# Template preview card shown inline in the wizard after a template is selected. #}
+<div class="card">
+  <h3 class="card__title">{{ template.display_name }}</h3>
+  <p class="field__help">{{ template.description }}</p>
+  {% if warnings %}
+  <div class="card card--danger">
+    <p><strong>Missing required tools:</strong></p>
+    <ul>
+      {% for w in warnings %}
+        <li>{{ w }}</li>
+      {% endfor %}
+    </ul>
+  </div>
+  {% endif %}
+  {% if template.actions %}
+  <div class="field">
+    <p class="field__label">Actions</p>
+    <ul>
+      {% for a in template.actions %}
+        <li>{{ a }}</li>
+      {% endfor %}
+    </ul>
+  </div>
+  {% endif %}
+  {% set all_tools = (template.tools.required + template.tools.optional) %}
+  {% if all_tools %}
+  <div class="field">
+    <p class="field__label">Tools</p>
+    <div class="checkbox-grid">
+      {% for t in all_tools %}
+        {% set ok = configured.get(t, true) %}
+        <label class="checkbox-row{% if not ok %} checkbox-row--locked{% endif %}">
+          <input type="checkbox" disabled {% if ok %}checked{% endif %}>
+          {{ t }}
+          <span class="badge{% if ok %} badge--ok{% else %} badge--warn{% endif %}">{% if ok %}configured{% else %}not configured{% endif %}</span>
+        </label>
+      {% endfor %}
+    </div>
+  </div>
+  {% endif %}
+</div>

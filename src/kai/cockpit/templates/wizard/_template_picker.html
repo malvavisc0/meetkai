@@ -1,0 +1,33 @@
+{# Template picker shown in the deployment wizard. #}
+<div class="field">
+  <label class="field__label" for="template">Choose what this agent does</label>
+  <select id="template" name="template">
+    {% for t in templates %}
+      <option value="{{ t.name }}" {% if t.name == template %}selected{% endif %}>{{ t.display_name }}</option>
+    {% endfor %}
+  </select>
+  <p class="field__help">Pick a role. You can change tools and settings later.</p>
+</div>
+{% if templates %}
+<div id="template-preview" class="hidden"></div>
+<script>
+(function() {
+  var sel = document.getElementById("template");
+  var box = document.getElementById("template-preview");
+  var last = null;
+  function fetchPreview() {
+    if (!sel.value) return;
+    var bot = sel.closest("form").querySelector('input[name="bot_type"]').value;
+    var url = "/deployments/new/preview?bot_type=" + encodeURIComponent(bot) + "&template=" + encodeURIComponent(sel.value);
+    fetch(url).then(function(r) { return r.text(); }).then(function(html) {
+      box.innerHTML = html;
+      box.classList.remove("hidden");
+    }).catch(function() {
+      box.innerHTML = "";
+      box.classList.add("hidden");
+    });
+  }
+  sel.addEventListener("change", function() { clearTimeout(last); last = setTimeout(fetchPreview, 200); });
+})();
+</script>
+{% endif %}

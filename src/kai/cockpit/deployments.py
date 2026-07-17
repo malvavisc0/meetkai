@@ -346,6 +346,7 @@ class DeploymentsService:
         goal: str,
         language: str,
         voice: str | None = None,
+        template: str = "general",
     ) -> Deployment:
         """Create a deployment. Validates required fields. Auto-picks voice if None."""
         if user.is_disabled:
@@ -406,6 +407,7 @@ class DeploymentsService:
             goal=goal.strip(),
             language=language.strip(),
             voice=voice.strip(),
+            template=template,
             settings=settings,
             feature_flags=feature_flags,
             status="stopped",
@@ -464,6 +466,17 @@ class DeploymentsService:
                 if value is not None and not isinstance(value, str):
                     raise ValueError("brain_instruction must be a string or null")
                 deployment.brain_instruction = str(value).strip() if value is not None else None
+            elif key == "template":
+                deployment.template = str(value)
+            elif key == "tool_overrides":
+                if not isinstance(value, dict):
+                    raise ValueError("tool_overrides must be a dict")
+                if set(value.keys()) - {"enable", "disable"}:
+                    raise ValueError("tool_overrides must only have 'enable' and 'disable' keys")
+                deployment.tool_overrides = {
+                    "enable": list(value.get("enable", [])),
+                    "disable": list(value.get("disable", [])),
+                }
 
         # Resolve any language conflict: an explicit ``language`` argument
         # always wins over a value inside ``settings["language"]``. Without
@@ -571,6 +584,12 @@ class DeploymentsService:
             "--voice",
             deployment.voice,
         ]
+        argv += ["--template", deployment.template]
+        overrides = deployment.tool_overrides or {}
+        for t in overrides.get("enable", []):
+            argv += ["--enable-tools", t]
+        for t in overrides.get("disable", []):
+            argv += ["--disable-tools", t]
 
         env: dict[str, str] = {**os.environ}
         # Cockpit URL for bot→cockpit escalation forwarding. The bot's

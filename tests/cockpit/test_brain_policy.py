@@ -3,10 +3,10 @@
 import subprocess
 
 import pytest
+from tests.cockpit.helpers import _connect_whatsapp
 
 from kai.cockpit.deployments import DeploymentsService
 from kai.cockpit.models import Connection
-from tests.cockpit.conftest import _connect_whatsapp
 
 
 @pytest.fixture(autouse=True)

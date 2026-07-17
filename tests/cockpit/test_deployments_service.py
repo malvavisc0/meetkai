@@ -3,6 +3,7 @@
 import subprocess
 
 import pytest
+from tests.cockpit.helpers import _connect_whatsapp
 
 from kai.bots.waha.config import WahaSettings
 from kai.cockpit.bots import auto_pick_voice
@@ -12,7 +13,6 @@ from kai.cockpit.deployments import (
     DeploymentStartupError,
 )
 from kai.cockpit.models import Connection
-from tests.cockpit.conftest import _connect_whatsapp
 
 
 @pytest.fixture(autouse=True)

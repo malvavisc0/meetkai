@@ -212,6 +212,8 @@ No fifth button variant is introduced without updating this table first.
 | `.landing-agent__brain` | Inline leading glyph (`brain.svg`) in the landing workflow card's agent sub-line, marking Brain-grounded knowledge; `aria-hidden`, text carries the meaning. |
 | `.deployment-card__summary` | Compact, right-aligned operational summary on an agent card; collapses below the card content on mobile. |
 | `.readiness-summary` / `.readiness-summary__section` | Exception-led infrastructure health summary: a concise readiness state followed by divided attention and available-service sections. |
+| `.badge--ok` | Green success badge — paired with `.badge` for a non-interactive "configured" / positive-state indicator (template preview tool-availability). |
+| `.hidden` | Utility to set `display: none` (used for the template-preview container before the first AJAX fetch populates it). |
 
 New local icons: `icons/search.svg`, `icons/upload.svg`, `icons/check.svg`,
 `icons/bot.svg`, `icons/brain.svg`.

@@ -74,6 +74,18 @@ _KNOWN_TOOL_NAMES: frozenset[str] = frozenset(
     ]
 )
 
+# Tools owned by the template-layer toggles (not connection-gated).
+# The connection-tools card continues to own smtp/database/calcom via
+# deployment.settings["tools"].
+TEMPLATE_TOGGLE_TOOLS: frozenset[str] = _KNOWN_TOOL_NAMES - {
+    "send_email",
+    "sql_query",
+    "describe_tables",
+    "calcom",
+    "get_available_slots",
+    "schedule_event",
+}
+
 _VALID_ACTIONS_BY_TRANSPORT = {
     "waha": _WAHA_VALID_ACTIONS,
     "email": _EMAIL_VALID_ACTIONS,
@@ -172,6 +184,13 @@ def validate_actions(template: TemplateDef) -> list[str]:
         if action not in valid:
             errors.append(f"action {action!r} is not valid for transport {template.transport!r}")
     return errors
+
+
+def tool_configured_map(template: TemplateDef) -> dict[str, bool]:
+    """Map every tool declared by ``template`` (required + optional) to whether
+    its env is currently configured. Used by the cockpit preview/warnings to
+    show which tools will actually load."""
+    return {t: _is_tool_configured(t) for t in {*template.tools.required, *template.tools.optional}}
 
 
 def _is_tool_configured(tool_name: str) -> bool:

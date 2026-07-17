@@ -70,6 +70,8 @@ class TestDeployment:
         assert dep.run_id is None
         assert dep.feature_flags == {}
         assert dep.settings == {}
+        assert dep.template == "general"
+        assert dep.tool_overrides == {}
 
     def test_unique_user_bot_type(self, db, user):
         db.add(

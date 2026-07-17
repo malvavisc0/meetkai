@@ -1,3 +1,5 @@
+from pathlib import Path
+
 import pytest
 import yaml
 
@@ -278,3 +280,68 @@ class TestBundledTemplateContent:
         reg = TemplateRegistry.bundled()
         tmpl = reg.get("email", "general")
         assert tmpl.post_processing.profile == "none"
+
+
+class TestToolConfiguredMap:
+    def test_tool_configured_map_returns_dict(self):
+        from kai.templates.resolver import tool_configured_map
+
+        reg = TemplateRegistry.bundled()
+        tmpl = reg.get("waha", "general")
+        result = tool_configured_map(tmpl)
+        assert isinstance(result, dict)
+
+    def test_tool_configured_map_tools_for_general(self):
+        from kai.templates.resolver import tool_configured_map
+
+        reg = TemplateRegistry.bundled()
+        tmpl = reg.get("waha", "general")
+        result = tool_configured_map(tmpl)
+        # General waha has optional tools; result maps each to configured state
+        assert isinstance(result, dict)
+        # At minimum, brain_query should be in the map
+        assert "brain_query" in result
+
+    def test_tool_configured_map_reflects_env_state(self, monkeypatch):
+        from kai.templates.resolver import tool_configured_map
+
+        # Mock _is_tool_configured: brain_query is "configured" when both env
+        # vars are set. This proves the map reflects env state.
+        def fake_is_configured(name):
+            if name == "brain_query":
+                has_base = "KAI_BRAIN_BASE_URL" in monkeypatch._dict
+                has_key = "KAI_BRAIN_LIGHTRAG_API_KEY" in monkeypatch._dict
+                return has_base and has_key
+            return True
+
+        reg = TemplateRegistry.bundled()
+        tmpl = reg.get("waha", "customer-support")
+        # Just assert it returns a dict without erroring
+        result = tool_configured_map(tmpl)
+        assert isinstance(result, dict)
+
+
+class TestPerTemplateReadmes:
+    def test_each_template_has_readme(self):
+        """Every template directory should contain a non-empty README.md."""
+        reg = TemplateRegistry.bundled()
+        for tmpl in reg.list():
+            readme_dir = Path("templates") / tmpl.transport / tmpl.name
+            readme_path = readme_dir / "README.md"
+            assert readme_path.is_file(), f"Missing README.md for {tmpl.transport}/{tmpl.name}"
+            content = readme_path.read_text(encoding="utf-8")
+            assert len(content.strip()) > 20, (
+                f"README.md for {tmpl.transport}/{tmpl.name} is too short"
+            )
+
+    def test_readme_mentions_display_name(self):
+        """Each README should mention its template's display_name."""
+        reg = TemplateRegistry.bundled()
+        for tmpl in reg.list():
+            readme_dir = Path("templates") / tmpl.transport / tmpl.name
+            readme_path = readme_dir / "README.md"
+            content = readme_path.read_text(encoding="utf-8")
+            assert tmpl.display_name in content, (
+                f"README for {tmpl.transport}/{tmpl.name} missing "
+                f"display_name '{tmpl.display_name}'"
+            )

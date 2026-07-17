@@ -31,6 +31,13 @@ from kai.cockpit.routes.deployments._shared import (
     build_tools_update,
     get_deployment,
 )
+from kai.templates import TemplateRegistry
+from kai.templates.resolver import (
+    TEMPLATE_TOGGLE_TOOLS,
+    resolve_tools,
+    tool_configured_map,
+    validate_tools,
+)
 
 router = APIRouter()
 
@@ -190,6 +197,34 @@ async def deployment_settings_page(
             "available": available,
         }
 
+    # Template-owned tool toggles: required tools (locked/read-only), optional
+    # tools (toggleable), and enableable extras (checkboxes defaulting off).
+    try:
+        tmpl = TemplateRegistry.bundled().get(dep.bot_type, dep.template)
+    except FileNotFoundError:
+        tmpl = None
+    template_tools: list[tuple[str, bool, bool]] = []
+    template_warnings: list[str] = []
+    if tmpl:
+        configured = tool_configured_map(tmpl)
+        saved = dep.tool_overrides or {}
+        saved_enable = set(saved.get("enable", []))
+        saved_disable = set(saved.get("disable", []))
+        for tool_name in sorted(TEMPLATE_TOGGLE_TOOLS):
+            is_optional = tool_name in tmpl.tools.optional
+            is_configured = configured.get(tool_name, True)
+            # Reflect the persisted override: an explicitly-disabled optional
+            # tool stays unchecked; an explicitly-enabled extra stays checked.
+            # Otherwise default to "on" for configured optional tools.
+            if tool_name in saved_disable:
+                is_on = False
+            elif tool_name in saved_enable:
+                is_on = True
+            else:
+                is_on = is_optional and is_configured
+            template_tools.append((tool_name, is_optional, is_on))
+        template_warnings = validate_tools(tmpl)
+
     flash = request.session.pop("flash", None)
 
     brain = BrainsService(db).get_brain(user)
@@ -213,6 +248,9 @@ async def deployment_settings_page(
             "supported_tools": supported_tools,
             "tools_state": tools_state,
             "tools_with_instruction": TOOLS_WITH_INSTRUCTION,
+            "template_tools": template_tools,
+            "template": tmpl,
+            "template_warnings": template_warnings,
             "flash": flash,
             "default_display_name": DEFAULT_DISPLAY_NAME,
         },
@@ -266,6 +304,41 @@ async def deployment_settings(
         "tools": build_tools_update(supported_svcs, form_fields),
     }
 
+    # Parse template tool overrides from the form. Checked checkboxes for
+    # enableable tools go into the "enable" list; unchecked optional tools
+    # go into the "disable" list.
+    try:
+        tmpl = TemplateRegistry.bundled().get(dep.bot_type, dep.template)
+    except FileNotFoundError:
+        tmpl = None
+
+    tool_overrides: dict = {"enable": [], "disable": []}
+    if tmpl:
+        for tool_name in sorted(TEMPLATE_TOGGLE_TOOLS):
+            is_optional = tool_name in tmpl.tools.optional
+            is_on = f"tool_override_{tool_name}" in form_fields
+            if is_optional:
+                # An optional tool unchecked by the operator is disabled.
+                # Checked = leave it on (no entry needed — resolve_tools
+                # enables configured optional tools by default).
+                if not is_on:
+                    tool_overrides["disable"].append(tool_name)
+            elif is_on:
+                # Enableable extras default to off; a checked box means enable.
+                tool_overrides["enable"].append(tool_name)
+
+    # Server-side validation: reject disabling default/required tools and
+    # unknown tool names. Uses resolve_tools() so the resolver rules are the
+    # single source of truth — the cockpit never reimplements them.
+    if tmpl:
+        resolution = resolve_tools(tmpl, tool_overrides["enable"], tool_overrides["disable"])
+        if resolution.rejected_disable:
+            request.session["flash"] = f"Cannot disable: {resolution.rejected_disable[0]}"
+            return RedirectResponse(f"/deployments/{dep_id}/settings", status_code=302)
+        if resolution.rejected_unknown:
+            request.session["flash"] = f"Unknown tool: {resolution.rejected_unknown[0]}"
+            return RedirectResponse(f"/deployments/{dep_id}/settings", status_code=302)
+
     voice = ""
     parser = _SETTINGS_PARSERS.get(dep.bot_type)
     if parser is not None:
@@ -285,6 +358,7 @@ async def deployment_settings(
             settings=settings_update,
             brain_mandatory=(brain_mandatory == "true"),
             brain_instruction=brain_instruction.strip() or None,
+            tool_overrides=tool_overrides,
         )
     except ValueError as exc:
         request.session["flash"] = str(exc)

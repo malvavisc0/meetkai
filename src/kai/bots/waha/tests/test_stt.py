@@ -83,16 +83,19 @@ class TestWhisperCppSTT:
         assert result == ""
 
     @pytest.mark.asyncio
-    async def test_temp_dir_cleaned_up(self, tmp_path):
+    @patch("kai.bots.waha.stt.subprocess.run")
+    async def test_temp_dir_cleaned_up(self, mock_run, tmp_path):
+        """Confirm the STT work dir is removed after transcribe() — happy path."""
+        mock_run.return_value = MagicMock(returncode=0, stderr=b"")
+
         stt = WhisperCppSTT(
-            ffmpeg_path="/nonexistent/ffmpeg",
-            whisper_cpp_path="/nonexistent/whisper",
-            model_path="/nonexistent/model.bin",
+            ffmpeg_path="/usr/bin/ffmpeg",
+            whisper_cpp_path="/usr/bin/whisper",
+            model_path="/models/ggml-base.bin",
         )
         before = set(Path("/tmp").glob("kai/media/*"))
-        result = await stt.transcribe(b"audio")
+        await stt.transcribe(b"fake-audio-bytes")
         after = set(Path("/tmp").glob("kai/media/*"))
-        assert result == ""
         new_dirs = after - before
         for d in new_dirs:
             assert not d.exists()

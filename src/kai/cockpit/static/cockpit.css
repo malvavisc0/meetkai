@@ -74,6 +74,8 @@
 
     --color-warn: #b45309;
     --color-warn-bg: #fef3c7;
+    --color-success: #15803d;
+    --color-success-bg: #f0fdf4;
     --color-danger: #c4373a;
     --color-danger-bg: #fef2f2;
 
@@ -1321,6 +1323,11 @@
     background: var(--color-status-live-bg);
   }
 
+  .badge--ok {
+    color: var(--color-success);
+    background: var(--color-success-bg);
+  }
+
   .badge--warn {
     color: var(--color-warn);
     background: var(--color-warn-bg);
@@ -2257,6 +2264,10 @@
 @layer utilities {
   .muted {
     color: var(--color-muted);
+  }
+
+  .hidden {
+    display: none;
   }
 
   .mono {

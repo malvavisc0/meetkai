@@ -25,6 +25,8 @@
 
     {% include "wizard/_config_fields.html" %}
 
+    {% include "wizard/_template_picker.html" %}
+
     <div class="field field--narrow">
       <label class="field__label" for="voice">Voice</label>
       <select id="voice" name="voice" {% if missing_connections %}disabled{% endif %}>

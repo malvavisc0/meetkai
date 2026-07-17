@@ -253,7 +253,7 @@ class TestControlPortInjection:
 
 class TestBespokeDoesNotGetGenericEnv:
     def test_whatsapp_bot_does_not_get_kai_bot_env(self, db, monkeypatch, tmp_path):
-        from tests.cockpit.conftest import _connect_whatsapp
+        from tests.cockpit.helpers import _connect_whatsapp
 
         user = _make_user(db)
         _connect_whatsapp(db, user)

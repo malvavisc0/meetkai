@@ -57,6 +57,13 @@ class Deployment(Base):
     voice: Mapped[str] = mapped_column(String, nullable=False)
     goal: Mapped[str] = mapped_column(String, nullable=False)
     language: Mapped[str] = mapped_column(String, nullable=False)
+    # Template selected for this deployment. ``"general"`` is the always-safe
+    # default (resolves without --template on the CLI).
+    template: Mapped[str] = mapped_column(String, nullable=False, default="general")
+    # Operator tool overrides from the cockpit settings form, shape:
+    # ``{"enable": [...], "disable": [...]}``. Persisted verbatim and passed to
+    # ``resolve_tools()`` at spawn.
+    tool_overrides: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
     feature_flags: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
     settings: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
     # Per-deployment Brain overrides, both nullable. `brain_mandatory=None`
