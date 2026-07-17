@@ -1,4 +1,4 @@
-# KAI Cockpit UI Standards
+# kAI Cockpit UI Standards
 
 This is the durable single source of truth for the Operator Console UI.
 `src/kai/cockpit/static/cockpit.css` is the central styling truth; this

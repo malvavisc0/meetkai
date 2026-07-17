@@ -78,7 +78,7 @@ class TestIngestEvent:
             {
                 "event": "email.inbound",
                 "source": "sender@example.com",
-                "text": "what is KAI?",
+                "text": "what is kAI?",
                 "metadata": {"subject": "question"},
             }
         )

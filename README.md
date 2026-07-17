@@ -1,8 +1,8 @@
-# KAI
+# kAI
 
 > A hackable Python framework for building and running small LLM bots over anything that emits a webhook.
 
-KAI gives bots a runtime, memory, tools, scheduling, and a simple plugin shape.
+kAI gives bots a runtime, memory, tools, scheduling, and a simple plugin shape.
 Bring any transport that can deliver events over HTTP: WhatsApp, email,
 Telegram, a Docker alert stream, or an internal system webhook.
 
@@ -77,7 +77,7 @@ uv sync
 
 ## Configure
 
-KAI reads `.env` from the working directory. Core settings use the `KAI_`
+kAI reads `.env` from the working directory. Core settings use the `KAI_`
 prefix. Bot-specific settings use their own prefixes, such as `KAI_WAHA_` or
 `KAI_BOT_`/`KAI_EMAIL_` for the email bot.
 
