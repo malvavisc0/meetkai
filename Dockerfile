@@ -14,6 +14,7 @@ WORKDIR /app
 
 COPY pyproject.toml uv.lock README.md ./
 COPY src/ src/
+COPY templates/ templates/
 COPY entrypoint.sh /entrypoint.sh
 
 RUN uv sync --frozen --no-dev && chmod +x /entrypoint.sh
