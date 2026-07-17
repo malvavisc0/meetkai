@@ -39,8 +39,8 @@ def bob(db):
 def fake_waha_client(monkeypatch):
     client = AsyncMock()
     client.close = AsyncMock()
-    monkeypatch.setattr("kai.cockpit.connections.WahaClient", lambda settings: client)
-    monkeypatch.setattr("kai.cockpit.connections.get_waha_settings", lambda: object())
+    monkeypatch.setattr("kai.cockpit.connections.service.WahaClient", lambda settings: client)
+    monkeypatch.setattr("kai.cockpit.connections.service.get_waha_settings", lambda: object())
     return client
 
 

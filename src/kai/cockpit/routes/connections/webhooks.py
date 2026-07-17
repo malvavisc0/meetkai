@@ -28,16 +28,16 @@ from sqlalchemy.orm import Session
 
 from kai.bots.waha.webhook import _MAX_BODY_BYTES
 from kai.cockpit.bots import BOT_TYPES
-from kai.cockpit.db import get_db
-from kai.cockpit.deployments import DeploymentsService
-from kai.cockpit.models import Connection, Deployment, User
-from kai.cockpit.secrets import decrypt_config
-from kai.cockpit.webhooks import (
+from kai.cockpit.connections.secrets import decrypt_config
+from kai.cockpit.connections.webhooks import (
     WEBHOOK_TYPES,
     WebhookUpstreamError,
     is_nonce_seen,
     record_nonce,
 )
+from kai.cockpit.db import get_db
+from kai.cockpit.deployments import DeploymentsService
+from kai.cockpit.models import Connection, Deployment, User
 
 router = APIRouter()
 

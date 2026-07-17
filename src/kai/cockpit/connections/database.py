@@ -10,12 +10,12 @@ import logging
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import Session
 
-from kai.cockpit.connection_probe import (
+from kai.cockpit.connections.probe import (
     _is_transient_db_error,
     reflect_probe_status,
 )
+from kai.cockpit.connections.secrets import decrypt_config, encrypt_config
 from kai.cockpit.models import Connection, User
-from kai.cockpit.secrets import decrypt_config, encrypt_config
 from kai.utils.common import now_iso
 
 logger = logging.getLogger(__name__)

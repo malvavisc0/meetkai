@@ -13,7 +13,7 @@ from __future__ import annotations
 
 import pytest
 
-from kai.cockpit.secrets import decrypt_config, is_encrypted
+from kai.cockpit.connections.secrets import decrypt_config, is_encrypted
 
 _KEY = "a" * 64
 
@@ -23,7 +23,7 @@ def _encryption_env(monkeypatch, tmp_path):
     monkeypatch.chdir(tmp_path)
     monkeypatch.setenv("KAI_CREDENTIAL_ENCRYPTION_KEY", _KEY)
     monkeypatch.setenv("KAI_CREDENTIAL_KEY_VERSION", "v1")
-    from kai.cockpit import secrets
+    from kai.cockpit.connections import secrets
 
     secrets._clear_key_cache()
 
@@ -42,7 +42,7 @@ def _encryption_env(monkeypatch, tmp_path):
 
 class TestSave:
     def test_save_encrypts_signing_secret_and_api_key(self, db, user):
-        from kai.cockpit.email_connections import EmailConnectionsService
+        from kai.cockpit.connections.email import EmailConnectionsService
 
         svc = EmailConnectionsService(db)
         conn = svc.save(user, signing_secret="whsec_dGVzdA==", api_key="re_live_abc123")
@@ -52,14 +52,14 @@ class TestSave:
         assert is_encrypted(conn.config["api_key"])
 
     def test_save_sets_status_connected(self, db, user):
-        from kai.cockpit.email_connections import EmailConnectionsService
+        from kai.cockpit.connections.email import EmailConnectionsService
 
         svc = EmailConnectionsService(db)
         conn = svc.save(user, signing_secret="whsec_dGVzdA==", api_key="re_live_abc123")
         assert conn.status == "connected"
 
     def test_save_empty_secret_preserves_existing(self, db, user):
-        from kai.cockpit.email_connections import EmailConnectionsService
+        from kai.cockpit.connections.email import EmailConnectionsService
 
         svc = EmailConnectionsService(db)
         svc.save(user, signing_secret="whsec_dGVzdA==", api_key="re_live_abc123")
@@ -72,7 +72,7 @@ class TestSave:
         assert decrypted["api_key"] == "re_live_abc123"
 
     def test_save_new_secret_overwrites(self, db, user):
-        from kai.cockpit.email_connections import EmailConnectionsService
+        from kai.cockpit.connections.email import EmailConnectionsService
 
         svc = EmailConnectionsService(db)
         svc.save(user, signing_secret="old-secret", api_key="old-key")
@@ -83,7 +83,7 @@ class TestSave:
 
     def test_save_updates_only_provided_field(self, db, user):
         """Updating just the signing secret must not clobber a stored api_key."""
-        from kai.cockpit.email_connections import EmailConnectionsService
+        from kai.cockpit.connections.email import EmailConnectionsService
 
         svc = EmailConnectionsService(db)
         svc.save(user, signing_secret="old-secret", api_key="stays-the-same")
@@ -95,7 +95,7 @@ class TestSave:
 
 class TestDelete:
     def test_delete_removes_connection(self, db, user):
-        from kai.cockpit.email_connections import EmailConnectionsService
+        from kai.cockpit.connections.email import EmailConnectionsService
 
         svc = EmailConnectionsService(db)
         svc.save(user, signing_secret="whsec_dGVzdA==", api_key="re_live_abc123")
@@ -105,7 +105,7 @@ class TestDelete:
         assert svc.get(user) is None
 
     def test_delete_when_no_connection_is_noop(self, db, user):
-        from kai.cockpit.email_connections import EmailConnectionsService
+        from kai.cockpit.connections.email import EmailConnectionsService
 
         svc = EmailConnectionsService(db)
         svc.delete(user)  # should not raise
@@ -113,27 +113,27 @@ class TestDelete:
 
 class TestDecryptSecret:
     def test_decrypt_secret_round_trips(self, db, user):
-        from kai.cockpit.email_connections import EmailConnectionsService
+        from kai.cockpit.connections.email import EmailConnectionsService
 
         svc = EmailConnectionsService(db)
         svc.save(user, signing_secret="whsec_dGVzdA==", api_key="re_live_abc123")
         assert svc.decrypt_secret(user) == "whsec_dGVzdA=="
 
     def test_decrypt_secret_none_when_no_connection(self, db, user):
-        from kai.cockpit.email_connections import EmailConnectionsService
+        from kai.cockpit.connections.email import EmailConnectionsService
 
         svc = EmailConnectionsService(db)
         assert svc.decrypt_secret(user) is None
 
     def test_decrypt_api_key_round_trips(self, db, user):
-        from kai.cockpit.email_connections import EmailConnectionsService
+        from kai.cockpit.connections.email import EmailConnectionsService
 
         svc = EmailConnectionsService(db)
         svc.save(user, signing_secret="whsec_dGVzdA==", api_key="re_live_abc123")
         assert svc.decrypt_api_key(user) == "re_live_abc123"
 
     def test_decrypt_api_key_none_when_no_connection(self, db, user):
-        from kai.cockpit.email_connections import EmailConnectionsService
+        from kai.cockpit.connections.email import EmailConnectionsService
 
         svc = EmailConnectionsService(db)
         assert svc.decrypt_api_key(user) is None
@@ -141,7 +141,7 @@ class TestDecryptSecret:
 
 class TestSecretEncryptedAtRest:
     def test_secret_stays_encrypted_after_save(self, db, user):
-        from kai.cockpit.email_connections import EmailConnectionsService
+        from kai.cockpit.connections.email import EmailConnectionsService
 
         svc = EmailConnectionsService(db)
         svc.save(user, signing_secret="whsec_dGVzdA==", api_key="re_live_abc123")
@@ -156,10 +156,10 @@ class TestSecretEncryptedAtRest:
 
 class TestStartGate:
     def test_start_gate_treats_connected_resend_as_connected(self, db, user):
+        from kai.cockpit.connections.email import EmailConnectionsService
+        from kai.cockpit.connections.smtp import SmtpConnectionsService
         from kai.cockpit.deployments import _is_connected
-        from kai.cockpit.email_connections import EmailConnectionsService
         from kai.cockpit.models import Connection
-        from kai.cockpit.smtp_connections import SmtpConnectionsService
 
         # Connect resend + smtp (both required for the email bot)
         EmailConnectionsService(db).save(user, signing_secret="dGVzdA==", api_key="re_test")
@@ -181,8 +181,8 @@ class TestStartGate:
 
     def test_start_gate_rejects_resend_missing_api_key(self, db, user):
         """Signing secret alone isn't enough — api_key is required to fetch content."""
+        from kai.cockpit.connections.email import EmailConnectionsService
         from kai.cockpit.deployments import _is_connected
-        from kai.cockpit.email_connections import EmailConnectionsService
         from kai.cockpit.models import Connection
 
         EmailConnectionsService(db).save(user, signing_secret="dGVzdA==", api_key="")

@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 from kai.cockpit.app import templates
 from kai.cockpit.auth import get_current_user, require_user
 from kai.cockpit.bots import BOT_TYPES
-from kai.cockpit.connections import ConnectionsService
+from kai.cockpit.connections.service import ConnectionsService
 from kai.cockpit.db import get_db
 from kai.cockpit.deployments import DeploymentsService, attention_reason
 from kai.cockpit.models import User

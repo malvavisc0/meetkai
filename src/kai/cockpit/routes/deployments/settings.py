@@ -29,7 +29,7 @@ from kai.cockpit.bots import (
     auto_pick_voice,
 )
 from kai.cockpit.brains import BrainsService
-from kai.cockpit.connections import ConnectionsService
+from kai.cockpit.connections.service import ConnectionsService
 from kai.cockpit.db import get_db
 from kai.cockpit.deployments import DeploymentsService, _tool_enabled, _tool_instruction
 from kai.cockpit.models import User

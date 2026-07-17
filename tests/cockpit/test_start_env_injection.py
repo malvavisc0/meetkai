@@ -68,7 +68,7 @@ def _encryption_env(monkeypatch, tmp_path):
     monkeypatch.chdir(tmp_path)
     monkeypatch.setenv("KAI_CREDENTIAL_ENCRYPTION_KEY", _KEY)
     monkeypatch.setenv("KAI_CREDENTIAL_KEY_VERSION", "v1")
-    from kai.cockpit import secrets as secrets_mod
+    from kai.cockpit.connections import secrets as secrets_mod
 
     secrets_mod._clear_key_cache()
     yield
@@ -92,7 +92,7 @@ def _make_user(db) -> User:
 
 
 def _resend_conn(user_id: int) -> Connection:
-    from kai.cockpit.secrets import encrypt_config
+    from kai.cockpit.connections.secrets import encrypt_config
 
     cfg = encrypt_config("resend", {"signing_secret": "dGVzdA==", "api_key": "re_test"})
     return Connection(
@@ -106,7 +106,7 @@ def _resend_conn(user_id: int) -> Connection:
 
 
 def _smtp_conn(user_id: int) -> Connection:
-    from kai.cockpit.secrets import encrypt_config
+    from kai.cockpit.connections.secrets import encrypt_config
 
     cfg = encrypt_config(
         "smtp",

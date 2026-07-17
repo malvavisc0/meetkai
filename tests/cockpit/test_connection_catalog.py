@@ -365,7 +365,7 @@ class TestInjectConnectionEnv:
         """The database branch decrypts the URL and sets KAI_SQL_DSN."""
         monkeypatch.setenv("KAI_CREDENTIAL_ENCRYPTION_KEY", "a" * 64)
         monkeypatch.setenv("KAI_CREDENTIAL_KEY_VERSION", "v1")
-        from kai.cockpit import secrets
+        from kai.cockpit.connections import secrets
 
         secrets._clear_key_cache()
         try:
@@ -388,7 +388,7 @@ class TestInjectConnectionEnv:
         """The smtp branch decrypts and sets all six KAI_SMTP_TOOL_* vars."""
         monkeypatch.setenv("KAI_CREDENTIAL_ENCRYPTION_KEY", "a" * 64)
         monkeypatch.setenv("KAI_CREDENTIAL_KEY_VERSION", "v1")
-        from kai.cockpit import secrets
+        from kai.cockpit.connections import secrets
 
         secrets._clear_key_cache()
         try:

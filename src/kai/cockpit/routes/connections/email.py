@@ -7,9 +7,9 @@ from sqlalchemy.orm import Session
 from kai.cockpit.app import templates
 from kai.cockpit.auth import require_user
 from kai.cockpit.cli_helpers import public_url
-from kai.cockpit.connection_probe import flash_connection_save
+from kai.cockpit.connections.email import EmailConnectionsService
+from kai.cockpit.connections.probe import flash_connection_save
 from kai.cockpit.db import get_db
-from kai.cockpit.email_connections import EmailConnectionsService
 from kai.cockpit.models import User
 
 router = APIRouter()

@@ -6,13 +6,13 @@ from sqlalchemy.orm import Session
 
 from kai.cockpit.app import templates
 from kai.cockpit.auth import require_user
-from kai.cockpit.calcom_connections import CalcomConnectionsService
-from kai.cockpit.connections import ConnectionsService
-from kai.cockpit.database_connections import DatabaseConnectionsService
+from kai.cockpit.connections.calcom import CalcomConnectionsService
+from kai.cockpit.connections.database import DatabaseConnectionsService
+from kai.cockpit.connections.email import EmailConnectionsService
+from kai.cockpit.connections.service import ConnectionsService
+from kai.cockpit.connections.smtp import SmtpConnectionsService
 from kai.cockpit.db import get_db
-from kai.cockpit.email_connections import EmailConnectionsService
 from kai.cockpit.models import User
-from kai.cockpit.smtp_connections import SmtpConnectionsService
 
 router = APIRouter()
 

@@ -15,13 +15,13 @@ import uuid
 import httpx
 from sqlalchemy.orm import Session
 
-from kai.cockpit.connection_probe import (
+from kai.cockpit.connections.probe import (
     _is_transient_resend_error,
     reflect_probe_status,
 )
+from kai.cockpit.connections.secrets import decrypt_config, encrypt_config
+from kai.cockpit.connections.webhooks import _RESEND_API_BASE, _sign_resend, _strip_whsec_prefix
 from kai.cockpit.models import Connection, User
-from kai.cockpit.secrets import decrypt_config, encrypt_config
-from kai.cockpit.webhooks import _RESEND_API_BASE, _sign_resend, _strip_whsec_prefix
 from kai.utils.common import now_iso
 
 logger = logging.getLogger(__name__)

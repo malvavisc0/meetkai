@@ -2,7 +2,7 @@
 
 import pytest
 
-from kai.cockpit.secrets import (
+from kai.cockpit.connections.secrets import (
     decrypt,
     decrypt_config,
     encrypt,
@@ -21,7 +21,7 @@ def _encryption_env(monkeypatch, tmp_path):
     monkeypatch.chdir(tmp_path)
     monkeypatch.setenv("KAI_CREDENTIAL_ENCRYPTION_KEY", _KEY)
     monkeypatch.setenv("KAI_CREDENTIAL_KEY_VERSION", "v1")
-    from kai.cockpit import secrets as secrets_mod
+    from kai.cockpit.connections import secrets as secrets_mod
 
     secrets_mod._clear_key_cache()
     yield
@@ -43,7 +43,7 @@ class TestRoundTrip:
         ciphertext_v1 = encrypt("secret")
         assert ciphertext_v1.startswith("v1:")
 
-        from kai.cockpit import secrets as secrets_mod
+        from kai.cockpit.connections import secrets as secrets_mod
 
         monkeypatch.setenv("KAI_CREDENTIAL_KEY_VERSION", "v2")
         secrets_mod._clear_key_cache()
@@ -52,7 +52,7 @@ class TestRoundTrip:
 
     def test_old_version_decrypts_after_version_bump(self, monkeypatch):
         ciphertext = encrypt("secret-value")
-        from kai.cockpit import secrets as secrets_mod
+        from kai.cockpit.connections import secrets as secrets_mod
 
         monkeypatch.setenv("KAI_CREDENTIAL_KEY_VERSION", "v2")
         secrets_mod._clear_key_cache()
@@ -117,7 +117,7 @@ class TestConfigHelpers:
 class TestMissingKey:
     def test_encrypt_without_key_raises_runtime_error(self, monkeypatch):
         monkeypatch.delenv("KAI_CREDENTIAL_ENCRYPTION_KEY")
-        from kai.cockpit import secrets as secrets_mod
+        from kai.cockpit.connections import secrets as secrets_mod
 
         secrets_mod._clear_key_cache()
         with pytest.raises(RuntimeError, match="KAI_CREDENTIAL_ENCRYPTION_KEY"):
@@ -125,7 +125,7 @@ class TestMissingKey:
 
     def test_encrypt_without_version_raises_runtime_error(self, monkeypatch):
         monkeypatch.delenv("KAI_CREDENTIAL_KEY_VERSION")
-        from kai.cockpit import secrets as secrets_mod
+        from kai.cockpit.connections import secrets as secrets_mod
 
         secrets_mod._clear_key_cache()
         with pytest.raises(RuntimeError, match="KAI_CREDENTIAL_KEY_VERSION"):

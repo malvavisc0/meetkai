@@ -1,4 +1,4 @@
-"""Tests for kai.cockpit.connections.ConnectionsService.
+"""Tests for kai.cockpit.connections.service.ConnectionsService.
 
 WAHA REST calls are mocked at the ``WahaClient`` method level
 rather than via respx/httpx, since the service only
@@ -10,7 +10,7 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from kai.cockpit.connections import ConnectionsService
+from kai.cockpit.connections.service import ConnectionsService
 from kai.cockpit.models import Connection
 
 
@@ -19,9 +19,9 @@ def fake_waha_client(monkeypatch):
     """Patch ``WahaClient`` used by connections.py with an AsyncMock."""
     client = AsyncMock()
     client.close = AsyncMock()
-    monkeypatch.setattr("kai.cockpit.connections.WahaClient", lambda settings: client)
+    monkeypatch.setattr("kai.cockpit.connections.service.WahaClient", lambda settings: client)
     monkeypatch.setattr(
-        "kai.cockpit.connections.get_waha_settings",
+        "kai.cockpit.connections.service.get_waha_settings",
         lambda: SimpleNamespace(webhook_public_host="test-host"),
     )
     return client

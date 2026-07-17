@@ -35,9 +35,9 @@ def fake_waha_client(monkeypatch):
     client.close = AsyncMock()
     client.create_session.return_value = {}
     client.get_session.return_value = {"status": "WORKING"}
-    monkeypatch.setattr("kai.cockpit.connections.WahaClient", lambda settings: client)
+    monkeypatch.setattr("kai.cockpit.connections.service.WahaClient", lambda settings: client)
     monkeypatch.setattr(
-        "kai.cockpit.connections.get_waha_settings",
+        "kai.cockpit.connections.service.get_waha_settings",
         lambda: SimpleNamespace(webhook_public_host="test-host"),
     )
     return client
@@ -80,7 +80,7 @@ class TestFullDeploymentFlow:
         r = client.post("/connections/whatsapp/connect", follow_redirects=False)
         assert r.status_code == 302
 
-        from kai.cockpit.connections import ConnectionsService
+        from kai.cockpit.connections.service import ConnectionsService
 
         conn = ConnectionsService(db).get_whatsapp(bob)
         assert conn is not None

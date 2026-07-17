@@ -10,7 +10,7 @@ def _encryption_env(monkeypatch):
     """Provide the encryption env vars the secrets module requires."""
     monkeypatch.setenv("KAI_CREDENTIAL_ENCRYPTION_KEY", "a" * 64)
     monkeypatch.setenv("KAI_CREDENTIAL_KEY_VERSION", "v1")
-    from kai.cockpit import secrets
+    from kai.cockpit.connections import secrets
 
     secrets._clear_key_cache()
     yield
@@ -19,7 +19,7 @@ def _encryption_env(monkeypatch):
 
 class TestSave:
     def test_save_encrypts_password(self, db, user):
-        from kai.cockpit.smtp_connections import SmtpConnectionsService
+        from kai.cockpit.connections.smtp import SmtpConnectionsService
 
         svc = SmtpConnectionsService(db)
         conn = svc.save(
@@ -32,12 +32,12 @@ class TestSave:
         )
         assert conn.config.get("host") == "smtp.example.com"
         assert conn.config.get("password") != "secret123"
-        from kai.cockpit.secrets import is_encrypted
+        from kai.cockpit.connections.secrets import is_encrypted
 
         assert is_encrypted(conn.config["password"])
 
     def test_save_empty_password_preserves_existing(self, db, user):
-        from kai.cockpit.smtp_connections import SmtpConnectionsService
+        from kai.cockpit.connections.smtp import SmtpConnectionsService
 
         svc = SmtpConnectionsService(db)
         svc.save(
@@ -59,12 +59,12 @@ class TestSave:
         assert conn.config.get("host") == "smtp.newhost.com"
         assert conn.config.get("username") == "user2"
         # Password is still there (encrypted, unchanged)
-        from kai.cockpit.secrets import is_encrypted
+        from kai.cockpit.connections.secrets import is_encrypted
 
         assert is_encrypted(conn.config["password"])
 
     def test_save_plaintext_fields_stored(self, db, user):
-        from kai.cockpit.smtp_connections import SmtpConnectionsService
+        from kai.cockpit.connections.smtp import SmtpConnectionsService
 
         svc = SmtpConnectionsService(db)
         conn = svc.save(
@@ -83,7 +83,7 @@ class TestSave:
 
 class TestDecryptConfig:
     def test_round_trips(self, db, user):
-        from kai.cockpit.smtp_connections import SmtpConnectionsService
+        from kai.cockpit.connections.smtp import SmtpConnectionsService
 
         svc = SmtpConnectionsService(db)
         svc.save(
@@ -103,7 +103,7 @@ class TestDecryptConfig:
         assert cfg["use_tls"] is True
 
     def test_none_when_no_connection(self, db, user):
-        from kai.cockpit.smtp_connections import SmtpConnectionsService
+        from kai.cockpit.connections.smtp import SmtpConnectionsService
 
         svc = SmtpConnectionsService(db)
         assert svc.decrypt_config(user) is None
@@ -111,7 +111,7 @@ class TestDecryptConfig:
 
 class TestDelete:
     def test_delete_removes_row(self, db, user):
-        from kai.cockpit.smtp_connections import SmtpConnectionsService
+        from kai.cockpit.connections.smtp import SmtpConnectionsService
 
         svc = SmtpConnectionsService(db)
         svc.save(
@@ -127,7 +127,7 @@ class TestDelete:
         assert svc.get(user) is None
 
     def test_delete_when_none_is_noop(self, db, user):
-        from kai.cockpit.smtp_connections import SmtpConnectionsService
+        from kai.cockpit.connections.smtp import SmtpConnectionsService
 
         svc = SmtpConnectionsService(db)
         svc.delete(user)

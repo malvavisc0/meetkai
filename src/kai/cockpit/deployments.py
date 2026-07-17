@@ -213,7 +213,7 @@ def _inject_connection_env(env: dict, service: str, conn: Connection) -> bool:
         svc_vars = SERVICE_ENV_VARS.get(service)
         if svc_vars is None:
             raise NotImplementedError(f"env injection for {service!r} not implemented")
-        from kai.cockpit.secrets import decrypt_config
+        from kai.cockpit.connections.secrets import decrypt_config
 
         cfg = decrypt_config(service, conn.config)
         bool_fields = svc_vars.get("bool_fields", set())

@@ -6,8 +6,8 @@ from sqlalchemy.orm import Session
 
 from kai.cockpit.app import templates
 from kai.cockpit.auth import require_user
-from kai.cockpit.calcom_connections import CalcomConnectionsService
-from kai.cockpit.connection_probe import flash_connection_save
+from kai.cockpit.connections.calcom import CalcomConnectionsService
+from kai.cockpit.connections.probe import flash_connection_save
 from kai.cockpit.db import get_db
 from kai.cockpit.models import User
 

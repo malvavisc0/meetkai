@@ -104,7 +104,7 @@ def run_smtp_probe_with_timeout(
     Returns ``(ok, message, transient)``. Uses a manual ThreadPoolExecutor
     so on timeout the pool shuts down without blocking the calling thread.
     """
-    from kai.cockpit.smtp_connections import _smtp_test
+    from kai.cockpit.connections.smtp import _smtp_test
 
     pool = ThreadPoolExecutor(max_workers=1)
     future = pool.submit(_smtp_test, host, port, username, password, use_tls)

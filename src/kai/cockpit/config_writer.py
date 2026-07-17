@@ -27,29 +27,29 @@ def write_config(deployment: Deployment, instance_id: str) -> Path:
     config = dict(deployment.settings)
     flags = deployment.feature_flags
 
-if "media" in config or deployment.bot_type == "waha":
-            media = dict(config.get("media", {}))
-            media["image_enabled"] = flags.get("image", False)
-            media["stt_enabled"] = flags.get("stt", False)
-            media["tts_enabled"] = flags.get("tts", False)
-            media["video_enabled"] = flags.get("video", False)
-            # Preserve instagram_enabled and max_size_mb from existing config file.
-            path = CONFIGS_DIR / f"{instance_id}.json"
-            if path.exists():
-                try:
-                    existing = json.loads(path.read_text(encoding="utf-8"))
-                    existing_media = existing.get("media", {})
-                    if "instagram_enabled" in existing_media:
-                        media.setdefault("instagram_enabled", existing_media["instagram_enabled"])
-                    if "max_size_mb" in existing_media:
-                        media.setdefault("max_size_mb", existing_media["max_size_mb"])
-                except (OSError, json.JSONDecodeError):
-                    pass
-            media.setdefault("instagram_enabled", True)
-            media.setdefault("max_size_mb", 10)
-            config["media"] = media
-        elif deployment.bot_type == "email":
-            # Email: ``image`` feature flag maps to BotConfig.vision.
+    if "media" in config or deployment.bot_type == "waha":
+        media = dict(config.get("media", {}))
+        media["image_enabled"] = flags.get("image", False)
+        media["stt_enabled"] = flags.get("stt", False)
+        media["tts_enabled"] = flags.get("tts", False)
+        media["video_enabled"] = flags.get("video", False)
+        # Preserve instagram_enabled and max_size_mb from existing config file.
+        existing_path = CONFIGS_DIR / f"{instance_id}.json"
+        if existing_path.exists():
+            try:
+                existing = json.loads(existing_path.read_text(encoding="utf-8"))
+                existing_media = existing.get("media", {})
+                if "instagram_enabled" in existing_media:
+                    media.setdefault("instagram_enabled", existing_media["instagram_enabled"])
+                if "max_size_mb" in existing_media:
+                    media.setdefault("max_size_mb", existing_media["max_size_mb"])
+            except (OSError, json.JSONDecodeError):
+                pass
+        media.setdefault("instagram_enabled", True)
+        media.setdefault("max_size_mb", 10)
+        config["media"] = media
+    elif deployment.bot_type == "email":
+        # Email: ``image`` feature flag maps to BotConfig.vision.
         config["vision"] = flags.get("image", False)
 
     path = CONFIGS_DIR / f"{instance_id}.json"

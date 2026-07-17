@@ -16,7 +16,7 @@ from sqlalchemy.orm import Session
 from kai.bots.waha.client import WahaClient
 from kai.bots.waha.config import get_waha_settings
 from kai.cockpit.auth import require_user
-from kai.cockpit.connections import ConnectionsService
+from kai.cockpit.connections.service import ConnectionsService
 from kai.cockpit.db import get_db
 from kai.cockpit.deployments import DeploymentsService
 from kai.cockpit.models import User

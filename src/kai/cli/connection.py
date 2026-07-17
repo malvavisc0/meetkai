@@ -24,7 +24,7 @@ def connection_connect(
     user: str = typer.Option(..., "--user", help="User email"),
 ):
     """Connect a service for a user."""
-    from kai.cockpit.connections import ConnectionsService
+    from kai.cockpit.connections.service import ConnectionsService
     from kai.cockpit.db import SessionLocal, create_all
     from kai.cockpit.models import User
 
@@ -60,7 +60,7 @@ def connection_status(
     user: str = typer.Option(..., "--user", help="User email"),
 ):
     """Show connection status for a user."""
-    from kai.cockpit.connections import ConnectionsService
+    from kai.cockpit.connections.service import ConnectionsService
     from kai.cockpit.db import SessionLocal, create_all
     from kai.cockpit.models import User
 
@@ -91,7 +91,7 @@ def connection_disconnect(
     user: str = typer.Option(..., "--user", help="User email"),
 ):
     """Disconnect a service for a user."""
-    from kai.cockpit.connections import ConnectionsService
+    from kai.cockpit.connections.service import ConnectionsService
     from kai.cockpit.db import SessionLocal, create_all
     from kai.cockpit.models import User
 

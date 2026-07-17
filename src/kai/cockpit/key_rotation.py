@@ -22,13 +22,13 @@ def rotate_credential_key(db: Session) -> tuple[str, bool]:
     the process's active version so subsequent ``encrypt()`` calls use it.
     """
     from kai.cockpit.bots import CREDENTIAL_TYPES
-    from kai.cockpit.models import Connection
-    from kai.cockpit.secrets import (
+    from kai.cockpit.connections.secrets import (
         _active_version,
         decrypt_config,
         encrypt_config,
         set_active_version,
     )
+    from kai.cockpit.models import Connection
 
     current_version = _active_version()
 

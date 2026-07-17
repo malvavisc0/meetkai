@@ -18,11 +18,8 @@ import time
 import pytest
 
 from kai.cockpit.bots import BOT_TYPES, BotType
-from kai.cockpit.deployments import DeploymentsService
-from kai.cockpit.models import Connection, Deployment, User
-from kai.cockpit.naming import kai_slug_for
-from kai.cockpit.secrets import encrypt_config
-from kai.cockpit.webhooks import (
+from kai.cockpit.connections.secrets import encrypt_config
+from kai.cockpit.connections.webhooks import (
     WEBHOOK_TYPES,
     NormalizedMessage,
     _clear_seen_nonces,
@@ -31,6 +28,9 @@ from kai.cockpit.webhooks import (
     is_nonce_seen,
     record_nonce,
 )
+from kai.cockpit.deployments import DeploymentsService
+from kai.cockpit.models import Connection, Deployment, User
+from kai.cockpit.naming import kai_slug_for
 
 _KEY = "a" * 64
 
@@ -76,7 +76,7 @@ def _encryption_env(monkeypatch, tmp_path):
     monkeypatch.chdir(tmp_path)
     monkeypatch.setenv("KAI_CREDENTIAL_ENCRYPTION_KEY", _KEY)
     monkeypatch.setenv("KAI_CREDENTIAL_KEY_VERSION", "v1")
-    from kai.cockpit import secrets as secrets_mod
+    from kai.cockpit.connections import secrets as secrets_mod
 
     secrets_mod._clear_key_cache()
     yield
@@ -197,7 +197,7 @@ class TestParseResend:
     The webhook body is ``{"type": ..., "created_at": ..., "data": {...}}``
     — envelope metadata only. Body text/HTML and attachment download URLs
     require follow-up calls to the Received Emails / Attachments REST APIs
-    (monkeypatched here via ``kai.cockpit.webhooks._fetch_resend_email`` /
+    (monkeypatched here via ``kai.cockpit.connections.webhooks._fetch_resend_email`` /
     ``_fetch_resend_attachments``), authenticated with the connection's
     ``api_key``.
     """
@@ -219,7 +219,7 @@ class TestParseResend:
         return {"type": "email.received", "created_at": "2026-01-01T00:00:00Z", "data": data}
 
     def test_text_part_preferred(self, monkeypatch):
-        import kai.cockpit.webhooks as webhooks_mod
+        import kai.cockpit.connections.webhooks as webhooks_mod
 
         monkeypatch.setattr(
             webhooks_mod,
@@ -232,7 +232,7 @@ class TestParseResend:
         assert msg.event == "email.inbound"
 
     def test_html_fallback_stripped(self, monkeypatch):
-        import kai.cockpit.webhooks as webhooks_mod
+        import kai.cockpit.connections.webhooks as webhooks_mod
 
         monkeypatch.setattr(
             webhooks_mod,
@@ -244,14 +244,14 @@ class TestParseResend:
         assert "<p>" not in msg.text
 
     def test_empty_body_when_no_text_or_html(self, monkeypatch):
-        import kai.cockpit.webhooks as webhooks_mod
+        import kai.cockpit.connections.webhooks as webhooks_mod
 
         monkeypatch.setattr(webhooks_mod, "_fetch_resend_email", lambda email_id, api_key: {})
         msg = _parse_resend(self._payload(), {"api_key": "re_test"})
         assert msg.text == ""
 
     def test_metadata_fields(self, monkeypatch):
-        import kai.cockpit.webhooks as webhooks_mod
+        import kai.cockpit.connections.webhooks as webhooks_mod
 
         monkeypatch.setattr(
             webhooks_mod, "_fetch_resend_email", lambda email_id, api_key: {"text": "hi"}
@@ -262,7 +262,7 @@ class TestParseResend:
         assert msg.metadata["to"] == ["support@meetk.ai"]
 
     def test_attachments_extracted_as_urls_only(self, monkeypatch):
-        import kai.cockpit.webhooks as webhooks_mod
+        import kai.cockpit.connections.webhooks as webhooks_mod
 
         monkeypatch.setattr(
             webhooks_mod, "_fetch_resend_email", lambda email_id, api_key: {"text": "see attached"}
@@ -289,7 +289,7 @@ class TestParseResend:
         assert atts[0]["filename"] == "shot.png"
 
     def test_no_attachments_skips_attachments_api_call(self, monkeypatch):
-        import kai.cockpit.webhooks as webhooks_mod
+        import kai.cockpit.connections.webhooks as webhooks_mod
 
         monkeypatch.setattr(
             webhooks_mod, "_fetch_resend_email", lambda email_id, api_key: {"text": "hi"}
@@ -303,7 +303,7 @@ class TestParseResend:
         assert msg.metadata["attachments"] == []
 
     def test_non_inbound_event_skips_api_calls(self, monkeypatch):
-        import kai.cockpit.webhooks as webhooks_mod
+        import kai.cockpit.connections.webhooks as webhooks_mod
 
         def _boom(*args, **kwargs):
             raise AssertionError("no API call should be made for a non-inbound event")
@@ -316,7 +316,7 @@ class TestParseResend:
         assert msg.text == ""
 
     def test_upstream_api_error_is_raised(self, monkeypatch):
-        import kai.cockpit.webhooks as webhooks_mod
+        import kai.cockpit.connections.webhooks as webhooks_mod
 
         def _fail(email_id, api_key):
             raise webhooks_mod.WebhookUpstreamError("boom")
@@ -351,7 +351,7 @@ class TestNonceHelpers:
         assert is_nonce_seen("stale") is False
 
     def test_record_bounds_to_max(self, monkeypatch):
-        monkeypatch.setattr("kai.cockpit.webhooks._SEEN_NONCES_MAX", 3)
+        monkeypatch.setattr("kai.cockpit.connections.webhooks._SEEN_NONCES_MAX", 3)
         record_nonce("a")
         record_nonce("b")
         record_nonce("c")

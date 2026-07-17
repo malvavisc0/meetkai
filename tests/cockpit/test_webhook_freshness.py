@@ -1,8 +1,8 @@
-"""Tests for webhook replay protection (kai.cockpit.webhooks._check_freshness)."""
+"""Tests for webhook replay protection (kai.cockpit.connections.webhooks._check_freshness)."""
 
 import pytest
 
-from kai.cockpit.webhooks import (
+from kai.cockpit.connections.webhooks import (
     FRESHNESS_WINDOW_SECONDS,
     _check_freshness,
     _clear_seen_nonces,
@@ -88,7 +88,7 @@ class TestPruning:
 
 class TestLruBound:
     def test_oldest_dropped_when_over_limit(self, monkeypatch):
-        monkeypatch.setattr("kai.cockpit.webhooks._SEEN_NONCES_MAX", 3)
+        monkeypatch.setattr("kai.cockpit.connections.webhooks._SEEN_NONCES_MAX", 3)
         _check_freshness(nonce="a", now=_NOW)
         _check_freshness(nonce="b", now=_NOW + 1)
         _check_freshness(nonce="c", now=_NOW + 2)

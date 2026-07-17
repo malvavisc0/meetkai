@@ -149,17 +149,19 @@ def create_app() -> FastAPI:
     from kai.cockpit.routes import (
         auth,
         brain,
-        calcom_connections,
         chat,
-        connections,
         console,
-        database_connections,
         dependencies,
         deployments,
-        email_connections,
         escalations,
         health,
-        smtp_connections,
+    )
+    from kai.cockpit.routes.connections import (
+        base,
+        calcom,
+        database,
+        email,
+        smtp,
         webhooks,
     )
 
@@ -167,15 +169,15 @@ def create_app() -> FastAPI:
     app.include_router(console.router)
     app.include_router(dependencies.router)
     app.include_router(deployments.router)
-    app.include_router(connections.router)
-    app.include_router(database_connections.router)
-    app.include_router(email_connections.router)
-    app.include_router(calcom_connections.router)
+    app.include_router(base.router)
+    app.include_router(database.router)
+    app.include_router(email.router)
+    app.include_router(calcom.router)
     app.include_router(brain.router)
     app.include_router(chat.router)
     app.include_router(escalations.router)
     app.include_router(health.router)
-    app.include_router(smtp_connections.router)
+    app.include_router(smtp.router)
     app.include_router(webhooks.router)
 
     return app

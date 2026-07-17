@@ -561,7 +561,7 @@ class TestDelete:
         dep = svc.create(user, "waha", "goal", "English")
         svc.delete(dep)
 
-        from kai.cockpit.connections import ConnectionsService
+        from kai.cockpit.connections.service import ConnectionsService
 
         assert ConnectionsService(db).get_whatsapp(user) is not None
 

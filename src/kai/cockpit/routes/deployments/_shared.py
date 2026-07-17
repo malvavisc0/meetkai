@@ -16,7 +16,7 @@ from kai.cockpit.bots import (
     CONNECTION_LABELS,
     BotType,
 )
-from kai.cockpit.connections import ConnectionsService
+from kai.cockpit.connections.service import ConnectionsService
 from kai.cockpit.deployments import DeploymentsService
 from kai.cockpit.models import Deployment, User
 

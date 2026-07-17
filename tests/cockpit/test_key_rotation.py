@@ -4,9 +4,9 @@ import secrets
 
 import pytest
 
+from kai.cockpit.connections.secrets import decrypt_config, encrypt_config, is_encrypted
 from kai.cockpit.key_rotation import _update_env_file, rotate_credential_key
 from kai.cockpit.models import Connection
-from kai.cockpit.secrets import decrypt_config, encrypt_config, is_encrypted
 
 _KEY = secrets.token_hex(32)
 
@@ -18,7 +18,7 @@ def _encryption_env(monkeypatch, tmp_path):
     monkeypatch.chdir(tmp_path)
     monkeypatch.setenv("KAI_CREDENTIAL_ENCRYPTION_KEY", _KEY)
     monkeypatch.setenv("KAI_CREDENTIAL_KEY_VERSION", "v1")
-    from kai.cockpit import secrets as secrets_mod
+    from kai.cockpit.connections import secrets as secrets_mod
 
     secrets_mod._clear_key_cache()
     yield

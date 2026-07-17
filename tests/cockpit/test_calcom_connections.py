@@ -5,7 +5,7 @@ from __future__ import annotations
 import httpx
 import pytest
 
-from kai.cockpit.secrets import decrypt_config, is_encrypted
+from kai.cockpit.connections.secrets import decrypt_config, is_encrypted
 
 _KEY = "a" * 64
 
@@ -24,7 +24,7 @@ def _encryption_env(monkeypatch, tmp_path):
     monkeypatch.chdir(tmp_path)
     monkeypatch.setenv("KAI_CREDENTIAL_ENCRYPTION_KEY", _KEY)
     monkeypatch.setenv("KAI_CREDENTIAL_KEY_VERSION", "v1")
-    from kai.cockpit import secrets
+    from kai.cockpit.connections import secrets
 
     secrets._clear_key_cache()
 
@@ -40,7 +40,7 @@ def _encryption_env(monkeypatch, tmp_path):
 
 class TestSave:
     def test_save_encrypts_api_key(self, db, user):
-        from kai.cockpit.calcom_connections import CalcomConnectionsService
+        from kai.cockpit.connections.calcom import CalcomConnectionsService
 
         svc = CalcomConnectionsService(db)
         conn = svc.save(user, api_key="cal_live_abc123", base_url="")
@@ -48,14 +48,14 @@ class TestSave:
         assert is_encrypted(conn.config["api_key"])
 
     def test_save_sets_status_connected_on_200(self, db, user):
-        from kai.cockpit.calcom_connections import CalcomConnectionsService
+        from kai.cockpit.connections.calcom import CalcomConnectionsService
 
         svc = CalcomConnectionsService(db)
         conn = svc.save(user, api_key="cal_live_abc123", base_url="")
         assert conn.status == "connected"
 
     def test_save_empty_api_key_preserves_existing(self, db, user):
-        from kai.cockpit.calcom_connections import CalcomConnectionsService
+        from kai.cockpit.connections.calcom import CalcomConnectionsService
 
         svc = CalcomConnectionsService(db)
         svc.save(user, api_key="cal_live_abc123", base_url="https://api.cal.com/v2")
@@ -68,7 +68,7 @@ class TestSave:
         import httpx
 
         monkeypatch.setattr(httpx, "get", lambda *a, **kw: _fake_resp(401))
-        from kai.cockpit.calcom_connections import CalcomConnectionsService
+        from kai.cockpit.connections.calcom import CalcomConnectionsService
 
         svc = CalcomConnectionsService(db)
         conn = svc.save(user, api_key="cal_live_bad", base_url="")
@@ -78,7 +78,7 @@ class TestSave:
         import httpx
 
         # First save succeeds (status=connected via the autouse 200 mock).
-        from kai.cockpit.calcom_connections import CalcomConnectionsService
+        from kai.cockpit.connections.calcom import CalcomConnectionsService
 
         svc = CalcomConnectionsService(db)
         svc.save(user, api_key="cal_live_abc123", base_url="")
@@ -94,7 +94,7 @@ class TestSave:
             raise httpx.ConnectError("boom")
 
         monkeypatch.setattr(httpx, "get", _raise)
-        from kai.cockpit.calcom_connections import CalcomConnectionsService
+        from kai.cockpit.connections.calcom import CalcomConnectionsService
 
         svc = CalcomConnectionsService(db)
         # No prior connection, so a transient failure lands on "disconnected"
@@ -105,14 +105,14 @@ class TestSave:
 
 class TestDecryptApiKey:
     def test_round_trips(self, db, user):
-        from kai.cockpit.calcom_connections import CalcomConnectionsService
+        from kai.cockpit.connections.calcom import CalcomConnectionsService
 
         svc = CalcomConnectionsService(db)
         svc.save(user, api_key="cal_live_abc123", base_url="")
         assert svc.decrypt_api_key(user) == "cal_live_abc123"
 
     def test_none_when_no_connection(self, db, user):
-        from kai.cockpit.calcom_connections import CalcomConnectionsService
+        from kai.cockpit.connections.calcom import CalcomConnectionsService
 
         svc = CalcomConnectionsService(db)
         assert svc.decrypt_api_key(user) is None
@@ -123,7 +123,7 @@ class TestProbe:
         import httpx
 
         monkeypatch.setattr(httpx, "get", lambda *a, **kw: _fake_resp(403))
-        from kai.cockpit.calcom_connections import CalcomConnectionsService
+        from kai.cockpit.connections.calcom import CalcomConnectionsService
 
         svc = CalcomConnectionsService(db)
         ok, _, transient = svc._probe("k", "")
@@ -134,7 +134,7 @@ class TestProbe:
         import httpx
 
         monkeypatch.setattr(httpx, "get", lambda *a, **kw: _fake_resp(429))
-        from kai.cockpit.calcom_connections import CalcomConnectionsService
+        from kai.cockpit.connections.calcom import CalcomConnectionsService
 
         svc = CalcomConnectionsService(db)
         ok, _, transient = svc._probe("k", "")
@@ -149,7 +149,7 @@ class TestProbe:
             return _fake_resp(200)
 
         monkeypatch.setattr(httpx, "get", _fake_get)
-        from kai.cockpit.calcom_connections import CalcomConnectionsService
+        from kai.cockpit.connections.calcom import CalcomConnectionsService
 
         svc = CalcomConnectionsService(db)
         svc._probe("k", "")
@@ -161,7 +161,7 @@ class TestTest:
         import httpx
 
         monkeypatch.setattr(httpx, "get", lambda *a, **kw: _fake_resp(200))
-        from kai.cockpit.calcom_connections import CalcomConnectionsService
+        from kai.cockpit.connections.calcom import CalcomConnectionsService
 
         svc = CalcomConnectionsService(db)
         ok, msg = svc.test(user, api_key="cal_live_adhoc", base_url="")
@@ -169,7 +169,7 @@ class TestTest:
         assert msg == "ok"
 
     def test_no_key_returns_false(self, db, user):
-        from kai.cockpit.calcom_connections import CalcomConnectionsService
+        from kai.cockpit.connections.calcom import CalcomConnectionsService
 
         svc = CalcomConnectionsService(db)
         ok, msg = svc.test(user)
@@ -179,7 +179,7 @@ class TestTest:
 
 class TestDelete:
     def test_delete_removes_row(self, db, user):
-        from kai.cockpit.calcom_connections import CalcomConnectionsService
+        from kai.cockpit.connections.calcom import CalcomConnectionsService
 
         svc = CalcomConnectionsService(db)
         svc.save(user, api_key="cal_live_abc123", base_url="")
@@ -188,7 +188,7 @@ class TestDelete:
         assert svc.get(user) is None
 
     def test_delete_when_none_is_noop(self, db, user):
-        from kai.cockpit.calcom_connections import CalcomConnectionsService
+        from kai.cockpit.connections.calcom import CalcomConnectionsService
 
         svc = CalcomConnectionsService(db)
         svc.delete(user)

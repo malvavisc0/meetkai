@@ -27,11 +27,8 @@ _HKDF_INFO = b"kai-connection-secrets"
 _VERSION_SEP = ":"
 _key_cache: dict[str, Fernet] = {}
 
-# Active key version for new encrypt() calls. Set by key rotation so the
-# running process encrypts new secrets under the new version without
-# mutating the process environment; the rotation command persists it to
-# ``.env`` for the next process start. ``None`` means read from
-# ``KAI_CREDENTIAL_KEY_VERSION`` on each call.
+# Active key version for new encrypt() calls, set by key rotation.
+# ``None`` means read from ``KAI_CREDENTIAL_KEY_VERSION`` on each call.
 _active_version_override: str | None = None
 
 
@@ -71,23 +68,13 @@ def _active_version() -> str:
 
 
 def set_active_version(version: str) -> None:
-    """Set the active encryption key version for subsequent ``encrypt()`` calls.
-
-    Used by key rotation: after re-encrypting every credential under a new
-    version, new credentials must encrypt under that same version. Held here
-    as explicit module state (and persisted to ``.env`` by the rotation
-    command) rather than mutating ``os.environ``.
-    """
+    """Set the active encryption key version for subsequent ``encrypt()`` calls."""
     global _active_version_override
     _active_version_override = version
 
 
 def _derive_fernet(version: str) -> Fernet:
-    """Derive (and cache) the Fernet key for a given version.
-
-    One cache entry per version ever used, so tiny. Avoids re-running HKDF
-    on every decrypt.
-    """
+    """Derive (and cache) the Fernet key for a given version."""
     if version in _key_cache:
         return _key_cache[version]
     info = _HKDF_INFO + b":" + version.encode()
@@ -106,9 +93,7 @@ def _derive_fernet(version: str) -> Fernet:
 def _clear_key_cache() -> None:
     """Drop cached Fernet instances and reset the active-version override.
 
-    Test/rotation use only: clears derived Fernet keys (keyed by version)
-    and the active-version override so a fresh key/version is picked up
-    from env on the next call.
+    Test/rotation use only.
     """
     global _active_version_override
     _key_cache.clear()

@@ -239,7 +239,7 @@ class TestStartIngestsRequiredSmtp(_StartBase):
         monkeypatch.chdir(tmp_path)
         monkeypatch.setenv("KAI_CREDENTIAL_ENCRYPTION_KEY", _KEY)
         monkeypatch.setenv("KAI_CREDENTIAL_KEY_VERSION", "v1")
-        from kai.cockpit import secrets as secrets_mod
+        from kai.cockpit.connections import secrets as secrets_mod
 
         secrets_mod._clear_key_cache()
         yield
@@ -255,7 +255,7 @@ class TestStartIngestsRequiredSmtp(_StartBase):
         monkeypatch.setitem(BOT_TYPES, "email", fake_bt)
 
     def _smtp_conn(self, user_id):
-        from kai.cockpit import secrets
+        from kai.cockpit.connections import secrets
 
         encrypted_pw = secrets.encrypt("secret123")
         return Connection(

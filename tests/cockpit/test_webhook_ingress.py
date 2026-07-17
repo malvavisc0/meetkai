@@ -13,10 +13,10 @@ import pytest
 
 from kai.bots.base import BaseBot
 from kai.cockpit.bots import BOT_TYPES, BotType
+from kai.cockpit.connections.webhooks import WEBHOOK_TYPES, NormalizedMessage, WebhookType
 from kai.cockpit.deployments import DeploymentsService
 from kai.cockpit.models import Connection, Deployment, User
 from kai.cockpit.naming import kai_slug_for
-from kai.cockpit.webhooks import WEBHOOK_TYPES, NormalizedMessage, WebhookType
 
 
 @pytest.fixture
@@ -67,7 +67,7 @@ def fake_webhook_type(monkeypatch):
     # signing_secret — mirroring how "resend" is paired with its
     # WebhookConnectionType in production).
     from kai.cockpit.bots import WEBHOOK_CONNECTION_TYPES, WebhookConnectionType
-    from kai.cockpit.webhooks import _clear_seen_nonces
+    from kai.cockpit.connections.webhooks import _clear_seen_nonces
 
     monkeypatch.setitem(WEBHOOK_TYPES, "test", _FAKE_TYPE)
     monkeypatch.setitem(
