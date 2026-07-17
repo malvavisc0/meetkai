@@ -304,6 +304,7 @@ def _start(
     language: str,
     user: str,
     voice: str,
+    template_name: str,
 ) -> None:
     """Start a bot. Blocks until SIGINT/SIGTERM."""
     settings = get_settings()
@@ -318,6 +319,35 @@ def _start(
     except ValueError as exc:
         err_line(str(exc))
         raise typer.Exit(1) from exc
+
+    # Resolve template (Phase 1: load + validate only; wiring lands in Phase 2).
+    # `general` is the default and matches today's hardcoded behavior, so this
+    # is a true no-op for the default case. The boot guard below fails fast if a
+    # template declares a required tool whose env vars are not configured.
+    from kai.templates import TemplateRegistry
+    from kai.templates.resolver import validate_actions, validate_tools
+
+    transport = bot_name
+    tmpl_name = template_name or "general"
+
+    registry = TemplateRegistry.bundled()
+    try:
+        tmpl = registry.get(transport, tmpl_name)
+    except FileNotFoundError:
+        err_line(f"template not found: {transport}/{tmpl_name}")
+        raise typer.Exit(1)
+
+    action_errors = validate_actions(tmpl)
+    if action_errors:
+        for err in action_errors:
+            err_line(err)
+        raise typer.Exit(1)
+
+    missing = validate_tools(tmpl)
+    if missing:
+        for err in missing:
+            err_line(f"required tool missing: {err}")
+        raise typer.Exit(1)
 
     # Instance namespace: when --user is provided, isolate files per user.
     instance_id = _instance_id(bot_name, user)
@@ -815,8 +845,21 @@ def register(app: typer.Typer) -> None:
         language: str = typer.Option("", "--language", "-l", help="Override bot language"),
         user: str = typer.Option("", "--user", "-u", help="User email (per-instance namespace)"),
         voice: str = typer.Option("", "--voice", "-v", help="Override kokoro voice"),
+        template: str = typer.Option(
+            "general",
+            "--template",
+            "-t",
+            help="Template to use (default: general)",
+        ),
     ):
-        _start(bot_name, goal_text, language, user, voice)
+        _start(
+            bot_name,
+            goal_text,
+            language,
+            user,
+            voice,
+            template,
+        )
 
     @app.command(name="list")
     def list_cmd():
