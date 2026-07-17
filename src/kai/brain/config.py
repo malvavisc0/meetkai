@@ -46,10 +46,7 @@ class BrainSettings(BaseSettings):
     )
     workspace: str = Field(
         default="default",
-        description=(
-            "LightRAG workspace — the user's Brain isolation key. Injected "
-            "per-user by deployments.start() (kai-v001-<email>), NOT in .env."
-        ),
+        description="LightRAG workspace — injected per-user by deployments.start()",
     )
 
     # --- crawl4ai (the headless-browser crawler) ---
@@ -65,11 +62,7 @@ class BrainSettings(BaseSettings):
     # --- crawl BFS bounds (kai-orchestrated, see crawler.py) ---
     crawl_max_depth: int = Field(
         default=1,
-        description=(
-            "Max BFS depth for whole-site crawl (seed = 0). Depth 1 fetches "
-            "the seed page plus its directly linked same-host pages. crawl4ai "
-            "docs warn >3 grows exponentially."
-        ),
+        description="Max BFS depth for whole-site crawl. crawl4ai warns >3 grows exponentially.",
     )
     crawl_max_pages: int = Field(
         default=25,
@@ -79,35 +72,15 @@ class BrainSettings(BaseSettings):
     # --- Per-Brain agent instructions (injected from Connection.config) ---
     instruction: str = Field(
         default="",
-        description=(
-            "Operator-authored guidance for when the bot should use "
-            "brain_query (one trigger per line). Empty = no instruction "
-            "injected; the tool is still available, the agent decides on its "
-            "own. Injected by deployments.start() as KAI_BRAIN_INSTRUCTION."
-        ),
+        description="Operator-authored guidance for when to use brain_query. One trigger per line.",
     )
     mandatory: bool = Field(
         default=False,
-        description=(
-            "If true, the workflow prompt uses MUST instead of SHOULD — the "
-            "operator asserts the Brain is required for this bot's answers, and "
-            "the prompt instructs the model to call brain_query first, fall "
-            "back to web_search when the Brain has no relevant answer, and "
-            "never answer factual questions from its own training data. This is "
-            "strong steering (MUST wording + greedy decoding via "
-            "mandatory_temperature), NOT a code-level guarantee that every "
-            "answer was grounded."
-        ),
+        description="If true, the Brain MUST be called first; greedy decoding is applied.",
     )
     mandatory_temperature: float = Field(
         default=0.0,
-        description=(
-            "LLM temperature applied when mandatory=True. Lower temperatures "
-            "make the model more likely to follow the MUST instruction to call "
-            "brain_query first. Applied via KaiAgent.set_temperature. 0 = "
-            "greedy decoding; set higher (e.g. 0.3) if deterministic replies "
-            "feel too robotic."
-        ),
+        description="LLM temperature applied when mandatory=True. 0 = greedy.",
     )
 
     @field_validator("base_url", "crawler_url")
@@ -154,52 +127,24 @@ class BrainSettings(BaseSettings):
 
     @property
     def brain_enabled(self) -> bool:
-        """True when the lightrag connection is fully configured (base_url +
-        api_key present). The brain_query tool is registered only when this
-        is true."""
+        """True when the lightrag connection is fully configured."""
         return bool(self.base_url and self.lightrag_api_key)
 
     def workflow_instruction(self) -> str:
-        """Build the agent tool-workflow prompt block from the operator's
-        ``instruction`` + ``mandatory`` flag. Always includes a general
-        Brain-awareness sentence (the agent should know the tool exists and
-        what it's for even if the operator hasn't written specific
-        triggers); the operator's free-text triggers, if any, are appended
-        as a bulleted list.
-        """
+        """Build the agent tool-workflow prompt block from
+        operator's instruction + mandatory flag."""
         return build_brain_workflow_instruction(self.instruction, self.mandatory)
 
     @classmethod
     def for_test(cls, **overrides: object) -> BrainSettings:
-        """Construct BrainSettings for tests without loading ``.env``/env vars.
-
-        Centralizes the one pydantic-settings/pyright stub gap (the
-        private ``_env_file`` init kwarg isn't part of the generated
-        ``__init__`` signature) so individual tests don't each need their
-        own ``# type: ignore[call-arg]``.
-        """
         return cls(_env_file=None, **overrides)  # type: ignore[call-arg]
 
 
-# The agent-facing tool name. Kept as a single constant so the prompt text
-# below and the actual ``FunctionTool`` registration (see
-# ``agent/tools/brain.py``) never
-# drift out of sync with each other.
 BRAIN_TOOL_NAME = "brain_query"
 
 
 def build_brain_workflow_instruction(instruction: str, mandatory: bool) -> str:
-    """Render the operator's per-Brain instruction into the agent prompt.
-
-    ``instruction`` is free text, one trigger per line (as the operator enters
-    it in the Brain UI). The general "you have a Brain" framing is always
-    included as long as this function is called at all (i.e. the Brain is
-    connected) — only the specific trigger bullets are conditional on the
-    operator having written any. The verb is MUST when ``mandatory`` else
-    SHOULD, and when ``mandatory`` a grounding rule is appended: call the
-    Brain first, fall back to ``web_search`` if it has nothing, and never
-    answer facts from training data.
-    """
+    """Render the operator's per-Brain instruction into the agent prompt."""
     triggers = [ln.strip() for ln in instruction.splitlines() if ln.strip()]
     intro = (
         "You have access to a Brain: a knowledge base of operator-provided, "
@@ -207,11 +152,6 @@ def build_brain_workflow_instruction(instruction: str, mandatory: bool) -> str:
         "higher priority than your own training data.\n"
         f"You have a tool called `{BRAIN_TOOL_NAME}` for searching the Brain."
     )
-    # When the Brain is mandatory, the model is steered to always ground
-    # factual answers: call the Brain first, fall back to the web if it has
-    # nothing, and never answer facts from memory. web_search is only actually
-    # available when the bot registered it; the final rung ("say you don't
-    # know") covers the case where neither source has the answer.
     mandatory_rule = (
         " Because the Brain is mandatory for this bot, you MUST call "
         f"`{BRAIN_TOOL_NAME}` before answering any factual question. If the "

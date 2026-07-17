@@ -208,22 +208,13 @@ def _repair_json(text: str) -> str | None:
     return candidate
 
 
-# Control (non-delivery) actions that base-class recovery must never rewrite
-# into a deliverable turn. Recovering ``silent`` on a no-silent turn, for
-# example, would ghost the user and bypass the bot's error-retry safety net.
-# These names mirror the canonical waha vocabulary cited in ``ActionResult``'s
-# docstring; a bot whose dispatch can degrade them safely is unaffected because
-# recovery is opt-in (only fires for actions disallowed by this turn's schema).
+# Control (non-delivery) actions that base-class recovery must never
+# rewrite into a deliverable turn.
 _CONTROL_ACTIONS: frozenset[str] = frozenset({"silent", "sleep", "console"})
 
 
 def _action_values(output_cls: type[ActionResult]) -> frozenset[str]:
-    """Extract the allowed ``action`` enum values from a bot's ``output_cls``.
-
-    The bot declares a ``Literal`` on its ``action`` field; pydantic exposes
-    that as an ``enum`` in the JSON schema. Used to recognize when the model
-    mistakenly emits an action value as a tool call.
-    """
+    """Extract the allowed ``action`` enum values from a bot's ``output_cls``."""
     try:
         schema = output_cls.model_json_schema()
         action_prop = schema.get("properties", {}).get("action", {})
@@ -332,17 +323,10 @@ class KaiAgent:
         )
 
     def set_tool_workflow(self, workflow: str | None) -> None:
-        """Add an optional tool-usage guidance block appended to the system prompt.
+        """Add an optional tool-usage guidance block to the system prompt.
 
-        Multiple calls **compose**: each non-``None`` workflow block is
-        appended (deduplicated) to the existing set rather than replacing it,
-        so e.g. a waha bot calling ``set_tool_workflow(WEB_WORKFLOW_INSTRUCTIONS)``
-        in ``configure()`` and a later Brain-aware layer calling
-        ``set_tool_workflow(BRAIN_WORKFLOW_INSTRUCTIONS)`` both survive in the
-        prompt. Pass ``None`` to clear *all* workflow blocks back to the
-        clean, tool-table-only prompt (e.g. a Docker ops bot that wants no
-        workflow guidance at all). Use :meth:`clear_tool_workflows` if you
-        need to drop workflows without also being unable to add ``None``.
+        Multiple calls compose (deduplicated). Pass ``None`` to clear all
+        workflow blocks back to the tool-table-only prompt.
         """
         if workflow is None:
             self._tool_workflows = []
@@ -656,21 +640,12 @@ class KaiAgent:
         return list(self._get_history(conversation_id))
 
     def list_conversations(self) -> list[tuple[str, int, str | None]]:
-        """Return known, non-empty conversations as ``(conversation_id, message_count, last_ts)``.
+        """Return known, non-empty conversations as ``(id, message_count, last_ts)``.
 
-        Read-only — unlike :meth:`_get_history`, this never creates an entry
-        or triggers eviction; it just snapshots the existing store. IDs are
-        stripped of the agent's namespace prefix (``_history_key``) so they
-        match what :meth:`get_conversation_history`/``record_assistant_message``
-        expect back as ``conversation_id``. Ordered most-recently-active
-        first — ``_history``/``_timestamps`` are ``OrderedDict``s that move a
-        key to the end on every read or write (see :meth:`_get_history`).
-
-        Used by the ``list_conversations`` tool so the operator (or the model
-        on an operator turn) can discover the exact conversation_id to pass to
-        ``get_conversation_messages``/``record_note`` when it only has a name
-        or vague reference — the history store requires an exact key match
-        and has no fuzzy lookup.
+        Read-only — never creates entries or triggers eviction. IDs are
+        stripped of the agent's namespace prefix. Ordered most-recently-active
+        first. Used by the ``list_conversations`` tool so the model can
+        discover conversation_ids to pass to ``get_conversation_messages``.
         """
         prefix = f"{self._namespace}:" if self._namespace else ""
         results: list[tuple[str, int, str | None]] = []
@@ -774,25 +749,14 @@ class KaiAgent:
 
             reply_text = action.text or ""
 
-            # An action whose ``text`` is not actually a reply to *this*
-            # conversation — e.g. an operator turn's ``send_to_group``/
-            # ``send_dm``, where ``text`` is the message for a different
-            # target chat — must not be recorded as an assistant reply here.
-            # The caller (bot) is responsible for recording that text in the
-            # *target* conversation's history once delivery is confirmed
-            # (see ``record_assistant_message``). Recording it here too would
-            # duplicate it, and would falsely show it as delivered to *this*
-            # conversation even if the actual send later fails.
+            # ``is_delegated_action`` marks actions whose text targets a
+            # different conversation (e.g. ``send_to_group``). Those must not
+            # be recorded as an assistant reply in this conversation.
             delegated = is_delegated_action is not None and is_delegated_action(action)
 
-            # The inbound user message is recorded independently of the
-            # assistant reply when the turn produced *something* — either a
-            # reply for this conversation, or a delegated send (whose text
-            # goes to a different chat but whose inbound instruction must
-            # still be visible in this conversation's history). A bare
-            # ``silent`` turn (empty reply, not delegated) stores nothing
-            # here: the bot's own ``_abort_turn``/``observe()`` path records
-            # the inbound separately, so storing it here too would duplicate.
+            # Save assistant reply only when it targets this conversation.
+            # Save user message on any turn that produced output or was
+            # delegated — bare ``silent`` turns store nothing here.
             save_assistant = bool(reply_text) and not delegated
             save_user = store_user_message and (bool(reply_text) or delegated)
             if save_user or save_assistant:
@@ -872,20 +836,13 @@ class KaiAgent:
         free-form ``achat`` path left for the model to leak markup through.
         """
         active_tools = tools if tools is not None else self._tools
-        # When a per-turn allowlist is given, dispatch looks tools up within
-        # that subset; otherwise it falls back to the globally-registered
-        # ``_tools_by_name`` dict (which callers may override per-test).
         active_by_name = {t.metadata.name: t for t in active_tools} if tools is not None else None
         scratchpad: list[ChatMessage] = []
         tool_call_records: list[ToolCallRecord] = []
-        # The closed set of action values the bot's ``output_cls`` allows. When
-        # a model emits one of these as a (nonexistent) tool call — the
-        # "action values are NOT tools" confusion — we treat it as the turn's
-        # terminal decision instead of recording a failed dispatch.
         action_values = _action_values(output_cls)
-        # Build per-call LLM kwargs. Temperature override makes the model
-        # more deterministic when e.g. Brain is mandatory — greedy decoding
-        # increases the chance the model follows MUST instructions.
+        # Temperature override makes the model more deterministic when e.g.
+        # Brain is mandatory — greedy decoding increases the chance the model
+        # follows MUST instructions.
         llm_kwargs: dict = {}
         if self._temperature is not None:
             llm_kwargs["temperature"] = self._temperature
@@ -968,28 +925,6 @@ class KaiAgent:
                 )
 
         # Terminal step: resolve the turn's action as a typed ``output_cls``.
-        #
-        # We call the LLM directly (not through ``as_structured_llm``) so we
-        # control parsing and can retry. The JSON-schema instruction is
-        # appended to the leading system message. We build it ourselves
-        # rather than via ``PydanticOutputParser.format_messages``: that
-        # helper emits the schema with doubled braces (``{{ ... }}``) because
-        # the string is meant for a ``PromptTemplate``, and its wording
-        # ("Output a valid JSON object but do not repeat the schema.") is too
-        # weak — models often answer simple questions in plain prose, which
-        # fails the parse and triggers a wasted retry LLM call. A stronger,
-        # valid-JSON instruction in the system message keeps the user's
-        # directive as the most recent turn (so directive-following is
-        # preserved) while still pushing the model toward JSON.
-        #
-        # The reply is parsed leniently:
-        #   1. Standard ``extract_json_str`` (regex ``{.*}`` — handles JSON
-        #      embedded in prose or markdown fences).
-        #   2. ``key: value`` line parser for models that ignore the JSON
-        #      instruction and emit ``action: send_to_group\ntext: ...``.
-        #   3. JSON repair (patch missing quotes/braces).
-        # If all three fail, the step is retried once with an explicit
-        # correction message ("return ONLY JSON") before giving up.
         from llama_index.core.output_parsers.pydantic import PydanticOutputParser
 
         parser = PydanticOutputParser(output_cls=output_cls)
@@ -1065,21 +1000,9 @@ class KaiAgent:
         output_cls: type[ActionResult],
         parser: Any,
     ) -> ActionResult:
-        """Parse a model reply into ``output_cls``, trying several strategies.
-
-        1. Standard ``PydanticOutputParser.parse`` — extracts JSON via regex
-           ``{.*}``, which handles JSON embedded in prose or markdown fences.
-        2. ``key: value`` line parser — for models that emit
-           ``action: send_to_group\\ntext: hello`` instead of JSON.
-        3. JSON repair — patches missing quotes/braces on partial JSON.
-        4. Base-class recovery — if the payload is well-formed but the bot's
-           constrained ``action`` Literal rejects the value the model chose
-           (e.g. the user insisted on a voice note while TTS is offline, so
-           ``send_voice_note`` is not in this turn's schema), validate against
-           the unconstrained ``ActionResult`` base and let the bot's dispatch
-           degrade gracefully. The waha bot's ``send_voice_note`` path already
-           falls back to a text delivery when voice synthesis is unavailable,
-           so this turns a hard crash into a delivered message.
+        """Parse a model reply into ``output_cls`` via 4 strategies:
+        standard JSON extraction, ``key: value`` line parsing, JSON repair,
+        and base-class ``ActionResult`` recovery for out-of-scope actions.
         """
         # 1. Standard JSON extraction
         try:
@@ -1106,18 +1029,10 @@ class KaiAgent:
             except Exception:
                 pass
 
-        # 4. Base-class recovery for a well-formed payload whose ``action``
-        #    value is outside this turn's constrained vocabulary. Scoped to
-        #    *delivery* actions — ones carrying a message the bot can still
-        #    deliver (possibly via a fallback, e.g. waha's send_voice_note
-        #    falls back to text when TTS is offline). Control actions
-        #    (silent / sleep / console) are deliberately excluded: recovering
-        #    ``silent`` on a no-silent turn would ghost the user and bypass
-        #    the bot's error-retry safety net, which is worse than the
-        #    original crash. A payload that fails for any other reason
-        #    (missing/ill-typed fields, or an allowed action that still
-        #    fails validation) continues to raise so genuinely malformed
-        #    output is not silently accepted.
+        # 4. Base-class recovery for out-of-scope actions. Control actions
+        #    (silent / sleep / console) are excluded — recovering them would
+        #    ghost the user. A payload failing for any other reason continues
+        #    to raise so malformed output isn't silently accepted.
         control_actions = frozenset({"silent", "sleep", "console"})
         allowed = _action_values(output_cls)
         payload: dict[str, Any] | None = None

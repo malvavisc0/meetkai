@@ -1,22 +1,9 @@
 """Conversation tools — read and write notes in the agent's internal history.
 
-These tools operate on :class:`KaiAgent`'s ``_history`` store (the
-transport-agnostic conversation memory), NOT on any transport-specific API.
-They are bot-agnostic: any bot that wants per-conversation note-taking or
-cross-conversation recall registers them via :func:`register_conversation_tools`.
+These tools operate on :class:`KaiAgent`'s ``_history`` store.
 
-- ``get_conversation_messages`` — read the messages stored for a specific
-  conversation (including notes). Lets the operator recall a thread from the
-  operator console, or lets the model read another conversation's history
-  during a cross-recipient instruction. Leaving ``conversation_id`` empty (on
-  an operator turn, where there's no "current chat" to fall back to) returns
-  every known conversation instead of erroring — the model/operator can see
-  what's there instead of needing to already know or guess the exact
-  address/JID up front.
-- ``record_note`` — write a note into a conversation's history bucket without
-  sending any message. The note persists and appears on that conversation's
-  future turns, so it actually reaches the reply decision. Available on both
-  operator and inbound turns — the model can take notes autonomously.
+- ``get_conversation_messages`` — read messages for a specific conversation.
+- ``record_note`` — write a note into a conversation's history bucket.
 """
 
 from __future__ import annotations
@@ -54,15 +41,7 @@ def _format_history(messages: list[ChatMessage]) -> str:
 
 
 def _format_all_conversations(agent: KaiAgent) -> str:
-    """Render every known conversation, most recently active first.
-
-    Used by ``get_conversation_messages`` when no ``conversation_id`` was
-    given (and there's no current chat to fall back to, e.g. an operator
-    turn) — instead of erroring, just show what's there. Reuses
-    ``agent.list_conversations()`` (already namespace-stripped IDs) and
-    ``agent.get_conversation_history()`` per ID, so there's nothing new to
-    maintain here — no separate tool, no separate store.
-    """
+    """Render every known conversation, most recently active first."""
     conversations = agent.list_conversations()
     if not conversations:
         return "No conversations found."
@@ -80,13 +59,9 @@ def register_conversation_tools(
 ) -> None:
     """Register ``get_conversation_messages`` and ``record_note`` on ``agent``.
 
-    Both tools operate on the agent's internal ``_history`` store. When
-    ``tool_context`` is provided, an empty ``conversation_id`` argument falls
-    back to the current chat from context (the chat the turn is running in —
-    both bots set this via ``set_task_context`` before every inbound turn);
-    when it is ``None``, an empty ``conversation_id`` has no current chat to
-    fall back to, so ``get_conversation_messages`` lists every known
-    conversation instead and ``record_note`` requires an explicit id.
+    When ``tool_context`` is provided, an empty ``conversation_id`` falls
+    back to the current chat; when ``None``, empty id returns all known
+    conversations.
     """
 
     def _resolve(conversation_id: str) -> str:

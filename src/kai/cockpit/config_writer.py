@@ -37,32 +37,39 @@ def write_config(deployment: Deployment, instance_id: str) -> Path:
     Returns the path written.
     """
     config = dict(deployment.settings)
-
-    # Merge feature flags into media.*
-    media = dict(config.get("media", {}))
     flags = deployment.feature_flags
-    media["image_enabled"] = flags.get("image", False)
-    media["stt_enabled"] = flags.get("stt", False)
-    media["tts_enabled"] = flags.get("tts", False)
-    media["video_enabled"] = flags.get("video", False)
-    # Preserve instagram_enabled and max_size_mb (not cockpit flags in v1).
-    # If the existing config file has them, read and merge.
-    path = CONFIGS_DIR / f"{instance_id}.json"
-    if path.exists():
-        try:
-            existing = json.loads(path.read_text(encoding="utf-8"))
-            existing_media = existing.get("media", {})
-            if "instagram_enabled" in existing_media:
-                media.setdefault("instagram_enabled", existing_media["instagram_enabled"])
-            if "max_size_mb" in existing_media:
-                media.setdefault("max_size_mb", existing_media["max_size_mb"])
-        except (OSError, json.JSONDecodeError):
-            pass
-    # Defaults for fields not in cockpit flags and not preserved from file
-    media.setdefault("instagram_enabled", True)
-    media.setdefault("max_size_mb", 10)
-    config["media"] = media
 
+    if "media" in config or deployment.bot_type == "waha":
+        # Waha: feature flags map to media.* fields on BotConfig.
+        media = dict(config.get("media", {}))
+        media["image_enabled"] = flags.get("image", False)
+        media["stt_enabled"] = flags.get("stt", False)
+        media["tts_enabled"] = flags.get("tts", False)
+        media["video_enabled"] = flags.get("video", False)
+        # Preserve instagram_enabled and max_size_mb (not cockpit flags in v1).
+        # If the existing config file has them, read and merge.
+        path = CONFIGS_DIR / f"{instance_id}.json"
+        if path.exists():
+            try:
+                existing = json.loads(path.read_text(encoding="utf-8"))
+                existing_media = existing.get("media", {})
+                if "instagram_enabled" in existing_media:
+                    media.setdefault("instagram_enabled", existing_media["instagram_enabled"])
+                if "max_size_mb" in existing_media:
+                    media.setdefault("max_size_mb", existing_media["max_size_mb"])
+            except (OSError, json.JSONDecodeError):
+                pass
+        # Defaults for fields not in cockpit flags and not preserved from file
+        media.setdefault("instagram_enabled", True)
+        media.setdefault("max_size_mb", 10)
+        config["media"] = media
+    elif deployment.bot_type == "email":
+        # Email: the ``image`` feature flag maps to BotConfig.vision (the
+        # LLM vision channel for image attachments). Same config.json channel
+        # waha uses for media.image_enabled — no bot-specific env injection.
+        config["vision"] = flags.get("image", False)
+
+    path = CONFIGS_DIR / f"{instance_id}.json"
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(config, indent=2, ensure_ascii=False), encoding="utf-8")
     return path

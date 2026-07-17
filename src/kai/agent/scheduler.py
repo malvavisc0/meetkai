@@ -63,8 +63,8 @@ def _coerce_repeat(value: object) -> RepeatKind:
     return cast(RepeatKind, text) if text in REPEAT_KINDS else "none"
 
 
-# Farthest we'll ever schedule into the future. Stops the model booking the
-# year 9999 and bloating the store with tasks that can never fire usefully.
+# Farthest we'll ever schedule into the future. Stops the model booking
+# tasks that can never fire usefully.
 _MAX_FUTURE = timedelta(days=365 * 5)
 
 # Re-entrancy guard: set while a fired task is executing so the agent, which
@@ -442,10 +442,8 @@ class TaskScheduler:
         return await self._store.list_for(chat_id=chat_id, owner_id=owner_id)
 
 
-# Optional LLM-based clarity judge. Given a goal, returns True only when the
-# goal is clear enough to act on autonomously. Returns True (permissive) when
-# unset so the scheduler degrades to the legacy "schedule anything" behavior
-# wherever an LLM isn't wired (e.g. unit tests).
+# Optional LLM-based clarity judge. Returns True only when the goal is
+# clear enough to act on autonomously. Returns True when unset.
 ClarityJudge = Callable[[str], Awaitable[bool]]
 
 

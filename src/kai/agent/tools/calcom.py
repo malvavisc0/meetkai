@@ -1,26 +1,13 @@
 """Cal.com tools — list event types, find slots, book, reschedule, and cancel.
 
-Bot-agnostic: ``cli/bot.py:_start()`` reads ``CalcomSettings`` from env vars
-(``KAI_CALCOM_API_KEY`` / ``KAI_CALCOM_BASE_URL`` /
-``KAI_CALCOM_INSTRUCTION``), and when ``calcom_enabled`` is true, calls
-:func:`register_calcom_tool`, which registers the tools on the agent AND
-injects a workflow-guidance block into the system prompt.
+Bot-agnostic: ``cli/bot.py:_start()`` registers these via
+:func:`register_calcom_tool` when ``calcom_enabled`` is true. The
+``api_key`` and ``base_url`` are closed over from the deployment's env.
 
-The ``api_key`` and ``base_url`` are closed over from the deployment's env —
-the LLM cannot override them (same spoofing guard as ``send_email``'s
-``from_address``). The key lives only in the closure and never appears in
-any tool argument, result, or log record.
-
-Cal.com's v2 API pins a ``cal-api-version`` header per endpoint, and the
-required value is NOT uniform across endpoints (see the OpenAPI specs):
-``/event-types`` → ``2024-06-14``, ``/slots`` → ``2024-09-04``,
-``/bookings`` and ``/bookings/{uid}/cancel`` → ``2026-02-25``. Sending one
-global version would silently fall back to an older endpoint version with a
-different response shape, so each tool pins its own.
-
-The workflow instruction composes — appended alongside any other workflow
-blocks (the waha bot's web-search, the Brain's, the SQL/SMTP tools') rather
-than replacing them (``agent/core.py:set_tool_workflow``).
+Cal.com's v2 API pins a ``cal-api-version`` header per endpoint; each tool
+pins its own (see ``_EVENT_TYPES_VERSION``, ``_SLOTS_VERSION``,
+``_BOOKINGS_VERSION``). The workflow instruction composes alongside other
+workflow blocks (web-search, Brain's, SQL's).
 """
 
 from __future__ import annotations

@@ -28,6 +28,11 @@ class BotConfig(BaseModel):
     # attachment download or agent turn. Checked fresh from this list on
     # every inbound email — no block history is persisted.
     blacklist: list[str] = Field(default_factory=list)
+    # Whether the deployment can see image attachments via the LLM vision
+    # channel. Mirrors waha's ``media.image_enabled`` — sourced from the
+    # ``image`` feature flag via config.json (written by the cockpit), so
+    # both transports read vision capability from the same config channel.
+    vision: bool = False
     # LLM sampling temperature (passed to agent.set_temperature() in
     # configure()). Left un-set, the provider's own default applies, which
     # varies by backend and is often not low. A support bot answering from a

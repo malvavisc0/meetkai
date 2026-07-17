@@ -7,6 +7,7 @@ _log_dir_configured: Path | None = None
 
 
 def setup_logging(log_dir: Path | None = None, level: int = logging.INFO) -> None:
+    """Configure kai logging: stderr console + optional file handler."""
     global _configured, _log_dir_configured
 
     fmt = logging.Formatter(

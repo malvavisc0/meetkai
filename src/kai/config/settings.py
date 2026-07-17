@@ -41,7 +41,7 @@ class Settings(BaseSettings):
     )
     agent_history_folder: Path | None = Field(
         default=Path("data"),
-        description="Directory for persisted per-bot chat history (e.g. data/waha.json)",
+        description="Directory for per-bot chat history. Null = no persistence.",
     )
 
     agent_language: str = Field(
@@ -63,43 +63,24 @@ class Settings(BaseSettings):
     )
     tasks_folder: Path | None = Field(
         default=Path("data"),
-        description=(
-            "Directory for persisted per-bot task stores "
-            "(<folder>/<name>.tasks.json). Relative paths are resolved against "
-            "the bot's own directory, not the process CWD. Set to null to keep "
-            "tasks in memory only."
-        ),
+        description=("Directory for per-bot task stores. Null = in-memory only."),
     )
 
     escalations_folder: Path | None = Field(
         default=Path("data"),
-        description=(
-            "Directory for persisted per-bot escalation stores "
-            "(<folder>/<name>.escalations.json). Relative paths are resolved "
-            "against the bot's own directory, not the process CWD. Set to "
-            "null to keep escalations in memory only."
-        ),
+        description="Directory for per-bot escalation stores. Null = in-memory only.",
     )
 
     cockpit_url: str = Field(
         default="",
         description=(
-            "Base URL of the cockpit web app, for bot→cockpit escalation "
-            "forwarding. Injected by DeploymentsService.start() when the "
-            "cockpit spawns bots. Empty (the default for a standalone "
-            "`kai start`) means no forwarding — escalations still persist "
-            "locally and fire on_escalation, the cockpit just won't see them."
+            "Base URL of the cockpit web app, for bot escalation forwarding. Empty = no forwarding."
         ),
     )
 
     cockpit_escalation_secret: str = Field(
         default="",
-        description=(
-            "Shared secret for the bot→cockpit escalation webhook. When set, "
-            "forward_to_cockpit sends it as Authorization: Bearer <secret> "
-            "and the cockpit's POST /api/escalations rejects requests without "
-            "it. Empty = no auth (internal network trust model)."
-        ),
+        description="Shared secret for the bot escalation webhook. Empty = no auth.",
     )
 
     log_dir: Path = Field(
@@ -109,7 +90,7 @@ class Settings(BaseSettings):
 
     configs_dir: Path = Field(
         default=Path("configs"),
-        description="Directory for per-bot external config overrides (e.g. configs/waha.json)",
+        description="Directory for per-bot external config overrides",
     )
 
     @field_validator("llm_api_base")
@@ -137,6 +118,7 @@ class Settings(BaseSettings):
         return v
 
     def validate_startup(self) -> list[str]:
+        """Return startup warnings (non-fatal). A missing key disables the tool."""
         warnings: list[str] = []
         if self.llm_api_key in ("sk-placeholder", ""):
             warnings.append("KAI_LLM_API_KEY is not set")
@@ -146,13 +128,6 @@ class Settings(BaseSettings):
 
     @classmethod
     def for_test(cls, **overrides: object) -> "Settings":
-        """Construct Settings for tests without loading ``.env``/env vars.
-
-        Centralizes the one pydantic-settings/pyright stub gap (the
-        private ``_env_file`` init kwarg isn't part of the generated
-        ``__init__`` signature) so individual tests don't each need their
-        own ``# type: ignore[call-arg]``.
-        """
         return cls(_env_file=None, **overrides)  # type: ignore[call-arg]
 
 

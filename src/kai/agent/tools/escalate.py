@@ -1,20 +1,12 @@
 """Escalation and blacklist tools — side-effecting tools that alert the
 operator and modify bot runtime state.
 
-The ``escalate`` tool is a side-channel alert. The model calls it BEFORE
-choosing its action. It persists an escalation record (via
-:class:`EscalationStore`) and fires the bot's ``on_escalation`` callback. The
-bot can reply AND escalate in the same turn.
+The ``escalate`` tool persists a record and fires the bot's ``on_escalation``
+callback. The ``blacklist_contact`` tool adds a contact to the runtime
+blacklist so future messages from that contact are silently dropped.
 
-The ``blacklist_contact`` tool adds a contact to the bot's runtime blacklist
-so future messages from that contact are silently dropped (using the same
-filtering mechanism the bot already uses — ``should_process_chat_message``).
-
-Persistence mirrors :class:`kai.agent.scheduler.TaskStore`: writes are atomic
-(temp file + replace), the on-disk format is a JSON object so it survives
-restarts and is human-readable, and the lock is created lazily per event loop
-for the same reason ``TaskStore`` does — a store is often reused across
-several ``asyncio.run`` calls (notably in tests).
+Persistence mirrors :class:`kai.agent.scheduler.TaskStore`: atomic writes,
+JSON format, lazy lock per event loop.
 """
 
 from __future__ import annotations
@@ -83,14 +75,9 @@ class Escalation(BaseModel):
 class EscalationStore:
     """Persistent store of escalation events.
 
-    Writes are atomic (temp file + replace). The on-disk format is a JSON
-    object ``{"escalations": [...]}`` so it survives restarts and is
-    queryable / human-readable. Mirrors
+    Writes are atomic (temp file + replace). ``path=None`` keeps the store
+    in-memory only — the API is identical either way. Mirrors
     :class:`kai.agent.scheduler.TaskStore`.
-
-    ``path=None`` keeps the store in-memory only (used by default and in
-    tests) — the API is identical either way, so callers never need to
-    special-case persistence.
     """
 
     def __init__(self, path: Path | None) -> None:
@@ -171,13 +158,7 @@ class EscalationStore:
             self._save_locked()
 
     def active_count(self) -> int:
-        """Sync count of unresolved escalations.
-
-        Used by the cockpit's sidebar badge (a Jinja global called on every
-        page render). Safe in a single-process async app — the cockpit is the
-        only writer to its store, and sync template rendering doesn't get
-        preempted mid-dict-iteration.
-        """
+        """Sync count of unresolved escalations. Used by the cockpit's sidebar."""
         return sum(1 for e in self._escalations.values() if not e.resolved)
 
     @staticmethod
@@ -194,18 +175,8 @@ class _State:
         self.blacklist: list[str] | None = None
         self.on_escalation: Callable[[Escalation], Awaitable[None]] | None = None
         self.tool_context: ToolContext | None = None
-        # Default to an in-memory-only store so escalate()/blacklist_contact()
-        # always have somewhere to persist to, even before configure() runs
-        # (e.g. in unit tests that call the tool functions directly).
         self.store: EscalationStore = EscalationStore(None)
-        # Base URL of the cockpit web app. Set by setup_escalation_store()
-        # from Settings.cockpit_url. Empty (standalone `kai start`, no
-        # cockpit) means forward_to_cockpit() is a no-op — escalations still
-        # persist locally and fire on_escalation.
         self.cockpit_url: str = ""
-        # Shared secret for the escalation webhook. Set from
-        # Settings.cockpit_escalation_secret. forward_to_cockpit() sends it
-        # as Authorization: Bearer <secret>; the cockpit validates it.
         self.cockpit_escalation_secret: str = ""
 
 

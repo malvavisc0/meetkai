@@ -79,12 +79,7 @@ class MarkdownResult(BaseModel):
 
 
 class CrawlPage(BaseModel):
-    """The full result of a POST /crawl single-page fetch.
-
-    ``markdown`` is the MarkdownResult (dict-extracted); ``links`` is the
-    discovered internal/external links (the BFS frontier for whole-site
-    crawl). ``success`` is the per-page fetch flag.
-    """
+    """The full result of a POST /crawl single-page fetch."""
 
     model_config = ConfigDict(frozen=True)
 

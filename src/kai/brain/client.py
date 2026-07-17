@@ -23,7 +23,6 @@ from kai.brain.config import BrainSettings, get_brain_settings
 logger = logging.getLogger(__name__)
 
 # DocStatus enum — the 7 states returned by /documents/track_status.
-# ``processed`` and ``failed`` are terminal; the rest are in-flight.
 DOC_STATUS_PENDING = "pending"
 DOC_STATUS_PARSING = "parsing"
 DOC_STATUS_ANALYZING = "analyzing"
@@ -33,9 +32,6 @@ DOC_STATUS_PROCESSED = "processed"
 DOC_STATUS_FAILED = "failed"
 TERMINAL_STATUSES = frozenset({DOC_STATUS_PROCESSED, DOC_STATUS_FAILED})
 
-# The field carries a Literal so an unexpected API value fails validation at
-# the boundary instead of flowing through silently. The ``| str`` fallback
-# keeps parsing resilient: LightRAG has added statuses before.
 DocStatus = Literal[
     "pending",
     "parsing",
@@ -51,12 +47,7 @@ QueryMode = Literal["naive", "local", "global", "hybrid", "mix"]
 
 
 class DocumentRecord(BaseModel):
-    """One document row from /documents/track_status or /documents/paginated.
-
-    The fields mirror the v1.5.4 response shape. ``id`` is the
-    LightRAG doc id (``doc-...``) used for delete; ``track_id`` is the ingest
-    job id (``insert_...`` / ``upload_...``) used for status polling.
-    """
+    """One document row from /documents/track_status or /documents/paginated."""
 
     model_config = ConfigDict(frozen=True)
 
@@ -87,16 +78,12 @@ class DocumentRecord(BaseModel):
 
     @classmethod
     def from_track_doc(cls, track_id: str, doc: dict[str, Any]) -> DocumentRecord:
-        """Build from one element of track_status's documents[] list.
-
-        ``track_id`` isn't in the per-doc payload for this endpoint, so it's
-        injected before validation.
-        """
+        """Build from one element of track_status's documents[] list."""
         return cls.model_validate({**doc, "track_id": track_id})
 
     @classmethod
     def from_list_doc(cls, doc: dict[str, Any]) -> DocumentRecord:
-        """Build from one element of paginated's documents[] list (track_id is present)."""
+        """Build from one element of paginated's documents[] list."""
         return cls.model_validate(doc)
 
 

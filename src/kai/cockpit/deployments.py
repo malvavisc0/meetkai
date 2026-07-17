@@ -654,13 +654,6 @@ class DeploymentsService:
             env["KAI_BOT_HMAC_KEY"] = user.hmac_key
             env["KAI_CONFIGS_DIR"] = str(config_writer.CONFIGS_DIR)
             deployment.settings = {**deployment.settings, "control_port": control_port}
-            # Deployment vision flag → KAI_EMAIL_VISION (the bot's
-            # _vision_enabled() reads it). Generic mechanism: a bot declares
-            # a feature_flag and the cockpit surfaces it as KAI_EMAIL_VISION
-            # only for the email bot type. This is the one bot-specific env
-            # name here; the control-port/HMAC block above is fully generic.
-            if "image" in bt.feature_flags and deployment.feature_flags.get("image"):
-                env["KAI_EMAIL_VISION"] = "1"
 
         if brain_conn is not None:
             workspace = brain_conn.config["workspace"]

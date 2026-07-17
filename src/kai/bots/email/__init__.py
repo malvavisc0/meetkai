@@ -570,10 +570,11 @@ class Bot(BaseBot):
     def _vision_enabled(self) -> bool:
         """True when the deployment's image feature flag is on.
 
-        Sourced from ``EmailSettings.vision`` (``KAI_EMAIL_VISION``), injected
-        by the cockpit at start time from ``Deployment.feature_flags["image"]``.
+        Sourced from ``BotConfig.vision`` (config.json, written by the cockpit
+        from ``Deployment.feature_flags["image"]``) — same channel waha uses
+        for ``media.image_enabled``.
         """
-        return self._email is not None and self._email.vision
+        return self._config.vision
 
 
 __all__ = ["Bot", "BotConfig", "EmailAction"]

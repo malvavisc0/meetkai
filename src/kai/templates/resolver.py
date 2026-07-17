@@ -14,17 +14,13 @@ _DEFAULT_TOOL_NAMES: frozenset[str] = frozenset(
     tool.metadata.name for tool in get_tools() if tool.metadata.name
 )
 
-# Default tools the operator may NOT disable via --disable-tools. These are
-# safety/moderation primitives that must stay available on every deployment
-# regardless of template or operator preference. The remaining default tools
-# (web_search, get_webpage_content, get_current_datetime, get_weather,
-# calculate) are disableable so a focused template can shed them.
+# Non-disableable defaults: safety tools that must stay available on every
+# deployment regardless of template or operator preference. Other default
+# tools (web_search, calculate, etc.) are disableable.
 _NON_DISABLEABLE_DEFAULTS: frozenset[str] = frozenset({"escalate", "blacklist_contact"})
 
-# Env vars each tool needs to be configured. A tool is "configured" only when
-# ALL listed vars are set — mirroring the *_enabled gates on each tool's
-# settings (e.g. BrainSettings.brain_enabled needs base_url AND lightrag_api_key;
-# SmtpSettings.smtp_enabled needs host AND username AND password AND from_address).
+# Env vars each connection-gated tool needs to be configured. A tool is
+# "configured" only when ALL listed vars are set.
 _TOOL_ENV_MAP: dict[str, list[str]] = {
     "brain_query": ["KAI_BRAIN_BASE_URL", "KAI_BRAIN_LIGHTRAG_API_KEY"],
     "sql_query": ["KAI_SQL_DSN"],
@@ -53,11 +49,8 @@ _EMAIL_VALID_ACTIONS = {
     "console",
 }
 
-# Every tool name the system can ever register, across default / bot-owned /
-# connection-gated tools. Used to reject phantom ``--enable-tools`` typos
-# (e.g. ``barin_query``) at boot instead of silently accepting them — see the
-# Phase 1 review note carried into Phase 2/3. Kept as a literal so a new tool
-# added without an entry here fails this set loudly rather than slipping past.
+# Every tool name the system can ever register. Used to reject phantom
+# ``--enable-tools`` typos (e.g. ``barin_query``) at boot.
 _KNOWN_TOOL_NAMES: frozenset[str] = frozenset(
     [
         "web_search",
@@ -84,8 +77,6 @@ _KNOWN_TOOL_NAMES: frozenset[str] = frozenset(
 )
 
 # Tools owned by the template-layer toggles (not connection-gated).
-# The connection-tools card continues to own smtp/database/calcom via
-# deployment.settings["tools"].
 TEMPLATE_TOGGLE_TOOLS: frozenset[str] = _KNOWN_TOOL_NAMES - {
     "send_email",
     "sql_query",

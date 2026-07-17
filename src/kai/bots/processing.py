@@ -116,9 +116,7 @@ class PostProcessor:
         return post_process(text)
 
     def _run_custom(self, text: str) -> str:
-        # Custom profiles still strip leaked reasoning channels first — a model
-        # can emit them regardless of which action it picked, and leaving them
-        # in would surface internal scratch to the user.
+        # Strip leaked reasoning channels before custom profile transforms.
         text = strip_reasoning_channels(text)
         for step in self._custom_steps:
             text = step(text)

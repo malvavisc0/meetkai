@@ -1,9 +1,8 @@
 """Email bot transport settings — read from KAI_BOT_* env vars.
 
-Two email-bot feature knobs are injected by the cockpit under ``KAI_EMAIL_*``
-rather than ``KAI_BOT_*`` (they predate the prefix and are surfaced as
-bot-specific feature flags), so they use an explicit alias instead of the
-class env_prefix.
+``max_attachment_bytes`` is injected by the cockpit under ``KAI_EMAIL_*``
+(it predates the prefix and is surfaced as a bot-specific knob), so it uses
+an explicit alias instead of the class env_prefix.
 """
 
 from __future__ import annotations
@@ -22,12 +21,6 @@ class EmailSettings(BaseSettings):
     hmac_key: str  # used to verify incoming webhooks
     hmac_algorithm: str = "sha512"
 
-    # Per-deployment image-vision flag, injected by the cockpit at start time
-    # from Deployment.feature_flags["image"].
-    vision: bool = Field(
-        default=False,
-        validation_alias=AliasChoices("KAI_EMAIL_VISION"),
-    )
     # Cap (bytes) for downloaded attachments; larger downloads are skipped.
     max_attachment_bytes: int = Field(
         default=10 * 1024 * 1024,
@@ -36,4 +29,4 @@ class EmailSettings(BaseSettings):
 
 
 def get_email_settings() -> EmailSettings:
-    return EmailSettings()  # type: ignore[call-arg]
+    return EmailSettings()  # type: ignore[call-args]
