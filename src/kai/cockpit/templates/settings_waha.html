@@ -25,7 +25,11 @@
       <div class="field-grid">
         <div class="field field--narrow">
           <label class="field__label" for="language">Language *</label>
-          <input id="language" type="text" name="language" value="{{ dep.language }}" required>
+          <select id="language" name="language" required>
+            {% for l in languages %}
+              <option value="{{ l }}" {% if l == dep.language %}selected{% endif %}>{{ l }}</option>
+            {% endfor %}
+          </select>
           <p class="field__help">Defaults to your account language — change it any time.</p>
         </div>
         <div class="field field--narrow">

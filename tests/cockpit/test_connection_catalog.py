@@ -279,7 +279,7 @@ class TestSupportedInjectionLoop(_StartBase):
 
         svc = DeploymentsService(db)
         dep = svc.create(user, "waha", "goal", "English")
-        svc.edit(dep, settings={"tools": {"database": True}})
+        svc.edit(dep, settings={"tools": {"database": {"enabled": True, "instruction": ""}}})
 
         def boom(_env, service, _conn):
             raise NotImplementedError(service)
@@ -308,7 +308,7 @@ class TestSupportedInjectionLoop(_StartBase):
 
         svc = DeploymentsService(db)
         dep = svc.create(user, "waha", "goal", "English")
-        svc.edit(dep, settings={"tools": {"database": True}})
+        svc.edit(dep, settings={"tools": {"database": {"enabled": True, "instruction": ""}}})
 
         injected_env: dict = {}
 
@@ -322,7 +322,7 @@ class TestSupportedInjectionLoop(_StartBase):
         assert injected_env["KAI_SQL_INSTRUCTION"] == ""
 
     def test_dict_form_injects_instruction(self, db, user, monkeypatch, tmp_path):
-        """Fix 05's nested-dict form injects both KAI_SQL_DSN and
+        """The nested-dict form injects both KAI_SQL_DSN and
         KAI_SQL_INSTRUCTION."""
         db.add(_whatsapp_conn(user.id))
         db.add(
@@ -432,9 +432,9 @@ class TestSettingsStoresToolToggle:
 
         svc = DeploymentsService(db)
         dep = svc.create(user, "waha", "goal", "English")
-        svc.edit(dep, settings={"tools": {"database": True}})
+        svc.edit(dep, settings={"tools": {"database": {"enabled": True, "instruction": ""}}})
         db.refresh(dep)
-        assert dep.settings["tools"] == {"database": True}
+        assert dep.settings["tools"] == {"database": {"enabled": True, "instruction": ""}}
 
     def test_edit_shallow_merges_not_deep(self, db, user):
         """edit() does a shallow merge: a partial settings update replaces
@@ -445,7 +445,7 @@ class TestSettingsStoresToolToggle:
 
         svc = DeploymentsService(db)
         dep = svc.create(user, "waha", "goal", "English")
-        svc.edit(dep, settings={"tools": {"database": True}})
-        svc.edit(dep, settings={"tools": {"database": False}})
+        svc.edit(dep, settings={"tools": {"database": {"enabled": True, "instruction": ""}}})
+        svc.edit(dep, settings={"tools": {"database": {"enabled": False, "instruction": ""}}})
         db.refresh(dep)
-        assert dep.settings["tools"] == {"database": False}
+        assert dep.settings["tools"] == {"database": {"enabled": False, "instruction": ""}}

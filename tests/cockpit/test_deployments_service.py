@@ -45,8 +45,8 @@ class TestCreate:
 
     def test_explicit_voice_kept(self, db, user):
         svc = DeploymentsService(db)
-        dep = svc.create(user, "waha", "be helpful", "English", voice="custom_voice")
-        assert dep.voice == "custom_voice"
+        dep = svc.create(user, "waha", "be helpful", "English", voice="am_michael")
+        assert dep.voice == "am_michael"
 
     def test_reject_empty_goal(self, db, user):
         svc = DeploymentsService(db)

@@ -18,17 +18,24 @@ from sqlalchemy.orm import Session
 from kai.agent.tools.email import DEFAULT_DISPLAY_NAME
 from kai.cockpit.app import templates
 from kai.cockpit.auth import require_user
-from kai.cockpit.bots import BOT_TYPES, CAPABILITY_LABELS, CREDENTIAL_TYPES, VOICE_LABELS
+from kai.cockpit.bots import (
+    ALL_LANGUAGES,
+    ALL_VOICES,
+    BOT_TYPES,
+    CAPABILITY_LABELS,
+    CREDENTIAL_TYPES,
+    VOICE_LABELS,
+    VOICE_LANGUAGE_BY_CODE,
+    auto_pick_voice,
+)
 from kai.cockpit.brains import BrainsService
 from kai.cockpit.connections import ConnectionsService
 from kai.cockpit.db import get_db
 from kai.cockpit.deployments import DeploymentsService, _tool_enabled, _tool_instruction
 from kai.cockpit.models import User
 from kai.cockpit.routes.deployments._shared import (
-    ALL_VOICES,
     SETTINGS_TEMPLATES,
     TOOLS_WITH_INSTRUCTION,
-    VOICE_LANGUAGE_BY_CODE,
     build_tools_update,
     get_deployment,
 )
@@ -188,10 +195,10 @@ async def deployment_settings_page(
 
     # Per-tool state for tools that carry an instruction (database).
     # Uses the same _tool_enabled/_tool_instruction helpers as start() so
-    # there's a single source of truth for the bool→dict transition.
+    # there's a single source of truth for reading the stored toggle.
     tools_state: dict[str, dict] = {}
     for conn_svc, _, available in supported_tools:
-        raw = tools_enabled.get(conn_svc, False)
+        raw = tools_enabled.get(conn_svc, {})
         tools_state[conn_svc] = {
             "enabled": _tool_enabled(raw),
             "instruction": _tool_instruction(raw),
@@ -244,6 +251,7 @@ async def deployment_settings_page(
             "voices": ALL_VOICES,
             "voice_labels": VOICE_LABELS,
             "voice_language_by_code": VOICE_LANGUAGE_BY_CODE,
+            "languages": ALL_LANGUAGES,
             "kokoro_languages": SUPPORTED_KOKORO_LANGS,
             "feature_flags": feature_flags,
             "capability_labels": CAPABILITY_LABELS,
@@ -356,7 +364,7 @@ async def deployment_settings(
             dep,
             goal=goal,
             language=language,
-            voice=voice or dep.voice,
+            voice=voice or auto_pick_voice(language),
             feature_flags=feature_flags,
             settings=settings_update,
             brain_mandatory=(brain_mandatory == "true"),

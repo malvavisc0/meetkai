@@ -107,15 +107,31 @@ VOICE_LABELS: dict[str, str] = {
     "pm_alex": "Alex",
 }
 
-# Languages the LLM can be told to reply in, beyond the ones Kokoro v1.0 has
-# a voice for (LANGUAGE_VOICES above). German has no Kokoro v1.0 voice at
-# all — a bot configured for German still replies in German text; it just
-# never gets voice notes (see kai.bots.waha.tts.resolve_kokoro_lang). Do NOT
-# add German (or any other Kokoro-unsupported language) to
-# LANGUAGE_VOICES with a made-up voice — that previously mapped German to
-# "hf_alpha" (a Hindi voice), which made German voice replies get
-# synthesized with English phonemization in a Hindi voice.
-AGENT_ONLY_LANGUAGES: tuple[str, ...] = ("German",)
+# Single source of truth for every language a deployment's `language` field
+# may be set to (server-validated in DeploymentsService.create/edit — never
+# trust the wizard/settings <select> alone, a hand-crafted POST can submit
+# anything). Deliberately exactly LANGUAGE_VOICES' keys: a language with no
+# Kokoro voice (e.g. German) is not a supported language at all — there is
+# no "agent replies in text only" mode for an unsupported language. Do NOT
+# add a language here that isn't a key in LANGUAGE_VOICES, and do NOT map a
+# language to a voice from a different language (that previously mapped
+# German to "hf_alpha", a Hindi voice, producing English-phonemized German
+# spoken in a Hindi voice).
+ALL_LANGUAGES: tuple[str, ...] = tuple(sorted(LANGUAGE_VOICES.keys()))
+
+# Single source of truth for every voice code a deployment's `voice` field
+# may be set to (server-validated alongside `language`).
+ALL_VOICES: tuple[str, ...] = tuple(
+    sorted({voice for voices in LANGUAGE_VOICES.values() for voice in voices})
+)
+
+# Voice code -> the language it belongs to. Used to filter the voice
+# <select> down to the voices matching the selected language, both
+# client-side (initVoiceFilter in cockpit.js) and server-side
+# (DeploymentsService validates voice/language agree).
+VOICE_LANGUAGE_BY_CODE: dict[str, str] = {
+    voice: lang for lang, voices in LANGUAGE_VOICES.items() for voice in voices
+}
 
 
 @dataclass(frozen=True)
@@ -249,8 +265,16 @@ CONNECTION_LABELS: dict[str, str] = {
 
 
 def auto_pick_voice(language: str) -> str:
-    """Return the default kokoro voice for a language, or af_heart as fallback."""
-    return LANGUAGE_VOICES.get(language, ["af_heart"])[0]
+    """Return the default (first-listed) Kokoro voice for *language*.
+
+    Raises ``ValueError`` for a language that isn't in ``ALL_LANGUAGES`` —
+    callers must validate/normalize the language before calling this;
+    silently substituting an unrelated voice for an unsupported language
+    is exactly the bug this function must not reintroduce.
+    """
+    if language not in LANGUAGE_VOICES:
+        raise ValueError(f"unsupported language: {language!r}. Supported: {ALL_LANGUAGES}")
+    return LANGUAGE_VOICES[language][0]
 
 
 # Single source of truth for capability display names, shared by the

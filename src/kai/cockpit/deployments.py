@@ -20,12 +20,41 @@ import httpx
 from sqlalchemy.orm import Session
 
 from kai.cockpit import config_writer
-from kai.cockpit.bots import BOT_TYPES, WEBHOOK_CONNECTION_TYPES, auto_pick_voice
+from kai.cockpit.bots import (
+    ALL_LANGUAGES,
+    ALL_VOICES,
+    BOT_TYPES,
+    VOICE_LANGUAGE_BY_CODE,
+    WEBHOOK_CONNECTION_TYPES,
+    auto_pick_voice,
+)
 from kai.cockpit.models import Connection, Deployment, User
 from kai.runs import RunRegistry, pid_alive, runs_path
 from kai.utils.common import compute_hmac, now_iso
 
 logger = logging.getLogger(__name__)
+
+
+def _require_supported_language(language: str) -> None:
+    if language not in ALL_LANGUAGES:
+        raise ValueError(f"unsupported language: {language!r}. Supported: {ALL_LANGUAGES}")
+
+
+def _require_valid_voice(voice: str) -> None:
+    if voice not in ALL_VOICES:
+        raise ValueError(f"unsupported voice: {voice!r}. Supported: {ALL_VOICES}")
+
+
+def _require_voice_matches_language(language: str, voice: str) -> None:
+    """Reject a voice/language pair Kokoro can't actually speak together.
+
+    Every deployment's ``voice`` column must name a voice belonging to its
+    ``language`` — including bot types with no TTS concept (email): the
+    column is never allowed to drift out of sync with the language, so
+    there is no bot-type-specific carve-out here.
+    """
+    if VOICE_LANGUAGE_BY_CODE.get(voice) != language:
+        raise ValueError(f"voice {voice!r} does not match language {language!r}")
 
 
 def _kai_argv_prefix() -> list[str]:
@@ -103,22 +132,19 @@ def _instance_id(bot_type: str, email: str) -> str:
     return f"{bot_type}-{email}"
 
 
-def _tool_enabled(value: bool | dict) -> bool:
-    """Normalize a stored tool toggle to a boolean ``enabled`` state.
+def _tool_enabled(value: dict) -> bool:
+    """Read the ``enabled`` flag from a stored tool toggle.
 
-    Handles both the legacy flat bool form (``True`` / ``False``) and the
-    newer nested dict form (``{"enabled": True, "instruction": "..."}``).
+    Every tool toggle is stored as ``{"enabled": bool, "instruction": str}``
+    (see ``build_tools_update``) — there is no other stored shape to
+    handle.
     """
-    if isinstance(value, dict):
-        return bool(value.get("enabled", False))
-    return bool(value)
+    return bool(value.get("enabled", False))
 
 
-def _tool_instruction(value: bool | dict) -> str:
-    """Extract the instruction text from a stored tool toggle (dict form)."""
-    if isinstance(value, dict):
-        return str(value.get("instruction", ""))
-    return ""
+def _tool_instruction(value: dict) -> str:
+    """Extract the instruction text from a stored tool toggle."""
+    return str(value.get("instruction", ""))
 
 
 # Maps each supported-connection service to its env-var names. ``fields``
@@ -357,6 +383,8 @@ class DeploymentsService:
             raise ValueError("goal is required")
         if not language or not language.strip():
             raise ValueError("language is required")
+        language = language.strip()
+        _require_supported_language(language)
 
         bt = BOT_TYPES[bot_type]
 
@@ -393,6 +421,9 @@ class DeploymentsService:
 
         if not voice or not voice.strip():
             voice = auto_pick_voice(language)
+        voice = voice.strip()
+        _require_valid_voice(voice)
+        _require_voice_matches_language(language, voice)
 
         from kai.bots.waha.setup import BotConfig
 
@@ -436,13 +467,17 @@ class DeploymentsService:
             elif key == "language":
                 if not value or not str(value).strip():
                     raise ValueError("language cannot be empty")
-                deployment.language = str(value).strip()
+                language = str(value).strip()
+                _require_supported_language(language)
+                deployment.language = language
                 deployment.settings["language"] = deployment.language
                 settings_changed = True
             elif key == "voice":
                 if not value or not str(value).strip():
                     raise ValueError("voice cannot be empty")
-                deployment.voice = str(value).strip()
+                voice = str(value).strip()
+                _require_valid_voice(voice)
+                deployment.voice = voice
             elif key == "feature_flags":
                 if not isinstance(value, dict):
                     raise ValueError("feature_flags must be a dict")
@@ -491,6 +526,13 @@ class DeploymentsService:
             # without ``language``. Current callers (web routes, CLI) always
             # pass ``language`` explicitly.
             deployment.language = deployment.settings.get("language", deployment.language)
+
+        # Whenever either field changed, the resulting (language, voice)
+        # pair must still agree — a caller editing only one of the two
+        # (e.g. just ``language``) must not silently leave a stale voice
+        # from the previous language on the deployment.
+        if "language" in fields or "voice" in fields:
+            _require_voice_matches_language(deployment.language, deployment.voice)
 
         # A settings/goal/language/voice/feature-flags edit while the bot is
         # running leaves the live process with stale in-memory config (the
@@ -670,13 +712,14 @@ class DeploymentsService:
         # bot type declares, inject its env vars only when both the operator
         # has toggled it on for this deployment (settings["tools"]) AND the
         # Connection row exists. Never "on for every bot just because the
-        # operator connected it once." The stored value may be a plain bool
-        # (simple toggle) or a nested dict (toggle + instruction).
+        # operator connected it once." Every stored toggle is a nested dict
+        # (see ``build_tools_update``/``_tool_enabled``); ``{}`` is the
+        # default for a service the operator hasn't touched yet.
         tools_cfg = deployment.settings.get("tools", {})
         for service in bt.supported_connections:
             if service in bt.required_connections:
                 continue
-            if not _tool_enabled(tools_cfg.get(service, False)):
+            if not _tool_enabled(tools_cfg.get(service, {})):
                 continue
             c = (
                 self.db.query(Connection)
@@ -704,7 +747,7 @@ class DeploymentsService:
             svc_vars = SERVICE_ENV_VARS.get(service, {})
             instr_var = svc_vars.get("instruction")
             if instr_var and any(ev in env for ev in svc_vars.get("fields", {}).values()):
-                env[instr_var] = _tool_instruction(tools_cfg.get(service))
+                env[instr_var] = _tool_instruction(tools_cfg.get(service, {}))
 
         proc = subprocess.Popen(
             argv,

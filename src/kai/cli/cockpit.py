@@ -97,9 +97,17 @@ def cockpit_user_create(
     """Create a new cockpit user."""
     import secrets
 
+    from kai.cockpit.bots import ALL_LANGUAGES
     from kai.cockpit.db import SessionLocal, create_all
     from kai.cockpit.models import User
     from kai.cockpit.naming import kai_slug_for
+
+    if language not in ALL_LANGUAGES:
+        console.print(
+            f"[{WARN}]\u25cf unsupported language '{language}'. "
+            f"Supported: {', '.join(ALL_LANGUAGES)}[/{WARN}]"
+        )
+        raise typer.Exit(1)
 
     create_all()
     db = SessionLocal()

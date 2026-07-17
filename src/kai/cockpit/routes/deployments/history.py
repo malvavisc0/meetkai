@@ -16,21 +16,16 @@ from kai.cockpit.routes.deployments._shared import fmt_ts, get_deployment
 router = APIRouter()
 
 
-def _conv_sort_key(item: tuple[str, list[dict]]) -> tuple[int, str]:
-    """Sort conversations by their latest message timestamp (newest first),
-    falling back to chat_id for legacy timestamp-less buckets so the page
-    is deterministic.
-    """
-    chat_id, msgs = item
+def _conv_sort_key(item: tuple[str, list[dict]]) -> str:
+    """Sort conversations by their latest message timestamp (newest first)."""
+    _chat_id, msgs = item
     last_ts = ""
     for m in reversed(msgs):
         ts = m.get("ts")
         if ts:
             last_ts = ts
             break
-    # Timestamps sort lexicographically as ISO-8601 UTC; empty (legacy)
-    # buckets sort last.
-    return (1 if last_ts else 0, last_ts or chat_id)
+    return last_ts
 
 
 @router.get("/deployments/{dep_id}/history")

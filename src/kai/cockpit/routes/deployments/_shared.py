@@ -12,23 +12,13 @@ from datetime import UTC, datetime
 from fastapi.responses import RedirectResponse
 from sqlalchemy.orm import Session
 
-from kai.cockpit.bots import AGENT_ONLY_LANGUAGES, CONNECTION_LABELS, LANGUAGE_VOICES, BotType
+from kai.cockpit.bots import (
+    CONNECTION_LABELS,
+    BotType,
+)
 from kai.cockpit.connections import ConnectionsService
 from kai.cockpit.deployments import DeploymentsService
 from kai.cockpit.models import Deployment, User
-
-ALL_VOICES = sorted({voice for voices in LANGUAGE_VOICES.values() for voice in voices})
-ALL_LANGUAGES = sorted({*LANGUAGE_VOICES.keys(), *AGENT_ONLY_LANGUAGES})
-
-# Voice code -> the language it belongs to. The voice <select> in the
-# settings/wizard templates renders every code in ALL_VOICES with a
-# ``data-language`` attribute from this map so client-side JS
-# (initVoiceFilter in cockpit.js) can hide every voice that doesn't belong
-# to the currently selected/typed language — previously the dropdown always
-# showed all languages' voices regardless of the deployment's language.
-VOICE_LANGUAGE_BY_CODE: dict[str, str] = {
-    voice: lang for lang, voices in LANGUAGE_VOICES.items() for voice in voices
-}
 
 # Per-bot-type settings templates. Each bot type renders its own template so
 # waha-specific sections (voice, triggers, chats, capabilities, participation)
@@ -53,20 +43,19 @@ TOOLS_WITH_INSTRUCTION = frozenset({"database", "smtp", "calcom"})
 _HOME_REDIRECT = RedirectResponse("/console", status_code=302)
 
 
-def build_tools_update(supported_svcs: list[str], form_fields: dict) -> dict[str, bool | dict]:
+def build_tools_update(supported_svcs: list[str], form_fields: dict) -> dict[str, dict]:
     """Build the ``settings["tools"]`` dict from the submitted form.
 
-    Simple toggles store a bool. Tools with an instruction (database) store
-    a nested ``{"enabled": bool, "instruction": str}`` dict.
+    Every service stores the same ``{"enabled": bool, "instruction": str}``
+    shape, whether or not its template renders an instruction textarea
+    (``TOOLS_WITH_INSTRUCTION`` gates the textarea, not the storage shape) —
+    one format everywhere, no separate flat-bool form to also support.
     """
-    tools: dict[str, bool | dict] = {}
+    tools: dict[str, dict] = {}
     for svc in supported_svcs:
         enabled = f"tool_{svc}" in form_fields
-        if svc in TOOLS_WITH_INSTRUCTION:
-            instruction = form_fields.get(f"tool_{svc}_instruction", "")
-            tools[svc] = {"enabled": enabled, "instruction": instruction.strip()}
-        else:
-            tools[svc] = enabled
+        instruction = form_fields.get(f"tool_{svc}_instruction", "")
+        tools[svc] = {"enabled": enabled, "instruction": instruction.strip()}
     return tools
 
 
