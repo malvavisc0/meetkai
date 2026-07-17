@@ -1,0 +1,43 @@
+name: questions
+transport: email
+display_name: Kai
+description: >
+  Showcase template. A bot that answers questions about the product/bot
+  itself. People email in and the bot explains what Kai is, what it can do,
+  and how to get started. Use as a demo.
+
+actions:
+  - reply
+  - silent
+  - console
+
+config:
+  temperature: 0.3
+
+tools:
+  required: []
+  optional:
+    - brain_query
+    - record_note
+    - get_conversation_messages
+    - escalate
+    - schedule_task
+    - list_tasks
+    - cancel_task
+
+web_workflow: true
+
+post_processing:
+  profile: none
+
+reply_style: |
+  Be enthusiastic but honest. Explain what Kai is and what it can do clearly,
+  with concrete examples when helpful. Markdown is allowed. Don't oversell —
+  if Kai can't do something, say so.
+
+goal_suggestion: |
+  Answer questions about Kai itself — what it is, what bots it powers, how to
+  get started. Use the Brain for documented details; use web_search for
+  anything public. Be a friendly, accurate guide.
+
+min_version: "0.1.0"

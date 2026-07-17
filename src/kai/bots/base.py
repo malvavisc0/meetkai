@@ -22,6 +22,8 @@ from kai.agent.tools.escalate import (
     set_tool_context,
 )
 from kai.config.settings import Settings, get_settings
+from kai.templates.resolver import ToolResolution
+from kai.templates.schema import TemplateDef
 
 logger = logging.getLogger(__name__)
 
@@ -87,6 +89,13 @@ class BaseBot(ABC):
         self._task_scheduler: TaskScheduler | None = None
         self._escalation_store: EscalationStore | None = None
         self._tool_context: ToolContext | None = ToolContext()
+        # Resolved template + tool set for this deployment. ``configure()``
+        # always receives both (there is no ``None`` branch — the default
+        # ``general`` template supplies a resolution, per TEMPLATES §6). Bare
+        # bots constructed without ``configure()`` (tests/scripts) leave these
+        # as ``None`` and the bot's own defaults apply.
+        self._template: TemplateDef | None = None
+        self._tool_resolution: ToolResolution | None = None
 
     @property
     def instance_id(self) -> str:
@@ -111,17 +120,46 @@ class BaseBot(ABC):
             return external
         return None
 
-    def configure(self, agent: KaiAgent, settings: Settings, *, voice: str | None = None) -> None:
-        """Default configure: hold the agent for task execution.
+    def configure(
+        self,
+        agent: KaiAgent,
+        settings: Settings,
+        *,
+        voice: str | None = None,
+        template: TemplateDef,
+        tools: ToolResolution,
+    ) -> None:
+        """Default configure: hold the agent + template/tool resolution.
 
         Override to load bot-specific config, register tools, etc. Subclasses
         that override this should call ``super().configure(...)`` (to capture
-        the agent reference) and :meth:`setup_task_scheduler`.
+        the agent reference and resolution) and :meth:`setup_task_scheduler`.
+
+        ``template`` is the resolved :class:`TemplateDef` (the default
+        ``general`` template when ``--template`` is omitted). ``tools`` is the
+        resolved :class:`ToolResolution`; bot-owned tool registration must
+        check ``tools.final_tools`` membership before registering, so a
+        template that omits a bot-owned tool actually omits it. There is no
+        ``None`` branch — every deployment resolves a template.
 
         ``voice`` is an optional per-run override passed from the ``--voice``
         CLI flag; bots without voice support (the default) ignore it.
         """
         self._agent = agent
+        self._template = template
+        self._tool_resolution = tools
+
+    def _has_tool(self, name: str) -> bool:
+        """True when ``name`` is in the resolved tool set for this deployment.
+
+        Bot-owned tool registration (``register_chat_history_tool``, the
+        conversation tools, the task scheduler) gates on this so a template
+        that omits a tool actually omits it. Returns True when no resolution
+        is set (a bare bot without ``configure()``, e.g. in tests) so default
+        behavior is preserved.
+        """
+        res = self._tool_resolution
+        return res is None or name in res.final_tools
 
     def setup_task_scheduler(self, agent: KaiAgent, settings: Settings) -> None:
         """Create the task store + scheduler and register the task tools.
@@ -130,10 +168,19 @@ class BaseBot(ABC):
         call is a no-op. The scheduler loop itself is started in
         :meth:`run` via :meth:`start_task_scheduler` and stopped in
         :meth:`stop`.
+
+        Only wired when the template's resolved tool set includes at least one
+        task tool (``schedule_task``/``list_tasks``/``cancel_task``): a focused
+        template like ``order-status`` that omits them gets no scheduler at
+        all, matching the template's declaration rather than always wiring it.
+        ``settings.tasks_enabled`` is still honored as a global off-switch.
         """
         if not settings.tasks_enabled:
             return
         if self._task_scheduler is not None:
+            return
+        task_tool_names = ("schedule_task", "list_tasks", "cancel_task")
+        if not any(self._has_tool(n) for n in task_tool_names):
             return
 
         self._agent = agent

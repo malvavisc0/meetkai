@@ -77,16 +77,16 @@ _FULL_ACTION_NAMES = (
     "send_to_group",
     "console",
 )
-_NO_SILENT_ACTION_NAMES = (
-    "reply",
-    "send_voice_note",
-    "sleep",
-    "send_dm",
-    "send_to_group",
-    "console",
+
+# The per-turn subsets are derived from a template's base action set (see
+# ``action_cls_for_turn``), not referenced as module-level constants. The names
+# below are only the canonical tuples used to seed the memoized class cache so
+# the four named classes below stay singletons.
+_NO_SILENT_ACTION_NAMES = tuple(a for a in _FULL_ACTION_NAMES if a != "silent")
+_NO_VOICE_ACTION_NAMES = tuple(a for a in _FULL_ACTION_NAMES if a != "send_voice_note")
+_NO_SILENT_NO_VOICE_ACTION_NAMES = tuple(
+    a for a in _NO_SILENT_ACTION_NAMES if a != "send_voice_note"
 )
-_NO_VOICE_ACTION_NAMES = ("reply", "silent", "sleep", "send_dm", "send_to_group", "console")
-_NO_SILENT_NO_VOICE_ACTION_NAMES = ("reply", "sleep", "send_dm", "send_to_group", "console")
 
 # Type aliases for backward compatibility (used in cast() in tests).
 _FULL_ACTIONS = Literal[
@@ -98,48 +98,82 @@ _NO_SILENT_ACTIONS = Literal[
 _NO_VOICE_ACTIONS = Literal["reply", "silent", "sleep", "send_dm", "send_to_group", "console"]
 _NO_SILENT_NO_VOICE_ACTIONS = Literal["reply", "sleep", "send_dm", "send_to_group", "console"]
 
-WahaAction = _make_action_cls(
-    "WahaAction",
-    "The waha bot's full action vocabulary (silence and voice allowed).",
+# One ActionResult subclass per unique action tuple. Memoizing by tuple means
+# ``action_cls_for_turn`` derives the per-turn vocabulary from a template's
+# ``base_actions`` on demand AND identical combos return the same class object
+# (so ``is``-identity assertions in tests/scripts hold for the canonical sets).
+_ACTION_CLS_CACHE: dict[tuple[str, ...], type[ActionResult]] = {}
+
+
+def build_action_cls(
+    actions: tuple[str, ...],
+    *,
+    name: str = "TemplateAction",
+    doc: str = "A template-driven action vocabulary.",
+) -> type[ActionResult]:
+    """Return the (cached) ActionResult subclass for ``actions``.
+
+    The first caller for a given tuple names the class; later callers for the
+    same tuple get the cached class regardless of the ``name`` they pass.
+    """
+    key = tuple(actions)
+    cls = _ACTION_CLS_CACHE.get(key)
+    if cls is None:
+        cls = _make_action_cls(name, doc, key)
+        _ACTION_CLS_CACHE[key] = cls
+    return cls
+
+
+WahaAction = build_action_cls(
     _FULL_ACTION_NAMES,
+    name="WahaAction",
+    doc="The waha bot's full action vocabulary (silence and voice allowed).",
 )
 
-WahaNoSilentAction = _make_action_cls(
-    "WahaNoSilentAction",
-    "Waha action vocabulary that excludes silent. Used when user must not be ghosted.",
+WahaNoSilentAction = build_action_cls(
     _NO_SILENT_ACTION_NAMES,
+    name="WahaNoSilentAction",
+    doc="Waha action vocabulary that excludes silent. Used when user must not be ghosted.",
 )
 
-WahaNoVoiceAction = _make_action_cls(
-    "WahaNoVoiceAction",
-    "Waha action vocabulary that excludes send_voice_note. Used when TTS is offline.",
+WahaNoVoiceAction = build_action_cls(
     _NO_VOICE_ACTION_NAMES,
+    name="WahaNoVoiceAction",
+    doc="Waha action vocabulary that excludes send_voice_note. Used when TTS is offline.",
 )
 
-WahaNoSilentNoVoiceAction = _make_action_cls(
-    "WahaNoSilentNoVoiceAction",
-    "Waha action vocabulary excluding both silent and send_voice_note.",
+WahaNoSilentNoVoiceAction = build_action_cls(
     _NO_SILENT_NO_VOICE_ACTION_NAMES,
+    name="WahaNoSilentNoVoiceAction",
+    doc="Waha action vocabulary excluding both silent and send_voice_note.",
 )
 
 
 def action_cls_for_turn(
     *,
+    base_actions: tuple[str, ...],
     allow_silence: bool,
     operator: bool = False,
     tts_available: bool = True,
 ) -> type[ActionResult]:
-    """Pick the ``output_cls`` for a waha turn.
+    """Pick the ``output_cls`` for a waha turn, derived from ``base_actions``.
 
-    ``allow_silence`` collapses the old runtime flag into a schema decision:
-    a turn that must never go silent simply omits ``silent`` from the
-    reachable ``Literal``. ``operator`` is reserved for ``tell`` turns (the
-    ``console`` value is meaningful there); for inbound turns it is False.
-    ``tts_available`` omits ``send_voice_note`` when voice synthesis is
-    offline — a capability alters the schema rather than remaining
-    prompt-only advisory text. The four combinations of the two boolean
-    gates map to the four action vocabularies above.
+    ``base_actions`` is the template's declared action vocabulary (the full set
+    the bot is taught). Per-turn context narrows it: a turn that must never go
+    silent (DM / hard direct address) drops ``silent``; a turn with TTS offline
+    drops ``send_voice_note``. The narrowing regenerates the class on demand
+    from the template's base set rather than selecting among module-level
+    constants, so a template that omits e.g. ``send_voice_note`` never offers it
+    regardless of TTS availability.
+
+    ``operator`` is reserved for ``tell`` turns (the ``console`` value is
+    meaningful there); for inbound turns it is False. On an operator turn
+    ``silent`` is kept even when ``allow_silence`` is True — the operator can
+    always decline — matching the previous behavior.
     """
+    actions = list(base_actions)
+    if not allow_silence and not operator:
+        actions = [a for a in actions if a != "silent"]
     if not tts_available:
-        return WahaNoSilentNoVoiceAction if not allow_silence else WahaNoVoiceAction
-    return WahaAction if allow_silence or operator else WahaNoSilentAction
+        actions = [a for a in actions if a != "send_voice_note"]
+    return build_action_cls(tuple(actions))

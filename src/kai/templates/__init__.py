@@ -77,3 +77,23 @@ class TemplateRegistry:
             if prompt_file.is_file():
                 return prompt_file
         return None
+
+
+def escalation_prompt_section(template: TemplateDef) -> str:
+    """Build the ``## ESCALATION RULES`` block appended to a template's prompt.
+
+    Returns an empty string when the template declares no escalation rules.
+    The block is appended to the base prompt (system-prompt step 1, see
+    TEMPLATES §5.6) so the rules land before tool instructions and read as
+    hard rules the model must follow before choosing its action.
+    """
+    if not template.escalation_rules:
+        return ""
+    lines = ["\n\n## ESCALATION RULES (hard — call escalate before replying)\n"]
+    for rule in template.escalation_rules:
+        lines.append(
+            f"- If {rule.condition} → "
+            f'escalate(severity="{rule.severity}", '
+            f'reason="{rule.message}")\n'
+        )
+    return "".join(lines)

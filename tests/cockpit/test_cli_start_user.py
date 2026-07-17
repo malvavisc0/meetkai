@@ -101,7 +101,7 @@ class TestStartUserFlag:
 
         seen_voice = {}
 
-        def _capture_configure(self, agent, settings, *, voice=None):
+        def _capture_configure(self, agent, settings, *, voice=None, template=None, tools=None):
             seen_voice["value"] = voice
 
         monkeypatch.setattr(Bot, "configure", _capture_configure)

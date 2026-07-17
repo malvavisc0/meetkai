@@ -59,6 +59,18 @@ def _instance_id(bot_name: str, user: str = "") -> str:
     return f"{bot_name}-{user}" if user else bot_name
 
 
+def _parse_tool_list(raw: str) -> list[str]:
+    """Parse a comma-separated ``--enable-tools`` / ``--disable-tools`` value.
+
+    Empty / whitespace-only → ``[]``. Entries are stripped and empties dropped.
+    No name validation here — ``resolve_tools`` records typos as
+    ``rejected_unknown`` and boot fails on them.
+    """
+    if not raw:
+        return []
+    return [t.strip() for t in raw.split(",") if t.strip()]
+
+
 def _resolve_run(bot_name: str, run_id: str, user: str = "") -> RunRecord:
     """Resolve a run_id to a live RunRecord or exit with an error panel."""
     settings = get_settings()
@@ -305,6 +317,8 @@ def _start(
     user: str,
     voice: str,
     template_name: str,
+    enable_tools: str,
+    disable_tools: str,
 ) -> None:
     """Start a bot. Blocks until SIGINT/SIGTERM."""
     settings = get_settings()
@@ -320,12 +334,14 @@ def _start(
         err_line(str(exc))
         raise typer.Exit(1) from exc
 
-    # Resolve template (Phase 1: load + validate only; wiring lands in Phase 2).
-    # `general` is the default and matches today's hardcoded behavior, so this
-    # is a true no-op for the default case. The boot guard below fails fast if a
-    # template declares a required tool whose env vars are not configured.
+    # Resolve the template + the final tool set. ``general`` is the default
+    # and reproduces today's behavior. The boot guards below fail fast on a
+    # template declaring a required tool whose env vars are not configured,
+    # on a template declaring transport-invalid actions, on an operator trying
+    # to disable a default/required tool, and on an operator typo in
+    # --enable-tools (phantom-enable validation).
     from kai.templates import TemplateRegistry
-    from kai.templates.resolver import validate_actions, validate_tools
+    from kai.templates.resolver import resolve_tools, validate_actions
 
     transport = bot_name
     tmpl_name = template_name or "general"
@@ -343,10 +359,21 @@ def _start(
             err_line(err)
         raise typer.Exit(1)
 
-    missing = validate_tools(tmpl)
-    if missing:
-        for err in missing:
+    operator_enable = _parse_tool_list(enable_tools)
+    operator_disable = _parse_tool_list(disable_tools)
+
+    tool_resolution = resolve_tools(tmpl, operator_enable, operator_disable)
+    if tool_resolution.missing_required:
+        for err in tool_resolution.missing_required:
             err_line(f"required tool missing: {err}")
+        raise typer.Exit(1)
+    if tool_resolution.rejected_disable:
+        for err in tool_resolution.rejected_disable:
+            err_line(f"cannot disable: {err}")
+        raise typer.Exit(1)
+    if tool_resolution.rejected_unknown:
+        for name in tool_resolution.rejected_unknown:
+            err_line(f"unknown tool in --enable-tools: {name}")
         raise typer.Exit(1)
 
     # Instance namespace: when --user is provided, isolate files per user.
@@ -361,7 +388,8 @@ def _start(
 
     console.print(
         f"[bold magenta]kai[/bold magenta] [{DIM}]v0.0.1[/{DIM}]  {GL_ARROW} "
-        f"[{DIM}]starting[/{DIM}] [bold]{bot.name}[/bold]"
+        f"[{DIM}]starting[/{DIM}] [bold]{bot.name}[/bold]  "
+        f"[{DIM}]{transport}/{tmpl_name}[/{DIM}]"
     )
 
     async def _main() -> int:
@@ -371,13 +399,15 @@ def _start(
         sql_engine = None
 
         try:
-            bot.configure(agent, settings, voice=voice or None)
+            bot.configure(
+                agent, settings, voice=voice or None, template=tmpl, tools=tool_resolution
+            )
         except (FileNotFoundError, ValueError, OSError) as exc:
             err_line(f"configuration error  {exc}")
             return 1
 
         brain_settings = get_brain_settings()
-        if brain_settings.brain_enabled:
+        if brain_settings.brain_enabled and "brain_query" in tool_resolution.final_tools:
             try:
                 brain_client = LightRagClient(brain_settings)
                 register_brain_tool(
@@ -412,7 +442,7 @@ def _start(
         from kai.agent.tools.sql import get_sql_settings
 
         sql_settings = get_sql_settings()
-        if sql_settings.sql_enabled:
+        if sql_settings.sql_enabled and "sql_query" in tool_resolution.final_tools:
             try:
                 from kai.agent.tools.sql import register_sql_tool
 
@@ -429,7 +459,7 @@ def _start(
         from kai.agent.tools.email import get_smtp_settings
 
         smtp_settings = get_smtp_settings()
-        if smtp_settings.smtp_enabled:
+        if smtp_settings.smtp_enabled and "send_email" in tool_resolution.final_tools:
             try:
                 from kai.agent.tools.email import register_email_tool
 
@@ -451,7 +481,7 @@ def _start(
         from kai.agent.tools.calcom import get_calcom_settings
 
         calcom_settings = get_calcom_settings()
-        if calcom_settings.calcom_enabled:
+        if calcom_settings.calcom_enabled and "calcom" in tool_resolution.final_tools:
             try:
                 from kai.agent.tools.calcom import register_calcom_tool
 
@@ -851,6 +881,16 @@ def register(app: typer.Typer) -> None:
             "-t",
             help="Template to use (default: general)",
         ),
+        enable_tools: str = typer.Option(
+            "",
+            "--enable-tools",
+            help="Comma-separated tools to force-enable beyond the template",
+        ),
+        disable_tools: str = typer.Option(
+            "",
+            "--disable-tools",
+            help="Comma-separated tools to disable from the template",
+        ),
     ):
         _start(
             bot_name,
@@ -859,6 +899,8 @@ def register(app: typer.Typer) -> None:
             user,
             voice,
             template,
+            enable_tools,
+            disable_tools,
         )
 
     @app.command(name="list")

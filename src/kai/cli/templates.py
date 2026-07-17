@@ -4,7 +4,7 @@ import typer
 
 from kai.cli.style import DIM, WARN, soft_table
 from kai.config.prompts import load_system_prompt
-from kai.templates import TemplateRegistry
+from kai.templates import TemplateRegistry, escalation_prompt_section
 from kai.templates.schema import TemplateDef
 
 app = typer.Typer(help="Bot templates")
@@ -78,14 +78,7 @@ def render(
         raise typer.Exit(1)
 
     if tmpl.escalation_rules:
-        prompt += "\n\n## ESCALATION RULES (hard — call escalate before replying)\n"
-        for rule in tmpl.escalation_rules:
-            line = (
-                f"- If {rule.condition} → "
-                f'escalate(severity="{rule.severity}", '
-                f'reason="{rule.message}")\n'
-            )
-            prompt += line
+        prompt += escalation_prompt_section(tmpl)
 
     typer.echo(prompt)
 

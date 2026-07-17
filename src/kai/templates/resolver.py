@@ -44,6 +44,36 @@ _EMAIL_VALID_ACTIONS = {
     "console",
 }
 
+# Every tool name the system can ever register, across default / bot-owned /
+# connection-gated tools. Used to reject phantom ``--enable-tools`` typos
+# (e.g. ``barin_query``) at boot instead of silently accepting them — see the
+# Phase 1 review note carried into Phase 2/3. Kept as a literal so a new tool
+# added without an entry here fails this set loudly rather than slipping past.
+_KNOWN_TOOL_NAMES: frozenset[str] = frozenset(
+    [
+        "web_search",
+        "get_webpage_content",
+        "get_current_datetime",
+        "get_weather",
+        "calculate",
+        "schedule_task",
+        "list_tasks",
+        "cancel_task",
+        "record_note",
+        "get_conversation_messages",
+        "brain_query",
+        "sql_query",
+        "describe_tables",
+        "send_email",
+        "calcom",
+        "get_available_slots",
+        "schedule_event",
+        "get_whatsapp_history",
+        "escalate",
+        "blacklist_contact",
+    ]
+)
+
 _VALID_ACTIONS_BY_TRANSPORT = {
     "waha": _WAHA_VALID_ACTIONS,
     "email": _EMAIL_VALID_ACTIONS,
@@ -55,6 +85,7 @@ class ToolResolution:
     final_tools: frozenset[str]
     missing_required: list[str] = field(default_factory=list)
     rejected_disable: list[str] = field(default_factory=list)
+    rejected_unknown: list[str] = field(default_factory=list)
 
 
 def resolve_config(
@@ -81,11 +112,17 @@ def resolve_tools(
 
     cannot_disable = set(default_tools) | template_required
 
-    rejected = []
+    rejected_disable = []
     for tool in operator_disable:
         if tool in cannot_disable:
             reason = "default" if tool in default_tools else "required by template"
-            rejected.append(f"{tool} ({reason} — cannot be disabled)")
+            rejected_disable.append(f"{tool} ({reason} — cannot be disabled)")
+
+    # ``--enable-tools`` names must exist in the real tool registry, otherwise
+    # a typo (``barin_query``) is silently accepted and the operator believes a
+    # tool is loaded when it isn't. Default/required tools are inherently known;
+    # only the operator-supplied extras need the check.
+    rejected_unknown = [t for t in operator_enable if t not in _KNOWN_TOOL_NAMES]
 
     tools: set[str] = set(default_tools)
     tools |= template_required
@@ -93,7 +130,8 @@ def resolve_tools(
         if _is_tool_configured(tool):
             tools.add(tool)
     for tool in operator_enable:
-        tools.add(tool)
+        if tool in _KNOWN_TOOL_NAMES:
+            tools.add(tool)
     for tool in operator_disable:
         if tool not in cannot_disable and tool in tools:
             tools.discard(tool)
@@ -107,7 +145,8 @@ def resolve_tools(
     return ToolResolution(
         final_tools=frozenset(tools),
         missing_required=missing,
-        rejected_disable=rejected,
+        rejected_disable=rejected_disable,
+        rejected_unknown=rejected_unknown,
     )
 
 

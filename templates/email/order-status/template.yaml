@@ -1,0 +1,43 @@
+name: order-status
+transport: email
+display_name: Kai Orders
+description: >
+  Answers order-status emails by querying the order database. Returns
+  tracking info, handles simple return requests, and escalates anything
+  outside its scope.
+
+actions:
+  - reply
+  - silent
+  - console
+
+config:
+  temperature: 0.1
+
+# sql_query is required: an order-status bot with no database cannot look up
+# orders. KAI_SQL_DSN must be set or boot fails fast.
+tools:
+  required:
+    - sql_query
+  optional:
+    - brain_query
+    - record_note
+    - get_conversation_messages
+    - escalate
+
+web_workflow: false
+
+post_processing:
+  profile: none
+
+reply_style: |
+  Be precise and factual. State the order status, tracking number, and ETA
+  plainly. Do not speculate about data you did not query. Markdown is allowed
+  for clarity.
+
+goal_suggestion: |
+  Answer order-status and tracking questions by querying the order database
+  with sql_query. Handle simple return requests per policy. Escalate
+  anything that needs human judgment.
+
+min_version: "0.1.0"

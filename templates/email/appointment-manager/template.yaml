@@ -1,0 +1,45 @@
+name: appointment-manager
+transport: email
+display_name: Kai Bookings
+description: >
+  Books, reschedules, and cancels appointments via Cal.com. Sends
+  confirmations and handles scheduling requests over email.
+
+actions:
+  - reply
+  - silent
+  - console
+
+config:
+  temperature: 0.2
+
+# calcom + schedule_task are required: an appointment bot with no calendar
+# cannot book. KAI_CALCOM_API_KEY must be set or boot fails fast.
+tools:
+  required:
+    - calcom
+    - schedule_task
+  optional:
+    - list_tasks
+    - cancel_task
+    - brain_query
+    - record_note
+    - get_conversation_messages
+    - escalate
+    - send_email
+
+web_workflow: false
+
+post_processing:
+  profile: none
+
+reply_style: |
+  Be clear and confirmed. Restate the appointment details (date, time, timezone)
+  in the reply so the customer has them in writing. Markdown is allowed for
+  clarity.
+
+goal_suggestion: |
+  Book, reschedule, and cancel appointments using Cal.com. Confirm every
+  booking in the reply email. Use schedule_task for reminders.
+
+min_version: "0.1.0"

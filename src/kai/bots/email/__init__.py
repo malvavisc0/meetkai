@@ -44,10 +44,13 @@ from kai.agent.tools.email import (
 from kai.bots.base import BaseBot, TellResult
 from kai.bots.email.config import EmailSettings, get_email_settings
 from kai.bots.email.setup import BotConfig
+from kai.bots.processing import PostProcessor
 from kai.bots.waha.webhook import create_webhook_app
 from kai.config.filters import should_process_chat_message
 from kai.config.prompts import load_system_prompt
 from kai.config.settings import Settings
+from kai.templates.resolver import ToolResolution
+from kai.templates.schema import PostProcessingConfig, TemplateDef
 
 logger = logging.getLogger(__name__)
 console = Console()
@@ -123,18 +126,35 @@ class Bot(BaseBot):
         self._email: EmailSettings | None = None
         self._config: BotConfig = config or BotConfig()
         self._prompt: str = ""
+        # ``general``-baseline defaults: a bare bot without ``configure()``
+        # behaves like the default template (no post-processing, no reply
+        # style). ``configure()`` overrides these from the resolved template.
+        self._reply_style: str = ""
+        self._post_processor = PostProcessor(PostProcessingConfig(profile="none"))
         self._server: uvicorn.Server | None = None
         self._shutting_down = asyncio.Event()
         self._smtp: SmtpSettings | None = None
 
-    def configure(self, agent: KaiAgent, settings: Settings, *, voice: str | None = None) -> None:
-        self._agent = agent
+    def configure(
+        self,
+        agent: KaiAgent,
+        settings: Settings,
+        *,
+        voice: str | None = None,
+        template: TemplateDef,
+        tools: ToolResolution,
+    ) -> None:
+        super().configure(agent, settings, voice=voice, template=template, tools=tools)
         self._settings = settings
         self._email = get_email_settings()
         self._config = self._load_config()
         if settings.agent_language_explicit:
             self._config = self._config.model_copy(update={"language": settings.agent_language})
-        self._prompt = self._load_prompt()
+        # Template-driven reply style + post-processing. ``general`` reproduces
+        # the previous hardcoded behavior (no post-processing, empty style).
+        self._reply_style = template.reply_style
+        self._post_processor = PostProcessor(template.post_processing)
+        self._prompt = self._load_prompt(template)
         agent.set_system_prompt(self._prompt)
         agent.set_temperature(self._config.temperature)
         agent.set_timezone(self._config.timezone)
@@ -142,13 +162,12 @@ class Bot(BaseBot):
         # for every KaiAgent by get_tools()) needs the same fetch-before-cite
         # / cross-check-sources protocol the waha bot gets via this same
         # constant — without it the model has tools but no usage guidance.
-        agent.set_tool_workflow(WEB_WORKFLOW_INSTRUCTIONS)
+        if template.web_workflow:
+            agent.set_tool_workflow(WEB_WORKFLOW_INSTRUCTIONS)
+        # Bot-owned tool registration is gated on the resolved tool set.
+        if self._has_tool("record_note") or self._has_tool("get_conversation_messages"):
+            register_conversation_tools(agent, tool_context=self._tool_context)
         self.setup_task_scheduler(agent, settings)
-        # tool_context is the same ToolContext set on every inbound turn via
-        # set_task_context(chat_id=source, ...) in ingest_event — reusing it
-        # here lets an empty conversation_id fall back to the current sender,
-        # matching the waha bot's wiring (register_chat_history_tool/etc.).
-        register_conversation_tools(agent, tool_context=self._tool_context)
         # Wire escalation and blacklist tools' module-level state to this bot.
         self._wire_escalation_tools(settings, self._config.blacklist)
         # SMTP settings for the reply path (KAI_SMTP_TOOL_* env, injected by
@@ -174,14 +193,23 @@ class Bot(BaseBot):
     def display_name(self) -> str:
         return self._config.display_name
 
-    def _load_prompt(self) -> str:
-        return load_system_prompt(
-            str(self.bot_dir / "prompt.md"),
+    def _load_prompt(self, template: TemplateDef) -> str:
+        from kai.templates import TemplateRegistry, escalation_prompt_section
+
+        registry = TemplateRegistry.bundled()
+        path = registry.prompt_path(template.transport, template.name)
+        if path is None:
+            path = self.bot_dir / "prompt.md"
+        prompt = load_system_prompt(
+            str(path),
             variables={
                 "language": self._config.language,
                 "display_name": self._config.display_name,
             },
         )
+        # Escalation rules are appended to the base prompt (system-prompt
+        # step 1) so they read as hard rules before tool instructions.
+        return prompt + escalation_prompt_section(template)
 
     async def run(self) -> None:
         assert self._email is not None, "configure() must be called before run()"
@@ -278,6 +306,7 @@ class Bot(BaseBot):
                 conversation_id=source,
                 context=context,
                 images=images or None,
+                reply_style=self._reply_style or None,
             )
 
             action = result.action
@@ -480,6 +509,12 @@ class Bot(BaseBot):
         if not _valid_recipient(to):
             logger.error("Invalid recipient: %s", to)
             raise RuntimeError(f"invalid recipient: {to}")
+
+        # Apply the template's post-processing pipeline. ``general`` uses
+        # ``profile: none`` (identity — email supports markdown), so this is a
+        # no-op for the default; an email template that sets ``profile: custom``
+        # gets its transforms applied before SMTP send.
+        body = self._post_processor.process(body)
 
         msg = EmailMessage()
         msg["Subject"] = f"Re: {subject}" if subject else "Re: your email"

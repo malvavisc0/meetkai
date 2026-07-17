@@ -19,7 +19,8 @@ from kai.agent.tools import WEB_WORKFLOW_INSTRUCTIONS
 from kai.agent.tools.conversation import register_conversation_tools
 from kai.agent.tools.email import DEFAULT_DISPLAY_NAME
 from kai.bots.base import BaseBot, TellResult
-from kai.bots.waha.actions import action_cls_for_turn
+from kai.bots.processing import PostProcessor
+from kai.bots.waha.actions import _FULL_ACTION_NAMES, action_cls_for_turn
 from kai.bots.waha.client import WahaClient
 from kai.bots.waha.config import WahaSettings, get_waha_settings
 from kai.bots.waha.history import register_chat_history_tool
@@ -31,7 +32,6 @@ from kai.bots.waha.payload import GROUP_SUFFIX, MessageMetadata, parse_message
 from kai.bots.waha.processing import (
     REPLY_STYLE,
     looks_like_base64_media,
-    post_process,
     should_organically_participate,
     should_send_voice_followup,
 )
@@ -64,6 +64,8 @@ from kai.cli import BotStartupError
 from kai.config.filters import should_process_chat_message
 from kai.config.prompts import load_system_prompt
 from kai.config.settings import Settings
+from kai.templates.resolver import ToolResolution
+from kai.templates.schema import PostProcessingConfig, TemplateDef
 from kai.utils.terminal import render_image_pixelated
 
 logger = logging.getLogger(__name__)
@@ -166,6 +168,12 @@ class Bot(BaseBot):
         self._waha: WahaSettings | None = None
         self._config: BotConfig = config or BotConfig()
         self._prompt: str = ""
+        # ``general``-baseline defaults: a bare bot constructed without
+        # ``configure()`` (tests/scripts) behaves like the default template.
+        # ``configure()`` overrides these from the resolved template.
+        self._base_actions: tuple[str, ...] = _FULL_ACTION_NAMES
+        self._reply_style: str = REPLY_STYLE
+        self._post_processor = PostProcessor(PostProcessingConfig(profile="waha_default"))
         self._bot_ids: set[str] = set()
         self._rosters: OrderedDict[str, dict[str, str]] = OrderedDict()
         self._roster_refreshed_at: dict[str, float] = {}
@@ -187,8 +195,16 @@ class Bot(BaseBot):
         self._seen_store: SeenStore | None = None
         self._ffmpeg_path: str | None = None
 
-    def configure(self, agent: KaiAgent, settings: Settings, *, voice: str | None = None) -> None:
-        self._agent = agent
+    def configure(
+        self,
+        agent: KaiAgent,
+        settings: Settings,
+        *,
+        voice: str | None = None,
+        template: TemplateDef,
+        tools: ToolResolution,
+    ) -> None:
+        super().configure(agent, settings, voice=voice, template=template, tools=tools)
         self._settings = settings
         waha = get_waha_settings()
         # --voice CLI flag overrides KAI_WAHA_KOKORO_VOICE for this run.
@@ -198,15 +214,26 @@ class Bot(BaseBot):
         self._config = self._load_config()
         if settings.agent_language_explicit:
             self._config = self._config.model_copy(update={"language": settings.agent_language})
-        self._prompt = self._load_prompt()
+        # Template-driven behavior: action vocabulary, reply style,
+        # post-processing pipeline. ``general`` (the default) reproduces the
+        # previous hardcoded values exactly.
+        self._base_actions = tuple(template.actions)
+        self._reply_style = template.reply_style
+        self._post_processor = PostProcessor(template.post_processing)
+        self._prompt = self._load_prompt(template)
         agent.set_system_prompt(self._prompt)
         agent.set_temperature(self._config.temperature)
-        agent.set_tool_workflow(WEB_WORKFLOW_INSTRUCTIONS)
+        if template.web_workflow:
+            agent.set_tool_workflow(WEB_WORKFLOW_INSTRUCTIONS)
         agent.set_tool_call_callback(self._render_tool_call)
         agent.set_timezone(self._config.timezone)
+        # Bot-owned tool registration is gated on the resolved tool set: a
+        # template that omits a tool gets it absent rather than always-on.
+        if self._has_tool("get_whatsapp_history"):
+            register_chat_history_tool(agent, bot=self)
+        if self._has_tool("record_note") or self._has_tool("get_conversation_messages"):
+            register_conversation_tools(agent, tool_context=self._tool_context)
         self.setup_task_scheduler(agent, settings)
-        register_chat_history_tool(agent, bot=self)
-        register_conversation_tools(agent, tool_context=self._tool_context)
         # Wire escalation and blacklist tools' module-level state to this bot.
         self._wire_escalation_tools(settings, self._config.blacklist)
         self._seen_store = SeenStore(self._seen_store_path(settings), max_size=_SEEN_IDS_MAX)
@@ -326,11 +353,24 @@ class Bot(BaseBot):
             ),
         )
 
-    def _load_prompt(self) -> str:
-        return load_system_prompt(
-            str(self.bot_dir / "prompt.md"),
+    def _load_prompt(self, template: TemplateDef) -> str:
+        # Resolve the template's prompt.md; fall back to the bot's bundled
+        # prompt.md when the template ships none (keeps a custom template dir
+        # that only carries template.yaml usable against the transport's
+        # default persona).
+        from kai.templates import TemplateRegistry, escalation_prompt_section
+
+        registry = TemplateRegistry.bundled()
+        path = registry.prompt_path(template.transport, template.name)
+        if path is None:
+            path = self.bot_dir / "prompt.md"
+        prompt = load_system_prompt(
+            str(path),
             variables={"language": self._config.language},
         )
+        # Escalation rules are appended to the base prompt (system-prompt
+        # step 1) so they read as hard rules before tool instructions.
+        return prompt + escalation_prompt_section(template)
 
     def display_name(self) -> str:
         return self._config.display_name
@@ -992,7 +1032,9 @@ class Bot(BaseBot):
             hard_addressed = (not meta.is_group) or meta.mentions_bot or replies_to_bot
             allow_silence = meta.is_group and not hard_addressed
             output_cls = action_cls_for_turn(
-                allow_silence=allow_silence, tts_available=self._voice_enabled()
+                base_actions=self._base_actions,
+                allow_silence=allow_silence,
+                tts_available=self._voice_enabled(),
             )
 
             result = await agent.chat(
@@ -1003,7 +1045,7 @@ class Bot(BaseBot):
                 extra_system_context=extra_context,
                 images=images or None,
                 videos=videos or None,
-                reply_style=REPLY_STYLE,
+                reply_style=self._reply_style,
             )
 
             await self._deliver_inbound(
@@ -1061,7 +1103,7 @@ class Bot(BaseBot):
                         "response. Reply now with ONLY a short plain-text "
                         "WhatsApp message answering the last message."
                     ),
-                    reply_style=REPLY_STYLE,
+                    reply_style=self._reply_style,
                 )
                 if (
                     not retry.error
@@ -1212,7 +1254,11 @@ class Bot(BaseBot):
             return
         # Directly addressed while asleep: let the model decide whether to wake
         # up. A reply-shaped action wakes it; silent/sleep keeps it asleep.
-        output_cls = action_cls_for_turn(allow_silence=True, tts_available=self._voice_enabled())
+        output_cls = action_cls_for_turn(
+            base_actions=self._base_actions,
+            allow_silence=True,
+            tts_available=self._voice_enabled(),
+        )
         wake_context = (
             "You are currently asleep in this chat. If this message is "
             "genuinely trying to wake you, set action to 'reply' and you "
@@ -1230,7 +1276,7 @@ class Bot(BaseBot):
             extra_system_context=wake_context,
             images=images or None,
             videos=videos or None,
-            reply_style=REPLY_STYLE,
+            reply_style=self._reply_style,
         )
         action = result.action
         kind = action.action
@@ -1387,7 +1433,10 @@ class Bot(BaseBot):
         if tts_note:
             op_context = f"{op_context}\n\n{tts_note}"
         op_output_cls = action_cls_for_turn(
-            allow_silence=True, operator=True, tts_available=self._voice_enabled()
+            base_actions=self._base_actions,
+            allow_silence=True,
+            operator=True,
+            tts_available=self._voice_enabled(),
         )
 
         try:
@@ -2009,7 +2058,7 @@ class Bot(BaseBot):
         )
 
     def _post_process(self, reply: str) -> str:
-        return post_process(reply)
+        return self._post_processor.process(reply)
 
     def _mark_replied(self, chat_id: str) -> None:
         self._last_reply_at[chat_id] = time.monotonic()
