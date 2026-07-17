@@ -12,13 +12,23 @@ from datetime import UTC, datetime
 from fastapi.responses import RedirectResponse
 from sqlalchemy.orm import Session
 
-from kai.cockpit.bots import AGENT_ONLY_LANGUAGES, CONNECTION_LABELS, LANGUAGE_VOICE_MAP, BotType
+from kai.cockpit.bots import AGENT_ONLY_LANGUAGES, CONNECTION_LABELS, LANGUAGE_VOICES, BotType
 from kai.cockpit.connections import ConnectionsService
 from kai.cockpit.deployments import DeploymentsService
 from kai.cockpit.models import Deployment, User
 
-ALL_VOICES = sorted(set(LANGUAGE_VOICE_MAP.values()))
-ALL_LANGUAGES = sorted({*LANGUAGE_VOICE_MAP.keys(), *AGENT_ONLY_LANGUAGES})
+ALL_VOICES = sorted({voice for voices in LANGUAGE_VOICES.values() for voice in voices})
+ALL_LANGUAGES = sorted({*LANGUAGE_VOICES.keys(), *AGENT_ONLY_LANGUAGES})
+
+# Voice code -> the language it belongs to. The voice <select> in the
+# settings/wizard templates renders every code in ALL_VOICES with a
+# ``data-language`` attribute from this map so client-side JS
+# (initVoiceFilter in cockpit.js) can hide every voice that doesn't belong
+# to the currently selected/typed language — previously the dropdown always
+# showed all languages' voices regardless of the deployment's language.
+VOICE_LANGUAGE_BY_CODE: dict[str, str] = {
+    voice: lang for lang, voices in LANGUAGE_VOICES.items() for voice in voices
+}
 
 # Per-bot-type settings templates. Each bot type renders its own template so
 # waha-specific sections (voice, triggers, chats, capabilities, participation)

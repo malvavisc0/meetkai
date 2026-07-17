@@ -356,4 +356,48 @@
   }
 
   document.addEventListener("DOMContentLoaded", initUploadFilename);
+
+  // --- Voice filter (Settings + New agent wizard) ---
+  // The voice <select data-voice-filter> lists every Kokoro voice across all
+  // supported languages, each <option> tagged with data-language. Without
+  // this, the dropdown always showed every language's voice (e.g. Spanish's
+  // "ef_dora") even when the deployment's language was set to English. This
+  // hides options that don't match the current #language field so only
+  // voices for the selected language are visible/selectable. If no voice
+  // matches (e.g. a language Kokoro has no voice for, or free-typed text
+  // that doesn't match any known language), every voice is shown rather than
+  // leaving the picker empty.
+  function initVoiceFilter() {
+    var select = document.querySelector("[data-voice-filter]");
+    var languageField = document.getElementById("language");
+    if (!select || !languageField) return;
+    var options = select.querySelectorAll("option[data-language]");
+
+    function apply() {
+      var lang = (languageField.value || "").trim().toLowerCase();
+      var matches = [];
+      for (var i = 0; i < options.length; i++) {
+        if ((options[i].dataset.language || "").toLowerCase() === lang) {
+          matches.push(options[i]);
+        }
+      }
+      var visible = matches.length > 0 ? matches : Array.prototype.slice.call(options);
+      var visibleValues = {};
+      for (var j = 0; j < options.length; j++) {
+        var shown = visible.indexOf(options[j]) !== -1;
+        options[j].hidden = !shown;
+        options[j].disabled = !shown;
+        if (shown) visibleValues[options[j].value] = true;
+      }
+      if (!visibleValues[select.value] && visible.length > 0) {
+        select.value = visible[0].value;
+      }
+    }
+
+    apply();
+    languageField.addEventListener("input", apply);
+    languageField.addEventListener("change", apply);
+  }
+
+  document.addEventListener("DOMContentLoaded", initVoiceFilter);
 })();

@@ -8,13 +8,14 @@ from sqlalchemy.orm import Session
 
 from kai.cockpit.app import templates
 from kai.cockpit.auth import require_user
-from kai.cockpit.bots import BOT_TYPES, auto_pick_voice
+from kai.cockpit.bots import BOT_TYPES, VOICE_LABELS, auto_pick_voice
 from kai.cockpit.db import get_db
 from kai.cockpit.deployments import ConnectionRequiredError, DeploymentsService
 from kai.cockpit.models import User
 from kai.cockpit.routes.deployments._shared import (
     ALL_LANGUAGES,
     ALL_VOICES,
+    VOICE_LANGUAGE_BY_CODE,
     WIZARD_TEMPLATES,
     missing_required_connections,
 )
@@ -57,6 +58,8 @@ def _wizard_context(
             "language": language,
             "voice": voice,
             "voices": ALL_VOICES,
+            "voice_labels": VOICE_LABELS,
+            "voice_language_by_code": VOICE_LANGUAGE_BY_CODE,
             "languages": ALL_LANGUAGES,
             "templates": _templates_for(bot_type),
             "template": template,

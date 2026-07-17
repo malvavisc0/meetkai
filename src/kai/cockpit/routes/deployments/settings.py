@@ -18,7 +18,7 @@ from sqlalchemy.orm import Session
 from kai.agent.tools.email import DEFAULT_DISPLAY_NAME
 from kai.cockpit.app import templates
 from kai.cockpit.auth import require_user
-from kai.cockpit.bots import BOT_TYPES, CAPABILITY_LABELS, CREDENTIAL_TYPES
+from kai.cockpit.bots import BOT_TYPES, CAPABILITY_LABELS, CREDENTIAL_TYPES, VOICE_LABELS
 from kai.cockpit.brains import BrainsService
 from kai.cockpit.connections import ConnectionsService
 from kai.cockpit.db import get_db
@@ -28,6 +28,7 @@ from kai.cockpit.routes.deployments._shared import (
     ALL_VOICES,
     SETTINGS_TEMPLATES,
     TOOLS_WITH_INSTRUCTION,
+    VOICE_LANGUAGE_BY_CODE,
     build_tools_update,
     get_deployment,
 )
@@ -241,6 +242,8 @@ async def deployment_settings_page(
             "dep": dep,
             "dep_user": user,
             "voices": ALL_VOICES,
+            "voice_labels": VOICE_LABELS,
+            "voice_language_by_code": VOICE_LANGUAGE_BY_CODE,
             "kokoro_languages": SUPPORTED_KOKORO_LANGS,
             "feature_flags": feature_flags,
             "capability_labels": CAPABILITY_LABELS,

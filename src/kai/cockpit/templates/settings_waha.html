@@ -30,12 +30,12 @@
         </div>
         <div class="field field--narrow">
           <label class="field__label" for="voice">Voice</label>
-          <select id="voice" name="voice">
+          <select id="voice" name="voice" data-voice-filter>
             {% for v in voices %}
-              <option value="{{ v }}" {% if v == dep.voice %}selected{% endif %}>{{ v }}</option>
+              <option value="{{ v }}" data-language="{{ voice_language_by_code.get(v, '') }}" {% if v == dep.voice %}selected{% endif %}>{{ voice_labels.get(v, v) }}</option>
             {% endfor %}
           </select>
-          <p class="field__help">Picked from the language. Used when kAI sends voice notes.</p>
+          <p class="field__help">Only voices matching the language above are shown. Used when kAI sends voice notes.</p>
         </div>
         <div class="field field--narrow">
           <label class="field__label" for="timezone">Timezone</label>

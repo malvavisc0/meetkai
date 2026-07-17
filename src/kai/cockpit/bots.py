@@ -80,20 +80,39 @@ BOT_TYPES: dict[str, BotType] = {
     ),
 }
 
-LANGUAGE_VOICE_MAP: dict[str, str] = {
-    "Spanish": "ef_dora",
-    "English": "af_heart",
-    "French": "ff_siwis",
-    "Italian": "if_sara",
-    "Portuguese": "pf_dora",
+LANGUAGE_VOICES: dict[str, list[str]] = {
+    # Order is [female, male, ...]; index 0 is the language's default voice
+    # (used by auto_pick_voice). French has no male voice in Kokoro v1.0 —
+    # see https://huggingface.co/hexgrad/Kokoro-82M/blob/main/VOICES.md.
+    "Spanish": ["ef_dora", "em_alex"],
+    "English": ["af_heart", "am_michael"],
+    "French": ["ff_siwis"],
+    "Italian": ["if_sara", "im_nicola"],
+    "Portuguese": ["pf_dora", "pm_alex"],
+}
+
+# Human-readable name for every voice code in LANGUAGE_VOICES, so the
+# cockpit's voice picker doesn't just print the raw Kokoro code (e.g.
+# "ef_dora"). The voice picker already filters options down to the selected
+# language, so the label only needs the voice's name.
+VOICE_LABELS: dict[str, str] = {
+    "af_heart": "Heart",
+    "am_michael": "Michael",
+    "ef_dora": "Dora",
+    "em_alex": "Alex",
+    "ff_siwis": "Siwis",
+    "if_sara": "Sara",
+    "im_nicola": "Nicola",
+    "pf_dora": "Dora",
+    "pm_alex": "Alex",
 }
 
 # Languages the LLM can be told to reply in, beyond the ones Kokoro v1.0 has
-# a voice for (LANGUAGE_VOICE_MAP above). German has no Kokoro v1.0 voice at
+# a voice for (LANGUAGE_VOICES above). German has no Kokoro v1.0 voice at
 # all — a bot configured for German still replies in German text; it just
 # never gets voice notes (see kai.bots.waha.tts.resolve_kokoro_lang). Do NOT
 # add German (or any other Kokoro-unsupported language) to
-# LANGUAGE_VOICE_MAP with a made-up voice — that previously mapped German to
+# LANGUAGE_VOICES with a made-up voice — that previously mapped German to
 # "hf_alpha" (a Hindi voice), which made German voice replies get
 # synthesized with English phonemization in a Hindi voice.
 AGENT_ONLY_LANGUAGES: tuple[str, ...] = ("German",)
@@ -231,7 +250,7 @@ CONNECTION_LABELS: dict[str, str] = {
 
 def auto_pick_voice(language: str) -> str:
     """Return the default kokoro voice for a language, or af_heart as fallback."""
-    return LANGUAGE_VOICE_MAP.get(language, "af_heart")
+    return LANGUAGE_VOICES.get(language, ["af_heart"])[0]
 
 
 # Single source of truth for capability display names, shared by the
