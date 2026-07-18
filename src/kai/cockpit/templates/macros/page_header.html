@@ -1,0 +1,22 @@
+{# Page header macro — the single source for every page header.
+   Usage:
+     {% from "macros/page_header.html" import page_header %}
+     {{ page_header(eyebrow="Agents", title="Console", subtitle="...") }}
+     {{ page_header(eyebrow="Agent", title=dep.bot_type, subtitle="...", back_url="/console") }}
+   When back_url is given, renders .page-header--split with a ghost Back link
+   in the action slot; otherwise renders a plain .page-header. #}
+{% macro page_header(eyebrow, title, subtitle="", back_url=None, action_html=None) %}
+<header class="page-header{% if back_url or action_html %} page-header--split{% endif %}">
+  <div class="page-header__copy">
+    <p class="page-eyebrow">{{ eyebrow }}</p>
+    <h1 class="page-title">{{ title }}</h1>
+    {% if subtitle %}<p class="page-subtitle">{{ subtitle }}</p>{% endif %}
+  </div>
+  {% if back_url or action_html %}
+  <div class="page-header__action">
+    {% if back_url %}<a href="{{ back_url }}" class="button button--ghost">Back</a>{% endif %}
+    {{ action_html or "" }}
+  </div>
+  {% endif %}
+</header>
+{% endmacro %}

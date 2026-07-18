@@ -1,0 +1,21 @@
+{# Empty state macro — the shell for every empty/first-run surface.
+   Phase 4 fills copy and diagram into this shell; Phase 2 lands the
+   primitive so the pattern exists before any page needs it.
+   Usage:
+     {% from "macros/empty_state.html" import empty_state %}
+     {{ empty_state(icon="icons/bot.svg", title="No agents yet", body="Create an agent that owns support replies.", primary_label="Create agent", primary_url="/deployments/new") }}
+   The icon is optional. When primary_label/primary_url are omitted the
+   CTA slot is empty (some empty states are informational only). #}
+{% macro empty_state(title, body="", icon=None, primary_label=None, primary_url=None, hint=None) %}
+<div class="card empty-state empty-state--hero">
+  {% if icon %}<div class="empty-state__icon">{% if icon %}{% include icon %}{% endif %}</div>{% endif %}
+  <h2 class="page-title">{{ title }}</h2>
+  {% if body %}<p class="page-subtitle">{{ body }}</p>{% endif %}
+  {% if hint %}<p class="field__help empty-state__hint">{{ hint }}</p>{% endif %}
+  {% if primary_label and primary_url %}
+  <div class="cluster">
+    <a href="{{ primary_url }}" class="button button--primary">{{ primary_label }}</a>
+  </div>
+  {% endif %}
+</div>
+{% endmacro %}

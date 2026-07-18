@@ -41,18 +41,25 @@ from kai.agent.tools.escalate import (
 )
 
 
-# Reset module state before each test
+# Reset module state before each test (setup, not just teardown) so a
+# file-based store left by another test file in the same xdist worker
+# (e.g. cockpit tests calling create_app() → set_escalation_store(path))
+# doesn't leak stale escalations into these tests.
 @pytest.fixture(autouse=True)
 def _reset_state():
-    try:
-        yield
-    finally:
-        _DYN.on_escalation = None
-        _DYN.blacklist = None
-        _DYN.tool_context = None
-        _DYN.cockpit_url = ""
-        _DYN.cockpit_escalation_secret = ""
-        _DYN.store = EscalationStore(None)
+    _reset_dyn_state()
+    yield
+    _reset_dyn_state()
+
+
+def _reset_dyn_state() -> None:
+    """Reset all module-level _DYN attributes to their defaults."""
+    _DYN.on_escalation = None
+    _DYN.blacklist = None
+    _DYN.tool_context = None
+    _DYN.cockpit_url = ""
+    _DYN.cockpit_escalation_secret = ""
+    _DYN.store = EscalationStore(None)
 
 
 class TestEscalate:

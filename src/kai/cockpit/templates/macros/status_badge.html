@@ -1,0 +1,38 @@
+{# Status badge macro — maps an entity state to the fixed badge palette.
+   Usage:
+     {% from "macros/status_badge.html" import status_badge %}
+     {{ status_badge("running") }}          → <span class="badge badge--live">Running</span>
+     {{ status_badge("connected") }}        → <span class="badge badge--live">Connected</span>
+     {{ status_badge("stopped") }}          → <span class="badge badge--muted">Stopped</span>
+     {{ status_badge("failed") }}           → <span class="badge badge--danger">Failed</span>
+     {{ status_badge("reading") }}          → <span class="badge badge--warn">Reading</span>
+   See STYLEGUIDE.md "Status system" for the full mapping. Never use
+   inline badge--{{ ternary }} — route through this macro so the mapping
+   stays in one place. #}
+{% macro status_badge(state, label=None) %}
+{% set mapping = {
+  "running": ("live", "Running"),
+  "connected": ("live", "Connected"),
+  "ready": ("live", "Ready"),
+  "healthy": ("live", "Healthy"),
+  "live": ("live", "Live"),
+  "reading": ("warn", "Reading"),
+  "connecting": ("warn", "Connecting"),
+  "pending": ("warn", "Pending"),
+  "restart": ("warn", "Restart needed"),
+  "warn": ("warn", "Warning"),
+  "failed": ("danger", "Failed"),
+  "down": ("danger", "Down"),
+  "attention": ("danger", "Attention"),
+  "critical": ("danger", "Critical"),
+  "error": ("danger", "Error"),
+  "stopped": ("muted", "Stopped"),
+  "inactive": ("muted", "Inactive"),
+  "disconnected": ("muted", "Disconnected"),
+  "muted": ("muted", "—"),
+  "configured": ("ok", "Configured"),
+  "ok": ("ok", "OK")
+} %}
+{% set pair = mapping.get(state, ("muted", state)) %}
+<span class="badge badge--{{ pair[0] }}">{{ label or pair[1] }}</span>
+{% endmacro %}

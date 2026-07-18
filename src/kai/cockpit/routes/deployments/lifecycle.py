@@ -13,6 +13,7 @@ from kai.cockpit.deployments import (
     DeploymentsService,
     DeploymentStartupError,
 )
+from kai.cockpit.flash import flash
 from kai.cockpit.models import User
 from kai.cockpit.routes.deployments._shared import get_deployment
 
@@ -34,10 +35,10 @@ async def deployment_start(
     try:
         svc.start(dep)
     except ConnectionRequiredError:
-        request.session["flash"] = "Connect WhatsApp first before starting."
+        flash(request, "warn", "Connect WhatsApp first before starting.")
         return RedirectResponse("/connections", status_code=302)
     except DeploymentStartupError as exc:
-        request.session["flash"] = f"Could not start deployment: {exc}"
+        flash(request, "error", f"Could not start deployment: {exc}")
     return RedirectResponse(f"/deployments/{dep_id}", status_code=302)
 
 
@@ -104,11 +105,11 @@ async def deployment_restart(
         svc.stop(dep)
         svc.start(dep)
     except (ConnectionRequiredError, DeploymentStartupError) as exc:
-        request.session["flash"] = f"restart failed: {exc}"
+        flash(request, "error", f"restart failed: {exc}")
     except Exception as exc:
         # stop() can raise (e.g. ProcessLookupError from a recycled PID);
         # surface it rather than letting it propagate as an unhandled 500.
-        request.session["flash"] = f"restart failed: {exc}"
+        flash(request, "error", f"restart failed: {exc}")
     return RedirectResponse(f"/deployments/{dep_id}", status_code=302)
 
 
@@ -126,5 +127,5 @@ async def deployment_delete(
         return result
     svc, dep = result
     svc.delete(dep)
-    request.session["flash"] = "Deployment deleted."
+    flash(request, "success", "Deployment deleted.")
     return RedirectResponse("/console", status_code=302)

@@ -18,6 +18,7 @@ from kai.cockpit.bots import (
 )
 from kai.cockpit.db import get_db
 from kai.cockpit.deployments import ConnectionRequiredError, DeploymentsService
+from kai.cockpit.flash import flash
 from kai.cockpit.models import User
 from kai.cockpit.routes.deployments._shared import (
     WIZARD_TEMPLATES,
@@ -152,7 +153,7 @@ async def deploy_new_post(
     # already gates the start button on WhatsApp being connected (showing a
     # "connect WhatsApp" action instead), so the intermediate "ready" step
     # is redundant.
-    request.session["flash"] = "Deployment created."
+    flash(request, "success", "Deployment created.")
     return RedirectResponse(f"/deployments/{dep.id}", status_code=302)
 
 

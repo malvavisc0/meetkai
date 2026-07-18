@@ -2,7 +2,7 @@
 {% block content %}
 <div class="page stack">
   <header class="page-header">
-    <p class="page-eyebrow">Agent knowledge</p>
+    <p class="page-eyebrow">Knowledge</p>
     <h1 class="page-title">Brain</h1>
     <p class="page-subtitle">The shared sources your agents consult before answering company-specific questions.</p>
   </header>
@@ -122,7 +122,7 @@
             </div>
           </form>
 
-          <form method="post" action="/brain/ingest-url" class="source-item{% if not crawler_ok %} source-item--unavailable{% endif %}">
+          <form method="post" action="/brain/ingest-url" class="source-item field--error{% if not crawler_ok %} source-item--unavailable{% endif %}">
             <div class="source-item__copy">
               <strong>Add a website</strong>
               <span>Import public documentation or support pages into the Brain.</span>

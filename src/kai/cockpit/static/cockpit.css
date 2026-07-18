@@ -295,6 +295,16 @@
     opacity: 0.6;
   }
 
+  input:disabled,
+  textarea:disabled,
+  select:disabled {
+    cursor: not-allowed;
+    background: var(--color-surface-alt);
+    color: var(--color-subtle);
+    border-color: var(--color-border);
+    opacity: 1;
+  }
+
   table {
     border-collapse: collapse;
     width: 100%;
@@ -1921,9 +1931,26 @@
   /* --- Flash --- */
   .flash {
     padding: var(--space-sm) var(--space-lg);
+    border-bottom: 1px solid var(--color-border);
+    background: var(--color-surface-alt);
+  }
+  .flash--success {
+    background: color-mix(in srgb, var(--color-accent-600) 8%, var(--color-surface));
+    border-bottom-color: var(--color-accent-600);
+    color: var(--color-accent-700);
+  }
+  .flash--info {
+    background: var(--color-surface-alt);
+  }
+  .flash--warn {
     background: var(--color-warn-bg);
-    border-bottom: 1px solid var(--color-warn);
+    border-bottom-color: var(--color-warn);
     color: var(--color-warn);
+  }
+  .flash--error {
+    background: color-mix(in srgb, var(--color-danger) 8%, var(--color-surface));
+    border-bottom-color: var(--color-danger);
+    color: var(--color-danger);
   }
 
   /* --- Health summary row --- */
@@ -1962,6 +1989,19 @@
     gap: var(--space-sm);
   }
 
+  /* Escalation queue rows — same flex layout as health-grid__row but
+     scoped to the escalations page so the two row types don't couple. */
+  .escalation-row {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: var(--space-sm);
+  }
+
+  .escalation-row form {
+    margin-left: auto;
+  }
+
   @media (max-width: 640px) {
     .health-grid {
       grid-template-columns: 1fr;
@@ -1990,6 +2030,17 @@
     border-color: var(--color-border-strong);
     box-shadow: var(--shadow-lg);
     transform: translateY(-2px);
+  }
+
+  .deployment-card--attention {
+    border-color: var(--color-danger);
+    background: color-mix(in srgb, var(--color-danger) 4%, var(--color-surface));
+  }
+  .deployment-card--running {
+    border-color: var(--color-border-strong);
+  }
+  .deployment-card--stopped {
+    opacity: 0.85;
   }
 
   .deployment-card__main {
@@ -2217,6 +2268,38 @@
   .choice-card input[type="radio"] {
     margin-top: 0.35em;
     accent-color: var(--color-action);
+  }
+
+  /* --- Thinking spinner (action-anchored loading) --- */
+  .thinking-spinner {
+    display: inline-block;
+    width: 12px;
+    height: 12px;
+    border: 2px solid var(--color-border-strong);
+    border-top-color: var(--color-accent-600);
+    border-radius: 50%;
+    animation: thinking-spin 0.7s linear infinite;
+    vertical-align: middle;
+  }
+  @keyframes thinking-spin {
+    to { transform: rotate(360deg); }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .thinking-spinner {
+      animation: none;
+      border-top-color: var(--color-border-strong);
+    }
+  }
+
+  /* --- Field validation errors --- */
+  .field--error input,
+  .field--error textarea,
+  .field--error select {
+    border-color: var(--color-danger);
+  }
+  .field--error .field__help,
+  .field__error {
+    color: var(--color-danger);
   }
 
   .qr-panel {

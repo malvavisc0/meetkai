@@ -4,9 +4,6 @@ This is the durable single source of truth for the Operator Console UI.
 `src/kai/cockpit/static/cockpit.css` is the central styling truth; this
 document states the rules new and existing pages must follow.
 
-The one-time project record that produced this guide is
-`OPERATOR_CONSOLE_UI_CONSISTENCY_PLAN.md`.
-
 ## Architecture
 
 The Cockpit is a server-rendered Jinja UI with static CSS and small static
@@ -46,6 +43,14 @@ else, use tokens/classes.
 - Page headers consistently use `.page-eyebrow`, `.page-title`, and
   `.page-subtitle` in that order. The subtitle explains the operator outcome,
   not the implementation detail.
+- **Eyebrow vocabulary is a closed set.** Every operator-console
+  `.page-eyebrow` uses one of: `Agents` · `Agent` · `Settings` ·
+  `Knowledge` · `Channels` · `Tools` · `Readiness` · `Attention` ·
+  `Activity`. Subpages of Connections preserve the `Channel setup` /
+  `Tool setup` split (a channel is where work arrives; a tool is a
+  connected capability — see the definitions below). Pre-auth surfaces
+  (login, landing) are exempt. Eyebrows are navigation-breadcrumb-ish,
+  not mini-marketing lines; prose goes in the subtitle.
 - Card headers use `.card__eyebrow` only for a grouping label and
   `.card__title` for the actionable section name. Help text explains a control
   or its operator impact; it does not repeat the title.
@@ -92,7 +97,7 @@ else, use tokens/classes.
 
 ## Buttons
 
-Four variants, and only four:
+Five variants, and only five:
 
 1. **Primary** (`.button--primary`) — green. One per page: the page's single
    dominant commit action (Save / Create / the action the page exists to
@@ -102,7 +107,10 @@ Four variants, and only four:
    submits, and all other non-destructive actions.
 3. **Danger** (`.button--danger`) — red. Destructive actions only (Delete
    deployment, per-document Delete in Brain).
-4. **Ghost** (`.button--ghost`) — text-only, no border/fill. Used exclusively
+4. **Warn** (`.button--warn`) — amber. Used only for non-destructive
+   interruption of a running operation (e.g. **Stop** on a running agent).
+   Never for confirmation or risk-of-loss; those are Danger.
+5. **Ghost** (`.button--ghost`) — text-only, no border/fill. Used exclusively
    for low-emphasis header navigation (`Back` in `.page-header__action`).
 
 Primary-count rules:
@@ -126,7 +134,15 @@ No other button receives an icon outside this convention.
 toggles, Wake). It is never used for a standalone control like `Load more
 chats`, which is a normal-size, full-width (`--block`) secondary button.
 
-No fifth button variant is introduced without updating this table first.
+No sixth button variant is introduced without updating this table first.
+
+Dual-primary rule: when the same page renders different primary buttons in
+different view states (e.g. `Start` when stopped, `Send` when running on
+`deployment.html`), each is the single primary of *that* view state, not of
+the page. The two primaries are mutually exclusive by state — they never
+render together — so this does not violate the one-primary-per-page rule;
+it states that the "page" for primary-count purposes is one view state at a
+time. See `deployment.html:91` (`Start`) and `deployment.html:152` (`Send`).
 
 ## Forms
 
@@ -167,6 +183,12 @@ No fifth button variant is introduced without updating this table first.
   hidden (`.sr-only`) and paired with a `<label>` styled as a secondary
   `.button` that triggers the picker; the selected file name is shown as
   helper text via the `.upload-control` pattern.
+- Disabled form controls (`<input>`, `<textarea>`, `<select>`) use the
+  same shared disabled treatment as `.button:disabled`:
+  `var(--color-surface-alt)` background, `var(--color-subtle)` text,
+  `var(--color-border)` border, `cursor: not-allowed`. Do not rely on
+  browser-default disabled chrome; the affordance is too quiet next to
+  the styled button it ships beside.
 
 ## Status badges and health indicators
 
@@ -179,6 +201,54 @@ No fifth button variant is introduced without updating this table first.
   used together where relevant, never as substitutes for each other.
 - Decorative green borders on cards are not used outside genuine state
   emphasis.
+
+### Status system — one state machine, many surfaces
+
+A single state→badge mapping is reused across console, agent detail,
+connections, brain, and readiness. No ad-hoc severity→badge pairs; every
+status rendering derives from this table:
+
+| State | Badge | Optional accent |
+|---|---|---|
+| Live / ready / connected / running | `badge--live` | green edge / dot |
+| Pending / reading / connecting / restart needed | `badge--warn` | amber |
+| Failed / down / attention / critical | `badge--danger` | red |
+| Stopped / zero / inactive | `badge--muted` | gray |
+| Configured (non-runtime) | `badge--ok` | only for "setup complete," not health |
+
+Dot + badge together only when the entity has continuous health (agent,
+readiness service). Connections are badge-only when the card already
+carries status edge classes (`.status-card--*`). Escalation severity
+maps to `danger`/`warn`/`muted` — never `live`, because an unresolved
+escalation is not healthy.
+
+## Motion
+
+Default is **zero animation**. No entrance effects, simulated activity, or
+decorative motion. The product should feel modern through composition,
+typography, contrast, and clear operational state.
+
+Three animated exceptions are permitted:
+
+1. **`.status-dot--running::after`** — radar pulse ring on live dots. Used only
+   to read "actively alive" at a glance (agent status dot, readiness live row).
+   Never on secondary indicators.
+2. **`.chat-picker__spinner`** — loading spinner for async chat-picker fetch.
+   Never as a generic progress indicator.
+3. **Loading spinners that imply "thinking"** — a small spinner on a button or
+   inline next to the action that triggered the request, while the request is
+   in flight. Used for any async submit where the operator would otherwise see
+   no feedback (a save that doesn't redirect, a chat-style send without a
+   visible reply yet, etc.). The spinner is anchored to the action that
+   caused the wait — not free-floating — and disappears the moment the result
+   arrives or the page state changes. No full-screen overlays, no "AI is
+   thinking" copy, no simulated typing.
+
+Subtle hover/focus transitions on interactive controls are acceptable when used
+sparingly (button state feedback, card hover). No transforms on hover, no
+entrance animations, no staggered reveals. Loading states with a known
+duration use the thinking spinner above; loading states with unknown duration
+use concise static text or a stable progress indicator.
 
 ## Mobile behavior
 
@@ -205,17 +275,80 @@ No fifth button variant is introduced without updating this table first.
 | `.checkbox-grid` | Two-column layout for a group of equal-weight toggles |
 | `.checkbox-row--locked` | Dimmed modifier for an unentitled/disabled toggle row |
 | `.chat-picker__spinner` | Spinner for the async chat-picker loading state |
+| `.status-dot--running::after` | Radar pulse ring on live status dots — animated exception to the zero-motion default, read as "actively alive" |
 | `.source-item--stack` | Opts a `.source-item` out of the compact inline "input + button" two-column layout for items whose controls are a fuller block (a form with a reply panel, a divided sub-panel) rather than a single-line input/button pair |
 | `.sleep-panel` / `.sleep-panel__section` / `.sleep-panel__title` | Two-halves-of-one-workflow layout divided by a border (`border-left`, `border-top` on mobile) instead of two boxed subcards |
 | `.landing-*` | Pre-auth marketing landing composition: navigation, two-column hero, workflow illustration, and support-demo callout. Scoped to the landing page and built from the shared token system. |
 | `.landing-agent__brain` | Inline leading glyph (`brain.svg`) in the landing workflow card's agent sub-line, marking Brain-grounded knowledge; `aria-hidden`, text carries the meaning. |
 | `.deployment-card__summary` | Compact, right-aligned operational summary on an agent card; collapses below the card content on mobile. |
+| `.deployment-card--attention` / `--running` / `--stopped` | State modifier on `.deployment-card`. Attention gets a danger-tinted border (4% danger mix on surface). Running uses a stronger neutral border. Stopped dims the whole card to 0.85. |
 | `.readiness-summary` / `.readiness-summary__section` | Exception-led infrastructure health summary: a concise readiness state followed by divided attention and available-service sections. |
 | `.badge--ok` | Green success badge — paired with `.badge` for a non-interactive "configured" / positive-state indicator (template preview tool-availability). |
 | `.hidden` | Utility to set `display: none` (used for the template-preview container before the first AJAX fetch populates it). |
 
+### Utilities
+
+Small single-purpose helpers that don't belong to a component family.
+Each is defined once in `cockpit.css` and reused across pages:
+
+| Class | Purpose |
+|---|---|
+| `.muted` | Secondary/metadata text color (`var(--color-muted)`) |
+| `.mono` | Monospace font for IDs, ports, counts (`var(--font-mono)`) |
+| `.sr-only` | Visually hidden, screen-reader accessible |
+| `.hidden` | `display: none` |
+| `.img-constrained` | Caps an image's max width (e.g. QR codes, diagrams) |
+| `.text-center` / `.text-left` | Text alignment |
+| `.text-danger` / `.text-warn` | Inline danger/warn text color |
+| `.text-sm` | Smaller text step (`var(--text-sm)`) |
+| `.mt-2xl` / `.mb-0` / `.mb-md` | Spacing utilities (top margin 2xl, bottom margin 0, bottom margin md) — prefer layout primitives (`.stack`, card gaps) for routine stacking; these are for one-off overrides only |
+| `.card--center` | Centers a card's content (used for narrow centered cards like auth/error states) |
+| `.empty-state` / `.empty-state--hero` / `.empty-state__icon` / `.empty-state__hint` | Empty / first-run state shell. Outcome-first copy + optional icon + optional primary CTA. Phase 4 populates; the macro lives at `macros/empty_state.html`. |
+| `macros/page_header.html` | Page header macro — single source for `.page-header` / `.page-header--split` with eyebrow, title, subtitle, optional back URL. |
+| `macros/form_actions.html` | Save / Cancel (or Save / Test) footer cluster macro — primary with check icon + optional secondary. |
+| `macros/status_badge.html` | State→badge mapping macro — routes every status badge through the fixed palette so no inline `badge--{{ ternary }}` patterns drift. |
+| `macros/empty_state.html` | Empty-state shell macro — icon + title + body + optional primary CTA + optional hint. |
+| `.thinking-spinner` | Small spinning ring anchored to the action that triggered an async request. Rendered with `role="status"` and `aria-label="Loading"` (or an `aria-live="polite"` sibling) at every call site so screen readers get the same in-flight signal. Disabled under `prefers-reduced-motion` (static ring, no spin). Gone the moment the result lands. |
+| `.field--error` / `.field__error` | Validation error primitive. `.field--error` on the parent `.field` turns the control border red; the error message renders in the `.field__help` slot in `--color-danger`. Use `.field__error` for a single explicit error block above the form. The affected control gets `aria-invalid="true"` and `aria-describedby` pointing at the help text id. |
+
 New local icons: `icons/search.svg`, `icons/upload.svg`, `icons/check.svg`,
 `icons/bot.svg`, `icons/brain.svg`.
+
+## Page shells
+
+Only four page shapes are allowed. Every Operator Console screen is one of:
+
+- **Index** — `.page.stack` → `.page-header` → optional summary strip →
+  a vertical stack of `.card`s (e.g. console, connections, readiness).
+- **Detail / settings** — `.page-header--split` (copy | ghost `Back` or
+  secondary `Settings`) → stacked `.card` sections → form-actions cluster
+  (primary + `Cancel`) → optional `.card--danger` last (e.g. agent detail,
+  agent settings, connection setup).
+- **Wizard** — same shell as Detail / settings, but a single Configuration
+  `.card` plus the template picker (e.g. the new-agent wizard).
+- **Marketing / auth (exception surface)** — `.landing-*` / `auth-*`
+  primitives only; does not use the operator console shell (e.g. landing,
+  login).
+
+A new page that does not fit one of these four shapes needs a design
+decision in this styleguide before it ships, not a one-off layout.
+
+### Page / component matrix
+
+Every screen answers the same questions. A new block that can't map onto
+this matrix needs a primitive plus a styleguide row, not a one-off:
+
+| Dimension | Required shape |
+|---|---|
+| Shell | `.page.stack` → `.page-header` → cards in a vertical stack |
+| Header | `.page-eyebrow` → `.page-title` → `.page-subtitle` (outcome-oriented) |
+| Nested action | `.page-header--split` + ghost `Back` **only** for sub-routes |
+| Primary | **one** `.button--primary` commit per view state (see Dual-primary rule) |
+| Cards | `.card` + optional `.card__eyebrow` / `.card__title` |
+| Status | badge palette + optional status-dot; same words everywhere |
+| Times | `format_timestamp()` only |
+| Forms | label above, help below; narrow fields in one `.field-grid` |
+| Danger | shared danger-zone partial |
 
 ## Review guardrails
 
@@ -230,3 +363,14 @@ Before merging a Cockpit UI change, check:
   that introduces it.
 - No CSS deadcode.
 - No Javascript deadcode.
+- **Template-side checks** (not only CSS):
+  - Every class referenced in a template has either a `cockpit.css`
+    selector or an entry in the primitives table — no one-off classes.
+  - Every new page maps onto one of the four Page shells and onto every
+    row of the page/component matrix; if it can't, add the primitive and
+    the styleguide row in the same PR.
+  - No legacy button API: `class="btn "` / `btn--` must never reappear;
+    buttons use `.button` and its documented variants only.
+  - Eyebrows use the closed vocabulary; timestamps go through
+    `format_timestamp()`; status color comes from the fixed badge mapping.
+

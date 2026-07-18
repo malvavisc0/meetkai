@@ -118,14 +118,3 @@ def run_smtp_probe_with_timeout(
     except Exception as exc:
         pool.shutdown(wait=True)
         return False, str(exc), _is_transient_smtp_error(exc)
-
-
-def flash_connection_save(request, service_label: str, conn: Connection) -> None:
-    """Set the flash message for a connection save based on ``conn.status``."""
-    if conn.status == "connected":
-        request.session["flash"] = f"{service_label} connection saved and verified."
-    else:
-        request.session["flash"] = (
-            f"{service_label} connection saved but could not be verified — "
-            "use Test connection to see the error."
-        )

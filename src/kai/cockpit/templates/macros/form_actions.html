@@ -1,0 +1,15 @@
+{# Form actions macro — the Save / Cancel (or Save / Test) footer cluster.
+   Usage:
+     {% from "macros/form_actions.html" import form_actions %}
+     {{ form_actions(save_label="Save connection", save_action="/connections/calcom") }}
+     {{ form_actions(save_label="Save connection", save_action="/connections/smtp", secondary_label="Test connection", secondary_action="/connections/smtp/test") }}
+   The primary button always carries the check icon per the icon-on-primary
+   convention. The secondary button (Test / Cancel) is a plain secondary. #}
+{% macro form_actions(save_label="Save", save_action=None, secondary_label=None, secondary_action=None, secondary_type="button") %}
+<div class="cluster">
+  <button type="submit" class="button button--primary"{% if save_action %} formaction="{{ save_action }}"{% endif %}><span class="icon">{% include "icons/check.svg" %}</span> {{ save_label }}</button>
+  {% if secondary_label %}
+  <button type="submit" formaction="{{ secondary_action }}" class="{{ secondary_type }}">{{ secondary_label }}</button>
+  {% endif %}
+</div>
+{% endmacro %}

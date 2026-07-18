@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="page stack">
+  <div class="card card--center empty-state empty-state--hero">
+    <p class="page-eyebrow">Error</p>
+    {% if status == 404 %}
+      <h1 class="page-title">Page not found</h1>
+      <p class="page-subtitle">The page you're looking for doesn't exist or may have moved.</p>
+    {% elif status == 403 %}
+      <h1 class="page-title">Access denied</h1>
+      <p class="page-subtitle">You don't have permission to view this page.</p>
+    {% else %}
+      <h1 class="page-title">Something went wrong</h1>
+      <p class="page-subtitle">An unexpected error occurred. If the problem persists, contact your administrator.</p>
+    {% endif %}
+    {% if detail and status != 404 and status != 403 %}
+      <p class="field__help mono">{{ detail }}</p>
+    {% endif %}
+    <div class="cluster">
+      <a href="/console" class="button button--primary"><span class="icon">{% include "icons/bot.svg" %}</span> Back to console</a>
+    </div>
+  </div>
+</div>
+{% endblock %}

@@ -2,7 +2,7 @@
 {% block content %}
 <div class="page stack">
   <header class="page-header">
-    <p class="page-eyebrow">Operator</p>
+    <p class="page-eyebrow">Attention</p>
     <h1 class="page-title">Escalations</h1>
     <p class="page-subtitle">Conversations flagged by agents for human attention.</p>
   </header>
@@ -17,12 +17,12 @@
     <p class="card__eyebrow">Active</p>
     {% if active %}
       {% for esc in active %}
-      <div class="health-grid__row">
-        <span class="badge badge--{{ 'danger' if esc.severity in ('high', 'critical') else 'live' }}">{{ esc.severity }}</span>
+      <div class="escalation-row">
+        <span class="badge badge--{{ 'danger' if esc.severity == 'critical' else ('warn' if esc.severity == 'high' else 'muted') }}">{{ esc.severity }}</span>
         <span>{{ esc.reason }}</span>
         <span class="field__help">chat: {{ esc.chat_id or '—' }} · {{ format_timestamp(esc.created_at) }}</span>
         <form method="post" action="/escalations/{{ esc.id }}/resolve">
-          <button type="submit" class="btn btn--small">Resolve</button>
+          <button type="submit" class="button button--sm">Resolve</button>
         </form>
       </div>
       {% endfor %}
@@ -35,7 +35,7 @@
     <p class="card__eyebrow">History</p>
     {% if resolved %}
       {% for esc in resolved %}
-      <div class="health-grid__row">
+      <div class="escalation-row">
         <span class="badge">{{ esc.severity }}</span>
         <span>{{ esc.reason }}</span>
         <span class="field__help">chat: {{ esc.chat_id or '—' }} · resolved {{ format_timestamp(esc.resolved_at) }}{% if esc.resolved_by %} by {{ esc.resolved_by }}{% endif %}</span>

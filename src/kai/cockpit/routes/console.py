@@ -24,9 +24,8 @@ async def console(
     deployments = svc.list_for_user(user.id)
     deployed_types = {d.bot_type for d in deployments}
     available_types = [BOT_TYPES[bt] for bt in BOT_TYPES if bt not in deployed_types]
-
     conn_svc = ConnectionsService(db)
-    whatsapp = conn_svc.get_whatsapp(user)
+    whatsapp = await conn_svc.refresh_status_if_stale(user)
     whatsapp_connected = bool(whatsapp and whatsapp.status == "connected")
 
     # Fetch each running deployment's live status once and reuse it for both

@@ -8,8 +8,8 @@ from kai.cockpit.app import templates
 from kai.cockpit.auth import require_user
 from kai.cockpit.cli_helpers import public_url
 from kai.cockpit.connections.email import EmailConnectionsService
-from kai.cockpit.connections.probe import flash_connection_save
 from kai.cockpit.db import get_db
+from kai.cockpit.flash import flash, flash_connection_save
 from kai.cockpit.models import User
 
 router = APIRouter()
@@ -57,7 +57,7 @@ def resend_save(
         conn = svc.save(user, signing_secret=signing_secret.strip(), api_key=api_key.strip())
         flash_connection_save(request, "Email", conn)
     except Exception as exc:  # noqa: BLE001 - surfaced to the operator
-        request.session["flash"] = f"Could not save: {exc}"
+        flash(request, "error", f"Could not save: {exc}")
     return RedirectResponse("/connections/resend", status_code=302)
 
 
@@ -69,7 +69,7 @@ async def resend_delete(
 ):
     svc = EmailConnectionsService(db)
     svc.delete(user)
-    request.session["flash"] = "Email connection removed."
+    flash(request, "success", "Email connection removed.")
     return RedirectResponse("/connections/resend", status_code=302)
 
 
@@ -95,5 +95,5 @@ def resend_test(
     ok, msg = svc.test(
         user, base_url=str(request.base_url), signing_secret=signing_secret.strip() or None
     )
-    request.session["flash"] = f"Test {'succeeded' if ok else 'failed'}: {msg}"
+    flash(request, "success" if ok else "error", f"Test {'succeeded' if ok else 'failed'}: {msg}")
     return RedirectResponse("/connections/resend", status_code=302)

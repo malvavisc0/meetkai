@@ -9,10 +9,11 @@ from pathlib import Path
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
+from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.middleware.sessions import SessionMiddleware
 
-from kai.cockpit.auth import get_cockpit_secret
-from kai.cockpit.db import create_all
+from kai.cockpit.auth import get_cockpit_secret, get_current_user
+from kai.cockpit.db import SessionLocal, create_all
 from kai.cockpit.settings import get_cockpit_settings
 
 templates = Jinja2Templates(directory=Path(__file__).parent / "templates")
@@ -179,5 +180,51 @@ def create_app() -> FastAPI:
     app.include_router(health.router)
     app.include_router(smtp.router)
     app.include_router(webhooks.router)
+
+    @app.exception_handler(StarletteHTTPException)
+    async def http_exception_handler(request, exc):
+        # Pass through redirects (require_user raises HTTPException(302)).
+        if exc.status_code in (301, 302, 303, 307, 308):
+            from starlette.responses import RedirectResponse
+
+            return RedirectResponse(
+                url=exc.headers.get("Location", "/"),
+                status_code=exc.status_code,
+                headers=exc.headers,
+            )
+        # Webhook / API endpoints serve machine consumers — return JSON, not
+        # the operator-facing HTML error page.
+        accept = request.headers.get("accept", "")
+        if request.url.path.startswith("/webhook") or "text/html" not in accept:
+            from starlette.responses import JSONResponse
+
+            return JSONResponse(
+                {"detail": exc.detail},
+                status_code=exc.status_code,
+                headers=dict(exc.headers) if exc.headers else None,
+            )
+        # Only open a DB session if the user has a session cookie — anonymous
+        # 404s from bots/scanners skip the pool entirely.
+        user = None
+        db = None
+        if request.session.get("user_id") is not None:
+            db = SessionLocal()
+            request.state.db = db
+            try:
+                user = get_current_user(request, db)
+            except Exception:
+                user = None
+        # Render while the session is still open — base.html's topbar_status
+        # reads request.state.db during template evaluation.
+        try:
+            return templates.TemplateResponse(
+                request,
+                "_error.html",
+                {"user": user, "status": exc.status_code, "detail": exc.detail},
+                status_code=exc.status_code,
+            )
+        finally:
+            if db is not None:
+                db.close()
 
     return app

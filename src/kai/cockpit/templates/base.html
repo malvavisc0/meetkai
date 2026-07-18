@@ -45,7 +45,11 @@
   </nav>
   {% endblock %}
   {% if flash %}
-    <div class="flash">{{ flash }}</div>
+    {% if flash is mapping %}
+      <div class="flash flash--{{ flash.level }}">{{ flash.message }}</div>
+    {% else %}
+      <div class="flash flash--warn">{{ flash }}</div>
+    {% endif %}
   {% endif %}
   {% block content %}{% endblock %}
   <script src="/static/cockpit.js"></script>

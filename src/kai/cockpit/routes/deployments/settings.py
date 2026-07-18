@@ -32,6 +32,7 @@ from kai.cockpit.brains import BrainsService
 from kai.cockpit.connections.service import ConnectionsService
 from kai.cockpit.db import get_db
 from kai.cockpit.deployments import DeploymentsService, _tool_enabled, _tool_instruction
+from kai.cockpit.flash import flash
 from kai.cockpit.models import User
 from kai.cockpit.routes.deployments._shared import (
     SETTINGS_TEMPLATES,
@@ -75,9 +76,11 @@ def _parse_waha_settings(dep_id: int, request: Request, form_fields: dict) -> Se
         lang for lang in parse_voice_map(kokoro_voice_map) if lang not in SUPPORTED_KOKORO_LANGS
     )
     if unknown_langs:
-        request.session["flash"] = (
+        flash(
+            request,
+            "warn",
             f"Unknown Kokoro language code(s) in voice overrides: {', '.join(unknown_langs)}. "
-            f"Supported: {', '.join(SUPPORTED_KOKORO_LANGS)}."
+            f"Supported: {', '.join(SUPPORTED_KOKORO_LANGS)}.",
         )
         return RedirectResponse(f"/deployments/{dep_id}/settings", status_code=302)
 
@@ -344,10 +347,10 @@ async def deployment_settings(
     if tmpl:
         resolution = resolve_tools(tmpl, tool_overrides["enable"], tool_overrides["disable"])
         if resolution.rejected_disable:
-            request.session["flash"] = f"Cannot disable: {resolution.rejected_disable[0]}"
+            flash(request, "warn", f"Cannot disable: {resolution.rejected_disable[0]}")
             return RedirectResponse(f"/deployments/{dep_id}/settings", status_code=302)
         if resolution.rejected_unknown:
-            request.session["flash"] = f"Unknown tool: {resolution.rejected_unknown[0]}"
+            flash(request, "warn", f"Unknown tool: {resolution.rejected_unknown[0]}")
             return RedirectResponse(f"/deployments/{dep_id}/settings", status_code=302)
 
     voice = ""
@@ -372,11 +375,11 @@ async def deployment_settings(
             tool_overrides=tool_overrides,
         )
     except ValueError as exc:
-        request.session["flash"] = str(exc)
+        flash(request, "warn", str(exc))
         return RedirectResponse(f"/deployments/{dep_id}/settings", status_code=302)
 
     if dep.status == "running":
-        request.session["flash"] = "Settings saved. Restart to apply."
+        flash(request, "info", "Settings saved. Restart to apply.")
     else:
-        request.session["flash"] = "Settings saved."
+        flash(request, "success", "Settings saved.")
     return RedirectResponse(f"/deployments/{dep_id}/settings", status_code=302)

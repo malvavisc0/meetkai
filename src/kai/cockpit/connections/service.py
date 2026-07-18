@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from datetime import UTC, datetime
 
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
@@ -20,6 +21,14 @@ logger = logging.getLogger(__name__)
 # otherwise a broken session or auth error spins the loop for all 60 iters
 # silently. A handful of transient blips are still tolerated.
 _MAX_CONSECUTIVE_FAILURES = 5
+
+# How long to trust a cached WhatsApp status before re-probing WAHA. Phone-side
+# disconnects (user unlinks the device, kills the app, loses signal) are not
+# pushed to us, so without re-probing the UI shows stale "connected" until a
+# manual refresh. 15s balances freshness against not hammering WAHA on every
+# page load. The "connecting" state always re-probes (shorter is fine there
+# because the QR-scan window is short-lived).
+_STATUS_STALE_SECONDS = 15
 
 
 class ConnectionsService:
@@ -247,6 +256,59 @@ class ConnectionsService:
 
         conn.updated_at = now_iso()
         self.db.commit()
+        return conn
+
+    async def refresh_status_if_stale(self, user: User) -> Connection | None:
+        """Re-probe WAHA when the cached status is older than the staleness
+        threshold, so phone-side disconnects surface without a manual refresh.
+
+        Always re-probes when ``connecting`` (short-lived QR-scan window);
+        only re-probes ``connected`` when the cache is stale. ``disconnected``
+        and missing connections are returned as-is. Returns the (possibly
+        updated) Connection, or None if the user has no WhatsApp connection.
+
+        WAHA failures are swallowed (logged) so a page load never 500s just
+        because WAHA is briefly unreachable — the cached status is shown
+        until the next successful probe.
+        """
+        conn = self.get_whatsapp(user)
+        if not conn or conn.status == "disconnected":
+            return conn
+
+        # "connecting" always re-probes — the QR-scan window is short and the
+        # user is actively waiting for the flip to "connected".
+        if conn.status == "connecting":
+            try:
+                return await self.refresh_status(user)
+            except Exception:
+                logger.warning(
+                    "refresh_status_if_stale: WAHA probe failed for %s; "
+                    "showing cached status %s",
+                    conn.config.get("waha_session"),
+                    conn.status,
+                    exc_info=True,
+                )
+                return conn
+
+        # "connected" only re-probes when stale, to avoid hammering WAHA on
+        # every page load while the user browses the console.
+        if conn.status == "connected":
+            try:
+                last = datetime.fromisoformat(conn.updated_at)
+            except (ValueError, TypeError):
+                last = datetime.fromtimestamp(0, tz=UTC)
+            age = (datetime.now(UTC) - last).total_seconds()
+            if age >= _STATUS_STALE_SECONDS:
+                try:
+                    return await self.refresh_status(user)
+                except Exception:
+                    logger.warning(
+                        "refresh_status_if_stale: WAHA probe failed for %s; "
+                        "showing cached status %s",
+                        conn.config.get("waha_session"),
+                        conn.status,
+                        exc_info=True,
+                    )
         return conn
 
     async def disconnect_whatsapp(self, user: User) -> None:

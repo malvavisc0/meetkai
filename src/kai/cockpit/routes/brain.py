@@ -10,6 +10,7 @@ from kai.cockpit.app import templates
 from kai.cockpit.auth import require_user
 from kai.cockpit.brains import BrainsService
 from kai.cockpit.db import get_db
+from kai.cockpit.flash import flash
 from kai.cockpit.models import User
 from kai.cockpit.service_health import check_crawler_health
 
@@ -62,9 +63,9 @@ async def brains_create(
     svc = BrainsService(db)
     try:
         svc.create_brain(user)
-        request.session["flash"] = "Brain created."
+        flash(request, "success", "Brain created.")
     except Exception as exc:
-        request.session["flash"] = f"Could not create Brain: {exc}"
+        flash(request, "error", f"Could not create Brain: {exc}")
     return RedirectResponse("/brain", status_code=302)
 
 
@@ -81,11 +82,11 @@ async def brains_update_instruction(
         # update_instruction flags running deployments needs_restart=True;
         # tell the operator so they know to restart for the change to take
         # effect on the live bot.
-        request.session["flash"] = "Brain instructions saved. Restart your bots to apply."
+        flash(request, "info", "Brain instructions saved. Restart your bots to apply.")
     except ValueError as exc:
-        request.session["flash"] = str(exc)
+        flash(request, "warn", str(exc))
     except Exception as exc:
-        request.session["flash"] = f"Could not save instructions: {exc}"
+        flash(request, "error", f"Could not save instructions: {exc}")
     return RedirectResponse("/brain", status_code=302)
 
 
@@ -101,11 +102,11 @@ async def brains_upload(
         if not file.filename:
             raise ValueError("No file selected.")
         await svc.ingest_file(user, filename=file.filename, file=file.file)
-        request.session["flash"] = f"Uploaded {file.filename}. kAI is adding it to the Brain."
+        flash(request, "info", f"Uploaded {file.filename}. kAI is adding it to the Brain.")
     except ValueError as exc:
-        request.session["flash"] = str(exc)
+        flash(request, "warn", str(exc))
     except Exception as exc:
-        request.session["flash"] = f"Upload failed: {exc}"
+        flash(request, "error", f"Upload failed: {exc}")
     return RedirectResponse("/brain", status_code=302)
 
 
@@ -128,11 +129,11 @@ async def brains_ingest_url(
                 "Check the Crawler container and try again."
             )
         result = await svc.ingest_url(user, url=url)
-        request.session["flash"] = f"Added {url}. kAI is saving it to the Brain. ({result.message})"
+        flash(request, "info", f"Added {url}. kAI is saving it to the Brain. ({result.message})")
     except ValueError as exc:
-        request.session["flash"] = str(exc)
+        flash(request, "warn", str(exc))
     except Exception as exc:
-        request.session["flash"] = f"Could not add website: {exc}"
+        flash(request, "error", f"Could not add website: {exc}")
     return RedirectResponse("/brain", status_code=302)
 
 
@@ -153,11 +154,11 @@ async def brains_ingest_text(
         if not text:
             raise ValueError("Text is required.")
         await svc.ingest_text(user, name=name, text=text)
-        request.session["flash"] = f"Added {name}. kAI is saving it to the Brain."
+        flash(request, "info", f"Added {name}. kAI is saving it to the Brain.")
     except ValueError as exc:
-        request.session["flash"] = str(exc)
+        flash(request, "warn", str(exc))
     except Exception as exc:
-        request.session["flash"] = f"Could not add text: {exc}"
+        flash(request, "error", f"Could not add text: {exc}")
     return RedirectResponse("/brain", status_code=302)
 
 
@@ -171,9 +172,9 @@ async def brains_delete_document(
     svc = BrainsService(db)
     try:
         await svc.delete_doc(user, doc_id=doc_id)
-        request.session["flash"] = "Document deleted."
+        flash(request, "success", "Document deleted.")
     except ValueError as exc:
-        request.session["flash"] = str(exc)
+        flash(request, "warn", str(exc))
     except Exception as exc:
-        request.session["flash"] = f"Could not delete document: {exc}"
+        flash(request, "error", f"Could not delete document: {exc}")
     return RedirectResponse("/brain", status_code=302)

@@ -7,8 +7,8 @@ from sqlalchemy.orm import Session
 from kai.cockpit.app import templates
 from kai.cockpit.auth import require_user
 from kai.cockpit.connections.database import DatabaseConnectionsService
-from kai.cockpit.connections.probe import flash_connection_save
 from kai.cockpit.db import get_db
+from kai.cockpit.flash import flash, flash_connection_save
 from kai.cockpit.models import User
 
 router = APIRouter()
@@ -49,7 +49,7 @@ def db_save(
         conn = svc.save(user, label=label.strip(), url=url.strip())
         flash_connection_save(request, "Database", conn)
     except Exception as exc:  # noqa: BLE001 - surfaced to the operator
-        request.session["flash"] = f"Could not save: {exc}"
+        flash(request, "error", f"Could not save: {exc}")
     return RedirectResponse("/connections/database", status_code=302)
 
 
@@ -61,7 +61,7 @@ async def db_delete(
 ):
     svc = DatabaseConnectionsService(db)
     svc.delete(user)
-    request.session["flash"] = "Database connection removed."
+    flash(request, "success", "Database connection removed.")
     return RedirectResponse("/connections/database", status_code=302)
 
 
@@ -85,5 +85,5 @@ def db_test(
     """
     svc = DatabaseConnectionsService(db)
     ok, msg = svc.test(user, url=url.strip() or None)
-    request.session["flash"] = f"Test {'succeeded' if ok else 'failed'}: {msg}"
+    flash(request, "success" if ok else "error", f"Test {'succeeded' if ok else 'failed'}: {msg}")
     return RedirectResponse("/connections/database", status_code=302)

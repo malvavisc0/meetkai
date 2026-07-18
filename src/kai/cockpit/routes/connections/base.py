@@ -12,6 +12,7 @@ from kai.cockpit.connections.email import EmailConnectionsService
 from kai.cockpit.connections.service import ConnectionsService
 from kai.cockpit.connections.smtp import SmtpConnectionsService
 from kai.cockpit.db import get_db
+from kai.cockpit.flash import flash
 from kai.cockpit.models import User
 
 router = APIRouter()
@@ -24,12 +25,11 @@ async def connections_page(
     db: Session = Depends(get_db),
 ):
     svc = ConnectionsService(db)
-    conn = svc.get_whatsapp(user)
-    # While showing the "connecting" state, live-poll WAHA so a successful
-    # QR scan flips to "connected" on the next page load without forcing the
-    # user to click refresh manually.
-    if conn and conn.status == "connecting":
-        conn = await svc.refresh_status(user)
+    # Re-probe WAHA when the cached status is stale, so phone-side
+    # disconnects surface without a manual refresh click. "connecting"
+    # always re-probes (QR-scan window); "connected" re-probes only when
+    # the cache is older than the staleness threshold.
+    conn = await svc.refresh_status_if_stale(user)
     qr_url = None
     if conn and conn.status == "connecting":
         qr_url = "/connections/whatsapp/qr"
@@ -73,13 +73,13 @@ async def whatsapp_connect(
         result = await svc.connect_whatsapp(user)
         status = result.get("status", "unknown")
         if status == "connected":
-            request.session["flash"] = "WhatsApp connected"
+            flash(request, "success", "WhatsApp connected")
         elif status == "scan_qr":
-            request.session["flash"] = "scan the QR code to complete connection"
+            flash(request, "info", "scan the QR code to complete connection")
         else:
-            request.session["flash"] = f"connection status: {status}"
+            flash(request, "info", f"connection status: {status}")
     except Exception as exc:
-        request.session["flash"] = f"connection failed: {exc}"
+        flash(request, "error", f"connection failed: {exc}")
     return RedirectResponse("/connections", status_code=302)
 
 
@@ -104,9 +104,9 @@ async def whatsapp_disconnect(
     svc = ConnectionsService(db)
     try:
         await svc.disconnect_whatsapp(user)
-        request.session["flash"] = "WhatsApp disconnected"
+        flash(request, "success", "WhatsApp disconnected")
     except Exception as exc:
-        request.session["flash"] = f"disconnect failed: {exc}"
+        flash(request, "error", f"disconnect failed: {exc}")
     return RedirectResponse("/connections", status_code=302)
 
 
@@ -119,7 +119,7 @@ async def whatsapp_refresh(
     svc = ConnectionsService(db)
     try:
         conn = await svc.refresh_status(user)
-        request.session["flash"] = f"status: {conn.status}"
+        flash(request, "info", f"status: {conn.status}")
     except Exception as exc:
-        request.session["flash"] = f"refresh failed: {exc}"
+        flash(request, "error", f"refresh failed: {exc}")
     return RedirectResponse("/connections", status_code=302)

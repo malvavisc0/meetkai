@@ -38,7 +38,7 @@ async def deployment_detail(
     # action shown instead) when that precondition isn't met, so the operator
     # is never offered a start that deployments.start() will refuse anyway.
     conn_svc = ConnectionsService(db)
-    whatsapp = conn_svc.get_whatsapp(user)
+    whatsapp = await conn_svc.refresh_status_if_stale(user)
     whatsapp_connected = bool(whatsapp and whatsapp.status == "connected")
 
     status_data = None

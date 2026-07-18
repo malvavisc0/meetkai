@@ -1,16 +1,9 @@
 {% extends "base.html" %}
+{% from "macros/page_header.html" import page_header %}
+{% from "macros/form_actions.html" import form_actions %}
 {% block content %}
 <div class="page stack">
-  <header class="page-header page-header--split">
-    <div class="page-header__copy">
-      <p class="page-eyebrow">Tool setup</p>
-      <h1 class="page-title">SMTP connection</h1>
-      <p class="page-subtitle">Let agents send follow-ups and resolutions from your team inbox.</p>
-    </div>
-    <div class="page-header__action">
-      <a href="/connections" class="button button--ghost">Back</a>
-    </div>
-  </header>
+  {{ page_header(eyebrow="Tool setup", title="SMTP connection", subtitle="Let agents send follow-ups and resolutions from your team inbox.", back_url="/connections") }}
 
   <form method="post" action="/connections/smtp" class="card">
     {% set c = conn.config if conn else {} %}
@@ -52,21 +45,15 @@
       </label>
       <p class="field__help">Upgrade the connection to TLS after connecting. Recommended.</p>
     </div>
-    <div class="cluster">
-      <button type="submit" class="button button--primary"><span class="icon">{% include "icons/check.svg" %}</span> Save connection</button>
-      <button type="submit" formaction="/connections/smtp/test" class="button">Test connection</button>
-    </div>
+    {{ form_actions(save_label="Save connection", secondary_label="Test connection", secondary_action="/connections/smtp/test") }}
   </form>
 
   {% if conn %}
-  <div class="card card--danger mt-2xl">
-    <h3 class="card__title text-danger">Danger zone</h3>
-    <p><strong>Delete SMTP connection</strong></p>
-    <p class="muted">Removes the SMTP credentials. Agents with email access enabled will lose the ability to send email on their next start.</p>
-    <form method="post" action="/connections/smtp/delete" data-confirm="Delete the SMTP connection?">
-      <button type="submit" class="button button--danger"><span class="icon">{% include "icons/trash-2.svg" %}</span> Delete connection</button>
-    </form>
-  </div>
+  {% set danger_title = "Delete SMTP connection" %}
+  {% set danger_impact = "Removes the SMTP credentials. Agents with email access enabled will lose the ability to send email on their next start." %}
+  {% set danger_action = "/connections/smtp/delete" %}
+  {% set danger_confirm = "Delete the SMTP connection?" %}
+  {% include "connections/_danger_zone.html" %}
   {% endif %}
 </div>
 {% endblock %}

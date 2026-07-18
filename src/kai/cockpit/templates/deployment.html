@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "macros/status_badge.html" import status_badge %}
 {% block content %}
 <div class="page stack">
   <header class="page-header page-header--split">
@@ -30,12 +31,12 @@
       <dt>Status</dt>
       <dd>
         {% if dep.status == "running" %}
-          <span class="badge badge--live">Running</span>
+          {{ status_badge("running") }}
         {% else %}
-          <span class="badge badge--muted">Stopped</span>
+          {{ status_badge("stopped") }}
         {% endif %}
         {% if attention_reason %}
-          <span class="badge badge--danger">Attention</span>
+          {{ status_badge("attention") }}
         {% endif %}
       </dd>
       {% if attention_reason %}
@@ -84,23 +85,20 @@
       <form method="post" action="/deployments/{{ dep.id }}/stop">
         <button type="submit" class="button button--warn"><span class="icon">{% include "icons/square.svg" %}</span> Stop</button>
       </form>
+    {% else %}
+      <div class="cluster">
+        {% if whatsapp_connected %}
+          <form method="post" action="/deployments/{{ dep.id }}/start">
+            <button type="submit" class="button button--primary"><span class="icon">{% include "icons/play.svg" %}</span> Start</button>
+          </form>
+        {% else %}
+          <p class="muted text-warn">Connect WhatsApp before starting this agent.</p>
+          <a href="/connections" class="button">Connect WhatsApp</a>
+        {% endif %}
+      </div>
     {% endif %}
     </div>
   </div>
-
-  {# --- Controls cluster --- #}
-  {% if dep.status != "running" %}
-    <div class="cluster">
-      {% if whatsapp_connected %}
-        <form method="post" action="/deployments/{{ dep.id }}/start">
-          <button type="submit" class="button button--primary"><span class="icon">{% include "icons/play.svg" %}</span> Start</button>
-        </form>
-      {% else %}
-        <p class="muted text-warn">Connect WhatsApp before starting this agent.</p>
-        <a href="/connections" class="button">Connect WhatsApp</a>
-      {% endif %}
-    </div>
-  {% endif %}
 
   {% if dep.status == "running" and needs_restart %}
     <div class="card cluster">

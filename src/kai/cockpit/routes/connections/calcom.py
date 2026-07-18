@@ -7,8 +7,8 @@ from sqlalchemy.orm import Session
 from kai.cockpit.app import templates
 from kai.cockpit.auth import require_user
 from kai.cockpit.connections.calcom import CalcomConnectionsService
-from kai.cockpit.connections.probe import flash_connection_save
 from kai.cockpit.db import get_db
+from kai.cockpit.flash import flash, flash_connection_save
 from kai.cockpit.models import User
 
 router = APIRouter()
@@ -49,7 +49,7 @@ def calcom_save(
         conn = svc.save(user, api_key=api_key.strip(), base_url=base_url.strip())
         flash_connection_save(request, "Cal.com", conn)
     except Exception as exc:  # noqa: BLE001 - surfaced to the operator
-        request.session["flash"] = f"Could not save: {exc}"
+        flash(request, "error", f"Could not save: {exc}")
     return RedirectResponse("/connections/calcom", status_code=302)
 
 
@@ -61,7 +61,7 @@ async def calcom_delete(
 ):
     svc = CalcomConnectionsService(db)
     svc.delete(user)
-    request.session["flash"] = "Cal.com connection removed."
+    flash(request, "success", "Cal.com connection removed.")
     return RedirectResponse("/connections/calcom", status_code=302)
 
 
@@ -85,5 +85,5 @@ def calcom_test(
     """
     svc = CalcomConnectionsService(db)
     ok, msg = svc.test(user, api_key=api_key.strip() or None, base_url=base_url.strip() or None)
-    request.session["flash"] = f"Test {'succeeded' if ok else 'failed'}: {msg}"
+    flash(request, "success" if ok else "error", f"Test {'succeeded' if ok else 'failed'}: {msg}")
     return RedirectResponse("/connections/calcom", status_code=302)

@@ -1,0 +1,14 @@
+{# Shared connection "Danger zone" card — included by connection setup templates.
+   Set these variables before including:
+     danger_title    — what gets deleted (bold)
+     danger_impact   — consequence sentence (muted)
+     danger_action   — the POST URL
+     danger_confirm  — the data-confirm string #}
+<div class="card card--danger mt-2xl">
+  <h3 class="card__title text-danger">Danger zone</h3>
+  <p><strong>{{ danger_title }}</strong></p>
+  <p class="muted">{{ danger_impact }}</p>
+  <form method="post" action="{{ danger_action }}" data-confirm="{{ danger_confirm }}">
+    <button type="submit" class="button button--danger"><span class="icon">{% include "icons/trash-2.svg" %}</span> Delete connection</button>
+  </form>
+</div>
