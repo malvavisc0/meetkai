@@ -1,6 +1,6 @@
 name: questions
 transport: email
-display_name: kAI
+display_name: kAI Questions
 description: >
   Showcase template. A bot that answers questions about the product/bot
   itself. People email in and the bot explains what kAI is, what it can do,

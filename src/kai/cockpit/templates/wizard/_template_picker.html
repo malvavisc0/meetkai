@@ -28,6 +28,7 @@
     });
   }
   sel.addEventListener("change", function() { clearTimeout(last); last = setTimeout(fetchPreview, 200); });
+  setTimeout(fetchPreview, 0);
 })();
 </script>
 {% endif %}

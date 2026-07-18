@@ -1,4 +1,4 @@
-# kAI
+# kAI Questions
 
 Showcase template. A bot that answers questions about the product/bot itself. People email in and the bot explains what kAI is, what it can do, and how to get started. Use as a demo.
 

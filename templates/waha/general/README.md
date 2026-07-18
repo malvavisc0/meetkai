@@ -1,4 +1,4 @@
-# kAI
+# kAI Persona
 
 The default kAI WhatsApp persona. Casual friend vibe with full media support, organic group participation, and TTS voice notes.
 

@@ -282,8 +282,7 @@ class ConnectionsService:
                 return await self.refresh_status(user)
             except Exception:
                 logger.warning(
-                    "refresh_status_if_stale: WAHA probe failed for %s; "
-                    "showing cached status %s",
+                    "refresh_status_if_stale: WAHA probe failed for %s; showing cached status %s",
                     conn.config.get("waha_session"),
                     conn.status,
                     exc_info=True,
