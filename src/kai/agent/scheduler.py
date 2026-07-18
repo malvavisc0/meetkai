@@ -3,20 +3,17 @@
 A :class:`TaskStore` persists one-shot tasks as JSON; a :class:`TaskScheduler`
 polls the store and executes due tasks through a transport-agnostic
 :func:`ExecuteCallback`. :func:`build_task_tools` exposes ``schedule_task`` /
-``list_tasks`` / ``cancel_task`` to the model, scoped to the current chat via
-:class:`ToolContext`.
+``list_tasks`` / ``cancel_task`` to the model, scoped to the current chat.
 
 Two behavioral guarantees:
 
-- **A task's goal must be clear.** Before persisting, an optional LLM judge
-  decides whether the goal is clear enough to act on autonomously. If not, the
-  tool refuses and the model is expected to ask the user for a clearer goal.
-
-- **Fired tasks cannot create new tasks.** When the scheduler executes a task
-  it sets a re-entrancy flag (a :class:`contextvars.ContextVar`) for the whole
-  execution; ``schedule_task`` refuses to run while that flag is set. This
-  prevents the "schedule a task that schedules a task" recursion at the tool
-  level, regardless of what the model tries to do.
+- **Goal must be clear.** Before persisting, an optional LLM judge decides
+  whether the goal is clear enough to act on autonomously; if not, the tool
+  refuses and the model is expected to ask the user for a clearer goal.
+- **Fired tasks cannot create new tasks.** The scheduler sets a re-entrancy
+  :class:`~contextvars.ContextVar` for the whole execution; ``schedule_task``
+  refuses to run while it's set, preventing "schedule a task that schedules a
+  task" recursion at the tool level regardless of what the model tries.
 """
 
 import asyncio
@@ -54,22 +51,17 @@ REPEAT_KINDS: tuple[RepeatKind, ...] = ("none", "daily", "weekly", "monthly")
 
 
 def _coerce_repeat(value: object) -> RepeatKind:
-    """Normalize a persisted ``repeat`` value to a valid RepeatKind.
-
-    Old or hand-edited stores may carry an unknown string; fall back to
-    ``"none"`` instead of letting pydantic reject the whole record.
+    """Normalize a persisted ``repeat`` value,
+    falling back to ``"none"`` for unknown values.
     """
     text = str(value) if value is not None else "none"
     return cast(RepeatKind, text) if text in REPEAT_KINDS else "none"
 
 
-# Farthest we'll ever schedule into the future. Stops the model booking
-# tasks that can never fire usefully.
 _MAX_FUTURE = timedelta(days=365 * 5)
 
-# Re-entrancy guard: set while a fired task is executing so the agent, which
-# runs inside that same asyncio context, cannot create a replacement task and
-# recurse. Read by schedule_task; set only by the scheduler's execution path.
+# Re-entrancy guard: set while a fired task executes so the agent cannot
+# create a replacement task and recurse.
 _EXECUTING_TASK = ContextVar("kai_executing_task", default=False)
 
 
@@ -104,17 +96,11 @@ def parse_when(when: str, *, tz_hint: str | None = None) -> datetime:
 class Task(BaseModel):
     """A single scheduled task.
 
-    Fires once at ``due_at`` (UTC) unless recurrence is set. At fire time the
-    scheduler calls the registered :data:`ExecuteCallback` with the task; the
-    callback is expected to act on ``goal`` (e.g. feed it back into the agent
-    and send the reply). ``chat_id`` is the conversation the task was created
-    in; ``owner_id`` records who asked for it (e.g. a WhatsApp JID).
-
-    Recurrence: ``repeat`` controls the period (daily/weekly/monthly).
-    ``interval`` is the step (every N days/weeks/months). For weekly recurrence,
-    ``weekdays`` can restrict to specific days (0=Mon..6=Sun). ``until`` and
-    ``count`` limit the recurrence. ``occurrences`` tracks how many times the
-    task has fired.
+    Fires once at ``due_at`` (UTC) unless recurrence is set. Recurrence:
+    ``repeat`` controls the period (daily/weekly/monthly). ``interval`` is the
+    step (every N days/weeks/months). For weekly recurrence, ``weekdays`` can
+    restrict to specific days (0=Mon..6=Sun). ``until`` and ``count`` limit
+    the recurrence. ``occurrences`` tracks how many times the task has fired.
     """
 
     model_config = ConfigDict(frozen=True)
@@ -200,13 +186,8 @@ def compute_next_due(task: Task) -> datetime | None:
 class TaskStore:
     """Persistent store of scheduled tasks.
 
-    Writes are atomic (temp file + replace). The on-disk format is a JSON
-    object ``{"tasks": [...]}`` so it survives restarts and is human-readable.
-
-    The lock is created lazily per event loop (see :meth:`_lock_for`) rather
-    than in ``__init__``: a store is often reused across several
-    ``asyncio.run`` calls (notably in tests), and an ``asyncio.Lock`` bound to
-    a dead loop would otherwise raise ``RuntimeError`` on the second call.
+    Writes are atomic (temp file + replace). The lock is created lazily per
+    event loop so it survives across ``asyncio.run`` calls.
     """
 
     def __init__(self, path: Path | None) -> None:
@@ -309,19 +290,10 @@ class TaskStore:
         return uuid.uuid4().hex[:12]
 
 
-# A fired task is handed to this callback. ``chat_id`` is the originating
-# conversation; ``goal`` is the clear goal the bot must act on. The callback
-# is responsible for execution (e.g. agent.chat) and delivery; the scheduler
-# stays transport-agnostic.
 ExecuteCallback = Callable[[Task], Awaitable[None]]
 
-# How far past ``due_at`` a task can be before we flag it as overdue in the
-# delivered message (e.g. fired after a restart delay). Keeps on-time tasks
-# from showing the "overdue" label just because the poll interval slipped.
 _OVERDUE_GRACE = timedelta(minutes=1)
 
-# Hard floor on goal length before the LLM judge even runs. Cheap, deterministic
-# first line of defense: a 2-word goal is never "clear".
 _MIN_GOAL_CHARS = 8
 
 
@@ -331,7 +303,7 @@ class TaskScheduler:
     ``start()`` spawns a polling task; ``stop()`` cancels it cleanly. Bots
     provide the :data:`ExecuteCallback` — the scheduler is transport-agnostic.
     A single task failing to execute is logged and swallowed so one bad run
-    doesn't kill the loop (fire-once: the task is removed regardless).
+    doesn't kill the loop.
     """
 
     def __init__(
@@ -380,13 +352,7 @@ class TaskScheduler:
             await self._execute_one(task, now=now)
 
     async def _execute_one(self, task: Task, *, now: datetime | None = None) -> None:
-        """Execute a fired task inside a recursion-guarded context.
-
-        Sets ``_EXECUTING_TASK`` so any ``schedule_task`` call made by the
-        agent during this execution is refused — the fired task cannot spawn a
-        replacement and recurse. A failure here is logged and swallowed so
-        the poll loop survives.
-        """
+        """Execute a fired task inside a recursion-guarded context."""
         now = now or utcnow()
         token = _EXECUTING_TASK.set(True)
         try:
@@ -442,8 +408,6 @@ class TaskScheduler:
         return await self._store.list_for(chat_id=chat_id, owner_id=owner_id)
 
 
-# Optional LLM-based clarity judge. Returns True only when the goal is
-# clear enough to act on autonomously. Returns True when unset.
 ClarityJudge = Callable[[str], Awaitable[bool]]
 
 

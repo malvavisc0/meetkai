@@ -48,23 +48,13 @@ def _runs_registry(bot_name: str, settings: Settings) -> RunRegistry:
 
 
 def _instance_id(bot_name: str, user: str = "") -> str:
-    """Mirror `start`'s per-user namespacing so lookups hit the same runs file.
-
-    `kai start <bot> --user <email>` registers its run under
-    `<bot>-<email>.runs.json` (see `start()` above). Any command that later
-    needs to resolve a run_id for that instance must derive the same
-    instance id from `--user`, or it will silently look at the wrong
-    (bot-only) runs file.
-    """
+    """Per-user instance id matching what `start` registers under."""
     return f"{bot_name}-{user}" if user else bot_name
 
 
 def _parse_tool_list(raw: str) -> list[str]:
-    """Parse a comma-separated ``--enable-tools`` / ``--disable-tools`` value.
-
-    Empty / whitespace-only → ``[]``. Entries are stripped and empties dropped.
-    No name validation here — ``resolve_tools`` records typos as
-    ``rejected_unknown`` and boot fails on them.
+    """Parse a comma-separated ``--enable-tools`` / ``--disable-tools``
+    value. Empty / whitespace-only -> ``[]``.
     """
     if not raw:
         return []
@@ -335,11 +325,9 @@ def _start(
         raise typer.Exit(1) from exc
 
     # Resolve the template + the final tool set. ``general`` is the default
-    # and reproduces today's behavior. The boot guards below fail fast on a
-    # template declaring a required tool whose env vars are not configured,
-    # on a template declaring transport-invalid actions, on an operator trying
-    # to disable a default/required tool, and on an operator typo in
-    # --enable-tools (phantom-enable validation).
+    # and reproduces today's behavior. Boot guards fail fast on templates
+    # declaring required tools without configured env vars, transport-invalid
+    # actions, disabled default/required tools, or typos in --enable-tools.
     from kai.templates import TemplateRegistry
     from kai.templates.resolver import resolve_tools, validate_actions
 

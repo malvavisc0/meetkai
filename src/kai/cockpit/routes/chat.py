@@ -51,8 +51,6 @@ async def chat_send(
     result_dict = svc.send_message(dep, message, persist=False)
     reply = result_dict.get("reply", "(no reply)")
     request.session["chat_reply"] = reply
-    # Show a "sent to" confirmation when the bot's own response actually
-    # confirms it dispatched the send (a ``send_reply`` action entry).
     sent_to = next(
         (
             a.get("target")

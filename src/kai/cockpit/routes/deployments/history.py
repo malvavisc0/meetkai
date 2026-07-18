@@ -44,8 +44,6 @@ async def deployment_history(
     history_raw = svc.history(dep)
     total = sum(len(msgs) for msgs in history_raw.values())
 
-    # Within each bucket messages are reversed so the latest message
-    # appears at the top — no scrolling to the bottom.
     history: dict[str, list[dict]] = {}
     for chat_id, msgs in sorted(history_raw.items(), key=_conv_sort_key, reverse=True):
         history[chat_id] = [{**m, "ts": fmt_ts(m.get("ts"))} for m in reversed(msgs)]

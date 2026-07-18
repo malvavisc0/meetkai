@@ -22,7 +22,6 @@ from kai.brain.config import BrainSettings, get_brain_settings
 
 logger = logging.getLogger(__name__)
 
-# DocStatus enum — the 7 states returned by /documents/track_status.
 DOC_STATUS_PENDING = "pending"
 DOC_STATUS_PARSING = "parsing"
 DOC_STATUS_ANALYZING = "analyzing"
@@ -42,14 +41,11 @@ DocStatus = Literal[
     "failed",
 ]
 
-# Query modes LightRAG supports (/query body).
 QueryMode = Literal["naive", "local", "global", "hybrid", "mix"]
 
 
 class DocumentRecord(BaseModel):
     """One document row from /documents/track_status or /documents/paginated."""
-
-    model_config = ConfigDict(frozen=True)
 
     id: str = ""
     track_id: str = ""
@@ -129,12 +125,9 @@ class QueryResult(BaseModel):
 class LightRagClient:
     """Async HTTP client for LightRAG v1.5.4.
 
-    Mirrors the WahaClient pattern: one ``httpx.AsyncClient`` with a base_url
-    + auth header, constructed from BrainSettings. Callers pass ``workspace``
-    per-method because it's user-scoped, not client-scoped.
-
-    Lifecycle: build once (in ``cli/bot.py`` for the agent tool, or in
-    ``BrainsService`` for the cockpit), ``await client.close()`` on shutdown.
+    Mirrors the WahaClient pattern. Callers pass ``workspace`` per-method
+    because it's user-scoped, not client-scoped. Lifecycle: build once,
+    ``await client.close()`` on shutdown.
     """
 
     def __init__(self, settings: BrainSettings | None = None) -> None:
@@ -164,8 +157,8 @@ class LightRagClient:
         """POST /documents/text — ingest raw text.
 
         ``file_source`` is required by v1.5.4 (400 without it) and
-        becomes the document's ``file_path`` (the display name).
-        Returns a track_id; poll ``track_status`` until terminal.
+        becomes the document's ``file_path``. Returns a track_id; poll
+        ``track_status`` until terminal.
         """
         resp = await self._client.post(
             "/documents/text",
@@ -204,12 +197,11 @@ class LightRagClient:
         filename: str,
         workspace: str,
     ) -> IngestResult:
-        """POST /documents/upload — multipart file upload (txt/md/pdf/docx/…).
+        """POST /documents/upload — multipart file upload.
 
         ``workspace`` goes as a query param (not in the multipart body);
-        confirmed working. The filename is passed through unchanged
-        so LightRAG's parser-routing hints (e.g. ``paper.[mineru-iteP].pdf``)
-        survive.
+        the filename is passed through unchanged so LightRAG's parser-routing
+        hints survive.
         """
         resp = await self._client.post(
             "/documents/upload",
@@ -226,10 +218,8 @@ class LightRagClient:
     async def track_status(self, *, track_id: str) -> list[DocumentRecord]:
         """GET /documents/track_status/{track_id} — poll ingest progress.
 
-        Returns the documents[] list (usually one element, but batch
-        ingest can yield several). Each record's ``status`` transitions
-        pending → parsing → analyzing → processing → preprocessed →
-        processed (or failed).
+        Returns the documents[] list (one for single ingest, several for
+        batch). Each record's ``status`` transitions pending → parsed, etc.
         """
         resp = await self._client.get(f"/documents/track_status/{track_id}")
         resp.raise_for_status()
@@ -247,9 +237,8 @@ class LightRagClient:
     ) -> list[DocumentRecord]:
         """POST /documents/paginated — list documents (NOT GET /documents).
 
-        ``workspace`` is passed in the body (it's a hidden param).
-        Returns the documents[] list; the caller can read total_count from
-        the full response if needed via ``list_docs_raw``.
+        ``workspace`` is passed in the body. Returns the documents[] list;
+        read total_count from the full response if needed via ``list_docs_raw``.
         """
         body: dict[str, Any] = {
             "page": page,
@@ -275,16 +264,13 @@ class LightRagClient:
     async def delete_doc(self, *, doc_id: str, workspace: str, delete_file: bool = True) -> str:
         """DELETE /documents/delete_document — async single-doc delete.
 
-        Body is ``{"doc_ids": [...], "delete_file": bool}`` (the array
-        supports batch delete). ``workspace`` is passed as a query param so
-        the deletion is scoped to the operator's Brain — without it a user
-        could delete a document from another workspace by guessing doc_ids.
-        Returns the status string ("deletion_started"); deletion is async,
-        poll ``list_docs`` until the doc is gone.
+        Body is ``{"doc_ids": [...], "delete_file": bool}`` (batch supported).
+        ``workspace`` is a query param to scope the deletion.
+        Returns "deletion_started"; poll ``list_docs`` until the doc is gone.
 
-        NOTE: uses ``request("DELETE", ...)`` rather than ``delete()`` because
-        httpx's ``delete()`` doesn't accept a ``json=`` kwarg (DELETE-with-body
-        is non-standard), but LightRAG's v1.5.4 endpoint requires one.
+        Uses ``request("DELETE", ...)`` rather than ``delete()`` because
+        httpx's ``delete()`` doesn't accept a ``json=`` kwarg, but LightRAG's
+        v1.5.4 endpoint requires one.
         """
         resp = await self._client.request(
             "DELETE",
@@ -298,8 +284,8 @@ class LightRagClient:
     async def clear_workspace(self, *, workspace: str) -> str:
         """DELETE /documents?workspace= — clears ALL docs in the workspace.
 
-        DANGEROUS: removes every document. Used by tests and (eventually)
-        a "reset Brain" admin action. Not exposed in the v1 UI.
+        DANGEROUS: used by tests and (eventually) a "reset Brain" admin action.
+        Not exposed in the v1 UI.
         """
         resp = await self._client.request("DELETE", "/documents", params={"workspace": workspace})
         resp.raise_for_status()
@@ -321,9 +307,8 @@ class LightRagClient:
         """POST /query — retrieve + synthesize a grounded answer.
 
         ``mode="mix"`` + ``enable_rerank=True`` is the validated default:
-        hybrid vector + keyword retrieval, then cohere rerank, then
-        LLM synthesis with references. The agent's ``brain_query`` tool calls
-        this.
+        hybrid retrieval, cohere rerank, then LLM synthesis with references.
+        Called by the agent's ``brain_query`` tool.
         """
         resp = await self._client.post(
             "/query",

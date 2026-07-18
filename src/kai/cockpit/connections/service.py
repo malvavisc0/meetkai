@@ -17,17 +17,14 @@ from kai.utils.common import now_iso, user_slug
 
 logger = logging.getLogger(__name__)
 
-# Stop polling for a QR/session once this many consecutive WAHA calls fail —
-# otherwise a broken session or auth error spins the loop for all 60 iters
-# silently. A handful of transient blips are still tolerated.
+# Stop polling for a QR/session once
+# _MAX_CONSECUTIVE_FAILURES calls fail — prevents a broken
+# session from spinning 60 iterations silently.
 _MAX_CONSECUTIVE_FAILURES = 5
 
-# How long to trust a cached WhatsApp status before re-probing WAHA. Phone-side
-# disconnects (user unlinks the device, kills the app, loses signal) are not
-# pushed to us, so without re-probing the UI shows stale "connected" until a
-# manual refresh. 15s balances freshness against not hammering WAHA on every
-# page load. The "connecting" state always re-probes (shorter is fine there
-# because the QR-scan window is short-lived).
+# Trust a cached WAHA status for this long before re-probing —
+# phone-side disconnects (user unlink, app kill, signal loss)
+# are not pushed to us.
 _STATUS_STALE_SECONDS = 15
 
 
@@ -36,14 +33,7 @@ class ConnectionsService:
         self.db = db
 
     def list_for_user(self, user: User) -> list[Connection]:
-        """Every connection row for this operator (all services).
-
-        The generic "what does this operator have?" read the catalog-driven
-        code needs — the settings UI and any future "show all connections"
-        page use this instead of a raw query in the route. Per-type helpers
-        (``get_whatsapp``, ``get_brain``, future ``get_database``) stay as
-        the bespoke read path for a single known service.
-        """
+        """Every connection row for this operator (all services)."""
         return self.db.query(Connection).filter(Connection.user_id == user.id).all()
 
     def get_whatsapp(self, user: User) -> Connection | None:
@@ -126,9 +116,7 @@ class ConnectionsService:
             conn.updated_at = now_iso()
             self.db.commit()
 
-            # Give WAHA a moment to transition out of STARTING before the
-            # first status probe — querying too quickly can race the session
-            # into a half-initialized state where get_qr 422s.
+            # Give WAHA a moment to transition out of STARTING before the first probe.
             await asyncio.sleep(1)
 
             consecutive_failures = 0
@@ -197,13 +185,7 @@ class ConnectionsService:
             await client.close()
 
     async def get_qr(self, user: User) -> bytes | None:
-        """Fetch current QR code image bytes for the user's WAHA session.
-
-        If the session is STOPPED (QR expired or never started), restart it
-        first so it re-enters SCAN_QR_CODE — otherwise the QR endpoint 422s.
-        Returns None if the user has no WhatsApp connection (so the route can
-        answer 404); WAHA-side failures are logged, not silenced.
-        """
+        """Fetch QR code bytes, restarting the session if STOPPED so it re-enters SCAN_QR_CODE."""
         conn = self.get_whatsapp(user)
         if not conn or conn.status == "disconnected":
             return None
@@ -259,24 +241,13 @@ class ConnectionsService:
         return conn
 
     async def refresh_status_if_stale(self, user: User) -> Connection | None:
-        """Re-probe WAHA when the cached status is older than the staleness
-        threshold, so phone-side disconnects surface without a manual refresh.
-
-        Always re-probes when ``connecting`` (short-lived QR-scan window);
-        only re-probes ``connected`` when the cache is stale. ``disconnected``
-        and missing connections are returned as-is. Returns the (possibly
-        updated) Connection, or None if the user has no WhatsApp connection.
-
-        WAHA failures are swallowed (logged) so a page load never 500s just
-        because WAHA is briefly unreachable — the cached status is shown
-        until the next successful probe.
+        """Re-probe WAHA when cached status is stale,
+        swallowing failures so a page load never 500s.
         """
         conn = self.get_whatsapp(user)
         if not conn or conn.status == "disconnected":
             return conn
 
-        # "connecting" always re-probes — the QR-scan window is short and the
-        # user is actively waiting for the flip to "connected".
         if conn.status == "connecting":
             try:
                 return await self.refresh_status(user)
@@ -289,8 +260,6 @@ class ConnectionsService:
                 )
                 return conn
 
-        # "connected" only re-probes when stale, to avoid hammering WAHA on
-        # every page load while the user browses the console.
         if conn.status == "connected":
             try:
                 last = datetime.fromisoformat(conn.updated_at)

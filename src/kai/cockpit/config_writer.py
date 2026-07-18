@@ -33,7 +33,6 @@ def write_config(deployment: Deployment, instance_id: str) -> Path:
         media["stt_enabled"] = flags.get("stt", False)
         media["tts_enabled"] = flags.get("tts", False)
         media["video_enabled"] = flags.get("video", False)
-        # Preserve instagram_enabled and max_size_mb from existing config file.
         existing_path = CONFIGS_DIR / f"{instance_id}.json"
         if existing_path.exists():
             try:

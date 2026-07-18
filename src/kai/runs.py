@@ -1,10 +1,8 @@
 """Per-bot run registry for the operator ``tell`` surface.
 
-When a bot is launched (``kai start <bot>``) the framework generates a short
-``run_id`` and registers the running instance in ``<data>/<bot>.runs.json``.
-``kai tell`` resolves a ``run_id`` to its endpoint + HMAC key, so the CLI
-targets a specific run rather than guessing settings from ``.env`` (handles
-multiple instances, CLI-overridden ports, changed ``.env``).
+When a bot is launched the framework generates a short ``run_id`` and
+registers it in ``<data>/<bot>.runs.json``. ``kai tell`` resolves a
+``run_id`` to its endpoint + HMAC key.
 """
 
 from __future__ import annotations
@@ -77,19 +75,12 @@ class RunRegistry:
         tmp.replace(self.path)
 
     def replace(self, run_id: str, record: RunRecord) -> None:
-        """Register ``run_id`` as the *sole* run for this file, discarding all others.
+        """Register ``run_id`` as the sole run for this file, discarding all others.
 
-        Each ``<bot>-<user>.runs.json`` is meant to track exactly one live
-        instance. Old entries left behind by a killed/crashed process (e.g.
-        every subprocess dies when the cockpit container restarts) are
-        never reliably prunable by ``active()`` alone: PIDs get recycled by
-        the OS after a restart, so a dead run's stored pid can coincidentally
-        match a live, unrelated process and survive ``pid_alive()`` checks
-        forever, or worse, get killed by a `stop` call meant for the stale
-        entry. Since starting a new instance means any previous run for this
-        exact instance is no longer the one we care about (it's either
-        actually dead already, or about to be superseded), wipe the file
-        down to just the new record instead of accumulating.
+        Each ``<bot>-<user>.runs.json`` tracks exactly one live instance.
+        Old entries from killed/crashed processes are never reliably prunable:
+        PIDs get recycled by the OS, so a dead run's pid can coincidentally
+        match a live process. Wipe the file down to just the new record.
         """
         self._save({run_id: record.model_dump()})
         logger.info(

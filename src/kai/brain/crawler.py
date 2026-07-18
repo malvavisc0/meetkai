@@ -5,9 +5,8 @@ Two methods, both POST with ``Authorization: Bearer``:
 - ``crawl(url)`` → ``POST /crawl`` (returns full result incl. internal links)
 
 The whole-site BFS is **not** in this client: crawl4ai 0.9.0 rejects
-``deep_crawl_strategy`` over HTTP for security, so kai orchestrates
-the BFS in ``BrainsService.ingest_url`` using ``crawl()``'s returned links.
-This client is the thin HTTP layer the cockpit BFS loop calls.
+``deep_crawl_strategy`` over HTTP, so kai orchestrates the BFS using
+``crawl()``'s returned links.
 """
 
 from __future__ import annotations
@@ -53,10 +52,8 @@ class CrawlLinks(BaseModel):
 class MarkdownResult(BaseModel):
     """The markdown dict returned by POST /crawl.
 
-    NOTE: ``/md`` returns markdown as a *string* (handled by
-    ``extract_markdown``); ``/crawl`` returns it as a *dict* with these
-    keys. ``fit_markdown`` is empty via ``/crawl`` (the fit filter
-    only runs on the ``/md`` path), so consumers of ``crawl()`` should read
+    ``/md`` returns markdown as a *string*; ``/crawl`` returns it as a *dict*.
+    ``fit_markdown`` is empty via ``/crawl``, so consumers should read
     ``raw_markdown``.
     """
 
@@ -104,8 +101,7 @@ class Crawl4aiClient:
     """Async HTTP client for crawl4ai v0.9.0.
 
     Mirrors the LightRagClient / WahaClient pattern. The bearer token
-    (``KAI_BRAIN_CRAWL4AI_TOKEN``) is set on construction. No LLM key is
-    configured on the container — the Brain never uses ``f="llm"``.
+    (``KAI_BRAIN_CRAWL4AI_TOKEN``) is set on construction.
     """
 
     def __init__(self, settings: BrainSettings | None = None) -> None:
@@ -126,8 +122,8 @@ class Crawl4aiClient:
 
         ``strategy`` is the ``f`` filter: "fit" (content-filtered, default),
         "raw" (full page), "bm25" / "llm" (query-aware; "llm" needs an LLM
-        key on the container, which the Brain never configures). Returns the
-        markdown as a **string** (unlike ``crawl()`` which returns a dict).
+        key). Returns the markdown as a **string** (unlike ``crawl()`` which
+        returns a dict).
         """
         resp = await self._client.post(
             "/md",
@@ -146,12 +142,10 @@ class Crawl4aiClient:
 
         This is the method ``BrainsService.ingest_url`` uses for whole-site
         crawl: the returned ``links.internal`` drives the BFS loop.
-        ``exclude_external_links=True`` keeps the link list same-domain only,
-        which is what the BFS scope wants.
+        ``exclude_external_links=True`` keeps the link list same-domain only.
 
         NOTE: ``deep_crawl_strategy`` is intentionally NOT accepted here —
-        crawl4ai 0.9.0 rejects it over HTTP. Whole-site crawl is
-        kai-orchestrated, not server-side.
+        crawl4ai 0.9.0 rejects it over HTTP.
         """
         resp = await self._client.post(
             "/crawl",

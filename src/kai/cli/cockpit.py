@@ -125,9 +125,6 @@ def cockpit_user_create(
             hmac_key=secrets.token_hex(32),
             feature_flags={},
             created_at=datetime.now(UTC).isoformat(),
-            # Generated once, here, and never recomputed — reused verbatim
-            # as both the WAHA session name and the LightRAG workspace name
-            # (see cockpit/naming.py, cockpit/connections.py, cockpit/brains.py).
             kai_slug=kai_slug_for(email),
         )
         db.add(user)
@@ -203,9 +200,6 @@ def cockpit_user_disable(
         db.close()
 
 
-# Known entitlement flag names. The User.feature_flags column is a free-form
-# JSON dict, but the CLI only toggles these — keeping the surface explicit so
-# an admin can't typo a flag that nothing reads.
 _USER_FLAGS: tuple[str, ...] = ("image", "stt", "tts", "video", "sso")
 
 
@@ -335,9 +329,8 @@ def cockpit_request_approve(
             err_line(f"user '{email}' not found")
             raise typer.Exit(1)
 
-        # Mint via the shared AuthProvider seam (single mint path), not an
-        # inline copy of the token logic. This requires a pending
-        # LoginRequest to exist.
+        # Mint via the shared AuthProvider seam so a single mint path handles
+        # the token logic. Requires a pending LoginRequest to exist.
         provider = MagicLinkProvider(db)
         try:
             token = provider.initiate_login(user.id)

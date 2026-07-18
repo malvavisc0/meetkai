@@ -108,9 +108,6 @@ class Bot(BaseBot):
         self._email: EmailSettings | None = None
         self._config: BotConfig = config or BotConfig()
         self._prompt: str = ""
-        # ``general``-baseline defaults: a bare bot without ``configure()``
-        # behaves like the default template (no post-processing, no reply
-        # style). ``configure()`` overrides these from the resolved template.
         self._reply_style: str = ""
         self._post_processor = PostProcessor(PostProcessingConfig(profile="none"))
         self._server: uvicorn.Server | None = None
@@ -132,8 +129,6 @@ class Bot(BaseBot):
         self._config = self._load_config(template)
         if settings.agent_language_explicit:
             self._config = self._config.model_copy(update={"language": settings.agent_language})
-        # Template-driven reply style + post-processing. ``general`` reproduces
-        # the previous hardcoded behavior (no post-processing, empty style).
         self._reply_style = template.reply_style
         self._post_processor = PostProcessor(template.post_processing)
         self._prompt = self._load_prompt(template)
@@ -142,7 +137,6 @@ class Bot(BaseBot):
         agent.set_timezone(self._config.timezone)
         if self._has_tool("web_search"):
             agent.set_tool_workflow(WEB_WORKFLOW_INSTRUCTIONS)
-        # Bot-owned tool registration is gated on the resolved tool set.
         if self._has_tool("record_note") or self._has_tool("get_conversation_messages"):
             register_conversation_tools(agent, tool_context=self._tool_context)
         self.setup_task_scheduler(agent, settings)
@@ -154,8 +148,7 @@ class Bot(BaseBot):
 
     def _load_config(self, template: TemplateDef, config_path: Path | None = None) -> BotConfig:
         # Config merge: BotConfig defaults ← template.config ← config.json
-        # (the per-deployment file the cockpit writes). Template values are
-        # the baseline; config.json is the operator's per-deployment override.
+        # (the per-deployment file the cockpit writes).
         path = config_path or self.resolve_config_path()
         config_file_data: dict | None = None
         if path is not None and path.exists():
@@ -243,13 +236,9 @@ class Bot(BaseBot):
 
         source = event.get("source", "")
         # Drop blacklisted senders before any attachment download or agent
-        # turn — no block history is persisted, the list is re-checked from
-        # config on every inbound email. should_process_chat_message treats
-        # a bare email address the same as a non-group chat_id (no "@g.us"),
-        # so passing it as both chat_id and author with an empty whitelist
-        # reduces to a plain blacklist membership check. Email addresses are
-        # conventionally compared case-insensitively, so both sides are
-        # lowercased here.
+        # turn — the list is re-checked from config on every email (no
+        # persisted block history). Both args are the normalized sender;
+        # case-insensitive comparison catches variations like "Alice@Ex.com".
         if not should_process_chat_message(
             source.strip().lower(),
             source.strip().lower(),
@@ -445,8 +434,6 @@ class Bot(BaseBot):
         if kind == "silent":
             return TellResult(ok=True, reply="", actions=[{"tool": kind, "ok": True}])
 
-        # ``console`` and any other action: return the reply text to the
-        # operator (the agent's own words) without delivering anywhere.
         actions: list[dict] = []
         for tc in result.tool_calls:
             entry: dict = {"tool": tc.name, "ok": tc.ok}
@@ -552,10 +539,6 @@ class Bot(BaseBot):
         cockpit's ingress route), so it's trusted as a source — but the
         content is still untrusted user data (prompt-injection guard in
         ``prompt.md`` covers this).
-
-        Uses ``httpx.AsyncClient`` so the bot's event loop isn't blocked
-        during the download (other /ingest, /tell, /status requests keep
-        flowing while bytes are fetched).
         """
         try:
             async with httpx.AsyncClient(timeout=30, follow_redirects=True) as client:

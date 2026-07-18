@@ -162,9 +162,6 @@ class Bot(BaseBot):
         self._waha: WahaSettings | None = None
         self._config: BotConfig = config or BotConfig()
         self._prompt: str = ""
-        # ``general``-baseline defaults: a bare bot constructed without
-        # ``configure()`` (tests/scripts) behaves like the default template.
-        # ``configure()`` overrides these from the resolved template.
         self._base_actions: tuple[str, ...] = _FULL_ACTION_NAMES
         self._reply_style: str = REPLY_STYLE
         self._post_processor = PostProcessor(PostProcessingConfig(profile="waha_default"))
@@ -208,9 +205,6 @@ class Bot(BaseBot):
         self._config = self._load_config(template)
         if settings.agent_language_explicit:
             self._config = self._config.model_copy(update={"language": settings.agent_language})
-        # Template-driven behavior: action vocabulary, reply style,
-        # post-processing pipeline. ``general`` (the default) reproduces the
-        # previous hardcoded values exactly.
         self._base_actions = tuple(template.actions)
         self._reply_style = template.reply_style
         self._post_processor = PostProcessor(template.post_processing)
@@ -221,8 +215,6 @@ class Bot(BaseBot):
             agent.set_tool_workflow(WEB_WORKFLOW_INSTRUCTIONS)
         agent.set_tool_call_callback(self._render_tool_call)
         agent.set_timezone(self._config.timezone)
-        # Bot-owned tool registration is gated on the resolved tool set: a
-        # template that omits a tool gets it absent rather than always-on.
         if self._has_tool("get_whatsapp_history"):
             register_chat_history_tool(agent, bot=self)
         if self._has_tool("record_note") or self._has_tool("get_conversation_messages"):
@@ -236,7 +228,7 @@ class Bot(BaseBot):
             # The whisper language and the chat language are separate settings.
             # When the user passes --language explicitly, use it for STT too,
             # unless KAI_WAHA_WHISPER_LANGUAGE was set to something other than
-            # "auto" (its default) — i.e. an explicit whisper override wins.
+            # "auto".
             whisper_lang = self._waha.whisper_language
             if settings.agent_language_explicit and whisper_lang == "auto":
                 whisper_lang = resolve_whisper_language(settings.agent_language)
@@ -260,22 +252,13 @@ class Bot(BaseBot):
             # Resolve the Kokoro lang code: an explicit KAI_WAHA_KOKORO_LANG
             # wins; otherwise derive it from the bot's configured language
             # (so an English bot gets lang="en-us" without extra configuration).
-            # ``None`` means the configured language has no Kokoro v1.0 voice
-            # at all (e.g. German, Dutch, Polish) — don't coerce it to
-            # "en-us", or replies get English phonemization in whatever
-            # unrelated voice was picked for that language.
+            # ``None`` means the configured language has no Kokoro v1.0 voice —
+            # don't coerce it to "en-us" to avoid English phonemization in
+            # whatever voice was picked.
             if self._waha.kokoro_lang:
                 self._tts_lang = self._waha.kokoro_lang
             else:
                 self._tts_lang = resolve_kokoro_lang(self._config.language)
-            # Per-language voice overrides. Seeded with the operator's
-            # configured primary voice so a detected language that matches the
-            # configured one keeps the operator's chosen voice; explicit
-            # KAI_WAHA_KOKORO_VOICE_MAP entries override/extend that. Voice
-            # replies detect the reply language at synthesis time, so a bot
-            # can mix languages in the same conversation. Skipped entirely
-            # when the configured language isn't Kokoro-supported — there is
-            # no correct lang code to seed the operator's voice under.
             self._voice_map: dict[str, str] = (
                 {self._tts_lang: self._tts_voice} if self._tts_lang else {}
             )
@@ -311,9 +294,8 @@ class Bot(BaseBot):
 
     def _load_prompt(self, template: TemplateDef) -> str:
         # Resolve the template's prompt.md; fall back to the bot's bundled
-        # prompt.md when the template ships none (keeps a custom template dir
-        # that only carries template.yaml usable against the transport's
-        # default persona).
+        # prompt.md when the template ships none (a custom template dir with
+        # only template.yaml remains usable against the transport's default).
         from kai.templates import TemplateRegistry, escalation_prompt_section
 
         registry = TemplateRegistry.bundled()
@@ -763,12 +745,11 @@ class Bot(BaseBot):
 
             enriched_text = self._enrich_message_text(msg, text)
 
-            # Voice/audio notes are transcribed on EVERY message — not just turns
-            # where kAI replies — so the spoken content is captured into
-            # conversation history regardless of whether the bot responds. A
-            # background voice note with an empty body would otherwise be
-            # observed as nothing, losing what was said. Only run when STT
-            # (whisper) is available; otherwise the raw caption/body is kept.
+            # Voice/audio notes are transcribed on EVERY message so the spoken
+            # content is captured into history regardless of whether the bot
+            # responds. A background voice note with an empty body would
+            # otherwise be observed as nothing. Only run when STT is
+            # available; otherwise the raw caption/body is kept.
             if (
                 media
                 and media.type in (MediaType.VOICE, MediaType.AUDIO)
@@ -791,14 +772,9 @@ class Bot(BaseBot):
                     logger.warning("Failed to resolve voice media")
 
             # ``images``/``videos`` are collected on every inbound media message
-            # (not just reply turns): the vision bytes are attached only on a
-            # reply turn, but the enrichment tags (``[video attached]`` /
-            # ``[video audio: ...]``) and the history placeholder must land in
-            # conversation history on background/sleep turns too — mirroring how
-            # voice notes are transcribed above regardless of whether the bot
-            # replies. Without this, a sleeping/overheard video selfie would
-            # lose its spoken words entirely, since gemma-4 has no audio
-            # modality and the transcript is the only durable record of them.
+            # (not just reply turns): the enrichment tags must land in
+            # conversation history on background/sleep turns too. Without
+            # this, a sleeping/overheard video loses its spoken words.
             images: list[bytes] = []
             videos: list[bytes] = []
             if media and media.type == MediaType.VIDEO and self._config.media.video_enabled:
@@ -892,12 +868,6 @@ class Bot(BaseBot):
 
             if not summoned and not organic:
                 if enriched_text.strip():
-                    # Pass both ``videos`` and ``images`` so the history
-                    # placeholder records the attachment either way. ``videos``
-                    # holds the compressed mp4 on success; ``images`` holds the
-                    # JPEG thumbnail fallback when ffmpeg failed (so a background
-                    # turn still leaves a "1 image(s), N KB" note rather than
-                    # a bare ``[video attached]`` tag with no size).
                     await agent.observe(
                         enriched_text,
                         conversation_id=meta.chat_id,
@@ -911,12 +881,7 @@ class Bot(BaseBot):
 
             # A response is expected (summoned or organic). If the inbound
             # media matches a capability this deployment has turned off,
-            # decline with a canned reply instead of spending an LLM call on
-            # content we can't actually process (no transcript/vision bytes
-            # were ever attached above when the flag is off). The turn is
-            # still recorded via ``agent.observe`` so conversation history
-            # isn't silently missing the user's message (mirrors the
-            # not-summoned/not-organic skip path above).
+            # decline with a canned reply instead of spending an LLM call.
             unsupported_reason = self._unsupported_media_reason(media)
             if unsupported_reason:
                 if enriched_text.strip():
@@ -982,9 +947,8 @@ class Bot(BaseBot):
             extra_context = "\n\n".join(extra_context_parts) or None
 
             # DMs and hard direct addresses (mention/reply) must never ghost the
-            # user — expressed structurally by *not offering* the ``silent``
-            # action in the WahaAction vocabulary for this turn. A group
-            # name-drop is a soft summon — the model may decline.
+            # user — structurally by *not offering* the ``silent`` action for
+            # this turn. A group name-drop is a soft summon — the model may decline.
             hard_addressed = (not meta.is_group) or meta.mentions_bot or replies_to_bot
             allow_silence = meta.is_group and not hard_addressed
             output_cls = action_cls_for_turn(
@@ -1348,14 +1312,10 @@ class Bot(BaseBot):
 
         tools = self._operator_tools(persist=persist)
 
-        # Enrich the operator message the same way inbound chat messages
-        # are enriched: pre-fetch Instagram posts and YouTube
-        # transcripts and inject them as tagged context. This keeps the
+        # Enrich the operator message the same way inbound messages are
+        # enriched: pre-fetch Instagram posts and YouTube transcripts so the
         # "Instagram is pre-processing, don't fetch it yourself" contract
-        # intact for operator turns — the agent sees the post content via
-        # the ``[instagram post: ...]`` tag and IG images on the vision
-        # channel, instead of hitting Instagram (which blocks fetching)
-        # via ``get_webpage_content`` and getting a 403.
+        # is intact for operator turns.
         enriched = message
         images: list[bytes] = []
         ig = await self._enrich_instagram(message)
@@ -1370,15 +1330,9 @@ class Bot(BaseBot):
             tag = f"[youtube transcript:\n  {yt}]"
             enriched = f"{tag}\n{enriched}" if enriched else tag
 
-        # Read-target wrinkle: ``get_whatsapp_history`` reads its chat_id
-        # from ToolContext. If the instruction mentions an explicit JID, set
-        # the context to it so the agent can read that chat's history;
-        # otherwise leave it empty. Do NOT fall back to "operator" here:
-        # "operator" isn't a real WhatsApp JID (``get_whatsapp_history``
-        # errors on it regardless), and a non-empty chat_id makes
-        # ``get_conversation_messages("")`` resolve to that value instead of
-        # listing every conversation — which is exactly the recall behavior
-        # the operator needs when the instruction names no specific chat.
+        # If the instruction mentions an explicit JID, set the read target
+        # so ``get_whatsapp_history`` reads that chat; otherwise leave it empty.
+        # "operator" isn't a real WhatsApp JID and would error.
         read_target = self._extract_chat_id(message) or ""
         self.set_task_context(
             chat_id=read_target, owner_id="<operator>", tz_hint=self._config.timezone
@@ -1409,15 +1363,13 @@ class Bot(BaseBot):
                 extra_system_context=op_context,
                 images=images or None,
                 # No REPLY_STYLE on operator turns: the operator's instruction
-                # controls what to say and how long it should be. A blanket
-                # brevity constraint would truncate detailed answers (business
-                # analyses, web search recaps) the operator explicitly asked for.
+                # controls what to say and how long it should be.
                 reply_style=None,
                 # ``send_to_group``/``send_dm``/``send_voice_note`` text is
                 # addressed to the *target* chat, not the operator — don't
-                # record it as an assistant reply in the operator's own history
-                # bucket. ``_dispatch_operator_action`` records it in the target
-                # chat's history once delivery is confirmed.
+                # record it as an assistant reply in the operator's own
+                # history bucket. ``_dispatch_operator_action`` records it
+                # in the target chat's history once delivery is confirmed.
                 is_delegated_action=lambda a: (
                     a.action in ("send_to_group", "send_dm", "send_voice_note")
                 ),
@@ -1673,14 +1625,7 @@ class Bot(BaseBot):
     def _unsupported_media_reason(self, media: MediaAttachment | None) -> str | None:
         """Canned decline text when inbound *media* matches a disabled capability.
 
-        Called only on turns where a reply is already expected (summoned or
-        organic). Lets the bot decline gracefully without spending an
-        LLM/vision/STT API call on content this deployment has turned off —
-        the corresponding enrichment block earlier in ``_handle_message``
-        never attaches bytes or a tag for the media when its flag is off, so
-        without this the model would otherwise be asked to react to an
-        attachment it was never shown. Returns ``None`` when the media is
-        missing or its capability is enabled.
+        Returns ``None`` when the media is missing or its capability is enabled.
         """
         if media is None:
             return None
@@ -1709,17 +1654,13 @@ class Bot(BaseBot):
         Two independent gates, each with its own advisory:
 
         1. TTS offline: the action schema already omits ``send_voice_note``
-           when TTS is offline (see :func:`action_cls_for_turn`'s
-           ``tts_available`` gate), so this note is a *fallback* advisory for
-           the rare case the model still leans toward voice.
-        2. TTS online but the bot's own configured language has no Kokoro
-           voice at all (``self._tts_lang is None``, e.g. a German-language
-           bot — see :func:`kai.bots.waha.tts.resolve_kokoro_lang`): voice
-           notes still work for replies Kokoro can detect as one of its
-           supported languages, but not as a *fallback* for the bot's own
-           inconclusive-language replies. The model needs the supported-
-           language list to know this rather than silently attempting (and
-           failing) a voice note, or promising one it can't deliver.
+           (see :func:`action_cls_for_turn`'s ``tts_available`` gate), so this
+           is a fallback advisory for the rare case the model still leans voice.
+        2. TTS online but the bot's configured language has no Kokoro v1.0 voice
+           (``self._tts_lang is None``, e.g. German): voice notes still work for
+           replies Kokoro can detect as a supported language, but not as a
+           fallback for the bot's own inconclusive-language replies — the model
+           needs the supported-language list to know this.
 
         Returns "" only when voice notes are fully available with no caveats.
         """
@@ -1755,26 +1696,12 @@ class Bot(BaseBot):
 
         The reply's language is detected from *text* so a bot can answer in
         any language and still get a matching Kokoro voice. When the detected
-        language is not supported by Kokoro v1.0 (e.g. Cyrillic, Arabic,
-        Korean), synthesis is skipped and the caller falls back to text.
-
-        The prompt instructs the model to match the incoming message's
-        language per turn (see ``prompt.md``), so a single chat can move
-        between languages — the bot's static configured language is not
-        necessarily *this* reply's language. ``detect_kokoro_lang`` only
-        needs a fallback when the reply text itself is too short/ambiguous
-        to score any language's stopwords (e.g. "OK!", "Listo."); for those,
-        the *conversation's own* last confidently-detected language is a far
-        better guess than the deployment's static default — a short ack in
-        an otherwise-Spanish chat is far more likely to still be Spanish than
-        to have switched to the bot's configured English. The static
-        ``self._tts_lang`` is only used as the final fallback for a chat with
-        no voice history yet.
+        language is not supported, synthesis is skipped and the caller falls
+        back to text.
 
         Returns ``True`` on success. Returns ``False`` when TTS is
-        unavailable, the text exceeds ``kokoro_max_chars``, the language is
-        unsupported, or synthesis / delivery fails — the caller should fall
-        back to a text reply in that case.
+        unavailable, the text exceeds the limit, the language is
+        unsupported, or synthesis/delivery fails.
         """
         if not self._tts_available or self._waha is None or not self._waha.kokoro_enabled:
             return False
@@ -1817,25 +1744,9 @@ class Bot(BaseBot):
     def _detect_voice_lang(self, chat_id: str, clean_text: str) -> str | None:
         """Resolve the Kokoro lang code to synthesize *clean_text* in.
 
-        First checks whether *clean_text* itself confidently identifies a
-        language (script detection or a stopword match) with no fallback
-        bias at all. Only when that's inconclusive does it fall back — to
-        this chat's own last confidently-detected voice language first, then
-        to the bot's static configured language. A confident detection here
-        is remembered for the chat so the next ambiguous reply in the same
-        conversation inherits it too.
-
-        Han text without kana (kanji-only) is deliberately excluded from the
-        "no fallback bias" pass: it's genuinely ambiguous between Japanese
-        and Mandarin, and ``detect_kokoro_lang`` resolves that ambiguity
-        entirely via its ``fallback`` argument (see its Han branch and
-        ``test_kanji_only_japanese_honors_configured_lang``). Calling it with
-        ``fallback=None`` doesn't make that branch unbiased — it just forces
-        the internal default fallback to ``"en-us"``, which always loses the
-        ja/cmn tie-break to ``"cmn"``. Treating that as a "confident" result
-        would silently overwrite a chat correctly remembered as Japanese
-        (e.g. from an earlier kana-containing reply) the next time it sends
-        a kanji-only ack.
+        Tries confident detection first (script detection or stopword
+        match). When that's inconclusive, falls back to this chat's last
+        detected voice language, then the bot's static configured language.
         """
         has_kana = any(0x3040 <= ord(ch) < 0x3100 for ch in clean_text)
         has_han = any(0x4E00 <= ord(ch) < 0x9FFF for ch in clean_text)

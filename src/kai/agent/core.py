@@ -87,9 +87,9 @@ def _to_openai_message_dict(message, drop_none=False, model=None, store=False):
 
 _openai_utils.to_openai_message_dict = _to_openai_message_dict
 
-# Type of an optional callback invoked when the agent calls a tool, so callers
-# (e.g. a bot) can render tool usage live. Receives (tool_name, tool_kwargs,
-# result); the result string may be empty for in-flight calls.
+# Invoked on every tool call so a caller (e.g. a bot) can render tool usage
+# live. Receives (tool_name, tool_kwargs, result); the result string may be
+# empty for in-flight calls (before the tool returns).
 ToolCallCallback = Callable[[str, dict, str], None]
 
 _DEFAULT_SYSTEM_PROMPT = "You are a helpful assistant."
@@ -265,10 +265,9 @@ class KaiAgent:
         self._dirty: bool = False
         self._flush_task: asyncio.Task | None = None
         self._timezone: str | None = None
-        # Optional per-call temperature override (see set_temperature). When a
-        # Brain is mandatory, bot.py lowers this (greedy decoding) to steer the
-        # model toward following the MUST instruction to call brain_query. It
-        # is steering, not a guarantee.
+        # Per-call temperature override (see set_temperature). When a Brain is
+        # mandatory, bot.py lowers this to steer the model toward calling
+        # brain_query first — steering, not a guarantee.
         self._temperature: float | None = None
 
     def _resolve_history_file(self) -> Path | None:
@@ -367,12 +366,10 @@ class KaiAgent:
     def set_temperature(self, temperature: float | None) -> None:
         """Override the LLM temperature for all subsequent calls.
 
-        When ``None`` (the default), the LLM uses its built-in default
-        (0.1 for OpenAILike). Set to a lower value (e.g. 0.0) to make the
-        model more deterministic. Used when a Brain is mandatory to steer the
-        model toward following the MUST instruction to call brain_query first.
-        This raises the probability of compliance; it does not guarantee it.
-        Set back to ``None`` to restore the default.
+        When ``None`` (the default), the LLM uses its built-in default.
+        Set to a lower value (e.g. 0.0) to make the model more deterministic.
+        Used when a Brain is mandatory to steer the model toward calling
+        brain_query first.
         """
         self._temperature = temperature
 
@@ -400,18 +397,6 @@ class KaiAgent:
             is_chat_model=True,
             additional_kwargs=additional_kwargs,
             is_function_calling_model=True,
-            # Reuse the AsyncOpenAI client (and thus the shared httpx client)
-            # across calls so connection pooling/keepalive is effective.
-            reuse_client=True,
-            async_http_client=async_http_client,  # type: ignore[call-arg]
-            # ``PydanticProgramMode.LLM`` makes any ``as_structured_llm`` call
-            # (used elsewhere in the framework) route through text completion +
-            # ``PydanticOutputParser`` rather than function-calling programs.
-            # The terminal structured step in ``_run_with_tools`` no longer
-            # uses ``as_structured_llm`` — it calls ``achat`` directly with a
-            # ``PydanticOutputParser``-formatted system message and a lenient
-            # fallback parser (see ``_parse_structured_text``). This setting is
-            # kept as a safety default for any other structured-predict caller.
             pydantic_program_mode=PydanticProgramMode.LLM,
         )
 
@@ -596,10 +581,8 @@ class KaiAgent:
             return
 
         # Iterate the tail (capped to _max_history) newest-first, dropping the
-        # oldest entries that breach the char budget. Track the surviving
-        # indices so the parallel timestamps list is trimmed to match — a
-        # divergence (e.g. direct _history mutation in tests) is tolerated:
-        # an out-of-range index yields None.
+        # oldest entries that breach the char budget. Track surviving indices
+        # so the parallel timestamps list trims to match.
         tail = history[-self._max_history :] if self._max_history > 0 else history
         base = len(history) - len(tail)
         trimmed: list[ChatMessage] = []

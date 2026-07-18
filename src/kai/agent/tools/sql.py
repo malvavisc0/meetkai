@@ -1,18 +1,9 @@
 """sql_query + describe_database — read-only SQL over the operator's external database.
 
-Bot-agnostic: ``cli/bot.py:_start()`` reads ``SqlSettings`` from env vars
-(``KAI_SQL_DSN`` / ``KAI_SQL_INSTRUCTION``), and when ``sql_enabled`` is
-true, calls :func:`register_sql_tool`, which registers both tools on the
-agent AND injects a workflow-guidance block into the system prompt.
-
-The workflow instruction composes — it's appended to any existing workflow
-blocks (the waha bot's web-search workflow, the Brain's workflow) rather
-than replacing them (``agent/core.py:set_tool_workflow``).
-
-Neither tool function contains ``logger.info`` call/result logging — that
-is handled generically by ``agent/core.py:_run_with_tools`` for every
-registered tool. The DSN lives only in the ``engine`` closure and is
-never passed to any logger.
+Registered by ``cli/bot.py`` when ``sql_enabled`` is true. The DSN lives only in
+the engine closure and is never passed to a logger — call/result logging is
+handled generically by ``agent/core.py:_run_with_tools`` so no per-tool
+``logger.info`` is added here.
 """
 
 from __future__ import annotations
@@ -28,12 +19,8 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 logger = logging.getLogger(__name__)
 
-# Cells larger than this are omitted from the JSON result — the agent has
-# no tool to act on a large blob anyway, and a truncated fragment is worse
-# than nothing: it looks like real data but isn't, inviting the model to
-# draw conclusions from a partial value. A short marker with the original
-# length tells the model the column has data without the misleading partial
-# content or the context cost of a multi-KB string.
+# Oversized cells are omitted, not truncated: a truncated fragment looks like
+# real data but isn't, inviting the model to draw conclusions from a partial value.
 _MAX_INLINE_CHARS = 200
 
 
@@ -52,9 +39,8 @@ _FORBIDDEN = re.compile(
     re.IGNORECASE,
 )
 
-# Sets a 30s statement timeout on every Postgres connection at checkout,
-# so a runaway query can't hang the bot. Other dialects (SQLite, MySQL) get
-# no timeout — their drivers either don't support it or default short enough.
+# Applied as a Postgres statement timeout at connection checkout so a runaway
+# query can't hang the bot. Other dialects get no timeout — see _create_sql_engine.
 _QUERY_TIMEOUT_SECONDS = 30
 
 

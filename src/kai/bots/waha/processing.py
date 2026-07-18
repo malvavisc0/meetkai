@@ -55,14 +55,11 @@ _EMOJI_RE = re.compile(
 )
 
 
-# A replied-to message whose body is a media attachment is delivered by WAHA
-# as a long base64 blob (JPEG `/9j/...`, PNG `iVBOR...`, WebP, audio, …) with no
-# whitespace. Such a blob is useless context for the model and bloats the turn,
-# so it must never be injected into the reply-to tag. A normal text reply is
-# short and almost always contains spaces/punctuation outside the base64 charset.
+# WAHA delivers a replied-to media attachment body as a base64 blob with no
+# whitespace — useless context that must not be injected into the reply-to tag.
 _BASE64_MEDIA_RE = re.compile(r"^[A-Za-z0-9+/=\s]{200,}$")
-# Known base64 media magic prefixes (data-url / raw blob). Short-circuiting on
-# these avoids scanning a multi-MB blob end-to-end on the inbound hot path.
+# Known base64 media magic prefixes — short-circuit avoids scanning a multi-MB
+# blob end-to-end on the inbound hot path.
 _MEDIA_B64_PREFIXES = (
     "/9j/",
     "iVBOR",
@@ -153,9 +150,8 @@ def should_organically_participate(
 ) -> bool:
     """Decide whether to offer the model a chance to chime in unprompted.
 
-    Probabilistic + cooldown + streak guard so the bot doesn't dominate or
-    machine-gun a fast chat. The model may still decline by choosing the
-    ``silent`` action (declared on its ``WahaAction`` vocabulary).
+    Probabilistic gate with cooldown and streak guard so the bot doesn't dominate
+    a fast chat. The model may still decline via ``silent``.
 
     Parameters
     ----------
@@ -209,10 +205,9 @@ def should_send_voice_followup(
 ) -> bool:
     """Decide whether to follow up a text reply with a voice note.
 
-    Pure probability roll guarded by a per-chat cooldown so the bot
-    doesn't spam voice notes. The LLM rarely picks ``send_voice_note``
-    on its own, so this gives the feature a floor: a fraction of text
-    replies get an audio echo regardless of the model's preference.
+    Probabilistic roll with per-chat cooldown so the bot doesn't spam. Gives
+    the feature a floor since the LLM rarely picks ``send_voice_note`` on its
+    own — a fraction of text replies always get an audio echo.
     """
     if voice_note_rate <= 0:
         return False

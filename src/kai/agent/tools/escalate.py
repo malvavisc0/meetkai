@@ -1,13 +1,5 @@
-"""Escalation and blacklist tools — side-effecting tools that alert the
-operator and modify bot runtime state.
-
-The ``escalate`` tool persists a record and fires the bot's ``on_escalation``
-callback. The ``blacklist_contact`` tool adds a contact to the runtime
-blacklist so future messages from that contact are silently dropped.
-
-Persistence mirrors :class:`kai.agent.scheduler.TaskStore`: atomic writes,
-JSON format, lazy lock per event loop.
-"""
+"""Escalation and blacklist tools — side-effecting tools
+that alert the operator and modify bot runtime state."""
 
 from __future__ import annotations
 
@@ -166,10 +158,8 @@ class EscalationStore:
         return f"esc-{uuid.uuid4().hex[:12]}"
 
 
-# ── Shared mutable state ─────────────────────────────────────────────
 # Populated from Bot.configure(). Tools (created as closures in get_tools())
-# read these attributes at call time, so configure() writing them before the
-# first tool call is sufficient.
+# read these attributes at call time.
 class _State:
     def __init__(self) -> None:
         self.blacklist: list[str] | None = None
@@ -299,14 +289,10 @@ async def blacklist_contact(contact_id: str = "") -> str:
 
     Use for contacts that are spamming, abusive, or otherwise undesired. After
     blacklisting, the bot will silently ignore all future messages from this
-    contact for the rest of the run.
-
-    Only the current conversation's contact can be blacklisted — an explicit
-    ``contact_id`` that doesn't match the current chat is refused, so a
-    prompt-injected message can't coerce the model into blacklisting arbitrary
-    contacts (e.g. the operator). An explicit ``contact_id`` is accepted only
-    when there is no current chat (the operator /tell path) or it matches the
-    current chat.
+    contact for the rest of the run. Only the current conversation's contact
+    can be blacklisted — an explicit ``contact_id`` that doesn't match is
+    refused, so a prompt-injected message can't coerce the model into
+    blacklisting arbitrary contacts.
 
     Args:
         contact_id: The chat ID / sender ID to blacklist. Leave empty to
@@ -350,8 +336,6 @@ async def blacklist_contact(contact_id: str = "") -> str:
 
 
 # ── Inspection helpers ───────────────────────────────────────────────
-# Thin async wrappers over the current store — kept as module-level functions
-# so callers (cockpit routes, tests) don't need to reach into _DYN directly.
 
 
 async def list_escalations() -> list[Escalation]:

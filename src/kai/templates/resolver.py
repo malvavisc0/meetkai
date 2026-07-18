@@ -15,12 +15,9 @@ _DEFAULT_TOOL_NAMES: frozenset[str] = frozenset(
 )
 
 # Non-disableable defaults: safety tools that must stay available on every
-# deployment regardless of template or operator preference. Other default
-# tools (web_search, calculate, etc.) are disableable.
+# deployment regardless of template or operator preference.
 _NON_DISABLEABLE_DEFAULTS: frozenset[str] = frozenset({"escalate", "blacklist_contact"})
 
-# Env vars each connection-gated tool needs to be configured. A tool is
-# "configured" only when ALL listed vars are set.
 _TOOL_ENV_MAP: dict[str, list[str]] = {
     "brain_query": ["KAI_BRAIN_BASE_URL", "KAI_BRAIN_LIGHTRAG_API_KEY"],
     "sql_query": ["KAI_SQL_DSN"],
@@ -50,7 +47,7 @@ _EMAIL_VALID_ACTIONS = {
 }
 
 # Every tool name the system can ever register. Used to reject phantom
-# ``--enable-tools`` typos (e.g. ``barin_query``) at boot.
+# ``--enable-tools`` typos (e.g. ``barin_query``) at boot — see resolve_tools.
 _KNOWN_TOOL_NAMES: frozenset[str] = frozenset(
     [
         "web_search",
@@ -76,7 +73,6 @@ _KNOWN_TOOL_NAMES: frozenset[str] = frozenset(
     ]
 )
 
-# Tools owned by the template-layer toggles (not connection-gated).
 TEMPLATE_TOGGLE_TOOLS: frozenset[str] = _KNOWN_TOOL_NAMES - {
     "send_email",
     "sql_query",
@@ -122,10 +118,6 @@ def resolve_tools(
     default_tools = frozenset(_DEFAULT_TOOL_NAMES)
     template_required = frozenset(template.tools.required)
 
-    # Non-disableable: the safety defaults (escalate, blacklist_contact) plus
-    # anything the template marks required. Every other default tool
-    # (web_search, calculate, …) and every optional/template-declared tool
-    # can be shed by the operator via --disable-tools.
     cannot_disable = _NON_DISABLEABLE_DEFAULTS | template_required
 
     rejected_disable = []
@@ -138,9 +130,8 @@ def resolve_tools(
             rejected_disable.append(f"{tool} ({reason} — cannot be disabled)")
 
     # ``--enable-tools`` names must exist in the real tool registry, otherwise
-    # a typo (``barin_query``) is silently accepted and the operator believes a
-    # tool is loaded when it isn't. Default/required tools are inherently known;
-    # only the operator-supplied extras need the check.
+    # a typo (``barin_query``) is silently accepted and the operator believes
+    # a tool is loaded when it isn't.
     rejected_unknown = [t for t in operator_enable if t not in _KNOWN_TOOL_NAMES]
 
     tools: set[str] = set(default_tools)
@@ -173,8 +164,7 @@ def validate_tools(template: TemplateDef) -> list[str]:
     """Return human-readable errors for any `required` tool whose env vars
     are not configured. Empty list = all required tools are available.
 
-    Reads env vars directly (the same source the tool registrations use); a
-    `settings` object would just re-export them, so it is not taken here.
+    Reads env vars directly (the same source the tool registrations use).
     """
     missing = []
     for tool in template.tools.required:
@@ -194,9 +184,8 @@ def validate_actions(template: TemplateDef) -> list[str]:
 
 
 def tool_configured_map(template: TemplateDef) -> dict[str, bool]:
-    """Map every tool declared by ``template`` (required + optional) to whether
-    its env is currently configured. Used by the cockpit preview/warnings to
-    show which tools will actually load."""
+    """Map every tool declared by ``template`` to whether its env is
+    currently configured. Used by the cockpit preview/warnings."""
     return {t: _is_tool_configured(t) for t in {*template.tools.required, *template.tools.optional}}
 
 

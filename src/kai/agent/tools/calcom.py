@@ -1,14 +1,4 @@
-"""Cal.com tools — list event types, find slots, book, reschedule, and cancel.
-
-Bot-agnostic: ``cli/bot.py:_start()`` registers these via
-:func:`register_calcom_tool` when ``calcom_enabled`` is true. The
-``api_key`` and ``base_url`` are closed over from the deployment's env.
-
-Cal.com's v2 API pins a ``cal-api-version`` header per endpoint; each tool
-pins its own (see ``_EVENT_TYPES_VERSION``, ``_SLOTS_VERSION``,
-``_BOOKINGS_VERSION``). The workflow instruction composes alongside other
-workflow blocks (web-search, Brain's, SQL's).
-"""
+"""Cal.com tools — list event types, find slots, book, reschedule, and cancel."""
 
 from __future__ import annotations
 
@@ -22,20 +12,13 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 logger = logging.getLogger(__name__)
 
-# The default Cal.com v2 API host. Mirrors the same constant in
-# ``cockpit/calcom_connections.py`` (kept separate to avoid a cockpit↔agent
-# layering import). ``base_url`` is optional in the catalog, so when the
-# operator leaves it blank the cockpit does not inject KAI_CALCOM_BASE_URL
-# and this default takes effect.
 DEFAULT_BASE_URL = "https://api.cal.com/v2"
 
-# Per-endpoint API versions — see module docstring.
+# Per-endpoint Cal.com v2 API versions.
 _EVENT_TYPES_VERSION = "2024-06-14"
 _SLOTS_VERSION = "2024-09-04"
 _BOOKINGS_VERSION = "2026-02-25"
 
-# Request timeout for every Cal.com call. Booking/slot lookups are fast;
-# this caps a slow host rather than tuning per-endpoint.
 _TIMEOUT = 30
 
 
@@ -78,10 +61,9 @@ def _request(
     params: dict[str, Any] | None = None,
     json_body: dict[str, Any] | None = None,
 ) -> tuple[Any, str | None]:
-    """Issue a Cal.com v2 request. Returns ``(parsed_json, None)`` on
-    success or ``(None, error_message)`` on any failure (network error or a
-    4xx/5xx response). The caller wraps the error message into the tool's
-    ``"Error: ..."`` result string."""
+    """Issue a Cal.com v2 request. Returns ``(parsed_json, None)`` on success
+    or ``(None, error_message)`` on any failure.
+    """
     url = f"{(base_url or DEFAULT_BASE_URL).rstrip('/')}{path}"
     try:
         resp = httpx.request(
@@ -102,9 +84,6 @@ def _request(
         return None, f"Cal.com API returned a non-JSON response: {exc}"
 
 
-# Cap on the error body surfaced to the model — long stack traces or HTML
-# error pages bloat the context without helping the model recover, so keep
-# the detail bounded. Cal.com 4xx bodies are short JSON error messages.
 _ERROR_DETAIL_MAX = 300
 
 
@@ -113,7 +92,7 @@ def _error_detail(resp: httpx.Response) -> str:
 
     Tries to extract a human-readable message from a JSON error body (Cal.com
     uses ``{"error": {"message": ...}}`` or ``{"message": ...}``), falling
-    back to a truncated text body. Never raises — a malformed body degrades
+    back to a truncated text body. Never raises - a malformed body degrades
     to the bare status code rather than failing the tool call.
     """
     base = f"Cal.com API returned {resp.status_code}"
@@ -209,15 +188,11 @@ def make_calcom_tools(api_key: str, base_url: str) -> list[FunctionTool]:
         )
         if err is not None:
             return f"Error: {err}"
-        # Project to the fields the agent needs to identify and book an event
-        # type. The full Cal.com item carries ~50 fields (locations, metadata,
-        # recurrence rules) that bloat the result without helping booking.
-        # bookingFields is included (compacted to slug/label/required/type) so
-        # the agent knows which custom questions it must collect answers for
-        # before booking — Cal.com rejects bookings missing required fields
-        # with a 400. Only fields carrying a slug are relevant: the default
-        # name/email fields are satisfied by the attendee object, not by
-        # bookingFieldsResponses.
+        # Project to the fields the agent needs; Cal.com items carry ~50 fields.
+        # bookingFields (compacted to slug/label/required/type) included so the
+        # agent knows which custom questions to collect. Only slug-bearing
+        # fields are relevant; the default name/email fields are satisfied by
+        # the attendee object, not bookingFieldsResponses.
         items = payload.get("data", []) if isinstance(payload, dict) else []
 
         def _compact_fields(fields: list | None) -> list[dict]:
@@ -232,9 +207,7 @@ def make_calcom_tools(api_key: str, base_url: str) -> list[FunctionTool]:
                     "type": bf.get("type"),
                 }
                 # options exist only on select/multiselect/checkbox/radio
-                # fields — include them so the agent can present the valid
-                # choices to the user. Omit for text/textarea/etc. to keep
-                # the output compact.
+                # fields — include so the agent can present valid choices.
                 if "options" in bf:
                     item["options"] = bf["options"]
                 out.append(item)

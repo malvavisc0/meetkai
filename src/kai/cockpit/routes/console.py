@@ -28,12 +28,9 @@ async def console(
     whatsapp = await conn_svc.refresh_status_if_stale(user)
     whatsapp_connected = bool(whatsapp and whatsapp.status == "connected")
 
-    # Fetch each running deployment's live status once and reuse it for both
-    # the attention check and the card's task count, rather than probing the
-    # bot process twice per page load.
+    # Fetch status once per running deployment — reuse for both attention check and card task count.
     status_map = {d.id: svc.fetch_status(d) for d in deployments if d.status == "running"}
-    # Interaction counts come from the on-disk history file (no network call),
-    # so they're cheap to compute for every card, running or not.
+    # Interaction counts come from on-disk history (no network call), so cheap for every card.
     interaction_summaries = {d.id: svc.interaction_summary(d) for d in deployments}
 
     attention_reasons = {

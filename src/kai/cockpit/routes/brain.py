@@ -79,9 +79,6 @@ async def brains_update_instruction(
     svc = BrainsService(db)
     try:
         svc.update_instruction(user, instruction=instruction)
-        # update_instruction flags running deployments needs_restart=True;
-        # tell the operator so they know to restart for the change to take
-        # effect on the live bot.
         flash(request, "info", "Brain instructions saved. Restart your bots to apply.")
     except ValueError as exc:
         flash(request, "warn", str(exc))

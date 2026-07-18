@@ -46,16 +46,9 @@ async def deployment_chats_json(
     """Proxy WAHA's chat overview for the chat picker on the Settings page.
 
     Returns ``{"chats": [{id, name, avatar_initial}], "has_more": bool}``,
-    trimmed down from WAHA's ``ChatSummary``. If the user has no WhatsApp
-    connection there are genuinely no chats to list, so an empty list with
-    a 200 is returned. If the session-scoped ``chats/overview`` call fails
-    (session-level WAHA/puppeteer error, timeout, etc.) the response
-    carries an ``error`` message instead of an empty chat list — the picker
-    JS shows it and links the user to ``/connections`` rather than
-    silently rendering nothing. This is deliberately *not* pointed at
-    ``/dependencies``: that page only probes WAHA's general ``/health``
-    endpoint and can be perfectly green while this operator's specific
-    session is failing — see ``service_health.py``.
+    trimmed from WAHA's ``ChatSummary``. If the WAHA session call fails the
+    response carries an ``error`` message — the picker JS shows it and links
+    the user to ``/connections`` rather than silently rendering nothing.
     """
     svc = DeploymentsService(db)
     result = get_deployment(svc, dep_id, user)
@@ -71,7 +64,7 @@ async def deployment_chats_json(
         client = WahaClient(settings)
         try:
             # Over-fetch by one so has_more is reliable even when WAHA's
-            # merge=true collapses @lid/@c.us pairs below the requested limit.
+            # merge=true collapses @lid/@c.us pairs below the limit.
             raw = await client.get_chats_overview(limit=limit + 1, offset=offset)
         finally:
             await client.close()

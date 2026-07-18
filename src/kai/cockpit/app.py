@@ -66,21 +66,18 @@ _MEDIA_SERVICES: list = []  # module-level so the shutdown handler can reach it
 
 
 def _reconcile_deployments_in_background() -> None:
-    # Bot subprocesses are children of this process (see
-    # DeploymentsService.start()), so a container restart/recreation kills
-    # all of them even though each deployment's `desired_state` is still
-    # "running" in the DB. Restart those in a background thread so a
-    # slow/failing bot start doesn't delay uvicorn from binding and
-    # serving the rest of the app.
+    # Bot subprocesses are children of this process, so a container restart
+    # kills all of them even though each deployment's `desired_state` is
+    # still "running" in the DB. Restart in a background thread so a
+    # slow/failing bot start doesn't delay uvicorn from binding.
     from kai.cockpit.db import SessionLocal
     from kai.cockpit.deployments import reconcile_deployments
     from kai.cockpit.media_services import MediaServiceManager
     from kai.cockpit.tokens import cleanup_expired_tokens
     from kai.vendors.manager import get_vendor_manager
 
-    # Start shared media services BEFORE reconcile.  start_all() blocks
-    # until every enabled service is healthy and sets MEDIA_READY, so
-    # reconcile only spawns bots once STT/TTS are up.
+    # Start shared media services BEFORE reconcile so reconcile only
+    # spawns bots once STT/TTS are up.
     try:
         from kai.bots.waha.config import get_waha_settings
 
@@ -106,11 +103,10 @@ def _reconcile_deployments_in_background() -> None:
 
 @asynccontextmanager
 async def _lifespan(app: FastAPI):
-    # Skipped under pytest: tests bind an isolated in-memory SQLite engine
-    # via a StaticPool (single shared connection) *after* create_app() has
-    # already run, and a background thread racing that connection against
-    # the test's own session corrupts SQLAlchemy's identity map. Production
-    # runs (KAI_COCKPIT_TESTING unset) always reconcile on startup.
+    # Skipped under pytest: tests use an in-memory SQLite StaticPool (single
+    # shared connection) and a background thread racing that connection
+    # against the test's own session corrupts SQLAlchemy's identity map.
+    # Production runs always reconcile on startup.
     if not get_cockpit_settings().cockpit_testing:
         threading.Thread(
             target=_reconcile_deployments_in_background,
@@ -127,9 +123,8 @@ def create_app() -> FastAPI:
 
     app.add_middleware(SessionMiddleware, secret_key=get_cockpit_secret())
 
-    # Serve self-hosted CSS, icons, and fonts. The cockpit is intentionally
-    # a no-JavaScript server-rendered app — all static assets are vendored
-    # locally (no runtime third-party CDN/fonts request).
+    # Serve self-hosted CSS, icons, and fonts. The cockpit is a no-JavaScript
+    # server-rendered app — all static assets are vendored locally.
     app.mount(
         "/static",
         StaticFiles(directory=Path(__file__).parent / "static"),
@@ -139,10 +134,9 @@ def create_app() -> FastAPI:
     create_all()
 
     # Cockpit's aggregated escalation store. Bots POST to /api/escalations
-    # (via forward_to_cockpit from BaseBot.on_escalation) and this store
-    # holds them so the dashboard + sidebar badge read a single source of
-    # truth. Created here (not at module import) so per-test redirection of
-    # KAI_ESCALATIONS_PATH via the cockpit conftest is respected.
+    # and this store holds them so the dashboard + sidebar badge read a
+    # single source of truth. Created here (not at module import) so per-test
+    # redirection of KAI_ESCALATIONS_PATH is respected.
     from kai.agent.tools.escalate import EscalationStore, set_escalation_store
 
     set_escalation_store(EscalationStore(get_cockpit_settings().escalations_path))

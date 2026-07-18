@@ -126,12 +126,7 @@ def _parse_waha_settings(dep_id: int, request: Request, form_fields: dict) -> Se
 
 
 def _parse_email_settings(dep_id: int, request: Request, form_fields: dict) -> SettingsParseResult:
-    """Email-only setting: a blocklist of sender addresses to silently
-    ignore in ``ingest_event``, before any attachment download or agent
-    turn (see ``kai.bots.email.Bot.ingest_event``). Unlike waha's chat
-    whitelist/blacklist, there's no "allow only these senders" counterpart
-    — just a blocklist.
-    """
+    """Email-only settings: a blocklist of sender addresses to silently ignore."""
     updates = {
         "blacklist": [
             line.strip().lower()
@@ -166,11 +161,10 @@ async def deployment_settings_page(
     svc, dep = result
 
     bt = BOT_TYPES.get(dep.bot_type)
-    # Render every flag the bot type declares, not just the entitled ones:
-    # an unentitled flag shows up disabled + unchecked so the operator sees
-    # what's possible and knows to request access, rather than staring at an
-    # empty card. The POST handler clamps submitted values to entitlements
-    # so a crafted checkbox can't self-enable anything.
+    # Render every flag the bot type declares: an unentitled flag shows up
+    # disabled + unchecked so the operator sees what's possible. The POST
+    # handler clamps submitted values to entitlements so a crafted checkbox
+    # can't self-enable anything.
     entitlements = {k for k, v in (user.feature_flags or {}).items() if v}
     feature_flags: list[tuple[str, str, bool]] = []
     if bt:
@@ -179,9 +173,8 @@ async def deployment_settings_page(
             feature_flags.append((flag, label, flag in entitlements))
 
     # Build the optional-connection toggles from the catalog: one checkbox
-    # per supported connection that isn't required (required ones are always
-    # on, no toggle). Each is disabled when the connection doesn't exist yet
-    # — the toggle is stored intent, not an executed grant.
+    # per supported connection that isn't required. Each is disabled when
+    # the connection doesn't exist yet.
     available_conns = {c.service for c in ConnectionsService(db).list_for_user(user)}
     supported_tools: list[tuple[str, str, bool]] = []
     if bt:
@@ -224,9 +217,9 @@ async def deployment_settings_page(
         for tool_name in sorted(TEMPLATE_TOGGLE_TOOLS):
             is_optional = tool_name in tmpl.tools.optional
             is_configured = configured.get(tool_name, True)
-            # Reflect the persisted override: an explicitly-disabled optional
-            # tool stays unchecked; an explicitly-enabled extra stays checked.
-            # Otherwise default to "on" for configured optional tools.
+            # Reflect persisted overrides: explicitly-disabled stays unchecked;
+            # explicitly-enabled stays checked; otherwise default to "on" for
+            # configured optional tools.
             if tool_name in saved_disable:
                 is_on = False
             elif tool_name in saved_enable:
@@ -290,16 +283,11 @@ async def deployment_settings(
     svc, dep = result
 
     bt = BOT_TYPES.get(dep.bot_type)
-    # A deployment may only enable a feature flag the user is entitled to.
-    # The form renders only entitled flags, but a direct POST can spoof any
-    # checkbox name — so we clamp server-side: an unentitled flag forced on
-    # is silently dropped (rather than 403) to avoid leaking entitlement
-    # state to a probing attacker. An entitlement is a flag whose value is
-    # truthy in the user's feature_flags dict.
+    # Clamp submitted feature flag values to the user's entitlements — the
+    # POST can spoof any checkbox name, so we silently drop unentitled
+    # flags rather than returning 403 (avoids leaking entitlement state).
     entitlements = {k for k, v in (user.feature_flags or {}).items() if v}
-    # This form has no file inputs, so every submitted field is text; drop
-    # anything that isn't a str (e.g. UploadFile) rather than mistyping the
-    # dict as dict[str, UploadFile | str] everywhere below.
+    # This form has no file inputs, so every submitted field is text.
     form_fields = {k: v for k, v in (await request.form()).items() if isinstance(v, str)}
     feature_flags = {}
     supported_svcs: list[str] = []
@@ -332,9 +320,7 @@ async def deployment_settings(
             is_optional = tool_name in tmpl.tools.optional
             is_on = f"tool_override_{tool_name}" in form_fields
             if is_optional:
-                # An optional tool unchecked by the operator is disabled.
-                # Checked = leave it on (no entry needed — resolve_tools
-                # enables configured optional tools by default).
+                # Unchecked optional tools are disabled. Checked = leave on.
                 if not is_on:
                     tool_overrides["disable"].append(tool_name)
             elif is_on:

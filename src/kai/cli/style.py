@@ -8,9 +8,6 @@ from rich.table import Table
 console = Console()
 
 # --- CLI style tokens -------------------------------------------------------
-# A tiny, consistent visual language so every command looks the same:
-#   • borders are dropped in favor of whitespace + color + glyph prefixes
-#   • panels survive only for card-like outputs (run id) and fatal errors
 OK, WARN, ERR, ACCENT, DIM = "green", "yellow", "red", "cyan", "dim"
 GL_OK = f"[{OK}]\u2713[/{OK}]"  # ✓
 GL_ERR = f"[{ERR}]\u2717[/{ERR}]"  # ✗
@@ -20,11 +17,7 @@ GL_ARROW = f"[{DIM}]\u2192[/{DIM}]"  # →
 
 
 def soft_table(*columns: tuple[str, str], header: bool = True) -> Table:
-    """Borderless, modern table: no box, no vertical rules, just spacing.
-
-    Columns are (name, style) tuples; pass style="" for default. A single dim
-    header replaces the heavy box-drawing top border.
-    """
+    """Borderless table: no box, no vertical rules, just spacing and a dim header."""
     table = Table(box=None, show_header=header, show_edge=False, padding=(0, 2))
     table.header_style = f"bold {DIM}"
     for name, style in columns:

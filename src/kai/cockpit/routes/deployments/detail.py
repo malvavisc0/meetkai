@@ -33,10 +33,8 @@ async def deployment_detail(
         return result
     svc, dep = result
 
-    # A waha deployment cannot start until the user's WhatsApp Connection is
-    # "connected" — the start button must be hidden (and a connect-whatsapp
-    # action shown instead) when that precondition isn't met, so the operator
-    # is never offered a start that deployments.start() will refuse anyway.
+    # Hide start button for waha when WhatsApp is not connected — the operator
+    # should never see a start that deploy.start() would refuse.
     conn_svc = ConnectionsService(db)
     whatsapp = await conn_svc.refresh_status_if_stale(user)
     whatsapp_connected = bool(whatsapp and whatsapp.status == "connected")
@@ -58,16 +56,13 @@ async def deployment_detail(
             except (ValueError, TypeError):
                 pass
 
-    # Same signal the console list badges use — a running bot whose
-    # WhatsApp got disconnected out from under it looks identical to a
-    # healthy one otherwise (still "running", Stop button still shown), so
-    # an operator landing directly on this page (not via /console) would
-    # otherwise have no way to notice messages are silently failing.
+    # Same signal as console — a running bot whose WhatsApp disconnected looks
+    # identical to a healthy one otherwise, so a direct page visit wouldn't
+    # show messages silently failing.
     reason = attention_reason(dep, status_data, whatsapp_connected)
 
     flash = request.session.pop("flash", None)
-    # needs_restart is now a persisted column (survives reloads/new tabs),
-    # not a session flash — see DeploymentsService.edit()/start()/stop().
+    # needs_restart is persisted (survives reloads/new tabs).
     needs_restart = bool(dep.needs_restart) and dep.status == "running"
 
     conversation_count, message_count = svc.interaction_summary(dep)

@@ -28,16 +28,13 @@ class User(Base):
     timezone: Mapped[str] = mapped_column(String, nullable=False)
     hmac_key: Mapped[str] = mapped_column(String, nullable=False)
     # Admin-granted entitlement flags (image, video, stt, tts, sso, ...).
-    # A deployment may only enable a flag that the user is entitled to —
-    # the settings form enforces this server-side so a direct POST cannot
-    # bypass it. Defaults to empty (all off) on user creation.
+    # Defaults to empty (all off). Server-side clamped in the settings route so
+    # a crafted POST cannot self-enable an unentitled flag.
     feature_flags: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
     created_at: Mapped[str] = mapped_column(String, nullable=False)
     # Stable external-service identifier generated once at user creation
-    # (kai.cockpit.naming.kai_slug_for) and reused verbatim as both the
-    # WAHA session name and the LightRAG workspace name — never
-    # recomputed. Nullable to allow lazy backfilling of rows that predate
-    # this column (see scripts/backfill_kai_slug.py).
+    # (kai.cockpit.naming.kai_slug_for) and reused as both WAHA session
+    # name and LightRAG workspace name. Nullable for lazy backfill.
     kai_slug: Mapped[str | None] = mapped_column(String, nullable=True)
 
 
@@ -57,27 +54,23 @@ class Deployment(Base):
     voice: Mapped[str] = mapped_column(String, nullable=False)
     goal: Mapped[str] = mapped_column(String, nullable=False)
     language: Mapped[str] = mapped_column(String, nullable=False)
-    # Template selected for this deployment. ``"general"`` is the always-safe
-    # default (resolves without --template on the CLI).
+    # "general" is the always-safe default (resolves without --template on the CLI).
     template: Mapped[str] = mapped_column(String, nullable=False, default="general")
-    # Operator tool overrides from the cockpit settings form, shape:
-    # ``{"enable": [...], "disable": [...]}``. Persisted verbatim and passed to
-    # ``resolve_tools()`` at spawn.
+    # Operator tool overrides from the cockpit settings form,
+    # shape: {"enable": [...], "disable": [...]}. Persisted verbatim
+    # and passed to resolve_tools() at spawn.
     tool_overrides: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
     feature_flags: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
     settings: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
-    # Per-deployment Brain overrides, both nullable. `brain_mandatory=None`
-    # behaves the same as `False` (Brain available, not forced).
-    # `brain_instruction=None` means: use the Brain connection's own
-    # instruction text instead of a per-deployment override. Actually
-    # applied in DeploymentsService.start(), not here.
+    # Per-deployment Brain overrides. brain_mandatory=None behaves
+    # same as False; brain_instruction=None uses the Brain
+    # connection's own instruction text. Applied in
+    # DeploymentsService.start().
     brain_mandatory: Mapped[bool | None] = mapped_column(Boolean, nullable=True, default=None)
     brain_instruction: Mapped[str | None] = mapped_column(String, nullable=True, default=None)
-    # True when settings were edited while the bot was running, so the live
-    # process has stale config in memory and a restart is needed to apply
-    # the on-disk config. Set in DeploymentsService.edit() when running,
-    # cleared in start()/stop(). Persists across reloads/sessions (unlike
-    # the prior session-flash signal, which was lost on reload).
+    # True when settings were edited while the bot was running — the
+    # live process has stale config and a restart is needed. Set in
+    # DeploymentsService.edit(); cleared in start()/stop().
     needs_restart: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     created_at: Mapped[str] = mapped_column(String, nullable=False)
     updated_at: Mapped[str] = mapped_column(String, nullable=False)
@@ -87,10 +80,8 @@ class Connection(Base):
     __tablename__ = "connections"
     __table_args__ = (
         UniqueConstraint("user_id", "service"),
-        # Enforces exclusive port allocation at the DB level (SQLite/most
-        # backends allow multiple NULLs through a unique constraint, so
-        # non-whatsapp connections that never set this column are unaffected).
-        UniqueConstraint("webhook_port"),
+        UniqueConstraint("webhook_port"),  # SQLite allows multiple NULLs in unique constraints,
+        # so non-whatsapp connections leave it NULL.
         {"sqlite_autoincrement": True},
     )
 
@@ -99,12 +90,10 @@ class Connection(Base):
     service: Mapped[str] = mapped_column(String, nullable=False)
     status: Mapped[str] = mapped_column(String, nullable=False, default="disconnected")
     config: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
-    # Mirrors config["waha_webhook_port"] as a real column so the DB can
-    # enforce exclusive allocation (see get_or_create_whatsapp). NULL for
-    # connections that don't allocate a port.
-    # provider-facing bespoke-transport port (WhatsApp/WAHA only); DO NOT
-    # populate for ingress-only or other connection types — this constraint
-    # is table-wide, not per-service.
+    # Mirrors config["waha_webhook_port"] for exclusive DB-level allocation.
+    # NULL for non-whatsapp connections. DO NOT populate for ingress-only or
+    # other connection types — the unique constraint above is table-wide, not
+    # per-service, so any non-NULL value reserves the port globally.
     webhook_port: Mapped[int | None] = mapped_column(Integer, nullable=True)
     created_at: Mapped[str] = mapped_column(String, nullable=False)
     updated_at: Mapped[str] = mapped_column(String, nullable=False)

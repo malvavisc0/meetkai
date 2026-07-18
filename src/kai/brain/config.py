@@ -1,16 +1,8 @@
 """Brain settings — LightRAG + crawl4ai connection config + agent instructions.
 
-Loaded from ``KAI_BRAIN_*`` env vars (or ``.env``). These are owned by the
-brain integration, not by any single bot: ``cli/bot.py:_start()`` reads them
-after ``bot.configure()`` and, when the connection fields are present,
-constructs a ``LightRagClient``, registers the ``brain_query`` tool (`BRAIN_TOOL_NAME`), and
-injects the operator-authored ``instruction`` into the agent's tool workflow
-prompt.
-
-Per-user fields (``workspace``, ``instruction``, ``mandatory``) are NOT set
-in ``.env`` — they live on the user's ``Connection.config`` JSON (row with
-``service="lightrag"``) and are injected into the bot subprocess env at
-runtime by ``deployments.start()``.
+Loaded from ``KAI_BRAIN_*`` env vars (or ``.env``). Per-user fields
+(``workspace``, ``instruction``, ``mandatory``) live on the user's
+``Connection.config`` JSON and are injected at runtime by ``deployments.start()``.
 """
 
 from __future__ import annotations
@@ -28,14 +20,12 @@ class BrainSettings(BaseSettings):
     """LightRAG + crawl4ai settings + per-Brain agent instructions.
 
     The connection fields (base_url, lightrag_api_key, crawler_url,
-    crawl4ai_token) are static — one shared lightrag + one shared crawl4ai
-    container for the whole kai deployment. The per-user fields (workspace,
-    instruction, mandatory) are injected at runtime from the Connection row.
+    crawl4ai_token) are static — one shared container for the deployment.
+    The per-user fields (workspace, instruction, mandatory) are injected at runtime.
     """
 
     model_config = SettingsConfigDict(env_prefix="KAI_BRAIN_", env_file=".env", extra="ignore")
 
-    # --- LightRAG (the vector/graph store) ---
     base_url: str = Field(
         default="",
         description="LightRAG API base URL (e.g. http://lightrag:9621).",
@@ -49,7 +39,6 @@ class BrainSettings(BaseSettings):
         description="LightRAG workspace — injected per-user by deployments.start()",
     )
 
-    # --- crawl4ai (the headless-browser crawler) ---
     crawler_url: str = Field(
         default="",
         description="crawl4ai API base URL (e.g. http://crawl4ai:11235).",
@@ -59,7 +48,6 @@ class BrainSettings(BaseSettings):
         description="crawl4ai bearer token (KAI_BRAIN_CRAWL4AI_TOKEN).",
     )
 
-    # --- crawl BFS bounds (kai-orchestrated, see crawler.py) ---
     crawl_max_depth: int = Field(
         default=1,
         description="Max BFS depth for whole-site crawl. crawl4ai warns >3 grows exponentially.",
@@ -69,7 +57,6 @@ class BrainSettings(BaseSettings):
         description="Hard cap on pages fetched per whole-site crawl.",
     )
 
-    # --- Per-Brain agent instructions (injected from Connection.config) ---
     instruction: str = Field(
         default="",
         description="Operator-authored guidance for when to use brain_query. One trigger per line.",

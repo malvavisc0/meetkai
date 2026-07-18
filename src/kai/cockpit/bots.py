@@ -13,17 +13,14 @@ class BotType:
     required_settings: list[str] = field(default_factory=list)
     description: str = ""
     default_goal: str = ""
-    # Connections a deployment of this type must have to start.
     required_connections: list[str] = field(default_factory=list)
-    # Optional connections an operator may enable per deployment via
-    # Deployment.settings["tools"]. Only these appear as toggles in the
-    # settings form.
+    # Optional connections an operator may enable
+    # via Deployment.settings["tools"] — only these
+    # appear as toggles in the settings form.
     supported_connections: list[str] = field(default_factory=list)
-    # Icon name under templates/icons/*.svg (no extension).
     icon: str = "bot"
-    # Whether this bot type implements per-chat sleep/wake (waha only).
-    # When False, /sleep and /wake 404 and "sleep" is absent from /status,
-    # so the deployment page hides the pause-conversations panel.
+    # Whether this bot type implements per-chat sleep/wake
+    # (waha only). When False, /sleep and /wake 404.
     supports_sleep: bool = False
 
 
@@ -43,9 +40,9 @@ BOT_TYPES: dict[str, BotType] = {
             "know, ask before guessing, and only reply when you add value."
         ),
         required_connections=["whatsapp"],
-        # database/smtp/calcom: shipped but optional. Declaring them here
-        # makes the catalog the single source of truth so the settings form
-        # can offer the toggle (disabled until the connection exists).
+        # database/smtp/calcom: shipped but optional,
+        # declared as single source of truth so the
+        # settings form can toggle them.
         supported_connections=["database", "smtp", "calcom"],
         icon="message-circle",
         supports_sleep=True,
@@ -71,8 +68,8 @@ BOT_TYPES: dict[str, BotType] = {
 }
 
 LANGUAGE_VOICES: dict[str, list[str]] = {
-    # Index 0 is the default voice (used by auto_pick_voice). French has no
-    # male voice in Kokoro v1.0.
+    # Index 0 is the default voice (used by auto_pick_voice).
+    # French has no male voice in Kokoro v1.0.
     "Spanish": ["ef_dora", "em_alex"],
     "English": ["af_heart", "am_michael"],
     "French": ["ff_siwis"],
@@ -80,7 +77,6 @@ LANGUAGE_VOICES: dict[str, list[str]] = {
     "Portuguese": ["pf_dora", "pm_alex"],
 }
 
-# Human-readable label per voice code, for the voice picker.
 VOICE_LABELS: dict[str, str] = {
     "af_heart": "Heart",
     "am_michael": "Michael",
@@ -93,21 +89,18 @@ VOICE_LABELS: dict[str, str] = {
     "pm_alex": "Alex",
 }
 
-# Every language a deployment's `language` field may take (server-validated
-# in DeploymentsService.create/edit — the form <select> alone is never
-# trusted). Exactly LANGUAGE_VOICES' keys: a language with no Kokoro voice
-# is not supported. Do NOT add a language here without a matching voice,
-# and do NOT map a language to another language's voice.
+# Every language a deployment's `language` field may take
+# (server-validated in DeploymentsService.create/edit —
+# the form <select> alone is never trusted).
 ALL_LANGUAGES: tuple[str, ...] = tuple(sorted(LANGUAGE_VOICES.keys()))
 
-# Every voice code a deployment's `voice` field may take.
 ALL_VOICES: tuple[str, ...] = tuple(
     sorted({voice for voices in LANGUAGE_VOICES.values() for voice in voices})
 )
 
-# Voice code -> language. Filters the voice <select> to voices matching the
-# selected language (client-side in cockpit.js, server-side in
-# DeploymentsService).
+# Voice code -> language. Filters the voice <select>
+# to matching languages (client-side in cockpit.js,
+# server-side in DeploymentsService).
 VOICE_LANGUAGE_BY_CODE: dict[str, str] = {
     voice: lang for lang, voices in LANGUAGE_VOICES.items() for voice in voices
 }
@@ -214,9 +207,8 @@ WEBHOOK_CONNECTION_TYPES: dict[str, WebhookConnectionType] = {
         label="Email Inbox (Resend)",
         fields=[
             CredentialField("signing_secret", "Signing secret", "secret", required=True),
-            # Resend's inbound webhook carries only envelope metadata, no
-            # body/attachments. The API key fetches the body via the
-            # Received Emails API and attachments via the Attachments API.
+            # Resend's inbound webhook carries only envelope metadata;
+            # the API key fetches body/attachments via the Resend APIs.
             CredentialField("api_key", "API key", "secret", required=True),
         ],
         secret_fields=["signing_secret", "api_key"],
@@ -224,9 +216,10 @@ WEBHOOK_CONNECTION_TYPES: dict[str, WebhookConnectionType] = {
     ),
 }
 
-# Display label per connection service. WhatsApp isn't a CredentialType
-# (provisioned via WAHA, not a credential form), so it has its own entry.
-# Ingress-only connections (resend) come from WEBHOOK_CONNECTION_TYPES.
+# Display label per connection service. WhatsApp has its own
+# entry (provisioned via WAHA, not a credential form);
+# ingress-only connections (resend) come from
+# WEBHOOK_CONNECTION_TYPES.
 CONNECTION_LABELS: dict[str, str] = {
     "whatsapp": "WhatsApp",
     **{service: ct.label for service, ct in CREDENTIAL_TYPES.items()},
@@ -245,10 +238,10 @@ def auto_pick_voice(language: str) -> str:
     return LANGUAGE_VOICES[language][0]
 
 
-# Capability display names, shared by the Runtime overview badges
-# (deployment.html, keyed by /status capability names) and the settings
-# checkboxes (settings_waha.html, keyed by BotType.feature_flags). One dict
-# so both pages can never show different wording for the same capability.
+# Capability display names, shared by the Runtime overview
+# badges and the settings checkboxes — one dict so
+# both pages can never show different wording for the
+# same capability.
 CAPABILITY_LABELS: dict[str, str] = {
     "vision": "Vision",
     "image": "Vision",

@@ -117,7 +117,7 @@ async def deploy_new_post(
     svc = DeploymentsService(db)
 
     # Defense-in-depth: reject a hand-crafted POST with a template for the
-    # wrong transport (the registry already filters by transport on GET).
+    # wrong transport.
     try:
         TemplateRegistry.bundled().get(bot_type, template)
     except FileNotFoundError:
@@ -149,10 +149,8 @@ async def deploy_new_post(
             error=str(exc),
         )
 
-    # Deployment created — go straight to its detail page. The detail page
-    # already gates the start button on WhatsApp being connected (showing a
-    # "connect WhatsApp" action instead), so the intermediate "ready" step
-    # is redundant.
+    # The detail page already gates the start button on WhatsApp connected,
+    # so the intermediate "ready" step is redundant.
     flash(request, "success", "Deployment created.")
     return RedirectResponse(f"/deployments/{dep.id}", status_code=302)
 

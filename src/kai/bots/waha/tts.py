@@ -12,9 +12,10 @@ logger = logging.getLogger(__name__)
 # language codes accepted by kokoro_onnx.Kokoro.create(lang=...). Keys are
 # matched case-insensitively. Unknown names fall back to "en-us".
 #
-# NOTE: only languages Kokoro v1.0 actually ships voices for are listed here
-# (see _DEFAULT_VOICE_BY_LANG). Russian/Arabic/Korean were previously listed
-# but have no voices in v1.0, so synthesizing them was silently broken.
+# Only languages Kokoro v1.0 actually ships voices for are listed here (see
+# _DEFAULT_VOICE_BY_LANG). Russian/Arabic/Korean were previously listed but
+# have no v1.0 voices — synthesizing them was silently broken. Do not re-add a
+# language here without a matching voice in _DEFAULT_VOICE_BY_LANG.
 _LANGUAGE_NAME_TO_KOKORO_LANG: dict[str, str] = {
     "english": "en-us",
     "british english": "en-gb",
@@ -51,11 +52,8 @@ _DEFAULT_VOICE_BY_LANG: dict[str, str] = {
 SUPPORTED_KOKORO_LANGS: tuple[str, ...] = tuple(_DEFAULT_VOICE_BY_LANG.keys())
 
 # One canonical display name per supported lang code, for surfacing to
-# humans/the agent (see SUPPORTED_KOKORO_LANGUAGE_NAMES below). Picks the more
-# common of any synonyms in _LANGUAGE_NAME_TO_KOKORO_LANG (e.g. "Chinese"
-# over "Mandarin", "English" over "British English" — the en-us/en-gb variant
-# distinction only matters for voice *selection* via resolve_kokoro_voice,
-# not for this yes/no capability list).
+# humans/the agent. Picks the more common of any synonyms in
+# _LANGUAGE_NAME_TO_KOKORO_LANG.
 _CANONICAL_LANG_NAME_BY_CODE: dict[str, str] = {
     "en-us": "English",
     "en-gb": "English",
@@ -69,22 +67,14 @@ _CANONICAL_LANG_NAME_BY_CODE: dict[str, str] = {
 }
 
 # Human-readable names for SUPPORTED_KOKORO_LANGS, deduplicated and derived
-# from _CANONICAL_LANG_NAME_BY_CODE so it can't silently drift out of sync
-# with _DEFAULT_VOICE_BY_LANG — adding/removing a lang code there without a
-# matching entry here raises KeyError immediately instead of the agent
-# silently getting a stale supported-language list. Used to tell the agent
-# which languages voice notes actually work for — see
-# WahaBot._tts_capability_note — so it doesn't promise/attempt a voice note
-# in a language Kokoro has no voice for (e.g. German) and can tell the user
-# in text instead.
+# from _CANONICAL_LANG_NAME_BY_CODE so it can't silently drift out of sync.
+# Used to tell the agent which languages voice notes actually work for.
 SUPPORTED_KOKORO_LANGUAGE_NAMES: tuple[str, ...] = tuple(
     dict.fromkeys(_CANONICAL_LANG_NAME_BY_CODE[code] for code in SUPPORTED_KOKORO_LANGS)
 )
 
 # Unicode letter ranges that count as "Latin" (ASCII + accented Latin in the
-# Latin-1 Supplement / Latin Extended blocks). Used to distinguish accented
-# Latin text (Spanish/French/Portuguese) from genuinely unsupported scripts
-# like Cyrillic, Arabic, or Hangul.
+# Latin-1 Supplement / Latin Extended blocks).
 _LATIN_RANGES: tuple[tuple[int, int], ...] = (
     (0x0041, 0x005B),  # A-Z
     (0x0061, 0x007B),  # a-z
@@ -94,10 +84,8 @@ _LATIN_RANGES: tuple[tuple[int, int], ...] = (
 )
 
 # Latin-script detection by common-word frequency. Tokens are accent-folded
-# (``cómo`` → ``como``) and lowercased so diacritics don't defeat matching.
-# Ordered: the first language with the highest score wins (ties resolve to the
-# earlier entry), so the discriminative unique words below are what actually
-# separate close relatives (Spanish vs Portuguese).
+# (``cómo`` → ``como``) and lowercased. Ordered: the first language with the
+# highest score wins.
 _LATIN_STOPWORDS: dict[str, frozenset[str]] = {
     "pt-br": frozenset(
         {
@@ -282,15 +270,8 @@ def _fold_accents(s: str) -> str:
 def resolve_kokoro_lang(language: str) -> str | None:
     """Resolve a language name (e.g. "Spanish") to a Kokoro lang code (e.g. "es").
 
-    Returns ``None`` when *language* is empty or isn't one Kokoro v1.0 ships
-    voices for (e.g. "German", "Dutch", "Klingon"). Coercing an unsupported
-    language to "en-us" here used to defeat the unsupported-language guard
-    in :func:`detect_kokoro_lang`/:func:`resolve_kokoro_voice` below: the
-    bot's own configured language would be silently treated as English,
-    so replies got synthesized with English phonemization and whatever
-    voice the operator had (wrongly) picked for that language — audibly
-    "speaking German with an English accent". Callers must fall back to a
-    text reply when this returns ``None``.
+    Returns ``None`` when *language* isn't a Kokoro v1.0 supported language,
+    signaling callers to fall back to a text reply.
     """
     if not language:
         return None
@@ -308,14 +289,8 @@ def detect_kokoro_lang(text: str, *, fallback: str | None = "en-us") -> str | No
     """Detect which Kokoro-supported language *text* is written in.
 
     Returns a Kokoro lang code from the v1.0 supported set. Returns ``None``
-    when the script is not supported by Kokoro v1.0 (Cyrillic, Arabic, Korean,
-    Thai, ...); callers should fall back to a text reply in that case. For
-    inconclusive Latin text (no common words matched), returns *fallback* when
-    it is itself a supported language. If *fallback* is ``None`` or not a
-    Kokoro-supported language (e.g. a bot configured for German, Dutch,
-    Polish, ...), inconclusive Latin text also returns ``None`` rather than
-    guessing an unrelated voice (e.g. English) for text Kokoro was never
-    asked to speak.
+    when the script is not supported (Cyrillic, Arabic, Korean, Thai, ...);
+    callers should fall back to a text reply.
     """
     fallback_supported = fallback is not None and _is_supported(fallback)
     fb = fallback if fallback_supported else "en-us"
@@ -401,12 +376,8 @@ def resolve_kokoro_voice(
 ) -> str | None:
     """Pick a Kokoro voice for *lang*.
 
-    Precedence: operator override map > built-in default-voice table. Returns
-    ``None`` if *lang* is not a Kokoro v1.0 supported language, signaling the
-    caller to fall back to a text reply. The operator's configured primary
-    voice is expected to be pre-seeded into *overrides* for the configured
-    language (see ``WahaBot`` startup), so a reply in the bot's own language
-    keeps the operator's chosen voice.
+    Precedence: operator override map > built-in default-voice table.
+    Returns ``None`` if *lang* is not a Kokoro v1.0 supported language.
     """
     if not _is_supported(lang):
         return None

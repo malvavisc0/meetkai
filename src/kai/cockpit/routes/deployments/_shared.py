@@ -20,10 +20,8 @@ from kai.cockpit.connections.service import ConnectionsService
 from kai.cockpit.deployments import DeploymentsService
 from kai.cockpit.models import Deployment, User
 
-# Per-bot-type settings templates. Each bot type renders its own template so
-# waha-specific sections (voice, triggers, chats, capabilities, participation)
-# never appear on the email bot and vice versa. The "default" fallback covers
-# any future bot type that hasn't yet gotten its own template.
+# Per-bot-type settings templates — each bot type renders
+# its own; the "default" fallback covers unregistered types.
 SETTINGS_TEMPLATES: dict[str, str] = {
     "waha": "settings_waha.html",
     "email": "settings_email.html",
@@ -47,9 +45,7 @@ def build_tools_update(supported_svcs: list[str], form_fields: dict) -> dict[str
     """Build the ``settings["tools"]`` dict from the submitted form.
 
     Every service stores the same ``{"enabled": bool, "instruction": str}``
-    shape, whether or not its template renders an instruction textarea
-    (``TOOLS_WITH_INSTRUCTION`` gates the textarea, not the storage shape) —
-    one format everywhere, no separate flat-bool form to also support.
+    shape — one format everywhere.
     """
     tools: dict[str, dict] = {}
     for svc in supported_svcs:
@@ -85,11 +81,7 @@ def uptime_str(seconds: int) -> str:
 def fmt_ts(ts: str | None) -> str:
     """Render an ISO-8601 timestamp for display in the server's local timezone.
 
-    Messages are stored as UTC-aware ISO strings (see
-    ``KaiAgent._now_ts()``), which is the right way to persist them — but
-    displaying that raw UTC value labeled "UTC" is misleading for a
-    human reading the cockpit from the server's timezone (``TZ`` env var,
-    e.g. ``Europe/Berlin``). Convert to the server's local tz for display.
+    Messages are stored as UTC-aware ISO strings; convert to the server's local tz for display.
     """
     if not ts:
         return ""
@@ -105,14 +97,9 @@ def fmt_ts(ts: str | None) -> str:
 
 
 def missing_required_connections(db: Session, user: User, bt: BotType) -> list[str]:
-    """Display labels for the ``bt.required_connections`` this operator has
-    not connected yet.
+    """Display labels for the ``bt.required_connections`` this operator has not connected yet.
 
-    Empty list means the bot type can be created right now. Shared by the
-    wizard's GET (to gate the submit button) and POST (server-side, so a
-    disabled button in the DOM is never the only thing standing between an
-    operator and a deployment its ``required_connections`` don't satisfy —
-    ``DeploymentsService.create()`` enforces the same rule either way).
+    Empty list means the bot type can be created right now.
     """
     if not bt.required_connections:
         return []

@@ -25,10 +25,8 @@ async def connections_page(
     db: Session = Depends(get_db),
 ):
     svc = ConnectionsService(db)
-    # Re-probe WAHA when the cached status is stale, so phone-side
-    # disconnects surface without a manual refresh click. "connecting"
-    # always re-probes (QR-scan window); "connected" re-probes only when
-    # the cache is older than the staleness threshold.
+    # Re-probe WAHA when cached status is stale,
+    # so phone-side disconnects surface without manual refresh.
     conn = await svc.refresh_status_if_stale(user)
     qr_url = None
     if conn and conn.status == "connecting":

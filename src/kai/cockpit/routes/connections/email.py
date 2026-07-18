@@ -26,9 +26,8 @@ async def resend_page(
     has_secret = bool(conn and conn.config.get("signing_secret"))
     has_api_key = bool(conn and conn.config.get("api_key"))
     flash = request.session.pop("flash", None)
-    # Externally-facing address Resend will POST to: prefer the configured
-    # public URL (correct behind proxies/DNS), fall back to the request's own
-    # base URL so local dev without KAI_PUBLIC_URL still shows something usable.
+    # Externally-facing address Resend will POST to: prefer
+    # configured URL, fall back to request base URL for local dev.
     base = public_url() or str(request.base_url).rstrip("/")
     return templates.TemplateResponse(
         request,
@@ -80,16 +79,9 @@ def resend_test(
     user: User = Depends(require_user),
     db: Session = Depends(get_db),
 ):
-    """Self-loopback test: sign a sample payload and POST to our own ingress.
-
-    Accepts the same form field as save, so the operator can test a
-    freshly-typed secret before saving it. When the field is blank (the
-    ``••••••••`` placeholder), falls back to the persisted secret.
-
-    Intentionally a sync ``def``, not ``async def`` like the save/delete
-    routes: ``svc.test()`` makes a real HTTP call with a timeout, and a sync
-    route handler runs in FastAPI's worker thread pool instead of blocking
-    the event loop.
+    """Test: sign a sample payload and POST to our
+    own ingress. Sync def because ``svc.test()``
+    blocks the event loop.
     """
     svc = EmailConnectionsService(db)
     ok, msg = svc.test(
