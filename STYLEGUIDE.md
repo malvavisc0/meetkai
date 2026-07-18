@@ -25,13 +25,18 @@ else, use tokens/classes.
 | Form labels | `--text-sm` | 600 |
 | Help text, metadata, eyebrows, table headers | `--text-sm` | 400 |
 | Micro labels / badges | `--text-xs` | 600 |
+| Landing promise (`.landing-title`) | `--text-landing-display` (44-64px clamp) | 600 |
+| Landing proof address (`.landing-proof__email`) | `--text-landing-email` (28-40px clamp) | 600 |
 
-- `--text-md` (16px) is reserved for genuinely emphasized inline body copy
-  (`.chat-reply` and the pre-auth `.landing-lede`). It is never used for
-  standard labels, help text, or card titles. `.landing-lede` is a sanctioned
-  pre-auth exception, mirroring the `--text-2xl` carve-out below.
+- `--text-md` (17px) is reserved for genuinely emphasized inline body copy
+  (`.chat-reply`). It is never used for standard labels, help text, or
+  card titles. The pre-auth `.landing-lede` uses standard `--text-base`
+  with the secondary ink color, not `--text-md`.
 - `--text-2xl` (the clamp hero token) is not used on any Operator Console
   screen. It stays reserved for pre-auth hero/display use.
+- `--text-landing-display` is reserved for the single pre-auth landing promise.
+  It is not reused for section titles.
+- `--text-landing-email` is reserved for the deployed-agent email focal point.
 - No page introduces a font size outside this table without updating this
   table first.
 
@@ -278,8 +283,12 @@ use concise static text or a stable progress indicator.
 | `.status-dot--running::after` | Radar pulse ring on live status dots — animated exception to the zero-motion default, read as "actively alive" |
 | `.source-item--stack` | Opts a `.source-item` out of the compact inline "input + button" two-column layout for items whose controls are a fuller block (a form with a reply panel, a divided sub-panel) rather than a single-line input/button pair |
 | `.sleep-panel` / `.sleep-panel__section` / `.sleep-panel__title` | Two-halves-of-one-workflow layout divided by a border (`border-left`, `border-top` on mobile) instead of two boxed subcards |
-| `.landing-*` | Pre-auth marketing landing composition: navigation, two-column hero, workflow illustration, and support-demo callout. Scoped to the landing page and built from the shared token system. |
-| `.landing-agent__brain` | Inline leading glyph (`brain.svg`) in the landing workflow card's agent sub-line, marking Brain-grounded knowledge; `aria-hidden`, text carries the meaning. |
+| `.landing-*` | Pre-auth marketing landing composition: navigation, two-column hero, static workflow illustration, onboarding path, Brain diagram, connection band, and proof invitation. Scoped to the landing page and built from the shared token system. |
+| `.landing-workflow__diagram` / `__stage` / `__resources` / `__decision` | Static, connected workflow line art: incoming channels, selected role, Brain and tools, then possible actions. It never renders a fabricated message, reply, timestamp, or runtime status. |
+| `.landing-steps` / `.landing-steps__path` | One continuous four-step onboarding path rather than a feature-card grid. |
+| `.landing-brain` / `.landing-brain__diagram` | Shared-knowledge explanation showing documents, website, and notes feeding the Brain and configured agent roles. |
+| `.landing-connections` / `.landing-connections__group` | Semantic connection band grouping channels where work arrives separately from tools agents use; visible text labels are retained until approved local integration assets are available. |
+| `.landing-proof` / `.landing-proof__path` | Editorial proof invitation with the deployed support email and factual email-to-agent-to-inbox path; its mail action stays secondary to the invite CTA. |
 | `.deployment-card__summary` | Compact, right-aligned operational summary on an agent card; collapses below the card content on mobile. |
 | `.deployment-card--attention` / `--running` / `--stopped` | State modifier on `.deployment-card`. Attention gets a danger-tinted border (4% danger mix on surface). Running uses a stronger neutral border. Stopped dims the whole card to 0.85. |
 | `.readiness-summary` / `.readiness-summary__section` | Exception-led infrastructure health summary: a concise readiness state followed by divided attention and available-service sections. |
@@ -373,4 +382,3 @@ Before merging a Cockpit UI change, check:
     buttons use `.button` and its documented variants only.
   - Eyebrows use the closed vocabulary; timestamps go through
     `format_timestamp()`; status color comes from the fixed badge mapping.
-

@@ -8,82 +8,164 @@
         <img class="landing-brand__mark" src="/static/icon-192.png" alt="">
         <span>kAI</span>
       </a>
-      {% if user %}
-      <a class="button" href="/console">Open the Cockpit</a>
-      {% else %}
-      <a class="button" href="/login">Log in to Beta</a>
-      {% endif %}
+      <div class="landing-nav__actions">
+        <a class="landing-nav__github" href="https://github.com/malvavisc0/meetkai">Explore on GitHub</a>
+        {% if user %}
+        <a class="button" href="/console">Manage your agents</a>
+        {% else %}
+        <a class="button" href="/login">Log in to Beta</a>
+        {% endif %}
+      </div>
     </header>
 
     <div class="landing-hero__grid">
       <div class="landing-copy landing-copy--hero">
         <p class="landing-eyebrow">Knowledgeable Artificial Intelligence</p>
-        <h1 class="landing-title">Autonomous AI agents working for you 24 hours a day, 7 days a week.</h1>
-        <p class="landing-lede">
-          When a message comes in — by email, chat, or any webhook you connect —
-          your kAI agent reads it and decides what to do: answer it, leave it
-          alone, pass it to a person, or come back to it later. Then it handles
-          it for you, using what it knows and the rules you set.
-        </p>
+        <h1 class="landing-title">Your next hire doesn't need a salary.</h1>
+        <p class="landing-lede">Put a kAI agent on support, inbox, or triage. It reads each request, consults your Brain and connected systems, then decides what happens next — around the clock, while you supervise.</p>
         <div class="landing-actions">
           <a href="mailto:{{ contact_email }}" class="button button--primary">
             <span class="icon">{% include "icons/send.svg" %}</span>
             Request an invite
           </a>
-          <a href="https://github.com/malvavisc0/meetkai" class="button">
-            Explore on GitHub
-          </a>
+          <a href="#see-it-working" class="button">See one working</a>
         </div>
-        <p class="landing-invite muted">
-          Private beta. Tell us how you would use kAI at
-          <a href="mailto:{{ contact_email }}">{{ contact_email }}</a>.
-        </p>
+        <p class="landing-invite muted">Private beta. Tell us how you'd put kAI to work at <a href="mailto:{{ contact_email }}">{{ contact_email }}</a>.</p>
       </div>
 
-      <div class="landing-workflow" aria-label="An incoming event is routed to a knowledgeable AI agent">
+      <div class="landing-workflow" role="img" aria-label="Example workflow: work arrives through WhatsApp or Resend Email Inbox, a support agent consults the Brain and connected tools, then chooses an action.">
         <div class="landing-workflow__topline">
-          <span>kAI workflow</span>
-          <span class="status-dot status-dot--running" aria-hidden="true"></span>
-          <span class="sr-only">Live</span>
+          <span>Workflow</span>
+          <span>kAI agent</span>
         </div>
-        <div class="landing-event">
-          <span class="landing-event__icon">{% include "icons/mail.svg" %}</span>
-          <span>
-            <strong>New customer email</strong>
-            <small>billing@acme.co</small>
-          </span>
-          <span class="landing-event__time">now</span>
-        </div>
-        <div class="landing-workflow__line" aria-hidden="true"></div>
-        <div class="landing-agent">
-          <img class="landing-agent__avatar" src="/static/icon-192.png" alt="">
-          <span>
-            <strong>Support agent</strong>
-            <small><span class="landing-agent__brain" aria-hidden="true">{% include "icons/brain.svg" %}</span>Answered based on the company's knowledge</small>
-          </span>
-        </div>
-        <div class="landing-reply">
-          <span class="landing-reply__label">Answer Found</span>
-          <p>I found the invoice and updated the billing contact. The revised receipt is on its way.</p>
-          <div class="landing-reply__meta"><span>Context applied</span><span>Replied</span></div>
+        <div class="landing-workflow__diagram">
+          <div class="landing-workflow__stage">
+            <p class="landing-workflow__label">Work arrives</p>
+            <div class="landing-workflow__sources">
+              <span>WhatsApp</span>
+              <span>Email</span>
+              <span>Webhook</span>
+            </div>
+          </div>
+          <div class="landing-workflow__connector" aria-hidden="true"></div>
+          <div class="landing-agent">
+            <img class="landing-agent__avatar" src="/static/icon-192.png" alt="">
+            <span>
+              <strong>Support agent</strong>
+              <small>Selected role for incoming events</small>
+            </span>
+          </div>
+          <div class="landing-workflow__resources">
+            <div class="landing-workflow__resource landing-workflow__resource--brain">
+              <span class="landing-workflow__resource-icon" aria-hidden="true">{% include "icons/brain.svg" %}</span>
+              <span><strong>Brain</strong><small>Documents, website, notes</small></span>
+            </div>
+            <div class="landing-workflow__resource">
+              <span><strong>Connected tools</strong><small>Database, SMTP, Cal.com</small></span>
+            </div>
+          </div>
+          <div class="landing-workflow__connector" aria-hidden="true"></div>
+          <div class="landing-workflow__decision">
+            <p class="landing-workflow__label">Chooses the next action</p>
+            <p>Reply, follow up or escalate.</p>
+          </div>
         </div>
       </div>
     </div>
   </section>
 
-  <section class="landing-demo">
+  <section class="landing-section landing-steps" aria-labelledby="onboard-title">
+    <div class="landing-section__intro">
+      <p class="landing-eyebrow">Onboard one agent</p>
+      <h2 id="onboard-title" class="landing-section__title">From a role you need covered to an agent you supervise.</h2>
+      <p class="landing-section__copy">Four steps from picking the job to watching it run. You stay in control at every stage.</p>
+    </div>
+    <ol class="landing-steps__path">
+      <li><span class="landing-step__number">01</span><h3>Choose a role</h3><p>Start with support, inbox, or triage: the work you want covered.</p></li>
+      <li><span class="landing-step__number">02</span><h3>Train its Brain</h3><p>Add documents, a website, notes, and rules for company-specific replies.</p></li>
+      <li><span class="landing-step__number">03</span><h3>Connect work</h3><p>Add the channels where work arrives and the tools the agent can use.</p></li>
+      <li><span class="landing-step__number">04</span><h3>Supervise</h3><p>Review what it handles, refine its setup, or stop it whenever needed.</p></li>
+    </ol>
+  </section>
+
+  <section class="landing-section landing-brain" aria-labelledby="brain-title">
+    <div class="landing-section__intro">
+      <p class="landing-eyebrow">Shared knowledge</p>
+      <h2 id="brain-title" class="landing-section__title">Train it on what your company knows.</h2>
+      <p class="landing-section__copy">The Brain is shared company knowledge agents consult before company-specific replies. Add documents, a website, or notes once. Configured agents draw on the relevant context before they decide what to do.</p>
+    </div>
+    <div class="landing-brain__diagram" role="img" aria-label="Documents, a website, and notes feed the Brain, which provides shared knowledge to support and inbox agents.">
+      <div class="landing-brain__sources"><span>Documents</span><span>Website</span><span>Notes / text</span></div>
+      <div class="landing-brain__node"><span class="landing-brain__icon" aria-hidden="true">{% include "icons/brain.svg" %}</span><strong>Brain</strong></div>
+      <div class="landing-brain__agents"><span>Support agent</span><span>Inbox agent</span><span>Chat agent</span></div>
+    </div>
+  </section>
+
+  <section class="landing-section landing-connections" aria-labelledby="connections-title">
+    <div class="landing-section__intro">
+      <p class="landing-eyebrow">Connections</p>
+      <h2 id="connections-title" class="landing-section__title">Connect the systems where the work already lives.</h2>
+      <p class="landing-section__copy">Channels bring work in. Tools let the agent act on it. Each connection is configured per agent in the cockpit.</p>
+    </div>
+    <div class="landing-connections__content">
+      <div class="landing-connections__group">
+        <p class="landing-connections__label">Channels <span>Where work arrives</span></p>
+        <ul class="landing-connections__items">
+          <li>
+            <span class="landing-connections__icon" aria-hidden="true">{% include "icons/message-circle.svg" %}</span>
+            <span class="landing-connections__body">
+              <strong>WhatsApp</strong>
+              <span>Customer conversations, end to end</span>
+            </span>
+          </li>
+          <li>
+            <span class="landing-connections__icon" aria-hidden="true">{% include "icons/mail.svg" %}</span>
+            <span class="landing-connections__body">
+              <strong>Resend Email Inbox</strong>
+              <span>Inbound email becomes agent work</span>
+            </span>
+          </li>
+        </ul>
+      </div>
+      <div class="landing-connections__group">
+        <p class="landing-connections__label">Tools <span>What the agent can do</span></p>
+        <ul class="landing-connections__items">
+          <li>
+            <span class="landing-connections__icon" aria-hidden="true">{% include "icons/layout-dashboard.svg" %}</span>
+            <span class="landing-connections__body">
+              <strong>Database</strong>
+              <span>Customer records, read-only</span>
+            </span>
+          </li>
+          <li>
+            <span class="landing-connections__icon" aria-hidden="true">{% include "icons/send.svg" %}</span>
+            <span class="landing-connections__body">
+              <strong>SMTP</strong>
+              <span>Replies and follow-ups</span>
+            </span>
+          </li>
+          <li>
+            <span class="landing-connections__icon" aria-hidden="true">{% include "icons/check.svg" %}</span>
+            <span class="landing-connections__body">
+              <strong>Cal.com</strong>
+              <span>Meetings booked on your behalf</span>
+            </span>
+          </li>
+        </ul>
+      </div>
+      <p class="landing-connections__note">Availability depends on the agent you pick and how it is configured.</p>
+    </div>
+  </section>
+
+  <section id="see-it-working" class="landing-section landing-proof" aria-labelledby="proof-title">
     <div>
       <p class="landing-eyebrow">See it working</p>
-      <h2 class="landing-demo__title">Ask the agent that runs on kAI.</h2>
-      <p class="landing-demo__copy">
-        Experience the workflow. Ask the kAI support agent a question to see
-        how it interprets your data in real-time.
-      </p>
+      <h2 id="proof-title" class="landing-proof__title">Give the agent a question you actually care about.</h2>
+      <p class="landing-proof__copy">Email <a href="mailto:questions@meetk.ai">questions@meetk.ai</a>. Your message goes to a deployed kAI support agent, and its answer comes back to your inbox.</p>
     </div>
-    <div class="landing-demo__action">
-      <a href="mailto:questions@meetk.ai" class="button">
-        Send your questions to the Agent
-      </a>
+    <div class="landing-proof__action">
+      <p class="landing-proof__path"><span>Your email</span><span>Deployed agent</span><span>Reply in your inbox</span></p>
+      <a href="mailto:questions@meetk.ai" class="button">Send your questions via email to questions@meetk.ai</a>
     </div>
   </section>
 </div>
