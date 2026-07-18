@@ -1,29 +1,39 @@
 # kAI
 
-> A hackable Python framework for building and running small LLM bots over anything that emits a webhook.
+> A hackable Python framework for building and running small LLM agents over anything that emits a webhook.
 
-kAI gives bots a runtime, memory, tools, scheduling, and a simple plugin shape.
+kAI gives agents a runtime, memory, tools, scheduling, and a simple plugin shape.
 Bring any transport that can deliver events over HTTP: WhatsApp, email,
 Telegram, a Docker alert stream, or an internal system webhook.
 
-Think of each bot as an employee: it receives an input, decides the best
+Think of each agent as an employee: it receives an input, decides the best
 action for it (reply, stay silent, escalate the recipient, schedule a
 follow-up), and executes that decision itself — there is no separate "send"
-tool the model calls. An operator (the person running the bot) can supervise
+tool the model calls. An operator (the person running the agent) can supervise
 and steer it through the cockpit's console, connect it to a knowledge base
 (the Brain), and switch it on or off, but the moment-to-moment decisions are
 the agent's.
 
 ## What kAI Builds
 
-- **Support bots** that answer WhatsApp or email questions with shared memory
+- **Support agents** that answer WhatsApp or email questions with shared memory
   and a shared knowledge base.
-- **DevOps bots** that receive alerts, inspect systems, and run approved
+- **DevOps agents** that receive alerts, inspect systems, and run approved
   actions.
-- **Process bots** that watch a queue, triage incoming work, and report
+- **Process agents** that watch a queue, triage incoming work, and report
   status.
 
 Same runtime, different bot plugins.
+
+Onboarding an agent mirrors hiring an employee:
+
+1. **Choose a role** — support, inbox, or triage: the work you want covered.
+2. **Train its Brain** — add documents, a website, notes, and the rules that
+   should guide company-specific replies.
+3. **Connect work** — add the channels where work arrives and the tools the
+   agent can use.
+4. **Supervise** — review what it handles, refine its setup, and stop it
+   whenever needed.
 
 ## What's Included
 
@@ -34,8 +44,8 @@ Same runtime, different bot plugins.
 - **Structured decisions, not free text.** Every bot turn ends in a typed
   `ActionResult` (e.g. `reply`, `silent`, `console`) the model must choose
   from — the bot dispatches it, it is never inferred from prose.
-- **Cockpit** for operators to manage connections, deployments, bot settings,
-  chat with a running bot (the operator console), and the Brain.
+- **Cockpit** for operators to manage connections, deployments, agent settings,
+  chat with a running agent (the operator console), and the Brain.
 - **Brain** for knowledge ingestion and per-deployment bot memory from
   documents, notes, and websites.
 - **Default tools** for web search, webpage fetch, weather, time, and
@@ -124,14 +134,14 @@ uv run kai cockpit serve
 ```
 
 Operators use the cockpit to connect services (WhatsApp, SMTP, Resend,
-database), create deployments, adjust bot settings, chat with deployed bots
-through the operator console, and add knowledge to the Brain.
+database), create deployments, adjust agent settings, chat with deployed
+agents through the operator console, and add knowledge to the Brain.
 
 ## Operating A Running Bot
 
 Every bot that opts in exposes a `/tell` HTTP route (wired by the framework,
 handled by the bot's `handle_operator`). This is the one channel an operator
-uses to supervise a running "employee":
+uses to supervise a running agent:
 
 - Send it a plain instruction ("what's the status of the last email from
   alice@example.com?", "send an email to bob@example.com with the shipping
@@ -200,11 +210,11 @@ the model answered with one of the values your `Literal` allows.
 
 ## Bot Ideas
 
-- **WhatsApp support bot**: answer questions in chats using the Brain and
+- **WhatsApp support agent**: answer questions in chats using the Brain and
   conversation history (this is `waha`).
 - **Docker watchdog**: receive container alerts, inspect state, and run
   approved remediation commands.
-- **Email triage bot**: route inbound mail into a webhook, draft replies, and
+- **Email triage agent**: route inbound mail into a webhook, draft replies, and
   keep thread-specific history (this is `email`).
 
 ## Development
