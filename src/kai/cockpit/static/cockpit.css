@@ -881,13 +881,6 @@
     border: 1px solid var(--color-border);
   }
 
-  .status-card--running,
-  .status-card--attention,
-  .status-card--warn,
-  .status-card--stopped {
-    border-color: var(--color-border);
-  }
-
   /* --- Definition grid (status rows) --- */
   .def-grid {
     display: grid;
@@ -1254,16 +1247,6 @@
     align-items: center;
     justify-content: center;
     gap: var(--space-xs);
-    padding: var(--space-sm) var(--space-md);
-    color: var(--color-muted);
-    font-size: var(--text-sm);
-    flex: 1;
-  }
-
-  .chat-picker__empty {
-    display: flex;
-    align-items: center;
-    justify-content: center;
     padding: var(--space-sm) var(--space-md);
     color: var(--color-muted);
     font-size: var(--text-sm);
@@ -1638,6 +1621,9 @@
     display: flex;
     justify-content: space-between;
     align-items: center;
+  }
+
+  .landing-workflow__topline {
     color: var(--color-muted);
     font-size: var(--text-sm);
   }
@@ -1997,12 +1983,6 @@
     border: 1px solid var(--color-border);
     transition: var(--transition-lift);
     transition-property: box-shadow, transform, border-color;
-  }
-
-  .deployment-card--running,
-  .deployment-card--attention,
-  .deployment-card--stopped {
-    border-color: var(--color-border);
   }
 
   .deployment-card:hover,

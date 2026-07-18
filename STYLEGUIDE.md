@@ -205,7 +205,6 @@ No fifth button variant is introduced without updating this table first.
 | `.checkbox-grid` | Two-column layout for a group of equal-weight toggles |
 | `.checkbox-row--locked` | Dimmed modifier for an unentitled/disabled toggle row |
 | `.chat-picker__spinner` | Spinner for the async chat-picker loading state |
-| `.chat-picker__empty` | Empty-state message when a chat fetch returns zero rows |
 | `.source-item--stack` | Opts a `.source-item` out of the compact inline "input + button" two-column layout for items whose controls are a fuller block (a form with a reply panel, a divided sub-panel) rather than a single-line input/button pair |
 | `.sleep-panel` / `.sleep-panel__section` / `.sleep-panel__title` | Two-halves-of-one-workflow layout divided by a border (`border-left`, `border-top` on mobile) instead of two boxed subcards |
 | `.landing-*` | Pre-auth marketing landing composition: navigation, two-column hero, workflow illustration, and support-demo callout. Scoped to the landing page and built from the shared token system. |
