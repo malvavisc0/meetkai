@@ -32,7 +32,7 @@
         <label class="checkbox-row{% if not ok %} checkbox-row--locked{% endif %}">
           <input type="checkbox" disabled {% if ok %}checked{% endif %}>
           {{ t }}
-          <span class="badge{% if ok %} badge--ok{% else %} badge--warn{% endif %}">{% if ok %}configured{% else %}not configured{% endif %}</span>
+          <span class="badge{% if ok %} badge--ok{% else %} badge--warn{% endif %}"></span>
         </label>
       {% endfor %}
     </div>
