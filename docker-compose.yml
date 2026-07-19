@@ -191,12 +191,13 @@ services:
     volumes:
       - https-portal-data:/var/lib/https-portal
     healthcheck:
-      test: ["CMD-SHELL", "curl -fsS http://localhost/ >/dev/null 2>&1 || exit 1"]
+      test: ["CMD-SHELL", "nginx -t 2>/dev/null && curl -fsSk https://localhost/ >/dev/null 2>&1 || exit 1"]
       interval: 30s
       timeout: 5s
       retries: 3
-      start_period: 15s
+      start_period: 30s
     depends_on:
-      - cockpit
+      cockpit:
+        condition: service_healthy
     networks:
       - meetkai-net
