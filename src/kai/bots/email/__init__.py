@@ -18,6 +18,7 @@ import asyncio
 import json
 import logging
 from email.message import EmailMessage
+from email.utils import formatdate, make_msgid
 from pathlib import Path
 from typing import Literal
 
@@ -251,6 +252,7 @@ class Bot(BaseBot):
             text = event["text"]
             metadata = event.get("metadata", {})
             subject = metadata.get("subject", "")
+            message_id = metadata.get("message_id", "")
             attachments = metadata.get("attachments", [])
 
             images, enriched_text = await self._process_attachments(text, attachments)
@@ -276,7 +278,9 @@ class Bot(BaseBot):
 
             action = result.action
             if action.action == "reply" and action.text and not self._sent_via_tool(result, source):
-                await self._send_reply(source, subject, action.text)
+                await self._send_reply(
+                    source, subject, action.text, message_id=message_id, original_body=text
+                )
             return {"ok": True}
         except Exception:
             logger.exception("ingest_event failed for %s", event.get("source", "<unknown>"))
@@ -407,7 +411,7 @@ class Bot(BaseBot):
                         f"[green]>[/green]  {out_text[:60]}  [dim](email to {target})[/dim]"
                     )
                     try:
-                        await self._send_reply(target, "", out_text)
+                        await self._send_email(target, "", out_text)
                     except Exception as exc:
                         logger.error("Failed to send email to %s: %s", target, exc)
                         console.print(f"[red]send failed: {target}: {exc}[/red]")
@@ -461,42 +465,75 @@ class Bot(BaseBot):
         await self._agent.clear_history("operator")
         return {"ok": True}
 
-    async def _send_reply(self, to: str, subject: str, body: str) -> None:
-        """Send a reply email via the operator's SMTP account.
+    async def _send_reply(
+        self,
+        to: str,
+        subject: str,
+        body: str,
+        message_id: str,
+        original_body: str,
+    ) -> None:
+        """Send a threaded reply to an inbound email via SMTP.
 
-        Reuses ``SmtpSettings`` (``KAI_SMTP_TOOL_*`` env) and
-        ``_valid_recipient`` from ``agent/tools/email.py`` — same ``smtplib``
-        pattern as ``make_send_email_tool``. The ``from`` address is closed
-        over from env; the LLM cannot override it (spoofing guard).
+        Sets ``In-Reply-To`` / ``References`` so mail clients group the reply
+        into the original thread, and appends a quoted copy of the inbound
+        body below the agent's reply.
         """
-        if not self._smtp or not self._smtp.smtp_enabled:
-            logger.error("SMTP not configured — cannot reply to %s", to)
-            raise RuntimeError("SMTP not configured")
+        smtp = self._require_smtp()
+        full_body = (
+            f"{self._post_processor.process(body)}\n\n{self._format_quote(original_body, to)}"
+        )
+        from_domain = smtp.from_address.split("@", 1)[-1] or "localhost"
+        msg = EmailMessage()
+        msg["Subject"] = f"Re: {subject or 'your email'}"
+        msg["From"] = format_from_header(self._config.display_name, smtp.from_address)
+        msg["To"] = to
+        msg["Message-ID"] = make_msgid(domain=from_domain)
+        if message_id:
+            msg["In-Reply-To"] = message_id
+            msg["References"] = message_id
+        set_email_body(msg, full_body)
+        self._deliver(msg, to, smtp)
 
+    async def _send_email(self, to: str, subject: str, body: str) -> None:
+        """Send a fresh (non-threaded) email — operator-initiated sends."""
+        smtp = self._require_smtp()
+        msg = EmailMessage()
+        msg["Subject"] = subject or "Re: your email"
+        msg["From"] = format_from_header(self._config.display_name, smtp.from_address)
+        msg["To"] = to
+        set_email_body(msg, self._post_processor.process(body))
+        self._deliver(msg, to, smtp)
+
+    def _require_smtp(self) -> SmtpSettings:
+        """Return the validated SMTP config, raising if not configured."""
+        if not self._smtp or not self._smtp.smtp_enabled:
+            logger.error("SMTP not configured")
+            raise RuntimeError("SMTP not configured")
+        return self._smtp
+
+    def _deliver(self, msg: EmailMessage, to: str, smtp: SmtpSettings) -> None:
+        """Validate recipient and send via SMTP."""
         if not _valid_recipient(to):
             logger.error("Invalid recipient: %s", to)
             raise RuntimeError(f"invalid recipient: {to}")
-
-        # Apply the template's post-processing pipeline. ``general`` uses
-        # ``profile: none`` (identity — email supports markdown), so this is a
-        # no-op for the default; an email template that sets ``profile: custom``
-        # gets its transforms applied before SMTP send.
-        body = self._post_processor.process(body)
-
-        msg = EmailMessage()
-        msg["Subject"] = f"Re: {subject}" if subject else "Re: your email"
-        msg["From"] = format_from_header(self._config.display_name, self._smtp.from_address)
-        msg["To"] = to
-        set_email_body(msg, body)
-
         send_via_smtp(
             msg,
-            host=self._smtp.host,
-            port=int(self._smtp.port),
-            username=self._smtp.username,
-            password=self._smtp.password,
-            use_tls=self._smtp.use_tls,
+            host=smtp.host,
+            port=int(smtp.port),
+            username=smtp.username,
+            password=smtp.password,
+            use_tls=smtp.use_tls,
         )
+
+    @staticmethod
+    def _format_quote(original_body: str, sender: str) -> str:
+        """Format the inbound body as a standard ``> `` quoted block."""
+        text = original_body.strip()
+        if len(text) > 2000:
+            text = text[:2000] + " […]"
+        quoted = "\n".join(f"> {line}" if line else ">" for line in text.splitlines())
+        return f"On {formatdate(localtime=True)}, {sender} wrote:\n{quoted}"
 
     async def _process_attachments(
         self, text: str, attachments: list[dict]
