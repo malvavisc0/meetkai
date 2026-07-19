@@ -143,7 +143,7 @@ SERVICE_ENV_VARS: dict[str, dict] = {
 }
 
 
-def _is_connected(service: str, conn: Connection | None) -> bool:
+def is_connected(service: str, conn: Connection | None) -> bool:
     """Per-family "is this connection ready?" predicate.
 
     Ingress-only connections (resend) require the row to exist with all
@@ -332,7 +332,7 @@ class DeploymentsService:
                 )
                 .first()
             )
-            if not _is_connected(service, c):
+            if not is_connected(service, c):
                 raise ConnectionRequiredError(f"Connect {service} first at /connections")
 
         existing = (
@@ -489,7 +489,7 @@ class DeploymentsService:
                 )
                 .first()
             )
-            if c is None or not _is_connected(service, c):
+            if c is None or not is_connected(service, c):
                 raise ConnectionRequiredError(f"Connect {service} first at /connections")
             required_conns[service] = c
 

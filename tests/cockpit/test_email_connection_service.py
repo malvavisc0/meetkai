@@ -158,7 +158,7 @@ class TestStartGate:
     def test_start_gate_treats_connected_resend_as_connected(self, db, user):
         from kai.cockpit.connections.email import EmailConnectionsService
         from kai.cockpit.connections.smtp import SmtpConnectionsService
-        from kai.cockpit.deployments import _is_connected
+        from kai.cockpit.deployments import is_connected
         from kai.cockpit.models import Connection
 
         # Connect resend + smtp (both required for the email bot)
@@ -177,12 +177,12 @@ class TestStartGate:
             .filter(Connection.user_id == user.id, Connection.service == "resend")
             .first()
         )
-        assert _is_connected("resend", resend_conn) is True
+        assert is_connected("resend", resend_conn) is True
 
     def test_start_gate_rejects_resend_missing_api_key(self, db, user):
         """Signing secret alone isn't enough — api_key is required to fetch content."""
         from kai.cockpit.connections.email import EmailConnectionsService
-        from kai.cockpit.deployments import _is_connected
+        from kai.cockpit.deployments import is_connected
         from kai.cockpit.models import Connection
 
         EmailConnectionsService(db).save(user, signing_secret="dGVzdA==", api_key="")
@@ -192,4 +192,4 @@ class TestStartGate:
             .filter(Connection.user_id == user.id, Connection.service == "resend")
             .first()
         )
-        assert _is_connected("resend", resend_conn) is False
+        assert is_connected("resend", resend_conn) is False

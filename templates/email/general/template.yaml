@@ -2,8 +2,8 @@ name: general
 transport: email
 display_name: kAI Basic
 description: >
-  The default kAI email support bot. Knowledge-grounded, professional tone,
-  answers product questions via Brain when connected.
+  The default email support Agent. Knowledge-grounded, professional tone,
+  answers product questions via Brain.
 
 actions:
   - reply
@@ -14,19 +14,14 @@ config:
   temperature: 0.2
 
 tools:
-  required: []
-  optional:
+  required:
     - brain_query
+  optional:
     - sql_query
     - send_email
     - calcom
-    # Bot-owned tools — no env vars, so they resolve as present. Declared so
-    # gating on the resolved tool set keeps today's behavior for `general`.
     - record_note
     - get_conversation_messages
-    - schedule_task
-    - list_tasks
-    - cancel_task
 
 post_processing:
   profile: none

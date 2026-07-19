@@ -87,13 +87,13 @@
       </form>
     {% else %}
       <div class="cluster">
-        {% if whatsapp_connected %}
+        {% if missing_connections %}
+          <p class="muted text-warn">Connect {{ missing_connections|join(", ") }} before starting this agent.</p>
+          <a href="/connections" class="button">Connect</a>
+        {% else %}
           <form method="post" action="/deployments/{{ dep.id }}/start">
             <button type="submit" class="button button--primary"><span class="icon">{% include "icons/play.svg" %}</span> Start</button>
           </form>
-        {% else %}
-          <p class="muted text-warn">Connect WhatsApp before starting this agent.</p>
-          <a href="/connections" class="button">Connect WhatsApp</a>
         {% endif %}
       </div>
     {% endif %}

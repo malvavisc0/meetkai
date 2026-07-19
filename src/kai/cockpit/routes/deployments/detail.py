@@ -15,7 +15,11 @@ from kai.cockpit.connections.service import ConnectionsService
 from kai.cockpit.db import get_db
 from kai.cockpit.deployments import DeploymentsService, attention_reason
 from kai.cockpit.models import User
-from kai.cockpit.routes.deployments._shared import get_deployment, uptime_str
+from kai.cockpit.routes.deployments._shared import (
+    get_deployment,
+    missing_required_connections,
+    uptime_str,
+)
 
 router = APIRouter()
 
@@ -33,11 +37,14 @@ async def deployment_detail(
         return result
     svc, dep = result
 
-    # Hide start button for waha when WhatsApp is not connected — the operator
-    # should never see a start that deploy.start() would refuse.
+    # Hide start button when the bot's required connections aren't all ready
+    # — the operator should never see a start that deploy.start() would refuse.
     conn_svc = ConnectionsService(db)
     whatsapp = await conn_svc.refresh_status_if_stale(user)
     whatsapp_connected = bool(whatsapp and whatsapp.status == "connected")
+
+    bt = BOT_TYPES.get(dep.bot_type)
+    missing_connections = missing_required_connections(db, user, bt) if bt else []
 
     status_data = None
     uptime_display = None
@@ -81,7 +88,7 @@ async def deployment_detail(
             "uptime_str": uptime_display,
             "uptime_s": uptime_s,
             "needs_restart": needs_restart,
-            "whatsapp_connected": whatsapp_connected,
+            "missing_connections": missing_connections,
             "attention_reason": reason,
             "conversation_count": conversation_count,
             "message_count": message_count,

@@ -7,6 +7,7 @@ from fastapi.responses import RedirectResponse
 from sqlalchemy.orm import Session
 
 from kai.cockpit.auth import require_user
+from kai.cockpit.bots import BOT_TYPES
 from kai.cockpit.db import get_db
 from kai.cockpit.deployments import (
     ConnectionRequiredError,
@@ -15,7 +16,10 @@ from kai.cockpit.deployments import (
 )
 from kai.cockpit.flash import flash
 from kai.cockpit.models import User
-from kai.cockpit.routes.deployments._shared import get_deployment
+from kai.cockpit.routes.deployments._shared import (
+    get_deployment,
+    missing_required_connections,
+)
 
 router = APIRouter()
 
@@ -35,7 +39,9 @@ async def deployment_start(
     try:
         svc.start(dep)
     except ConnectionRequiredError:
-        flash(request, "warn", "Connect WhatsApp first before starting.")
+        bt = BOT_TYPES.get(dep.bot_type)
+        missing = missing_required_connections(db, user, bt) if bt else []
+        flash(request, "warn", f"Connect {', '.join(missing)} first before starting.")
         return RedirectResponse("/connections", status_code=302)
     except DeploymentStartupError as exc:
         flash(request, "error", f"Could not start deployment: {exc}")

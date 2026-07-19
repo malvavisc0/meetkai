@@ -2,7 +2,7 @@
 
 Covers: the ``WebhookConnectionType`` registry, ``CONNECTION_LABELS`` spread
 from both registries, ``encrypt_config``/``decrypt_config`` accepting resend
-(error-message change lives in test_secrets.py), ``_is_connected``'s
+(error-message change lives in test_secrets.py), ``is_connected``'s
 ingress-only predicate, ``_inject_connection_env``'s early-return no-op for
 ingress-only services, and the required-credential env-injection loop in
 ``start()`` (the email bot's required smtp → ``KAI_SMTP_TOOL_*``).
@@ -23,7 +23,7 @@ from kai.cockpit.deployments import (
     ConnectionRequiredError,
     DeploymentsService,
     _inject_connection_env,
-    _is_connected,
+    is_connected,
 )
 from kai.cockpit.models import Connection, Deployment
 
@@ -152,42 +152,42 @@ class TestIsConnected:
         )
 
     def test_none_is_not_connected(self):
-        assert _is_connected("resend", None) is False
+        assert is_connected("resend", None) is False
 
     def test_bespoke_uses_status_only(self):
         # whatsapp is not in WEBHOOK_CONNECTION_TYPES → existing semantics
-        assert _is_connected("whatsapp", self._conn("whatsapp", "connected")) is True
-        assert _is_connected("whatsapp", self._conn("whatsapp", "disconnected")) is False
+        assert is_connected("whatsapp", self._conn("whatsapp", "connected")) is True
+        assert is_connected("whatsapp", self._conn("whatsapp", "disconnected")) is False
 
     def test_credential_uses_status_only(self):
-        assert _is_connected("database", self._conn("database", "connected")) is True
-        assert _is_connected("smtp", self._conn("smtp", "disconnected")) is False
+        assert is_connected("database", self._conn("database", "connected")) is True
+        assert is_connected("smtp", self._conn("smtp", "disconnected")) is False
 
     def test_ingress_connected_when_status_and_secret(self):
         c = self._conn(
             "resend", "connected", {"signing_secret": "whsec_live_x", "api_key": "re_live_x"}
         )
-        assert _is_connected("resend", c) is True
+        assert is_connected("resend", c) is True
 
     def test_ingress_not_connected_when_api_key_missing(self):
         # signing_secret alone is not enough -- api_key is required to fetch
         # email content (the webhook itself carries none).
         c = self._conn("resend", "connected", {"signing_secret": "whsec_live_x"})
-        assert _is_connected("resend", c) is False
+        assert is_connected("resend", c) is False
 
     def test_ingress_not_connected_when_secret_empty(self):
         # an ingress row with an empty secret must not be treated as connected,
         # or a bot could start with no way to verify its inbound webhooks.
         c = self._conn("resend", "connected", {"signing_secret": ""})
-        assert _is_connected("resend", c) is False
+        assert is_connected("resend", c) is False
 
     def test_ingress_not_connected_when_secret_missing(self):
         c = self._conn("resend", "connected", {})
-        assert _is_connected("resend", c) is False
+        assert is_connected("resend", c) is False
 
     def test_ingress_not_connected_when_status_disconnected(self):
         c = self._conn("resend", "disconnected", {"signing_secret": "whsec_live_x"})
-        assert _is_connected("resend", c) is False
+        assert is_connected("resend", c) is False
 
 
 class TestInjectConnectionEnvIngressNoOp:
@@ -341,7 +341,7 @@ class TestStartIngestsRequiredSmtp(_StartBase):
 
 class TestStartIngestsRequiredResend(_StartBase):
     """A bot requiring a resend (ingress-only) connection must also pass the
-    start gate via ``_is_connected`` (secret non-empty + connected), and the
+    start gate via ``is_connected`` (secret non-empty + connected), and the
     required-credential loop must no-op it (no env, no crash)."""
 
     def _resend_bot(self, monkeypatch):
@@ -427,7 +427,7 @@ class TestStartIngestsRequiredResend(_StartBase):
 
 class TestCreateGateUsesIsConnected:
     """create() must reject an ingress-only required connection whose secret
-    is empty (``_is_connected`` returns False for it), not just one that's
+    is empty (``is_connected`` returns False for it), not just one that's
     missing entirely."""
 
     def _resend_bot(self, monkeypatch):

@@ -17,7 +17,7 @@ from kai.cockpit.bots import (
     BotType,
 )
 from kai.cockpit.connections.service import ConnectionsService
-from kai.cockpit.deployments import DeploymentsService
+from kai.cockpit.deployments import DeploymentsService, is_connected
 from kai.cockpit.models import Deployment, User
 
 # Per-bot-type settings templates — each bot type renders
@@ -99,12 +99,10 @@ def fmt_ts(ts: str | None) -> str:
 def missing_required_connections(db: Session, user: User, bt: BotType) -> list[str]:
     """Display labels for the ``bt.required_connections`` this operator has not connected yet.
 
-    Empty list means the bot type can be created right now.
+    Uses the same readiness predicate as ``DeploymentsService.start``, so the
+    UI start gate can never disagree with what ``start()`` would accept.
+    Empty list means the bot type can be started right now.
     """
-    if not bt.required_connections:
-        return []
-    connected = {
-        c.service for c in ConnectionsService(db).list_for_user(user) if c.status == "connected"
-    }
-    missing = [service for service in bt.required_connections if service not in connected]
-    return [CONNECTION_LABELS.get(service, service) for service in missing]
+    conns = {c.service: c for c in ConnectionsService(db).list_for_user(user)}
+    missing = [s for s in bt.required_connections if not is_connected(s, conns.get(s))]
+    return [CONNECTION_LABELS.get(s, s) for s in missing]
