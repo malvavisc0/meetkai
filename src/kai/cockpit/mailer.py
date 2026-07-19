@@ -2,11 +2,14 @@
 
 from __future__ import annotations
 
+import logging
 import smtplib
 from email.message import EmailMessage
 from email.utils import formataddr
 
 from kai.cockpit.settings import get_cockpit_settings
+
+logger = logging.getLogger(__name__)
 
 
 class MailError(RuntimeError):
@@ -43,6 +46,7 @@ def send_magic_link(user_email: str, magic_url: str) -> None:
     except MailError:
         raise
     except smtplib.SMTPException as exc:
+        logger.exception("Failed to send magic link email to %s", user_email)
         raise MailError(f"Failed to send email: {exc}") from exc
 
 
