@@ -191,7 +191,7 @@ services:
     volumes:
       - https-portal-data:/var/lib/https-portal
     healthcheck:
-      test: ["CMD-SHELL", "nginx -t 2>/dev/null && curl -fsSk https://localhost/ >/dev/null 2>&1 || exit 1"]
+      test: ["CMD-SHELL", "nginx -t 2>/dev/null && curl -fsSk --resolve ${SITE_DOMAIN:-meetk.ai}:443:127.0.0.1 https://${SITE_DOMAIN:-meetk.ai}/ >/dev/null 2>&1 || exit 1"]
       interval: 30s
       timeout: 5s
       retries: 3
