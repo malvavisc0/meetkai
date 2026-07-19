@@ -6,8 +6,6 @@ handled generically by ``agent/core.py:_run_with_tools`` so no per-tool
 ``logger.info`` is added here.
 """
 
-from __future__ import annotations
-
 import json
 import logging
 import re

@@ -3,8 +3,6 @@
 The DSN is encrypted at rest; the label stays plaintext. ``save`` with an
 empty ``url`` preserves the existing encrypted DSN."""
 
-from __future__ import annotations
-
 import logging
 
 from sqlalchemy import create_engine, text

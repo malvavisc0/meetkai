@@ -4,8 +4,6 @@ The signing secret and API key are encrypted at rest. ``save`` with empty
 fields preserves existing secrets. Probes just-saved credentials and sets
 ``status="connected"`` only when both sign and API are valid."""
 
-from __future__ import annotations
-
 import base64
 import json
 import logging

@@ -9,8 +9,6 @@ Do not write to ``request.session["flash"]`` directly elsewhere — that
 bypasses the level and produces the single-tone bug (audit item L).
 """
 
-from __future__ import annotations
-
 from typing import Literal
 
 from starlette.requests import Request

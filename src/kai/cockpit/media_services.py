@@ -4,8 +4,6 @@ Spawns both services, blocks until healthy, sets ``MEDIA_READY``. Bots gate
 on it so no bot launches before STT/TTS are up. Bots are pure HTTP clients.
 """
 
-from __future__ import annotations
-
 import logging
 import signal
 import subprocess

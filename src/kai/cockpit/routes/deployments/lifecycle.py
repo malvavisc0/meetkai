@@ -1,7 +1,5 @@
 """Deployment lifecycle actions: start, stop, sleep, wake, restart, delete."""
 
-from __future__ import annotations
-
 from fastapi import APIRouter, Depends, Form, Request
 from fastapi.responses import RedirectResponse
 from sqlalchemy.orm import Session

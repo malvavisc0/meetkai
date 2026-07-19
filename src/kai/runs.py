@@ -5,8 +5,6 @@ registers it in ``<data>/<bot>.runs.json``. ``kai tell`` resolves a
 ``run_id`` to its endpoint + HMAC key.
 """
 
-from __future__ import annotations
-
 import json
 import logging
 import os

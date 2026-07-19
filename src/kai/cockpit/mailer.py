@@ -1,7 +1,5 @@
 """Send magic-link emails via stdlib smtplib, or print to stdout."""
 
-from __future__ import annotations
-
 import logging
 import smtplib
 from email.message import EmailMessage

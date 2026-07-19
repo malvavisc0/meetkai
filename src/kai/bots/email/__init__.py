@@ -14,8 +14,6 @@ Conversation history is the framework's built-in JSON history keyed by
 history tool here (unlike the waha bot's WAHA-fetching ``get_chat_history``).
 """
 
-from __future__ import annotations
-
 import asyncio
 import json
 import logging

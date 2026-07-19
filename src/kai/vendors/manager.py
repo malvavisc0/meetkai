@@ -18,8 +18,6 @@ clean — a half-removed vendor (binary gone, stale model present) is the exact
 footgun the explicit delete exists to prevent.
 """
 
-from __future__ import annotations
-
 import shutil
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
@@ -105,7 +103,7 @@ class VendorManager:
     def all_vendors(self) -> list[Vendor]:
         return [self._vendors[n] for n in VENDOR_NAMES]
 
-    def list(self) -> list[dict]:
+    def status_rows(self) -> list[dict]:
         """Return a status row per vendor for the CLI table."""
         rows: list[dict] = []
         for v in self.all_vendors():

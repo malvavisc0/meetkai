@@ -22,8 +22,6 @@ A turn that must never go silent (DM / hard direct address) is expressed by
 :func:`action_cls_for_turn`.
 """
 
-from __future__ import annotations
-
 from typing import Literal
 
 from pydantic import Field

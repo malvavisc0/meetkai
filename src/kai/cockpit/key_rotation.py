@@ -3,8 +3,6 @@
 Rotation is operator-initiated (``kai cockpit rotate-credential-key``),
 not tracked or scheduled by the application."""
 
-from __future__ import annotations
-
 import logging
 import re
 from pathlib import Path

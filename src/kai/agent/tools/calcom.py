@@ -1,7 +1,5 @@
 """Cal.com tools — list event types, find slots, book, reschedule, and cancel."""
 
-from __future__ import annotations
-
 import json
 import logging
 from typing import Any, Protocol

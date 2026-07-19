@@ -5,8 +5,6 @@ previously each inlined or duplicated, so there is exactly one place that
 knows how to produce/parse our ISO-8601 wire format and resolve timezones.
 """
 
-from __future__ import annotations
-
 import re
 from datetime import UTC, datetime, timedelta
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError

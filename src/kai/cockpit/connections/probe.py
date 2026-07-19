@@ -5,8 +5,6 @@ identical across SMTP, Database, and Resend connection services. These
 helpers centralize status-reflection and the transient-vs-auth-rejection
 distinction."""
 
-from __future__ import annotations
-
 import logging
 import smtplib
 import socket

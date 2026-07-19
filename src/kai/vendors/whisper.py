@@ -9,8 +9,6 @@ Build deps (cmake, make, gcc) must be present on the host; this module does
 not install them — the error surfaces clearly if missing.
 """
 
-from __future__ import annotations
-
 import logging
 import os
 import shutil

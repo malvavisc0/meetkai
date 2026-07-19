@@ -14,18 +14,13 @@ sync and would break llama_index's coroutine detection — logging is left to
 ``KaiAgent``'s existing tool-call/tool-result logging in ``agent/core.py``.
 """
 
-from __future__ import annotations
-
 import logging
-from typing import TYPE_CHECKING, Protocol, runtime_checkable
+from typing import Protocol, runtime_checkable
 
 from llama_index.core.tools import FunctionTool
 
-from kai.brain.client import QueryResult
+from kai.brain.client import QueryMode, QueryResult
 from kai.brain.config import BRAIN_TOOL_NAME, build_brain_workflow_instruction
-
-if TYPE_CHECKING:
-    from kai.brain.client import QueryMode
 
 logger = logging.getLogger(__name__)
 

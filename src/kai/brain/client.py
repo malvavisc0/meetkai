@@ -10,8 +10,6 @@ Every method, path, body, and response field here was validated empirically
 against a running ``ghcr.io/hkuds/lightrag:v1.5.4`` container.
 """
 
-from __future__ import annotations
-
 import logging
 from typing import Any, BinaryIO, Literal
 
@@ -73,12 +71,12 @@ class DocumentRecord(BaseModel):
         return self.status in TERMINAL_STATUSES
 
     @classmethod
-    def from_track_doc(cls, track_id: str, doc: dict[str, Any]) -> DocumentRecord:
+    def from_track_doc(cls, track_id: str, doc: dict[str, Any]) -> "DocumentRecord":
         """Build from one element of track_status's documents[] list."""
         return cls.model_validate({**doc, "track_id": track_id})
 
     @classmethod
-    def from_list_doc(cls, doc: dict[str, Any]) -> DocumentRecord:
+    def from_list_doc(cls, doc: dict[str, Any]) -> "DocumentRecord":
         """Build from one element of paginated's documents[] list."""
         return cls.model_validate(doc)
 
@@ -93,7 +91,7 @@ class IngestResult(BaseModel):
     message: str = ""
 
     @classmethod
-    def from_response(cls, data: dict[str, Any]) -> IngestResult:
+    def from_response(cls, data: dict[str, Any]) -> "IngestResult":
         return cls.model_validate(data)
 
 
@@ -114,7 +112,7 @@ class QueryResult(BaseModel):
     references: list[QueryReference] = Field(default_factory=list)
 
     @classmethod
-    def from_response(cls, data: dict[str, Any]) -> QueryResult:
+    def from_response(cls, data: dict[str, Any]) -> "QueryResult":
         refs_raw = data.get("references") or []
         return cls(
             response=data.get("response", ""),

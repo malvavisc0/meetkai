@@ -514,7 +514,7 @@ class Bot(BaseBot):
         """
         if self._sleep_store is None:
             return {"ok": False, "error": "sleep store not configured"}
-        self._sleep_store.set(chat_id, True)
+        self._sleep_store.mark(chat_id, True)
         return {"ok": True, "chat_id": chat_id, "sleeping": True}
 
     async def set_wake(self, chat_id: str) -> dict:
@@ -526,7 +526,7 @@ class Bot(BaseBot):
         """
         if self._sleep_store is None:
             return {"ok": False, "error": "sleep store not configured"}
-        self._sleep_store.set(chat_id, False)
+        self._sleep_store.mark(chat_id, False)
         return {"ok": True, "chat_id": chat_id, "sleeping": False}
 
     def _print_startup_config(self) -> None:
@@ -1056,7 +1056,7 @@ class Bot(BaseBot):
             ack = action.text or _SLEEP_ACK
             ack = self._post_process(ack)
             if self._sleep_store is not None:
-                self._sleep_store.set(meta.chat_id, True)
+                self._sleep_store.mark(meta.chat_id, True)
             console.print(f"[green]>[/green]  {ack}  [dim](going to sleep)[/dim]")
             if self._config.mentions_enabled:
                 resolved = resolve_mentions(
@@ -1206,7 +1206,7 @@ class Bot(BaseBot):
             return
         # Waking up: clear sleep and deliver the reply.
         if self._sleep_store is not None:
-            self._sleep_store.set(meta.chat_id, False)
+            self._sleep_store.mark(meta.chat_id, False)
         console.print("[dim]> (woke up)[/dim]")
         if kind in ("send_dm", "send_to_group"):
             target = action.target or meta.chat_id

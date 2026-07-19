@@ -6,8 +6,6 @@ registration wiring (register_tool + add_tool_workflow), not LightRAG's HTTP
 layer (covered by ``brain/tests/test_client.py``).
 """
 
-from __future__ import annotations
-
 from llama_index.core.tools import FunctionTool
 
 from kai.agent.tools.brain import make_brain_query_tool, register_brain_tool

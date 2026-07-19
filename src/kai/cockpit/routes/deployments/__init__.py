@@ -6,8 +6,6 @@ unrelated surfaces. ``router`` here is the combined router the app mounts —
 callers (``kai.cockpit.app``) don't need to know about the split.
 """
 
-from __future__ import annotations
-
 from fastapi import APIRouter
 
 from kai.cockpit.routes.deployments import chats, detail, history, lifecycle, settings, wizard

@@ -6,8 +6,6 @@ into it (NOT the project venv), and downloads the int8-quantized ONNX model
 and voice pack to ``models/kokoro/``.
 """
 
-from __future__ import annotations
-
 import logging
 import shutil
 import subprocess

@@ -12,8 +12,6 @@ transcript XML. Only ``httpx`` is required; no API key is needed (the
 player endpoint responds without one).
 """
 
-from __future__ import annotations
-
 import html as html_module
 import logging
 import re

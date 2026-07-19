@@ -5,8 +5,6 @@ stays focused on its own layout. Uses httpx (already a project dep) rather
 than shelling out to curl — one fewer runtime dependency and cross-platform.
 """
 
-from __future__ import annotations
-
 import logging
 import os
 from pathlib import Path

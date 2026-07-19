@@ -14,8 +14,6 @@ request without blowing up context or cost. The WAV is fed to the existing
 ffmpeg is synchronous, so callers wrap this in ``asyncio.to_thread``.
 """
 
-from __future__ import annotations
-
 import logging
 import os
 import shutil

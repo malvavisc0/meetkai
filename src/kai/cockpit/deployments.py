@@ -4,8 +4,6 @@ Authorization scope differs (CLI: admin/any user; web: self only), but both
 call the same methods.
 """
 
-from __future__ import annotations
-
 import json
 import logging
 import os

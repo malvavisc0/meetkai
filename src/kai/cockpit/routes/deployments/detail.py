@@ -1,7 +1,5 @@
 """Deployment detail page: ``GET /deployments/{dep_id}``."""
 
-from __future__ import annotations
-
 from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends, Request

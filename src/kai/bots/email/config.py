@@ -5,8 +5,6 @@
 an explicit alias instead of the class env_prefix.
 """
 
-from __future__ import annotations
-
 from pydantic import AliasChoices, Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 

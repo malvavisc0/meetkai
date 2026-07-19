@@ -1,7 +1,5 @@
 """Deployment settings: ``GET``/``POST /deployments/{dep_id}/settings``."""
 
-from __future__ import annotations
-
 from collections.abc import Callable
 
 from fastapi import APIRouter, Depends, Form, Request

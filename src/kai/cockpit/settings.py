@@ -5,8 +5,6 @@ Covers the cockpit's own DB, session secret, public URL, SMTP relay for
 login links, and behaviour flags.
 """
 
-from __future__ import annotations
-
 from pathlib import Path
 
 from pydantic_settings import BaseSettings, SettingsConfigDict

@@ -13,8 +13,6 @@ Two-step approach:
 2. httpx.get(CDN_url) → image bytes. The CDN is publicly accessible, no auth.
 """
 
-from __future__ import annotations
-
 import json
 import logging
 import re

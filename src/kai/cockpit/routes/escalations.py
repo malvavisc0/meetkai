@@ -14,8 +14,6 @@ read endpoints — the cockpit passes its URL to the bots it spawns, and the
 payload is a plain escalation record (no credentials).
 """
 
-from __future__ import annotations
-
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import JSONResponse, RedirectResponse
 from pydantic import ValidationError

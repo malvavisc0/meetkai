@@ -8,8 +8,6 @@ channel left to leak control tokens into. ``post_process`` cleans the
 prose in ``action.text`` itself, independent of which action fired.
 """
 
-from __future__ import annotations
-
 import random
 import re
 import time

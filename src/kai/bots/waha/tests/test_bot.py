@@ -979,7 +979,7 @@ class TestSleepToken:
     async def test_sleeping_bot_observes_non_addressed_without_llm(self):
         bot = _make_bot(BotConfig(trigger_keyword="kai"))
         assert bot._sleep_store is not None
-        bot._sleep_store.set("group@g.us", True)
+        bot._sleep_store.mark("group@g.us", True)
         agent = MagicMock()
         agent.chat = AsyncMock(return_value=_chat_result("should not happen"))
         agent.observe = AsyncMock()
@@ -996,7 +996,7 @@ class TestSleepToken:
     async def test_sleeping_bot_wakes_on_mention_with_real_reply(self):
         bot = _make_bot(BotConfig(trigger_keyword="kai"))
         assert bot._sleep_store is not None
-        bot._sleep_store.set("group@g.us", True)
+        bot._sleep_store.mark("group@g.us", True)
         bot._send = AsyncMock()
         bot._bot_ids.add("bot@c.us")
         agent = MagicMock()
@@ -1017,7 +1017,7 @@ class TestSleepToken:
     async def test_sleeping_bot_stays_asleep_on_silent_reply(self):
         bot = _make_bot(BotConfig(trigger_keyword="kai"))
         assert bot._sleep_store is not None
-        bot._sleep_store.set("group@g.us", True)
+        bot._sleep_store.mark("group@g.us", True)
         bot._bot_ids.add("bot@c.us")
         bot._send = AsyncMock()
         agent = MagicMock()
@@ -1036,7 +1036,7 @@ class TestSleepToken:
     async def test_sleeping_dm_wakes_bot(self):
         bot = _make_bot(BotConfig(trigger_keyword="kai"))
         assert bot._sleep_store is not None
-        bot._sleep_store.set("123@c.us", True)
+        bot._sleep_store.mark("123@c.us", True)
         bot._send = AsyncMock()
         agent = MagicMock()
         agent.chat = AsyncMock(return_value=_chat_result("hi again"))
@@ -2171,8 +2171,8 @@ class TestSleepStore:
     def test_load_round_trip(self, tmp_path):
         path = tmp_path / "sleep.json"
         s = SleepStore(path)
-        s.set("chat1@g.us", True)
-        s.set("chat2@g.us", True)
+        s.mark("chat1@g.us", True)
+        s.mark("chat2@g.us", True)
 
         # A fresh instance loading the same file sees both asleep.
         s2 = SleepStore(path)
@@ -2183,8 +2183,8 @@ class TestSleepStore:
     def test_set_false_clears_and_persists(self, tmp_path):
         path = tmp_path / "sleep.json"
         s = SleepStore(path)
-        s.set("chat1@g.us", True)
-        s.set("chat1@g.us", False)
+        s.mark("chat1@g.us", True)
+        s.mark("chat1@g.us", False)
 
         assert not s.is_sleeping("chat1@g.us")
         # And persisted as awake (absent from the file).
@@ -2205,7 +2205,7 @@ class TestSleepStore:
 
     def test_none_path_is_in_memory_only(self):
         s = SleepStore(None)
-        s.set("chat1@g.us", True)
+        s.mark("chat1@g.us", True)
         assert s.is_sleeping("chat1@g.us")
         # A second in-memory instance can't see it (no file written).
         s2 = SleepStore(None)
@@ -2214,19 +2214,19 @@ class TestSleepStore:
     def test_idempotent_set_is_noop_no_rewrite(self, tmp_path):
         path = tmp_path / "sleep.json"
         s = SleepStore(path)
-        s.set("chat1@g.us", True)
+        s.mark("chat1@g.us", True)
         mtime1 = path.stat().st_mtime_ns
         # Setting the same state again must not trigger another write.
-        s.set("chat1@g.us", True)
+        s.mark("chat1@g.us", True)
         assert path.stat().st_mtime_ns == mtime1
         # Nor clearing an already-awake chat.
-        s.set("chat2@g.us", False)
+        s.mark("chat2@g.us", False)
         assert path.stat().st_mtime_ns == mtime1
 
     def test_all_returns_copy(self):
         s = SleepStore(None)
-        s.set("a@g.us", True)
-        s.set("b@g.us", True)
+        s.mark("a@g.us", True)
+        s.mark("b@g.us", True)
         snapshot = s.all()
         assert snapshot == {"a@g.us", "b@g.us"}
         # Mutating the returned set must not affect the store.
@@ -2241,7 +2241,7 @@ class TestSleepPersistence:
         path = tmp_path / "waha.sleep.json"
         bot1 = _make_bot()
         bot1._sleep_store = SleepStore(path)
-        bot1._sleep_store.set("group@g.us", True)
+        bot1._sleep_store.mark("group@g.us", True)
 
         # A brand-new Bot instance (simulating a restart) loading the same
         # store file must still see the chat as asleep.
@@ -2253,8 +2253,8 @@ class TestSleepPersistence:
         path = tmp_path / "waha.sleep.json"
         bot1 = _make_bot()
         bot1._sleep_store = SleepStore(path)
-        bot1._sleep_store.set("group@g.us", True)
-        bot1._sleep_store.set("group@g.us", False)
+        bot1._sleep_store.mark("group@g.us", True)
+        bot1._sleep_store.mark("group@g.us", False)
 
         bot2 = _make_bot()
         bot2._sleep_store = SleepStore(path)

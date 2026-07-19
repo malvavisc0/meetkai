@@ -5,8 +5,6 @@ sub-module (wizard, detail, settings, chats, history, lifecycle) can import
 just what it needs without everything living in one file.
 """
 
-from __future__ import annotations
-
 from datetime import UTC, datetime
 
 from fastapi.responses import RedirectResponse

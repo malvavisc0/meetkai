@@ -5,8 +5,6 @@ The password is encrypted at rest; all other fields stay plaintext.
 Distinct from ``cockpit/mailer.py``'s ``KAI_SMTP_*`` (the cockpit's login-link relay).
 """
 
-from __future__ import annotations
-
 import logging
 import smtplib
 

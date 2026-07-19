@@ -5,8 +5,6 @@ operator's live WhatsApp chat list); the email bot has no equivalent and
 never renders the picker widget.
 """
 
-from __future__ import annotations
-
 import logging
 
 from fastapi import APIRouter, Depends, Query

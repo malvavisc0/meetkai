@@ -5,8 +5,6 @@ single Python command so the same code runs locally, in CI, and in the
 container without a shell layer.
 """
 
-from __future__ import annotations
-
 import logging
 
 import typer
@@ -42,7 +40,7 @@ def vendors_list() -> None:
         ("vendor dir", "dim"),
         ("model dir", "dim"),
     )
-    for row in mgr.list():
+    for row in mgr.status_rows():
         installed = "[green]✓ yes[/green]" if row["installed"] else "[red]✗ no[/red]"
         table.add_row(
             row["name"],

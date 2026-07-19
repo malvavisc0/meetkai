@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 import typer
 
 from kai.cli.style import DIM, WARN, soft_table

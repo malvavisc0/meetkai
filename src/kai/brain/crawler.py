@@ -9,8 +9,6 @@ The whole-site BFS is **not** in this client: crawl4ai 0.9.0 rejects
 ``crawl()``'s returned links.
 """
 
-from __future__ import annotations
-
 import logging
 from typing import Any
 
@@ -31,7 +29,7 @@ class CrawlLinks(BaseModel):
     external: list[str] = Field(default_factory=list)
 
     @classmethod
-    def from_dict(cls, links: dict[str, Any] | None) -> CrawlLinks:
+    def from_dict(cls, links: dict[str, Any] | None) -> "CrawlLinks":
         if not links:
             return cls()
 
@@ -87,7 +85,7 @@ class CrawlPage(BaseModel):
     error_message: str | None = None
 
     @classmethod
-    def from_result(cls, result: dict[str, Any]) -> CrawlPage:
+    def from_result(cls, result: dict[str, Any]) -> "CrawlPage":
         return cls(
             url=result.get("url", ""),
             success=bool(result.get("success")),

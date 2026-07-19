@@ -2,8 +2,6 @@
 + document management (upload / paste text / crawl a URL / list / delete).
 """
 
-from __future__ import annotations
-
 import re
 from collections import deque
 from typing import BinaryIO

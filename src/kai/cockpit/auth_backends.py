@@ -4,8 +4,6 @@ v1 ships MagicLinkProvider (request→approve flow). A future OIDCProvider
 plugs in behind the same AuthProvider interface.
 """
 
-from __future__ import annotations
-
 from abc import ABC, abstractmethod
 
 from sqlalchemy.orm import Session

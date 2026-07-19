@@ -1,7 +1,5 @@
 """Deploy wizard routes: ``GET``/``POST /deployments/new``."""
 
-from __future__ import annotations
-
 from fastapi import APIRouter, Depends, Form, HTTPException, Request
 from fastapi.responses import RedirectResponse
 from sqlalchemy.orm import Session

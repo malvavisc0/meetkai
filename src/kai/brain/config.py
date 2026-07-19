@@ -5,8 +5,6 @@ Loaded from ``KAI_BRAIN_*`` env vars (or ``.env``). Per-user fields
 ``Connection.config`` JSON and are injected at runtime by ``deployments.start()``.
 """
 
-from __future__ import annotations
-
 import logging
 from urllib.parse import urlparse
 
@@ -123,7 +121,7 @@ class BrainSettings(BaseSettings):
         return build_brain_workflow_instruction(self.instruction, self.mandatory)
 
     @classmethod
-    def for_test(cls, **overrides: object) -> BrainSettings:
+    def for_test(cls, **overrides: object) -> "BrainSettings":
         return cls(_env_file=None, **overrides)  # type: ignore[call-arg]
 
 

@@ -1,7 +1,5 @@
 """``kai-vNNN-<slug>`` naming scheme for external service identifiers."""
 
-from __future__ import annotations
-
 import re
 from importlib.metadata import PackageNotFoundError, version
 

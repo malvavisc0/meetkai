@@ -21,8 +21,6 @@ disabled by config (e.g. ``kokoro_enabled=False``) is omitted rather than
 flagged as down.
 """
 
-from __future__ import annotations
-
 import asyncio
 from dataclasses import dataclass
 

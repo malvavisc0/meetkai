@@ -20,8 +20,6 @@ transforms, not the waha persona's full cleanup. The emoji range is shared with
 an emoji.
 """
 
-from __future__ import annotations
-
 import re
 from functools import partial
 

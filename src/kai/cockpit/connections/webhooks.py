@@ -1,7 +1,5 @@
 """Webhook-type catalog for cockpit-level provider ingress."""
 
-from __future__ import annotations
-
 import base64
 import hashlib
 import hmac

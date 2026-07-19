@@ -1,24 +1,19 @@
 """Escalation and blacklist tools — side-effecting tools
 that alert the operator and modify bot runtime state."""
 
-from __future__ import annotations
-
 import asyncio
 import json
 import logging
 import uuid
+from collections.abc import Awaitable, Callable
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Literal
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
+from kai.agent.context import ToolContext
 from kai.agent.helpers import parse_iso, to_iso
-
-if TYPE_CHECKING:
-    from collections.abc import Awaitable, Callable
-
-    from kai.agent.context import ToolContext
 
 logger = logging.getLogger(__name__)
 
@@ -46,7 +41,7 @@ class Escalation(BaseModel):
         return d
 
     @classmethod
-    def from_dict(cls, data: dict[str, Any]) -> Escalation:
+    def from_dict(cls, data: dict[str, Any]) -> "Escalation":
         created_at = (
             parse_iso(str(data["created_at"])) if data.get("created_at") else datetime.now(UTC)
         )

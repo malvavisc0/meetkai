@@ -14,8 +14,6 @@ blocks (the waha bot's web-search, the Brain's, the SQL tool's) rather
 than replacing them (``agent/core.py:add_tool_workflow``).
 """
 
-from __future__ import annotations
-
 import logging
 import re
 import smtplib

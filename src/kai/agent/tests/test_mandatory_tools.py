@@ -14,8 +14,6 @@ These tests cover the prompt builder and confirm the agent no longer performs
 any post-turn retry (the removed "hard guarantee" that was really a nudge).
 """
 
-from __future__ import annotations
-
 import asyncio
 from collections import OrderedDict
 

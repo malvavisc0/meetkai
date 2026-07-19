@@ -10,8 +10,6 @@ Callers should run these checks *before* any network I/O; treat ``ValueError``
 as an Operator-facing message.
 """
 
-from __future__ import annotations
-
 import asyncio
 import ipaddress
 import os

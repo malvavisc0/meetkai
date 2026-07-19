@@ -1,7 +1,5 @@
 """Conversation history page: ``GET /deployments/{dep_id}/history``."""
 
-from __future__ import annotations
-
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import RedirectResponse
 from sqlalchemy.orm import Session

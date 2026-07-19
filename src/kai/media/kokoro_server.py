@@ -18,8 +18,6 @@ Usage (standalone, for testing):
         --host 127.0.0.1 --port 8788
 """
 
-from __future__ import annotations
-
 import argparse
 import io
 import json

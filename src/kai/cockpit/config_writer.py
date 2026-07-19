@@ -6,14 +6,10 @@ match what the spawned bot reads: ``BaseBot.resolve_config_path`` looks up
 ``KAI_CONFIGS_DIR=data/configs/cockpit``.
 """
 
-from __future__ import annotations
-
 import json
 from pathlib import Path
-from typing import TYPE_CHECKING
 
-if TYPE_CHECKING:
-    from kai.cockpit.models import Deployment
+from kai.cockpit.models import Deployment
 
 CONFIGS_DIR = Path("data/configs/cockpit")
 

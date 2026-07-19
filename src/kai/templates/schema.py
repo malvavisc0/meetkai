@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 from typing import Any, Literal
 
 from pydantic import BaseModel, Field, model_validator
@@ -21,7 +19,7 @@ class PostProcessingConfig(BaseModel):
     max_words: int | None = None
 
     @model_validator(mode="after")
-    def _reject_dead_config(self) -> PostProcessingConfig:
+    def _reject_dead_config(self) -> "PostProcessingConfig":
         if self.profile == "custom":
             return self
 

@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 import logging
 from pathlib import Path
 
@@ -18,7 +16,7 @@ class TemplateRegistry:
         self._dirs = [Path(d) for d in dirs]
 
     @classmethod
-    def bundled(cls) -> TemplateRegistry:
+    def bundled(cls) -> "TemplateRegistry":
         templates_dir = Path(__file__).resolve().parents[3] / "templates"
         if not templates_dir.is_dir():
             raise FileNotFoundError(f"Templates directory not found: {templates_dir}")

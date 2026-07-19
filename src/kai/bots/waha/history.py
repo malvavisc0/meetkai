@@ -5,29 +5,28 @@ Extracted from ``__init__.py`` to keep the main bot module lean.  The
 :meth:`Bot.configure` to register the ``get_whatsapp_history`` LLM tool.
 """
 
-from __future__ import annotations
-
 import logging
 from typing import TYPE_CHECKING
 
 from llama_index.core.tools import FunctionTool
 
+from kai.agent.core import KaiAgent
+from kai.bots.waha.client import WahaClient
 from kai.bots.waha.jid import sanitize_display_name
 from kai.bots.waha.mentions import resolve_inbound_mentions
 from kai.bots.waha.payload import GROUP_SUFFIX, _extract_sender_id, _extract_sender_name
 
-if TYPE_CHECKING:
-    from kai.agent.core import KaiAgent
-    from kai.bots.waha import Bot
-    from kai.bots.waha.client import WahaClient
-
 logger = logging.getLogger(__name__)
+
+
+if TYPE_CHECKING:
+    from kai.bots.waha import Bot
 
 
 def register_chat_history_tool(
     agent: KaiAgent,
     *,
-    bot: Bot,
+    bot: "Bot",
 ) -> None:
     """Register ``get_whatsapp_history``, scoped to the current chat.
 

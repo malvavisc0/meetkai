@@ -10,8 +10,6 @@ successful forward — a transient bot failure (502) leaves it unrecorded so the
 provider's retry of the same id gets a clean re-forward attempt.
 """
 
-from __future__ import annotations
-
 import asyncio
 import json
 

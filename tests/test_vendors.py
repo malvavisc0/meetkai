@@ -42,7 +42,7 @@ class TestVendorManager:
             mgr.get("nope")
 
     def test_list_reports_all_three(self, root):
-        rows = VendorManager(root).list()
+        rows = VendorManager(root).status_rows()
         assert {r["name"] for r in rows} == set(VENDOR_NAMES)
         for r in rows:
             assert r["installed"] is False

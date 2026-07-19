@@ -10,8 +10,6 @@ Format: ``{"sleeping": ["chat1@g.us", ...]}``. Sleep is binary, so only
 asleep chats are stored (absence == awake) — the file stays tiny.
 """
 
-from __future__ import annotations
-
 import json
 import logging
 from pathlib import Path
@@ -62,7 +60,7 @@ class SleepStore:
         """Return True if ``chat_id`` is currently asleep."""
         return chat_id in self._sleeping
 
-    def set(self, chat_id: str, sleeping: bool) -> None:
+    def mark(self, chat_id: str, sleeping: bool) -> None:
         """Mark ``chat_id`` as asleep (or awake) and persist.
 
         Idempotent: setting an already-correct state is a no-op (no rewrite).

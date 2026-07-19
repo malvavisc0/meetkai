@@ -4,8 +4,6 @@ Kept dependency-free (no SQLAlchemy / FastAPI imports) so any module can
 import these without pulling in the web stack.
 """
 
-from __future__ import annotations
-
 import hashlib
 import hmac as hmac_mod
 from datetime import UTC, datetime

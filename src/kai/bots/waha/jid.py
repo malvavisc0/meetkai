@@ -1,7 +1,5 @@
 """Shared JID and display-name helpers for the WAHA bot."""
 
-from __future__ import annotations
-
 
 def user_digits(jid: str) -> str:
     """Extract the bare digit prefix from a WhatsApp JID (before ``@``)."""

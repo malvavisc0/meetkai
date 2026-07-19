@@ -7,8 +7,6 @@ always current, per project decision) and evermeet for macOS.
 No build step — ffmpeg is distributed as prebuilt binaries.
 """
 
-from __future__ import annotations
-
 import logging
 import platform
 import shutil

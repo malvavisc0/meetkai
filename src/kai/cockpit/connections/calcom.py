@@ -5,8 +5,6 @@ an empty ``api_key`` preserves the existing key. Cal.com authenticates with
 a static Bearer API key — no OAuth, no webhook ingress.
 """
 
-from __future__ import annotations
-
 import logging
 
 import httpx

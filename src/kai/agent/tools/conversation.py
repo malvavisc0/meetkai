@@ -6,17 +6,13 @@ These tools operate on :class:`KaiAgent`'s ``_history`` store.
 - ``record_note`` — write a note into a conversation's history bucket.
 """
 
-from __future__ import annotations
-
 import logging
-from typing import TYPE_CHECKING
 
 from llama_index.core.llms import ChatMessage, MessageRole
 from llama_index.core.tools import FunctionTool
 
-if TYPE_CHECKING:
-    from kai.agent.context import ToolContext
-    from kai.agent.core import KaiAgent
+from kai.agent.context import ToolContext
+from kai.agent.core import KaiAgent
 
 logger = logging.getLogger(__name__)
 

@@ -14,8 +14,6 @@ Only the fields declared in ``CREDENTIAL_TYPES[...].secret_fields`` (or
 ``Connection.config`` stays plaintext.
 """
 
-from __future__ import annotations
-
 import base64
 
 from cryptography.fernet import Fernet, InvalidToken

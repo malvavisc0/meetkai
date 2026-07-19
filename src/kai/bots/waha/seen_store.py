@@ -21,8 +21,6 @@ Two persistence paths share one in-memory mutation:
   ``OrderedDict`` (which the loop may mutate concurrently).
 """
 
-from __future__ import annotations
-
 import asyncio
 import json
 import logging
