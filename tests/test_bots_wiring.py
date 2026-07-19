@@ -1,13 +1,4 @@
-"""Phase 2 smoke tests — template-driven bot behavior wiring.
-
-Verifies the Phase 2 success criteria:
-- ``configure()`` receives the resolved template + ``ToolResolution`` and drives
-  actions / post-processing / reply_style / tool gating from it.
-- Bot-owned tool registration (``get_whatsapp_history``, conversation tools,
-  the task scheduler) respects the resolved tool set — a template that omits a
-  tool gets it absent.
-- The ``general`` default reproduces the previous hardcoded behavior.
-"""
+"""Smoke tests — template-driven bot behavior wiring."""
 
 from pathlib import Path
 from unittest.mock import MagicMock
@@ -25,7 +16,6 @@ from kai.bots.waha.actions import (
     action_cls_for_turn,
 )
 from kai.bots.waha.setup import BotConfig as WahaBotConfig
-from kai.config.settings import Settings
 from kai.templates import TemplateRegistry
 from kai.templates.resolver import resolve_tools
 from kai.templates.schema import (
@@ -33,6 +23,7 @@ from kai.templates.schema import (
     TemplateDef,
     TemplateTools,
 )
+from tests.conftest import make_test_settings as _settings
 
 
 def _general(transport: str) -> TemplateDef:
@@ -67,10 +58,6 @@ def _fake_agent() -> MagicMock:
     agent.register_tool.side_effect = _register_tool
     agent.add_tool_workflow.side_effect = _add_tool_workflow
     return agent
-
-
-def _settings() -> Settings:
-    return Settings.for_test(agent_history_folder=None)
 
 
 @pytest.fixture

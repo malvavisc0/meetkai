@@ -1,14 +1,4 @@
-"""Phase 3 specialized-template tests.
-
-Verifies the Phase 3 success criteria:
-- Each specialized template declares distinct actions / tools / config.
-- Templates with ``escalation_rules`` inject the ESCALATION RULES block into
-  the bot's loaded system prompt at runtime (not just the CLI preview).
-- A focused template (``order-status``) omits task tools and task-related
-  machinery.
-- The catalog's transport-action constraints hold (no waha-only actions on
-  email templates).
-"""
+"""Specialized-template tests."""
 
 from pathlib import Path
 from unittest.mock import MagicMock
@@ -19,9 +9,9 @@ from kai.bots.email import Bot as EmailBot
 from kai.bots.email.setup import BotConfig as EmailBotConfig
 from kai.bots.waha import Bot as WahaBot
 from kai.bots.waha.setup import BotConfig as WahaBotConfig
-from kai.config.settings import Settings
 from kai.templates import TemplateRegistry, escalation_prompt_section
 from kai.templates.resolver import resolve_tools
+from tests.conftest import make_test_settings as _settings
 
 
 def _tmpl(transport: str, name: str):
@@ -49,10 +39,6 @@ def _fake_agent() -> MagicMock:
 
     agent.register_tool.side_effect = _register_tool
     return agent
-
-
-def _settings() -> Settings:
-    return Settings.for_test(agent_history_folder=None)
 
 
 @pytest.fixture

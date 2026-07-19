@@ -182,17 +182,9 @@ class BaseBot(ABC):
             return
 
         self._agent = agent
-        store_path = None
-        if settings.tasks_folder is not None:
-            # Anchor relative folders to the bot's own directory so the store
-            # lives "alongside the bot" and does not depend on the process CWD
-            # (a relative path would otherwise resolve differently each time the
-            # bot is started from a different directory, silently losing tasks).
-            folder = Path(settings.tasks_folder)
-            if not folder.is_absolute():
-                folder = self.bot_dir / folder
-            store_path = folder / f"{self.instance_id}.tasks.json"
-            store_path.parent.mkdir(parents=True, exist_ok=True)
+        folder = Path(settings.tasks_folder)
+        store_path = folder / f"{self.instance_id}.tasks.json"
+        store_path.parent.mkdir(parents=True, exist_ok=True)
         self._task_store = TaskStore(store_path)
         self._task_scheduler = TaskScheduler(
             self._task_store,
@@ -223,13 +215,9 @@ class BaseBot(ABC):
         survive restarts the same way tasks do.
         """
         if self._escalation_store is None:
-            store_path = None
-            if settings.escalations_folder is not None:
-                folder = Path(settings.escalations_folder)
-                if not folder.is_absolute():
-                    folder = self.bot_dir / folder
-                store_path = folder / f"{self.instance_id}.escalations.json"
-                store_path.parent.mkdir(parents=True, exist_ok=True)
+            folder = Path(settings.escalations_folder)
+            store_path = folder / f"{self.instance_id}.escalations.json"
+            store_path.parent.mkdir(parents=True, exist_ok=True)
             self._escalation_store = EscalationStore(store_path)
         set_escalation_store(self._escalation_store)
         set_cockpit_url(settings.cockpit_url)

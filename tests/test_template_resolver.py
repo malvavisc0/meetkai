@@ -407,10 +407,6 @@ class TestActionVocabularyDrift:
     bot modules' canonical definitions. If a bot adds/renames an action without
     updating resolver.py, validate_actions() would wrongly reject valid
     templates — these tests make that drift fail loudly instead.
-
-    Phase 2 dissolves the duplication entirely when actions become
-    template-driven (the bot reads its vocabulary from the template); until then
-    this guard is the safety net.
     """
 
     def test_waha_actions_match_bot_definition(self):

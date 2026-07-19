@@ -40,12 +40,22 @@ def _clean_kai_env(monkeypatch):
     monkeypatch.setattr(logger_mod, "_configured", False)
 
 
+def make_test_settings() -> Settings:
+    """Settings for bot-configuring tests.
+
+    No on-disk chat history (``agent_history_folder=None``); task/escalation
+    stores go to scratch ``/tmp`` dirs so the absolute-path validator passes
+    without touching the container-only ``/app/data`` default.
+    """
+    return Settings.for_test(
+        agent_history_folder=None,
+        tasks_folder="/tmp/kai-test-tasks",
+        escalations_folder="/tmp/kai-test-esc",
+    )
+
+
 @pytest.fixture(autouse=True)
 def _isolated_settings(monkeypatch):
     """Ensure tests using KaiAgent(settings=None) never load real history
     from the on-disk data/ folder."""
-
-    def _test_settings() -> Settings:
-        return Settings.for_test(agent_history_folder=None)
-
-    monkeypatch.setattr("kai.agent.core.get_settings", _test_settings)
+    monkeypatch.setattr("kai.agent.core.get_settings", make_test_settings)

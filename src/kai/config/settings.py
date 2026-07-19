@@ -61,15 +61,24 @@ class Settings(BaseSettings):
         default=5.0,
         description="How often (seconds) the scheduler checks for due tasks",
     )
-    tasks_folder: Path | None = Field(
-        default=Path("data"),
-        description=("Directory for per-bot task stores. Null = in-memory only."),
+    tasks_folder: Path = Field(
+        default=Path("/app/data"),
+        description="Directory for per-bot task stores (must be an absolute path).",
+    )
+    escalations_folder: Path = Field(
+        default=Path("/app/data"),
+        description="Directory for per-bot escalation stores (must be an absolute path).",
     )
 
-    escalations_folder: Path | None = Field(
-        default=Path("data"),
-        description="Directory for per-bot escalation stores. Null = in-memory only.",
-    )
+    @field_validator("tasks_folder", "escalations_folder")
+    @classmethod
+    def validate_store_folder_absolute(cls, v: Path) -> Path:
+        if not v.is_absolute():
+            raise ValueError(
+                f"{v} is not an absolute path. KAI_TASKS_FOLDER and "
+                "KAI_ESCALATIONS_FOLDER must be absolute paths."
+            )
+        return v
 
     cockpit_url: str = Field(
         default="",

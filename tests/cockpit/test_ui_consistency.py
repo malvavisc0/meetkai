@@ -60,11 +60,7 @@ def _css_outside_tokens_layer(css: str) -> str:
 
 
 def test_no_inline_style_attributes_in_templates():
-    """Cockpit templates must style elements via cockpit.css classes only.
-
-    An inline `style="..."` is exactly the kind of one-off page style
-    Phase 0 of the UI consistency plan exists to prevent from reappearing.
-    """
+    """Cockpit templates must style elements via cockpit.css classes only."""
     offenders = []
     for path in _iter_template_files():
         text = path.read_text()

@@ -641,29 +641,19 @@ class Bot(BaseBot):
         finally:
             await client.close()
 
-    def _resolve_store_path(self, settings: Settings, suffix: str) -> Path | None:
-        """Resolve a per-bot state file path anchored to the bot dir.
-
-        Shared by the seen-IDs and sleep-state stores: both live alongside
-        ``<name>.tasks.json`` (CWD-independent). Returns None when
-        persistence is disabled (``tasks_folder`` unset), in which case the
-        caller's store stays in-memory only.
-        """
-        if settings.tasks_folder is None:
-            return None
+    def _resolve_store_path(self, settings: Settings, suffix: str) -> Path:
+        """Resolve a per-bot state file path (CWD-independent, requires absolute folder)."""
         folder = Path(settings.tasks_folder)
-        if not folder.is_absolute():
-            folder = self.bot_dir / folder
         path = folder / f"{self.instance_id}.{suffix}"
         path.parent.mkdir(parents=True, exist_ok=True)
         return path
 
-    def _seen_store_path(self, settings: Settings) -> Path | None:
-        """Path to the seen-IDs file, or None when persistence is off."""
+    def _seen_store_path(self, settings: Settings) -> Path:
+        """Path to the seen-IDs file."""
         return self._resolve_store_path(settings, "seen.json")
 
-    def _sleep_store_path(self, settings: Settings) -> Path | None:
-        """Path to the sleep-state file, or None when persistence is off."""
+    def _sleep_store_path(self, settings: Settings) -> Path:
+        """Path to the sleep-state file."""
         return self._resolve_store_path(settings, "sleep.json")
 
     async def _is_seen_message(self, message_id: str) -> bool:

@@ -748,7 +748,6 @@ class DeploymentsService:
         """Remove every per-bot state file for this deployment instance."""
         instance_id = self._instance_id(deployment)
 
-        from kai.bots import load_bot
         from kai.config.settings import get_settings
 
         settings = get_settings()
@@ -758,8 +757,6 @@ class DeploymentsService:
         # goal), runs.runs_path (runs), kai.bots.waha.Bot (seen/sleep), and
         # kai.bots.base.Bot (tasks). If any naming rule changes, update the
         # suffixes here too or purge silently leaves orphaned files behind.
-        # tasks_folder is resolved relative to the bot's package dir (not CWD
-        # like agent_history_folder) — mirrored exactly below via load_bot.
         history_suffixes = [
             f"{instance_id}.json",
             f"{instance_id}.json.goal",
@@ -782,15 +779,12 @@ class DeploymentsService:
             except OSError:
                 pass
 
-        if settings.tasks_folder is not None:
-            tasks_folder = Path(settings.tasks_folder)
-            if not tasks_folder.is_absolute():
-                tasks_folder = load_bot(deployment.bot_type).bot_dir / tasks_folder
-            for suffix in task_suffixes:
-                try:
-                    (tasks_folder / suffix).unlink(missing_ok=True)
-                except OSError:
-                    pass
+        tasks_folder = Path(settings.tasks_folder)
+        for suffix in task_suffixes:
+            try:
+                (tasks_folder / suffix).unlink(missing_ok=True)
+            except OSError:
+                pass
 
         try:
             (config_writer.CONFIGS_DIR / f"{instance_id}.json").unlink(missing_ok=True)

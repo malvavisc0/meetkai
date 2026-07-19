@@ -1,17 +1,17 @@
 name: meetkai
 
 networks:
-  meetkai-net:
+  odyssey:
 
 volumes:
   redis-data:
   waha-sessions:
   morphik-storage:
   morphik-postgres-data:
-  cockpit-data:
-  cockpit-vendor:
-  cockpit-models:
   https-portal-data:
+  kai-data:
+  kai-vendor:
+  kai-models:
 
 services:
   redis:
@@ -30,7 +30,7 @@ services:
       retries: 10
       start_period: 10s
     networks:
-      - meetkai-net
+      - odyssey
 
   waha:
     image: devlikeapro/waha:latest
@@ -76,7 +76,7 @@ services:
     depends_on:
       - redis
     networks:
-      - meetkai-net
+      - odyssey
 
   morphik:
     image: ghcr.io/morphik-org/morphik-core:2026-07-05
@@ -89,12 +89,12 @@ services:
       TZ: ${TZ}
       JWT_SECRET_KEY: ${KAI_BRAIN_MORPHIK_JWT_SECRET}
       LOCAL_URI_PASSWORD: ${KAI_BRAIN_MORPHIK_LOCAL_PASSWORD}
-      POSTGRES_URI: postgresql+asyncpg://morphik:morphik@morphik-postgres:5432/morphik
-      PGPASSWORD: morphik
+      POSTGRES_URI: postgresql+asyncpg://${MORPHIK_POSTGRES_USER}:${MORPHIK_POSTGRES_PASSWORD}@morphik-postgres:5432/${MORPHIK_POSTGRES_DB}
+      PGPASSWORD: ${MORPHIK_POSTGRES_PASSWORD}
       PGHOST: morphik-postgres
       PGPORT: "5432"
-      PGUSER: morphik
-      PGDATABASE: morphik
+      PGUSER: ${MORPHIK_POSTGRES_USER}
+      PGDATABASE: ${MORPHIK_POSTGRES_DB}
       REDIS_HOST: redis
       REDIS_PORT: "6379"
       # OPENAI_API_KEY is read by morphik.toml's openai completion/embedding
@@ -116,7 +116,7 @@ services:
       retries: 10
       start_period: 30s
     networks:
-      - meetkai-net
+      - odyssey
 
   morphik-postgres:
     image: pgvector/pgvector:pg18
@@ -125,20 +125,20 @@ services:
     restart: unless-stopped
     environment:
       TZ: ${TZ}
-      POSTGRES_USER: morphik
-      POSTGRES_PASSWORD: morphik
-      POSTGRES_DB: morphik
+      POSTGRES_USER: ${MORPHIK_POSTGRES_USER}
+      POSTGRES_PASSWORD: ${MORPHIK_POSTGRES_PASSWORD}
+      POSTGRES_DB: ${MORPHIK_POSTGRES_DB}
       PGDATA: /var/lib/postgresql/data/pgdata
     volumes:
       - morphik-postgres-data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U morphik -d morphik"]
+      test: ["CMD-SHELL", "pg_isready -U ${MORPHIK_POSTGRES_USER} -d ${MORPHIK_POSTGRES_DB}"]
       interval: 10s
       timeout: 5s
       retries: 10
       start_period: 10s
     networks:
-      - meetkai-net
+      - odyssey
 
   crawl4ai:
     image: unclecode/crawl4ai:0
@@ -160,7 +160,7 @@ services:
       retries: 10
       start_period: 60s
     networks:
-      - meetkai-net
+      - odyssey
 
   cockpit:
     image: ghcr.io/malvavisc0/meetkai-cockpit:${KAI_IMAGE_TAG:-latest}
@@ -173,9 +173,9 @@ services:
     expose:
       - "8080"
     volumes:
-      - cockpit-data:/app/data
-      - cockpit-vendor:/app/vendor
-      - cockpit-models:/app/models
+      - kai-data:/app/data
+      - kai-vendor:/app/vendor
+      - kai-models:/app/models
     env_file: .env
     depends_on:
       waha:
@@ -191,7 +191,7 @@ services:
       retries: 10
       start_period: 60s
     networks:
-      - meetkai-net
+      - odyssey
 
   https-portal:
     image: steveltn/https-portal:1
@@ -220,4 +220,4 @@ services:
       cockpit:
         condition: service_healthy
     networks:
-      - meetkai-net
+      - odyssey

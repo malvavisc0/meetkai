@@ -1,8 +1,16 @@
 name: meetkai-dev
 
-# Dev override. The cockpit image runs as non-root uid 1000 (see Dockerfile),
-# so the bind-mounted ./data/* dirs below must be owned by uid 1000 on the
-# host. If they're root-owned, fix once: sudo chown -R 1000:1000 data/
+networks:
+  odyssey:
+
+volumes:
+  redis-data:
+  waha-sessions:
+  morphik-storage:
+  morphik-postgres-data:
+  kai-data:
+  kai-vendor:
+  kai-models:
 
 services:
   redis:
@@ -11,7 +19,9 @@ services:
     hostname: redis
     restart: unless-stopped
     volumes:
-      - ./data/redis:/data
+      - redis-data:/data
+    networks:
+      - odyssey
 
   waha:
     image: devlikeapro/waha:latest
@@ -47,9 +57,11 @@ services:
       WHATSAPP_API_PORT: ${WHATSAPP_API_PORT}
       WAHA_APPS_ENABLED: ${WAHA_APPS_ENABLED}
     volumes:
-      - ./data/waha:/app/.sessions
+      - waha-sessions:/app/.sessions
     depends_on:
       - redis
+    networks:
+      - odyssey
 
   mailpit:
     image: axllent/mailpit:v1.30
@@ -60,6 +72,8 @@ services:
       - 1025
     ports:
       - "8025:8025"
+    networks:
+      - odyssey
 
   morphik:
     image: ghcr.io/morphik-org/morphik-core:2026-07-05
@@ -71,17 +85,17 @@ services:
     environment:
       JWT_SECRET_KEY: ${KAI_BRAIN_MORPHIK_JWT_SECRET}
       LOCAL_URI_PASSWORD: ${KAI_BRAIN_MORPHIK_LOCAL_PASSWORD}
-      POSTGRES_URI: postgresql+asyncpg://morphik:morphik@morphik-postgres:5432/morphik
-      PGPASSWORD: morphik
+      POSTGRES_URI: postgresql+asyncpg://${MORPHIK_POSTGRES_USER}:${MORPHIK_POSTGRES_PASSWORD}@morphik-postgres:5432/${MORPHIK_POSTGRES_DB}
+      PGPASSWORD: ${MORPHIK_POSTGRES_PASSWORD}
       PGHOST: morphik-postgres
       PGPORT: "5432"
-      PGUSER: morphik
-      PGDATABASE: morphik
+      PGUSER: ${MORPHIK_POSTGRES_USER}
+      PGDATABASE: ${MORPHIK_POSTGRES_DB}
       REDIS_HOST: redis
       REDIS_PORT: "6379"
       OPENAI_API_KEY: ${OPENROUTER_API_KEY}
     volumes:
-      - ./data/morphik/storage:/app/storage
+      - morphik-storage:/app/storage
       - ./docker/morphik.toml:/app/morphik.toml:ro
     depends_on:
       morphik-postgres:
@@ -92,6 +106,8 @@ services:
       timeout: 5s
       retries: 10
       start_period: 30s
+    networks:
+      - odyssey
 
   morphik-postgres:
     image: pgvector/pgvector:pg18
@@ -100,18 +116,20 @@ services:
     restart: unless-stopped
     environment:
       TZ: ${TZ}
-      POSTGRES_USER: morphik
-      POSTGRES_PASSWORD: morphik
-      POSTGRES_DB: morphik
+      POSTGRES_USER: ${MORPHIK_POSTGRES_USER}
+      POSTGRES_PASSWORD: ${MORPHIK_POSTGRES_PASSWORD}
+      POSTGRES_DB: ${MORPHIK_POSTGRES_DB}
       PGDATA: /var/lib/postgresql/data/pgdata
     volumes:
-      - ./data/morphik/postgres:/var/lib/postgresql/data
+      - morphik-postgres-data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U morphik -d morphik"]
+      test: ["CMD-SHELL", "pg_isready -U ${MORPHIK_POSTGRES_USER} -d ${MORPHIK_POSTGRES_DB}"]
       interval: 10s
       timeout: 5s
       retries: 10
       start_period: 10s
+    networks:
+      - odyssey
 
   crawl4ai:
     image: unclecode/crawl4ai:0
@@ -125,6 +143,8 @@ services:
       bash -c "python -m playwright install chromium && exec bash entrypoint.sh"
     environment:
       CRAWL4AI_API_TOKEN: ${KAI_BRAIN_CRAWL4AI_TOKEN}
+    networks:
+      - odyssey
 
   cockpit:
     build: .
@@ -138,9 +158,9 @@ services:
     ports:
       - "8080:8080"
     volumes:
-      - ./data/kai:/app/data
-      - ./data/vendor:/app/vendor
-      - ./data/models:/app/models
+      - kai-data:/app/data
+      - kai-vendor:/app/vendor
+      - kai-models:/app/models
     env_file: .env
     depends_on:
       waha:
@@ -151,3 +171,5 @@ services:
         condition: service_started
       morphik:
         condition: service_healthy
+    networks:
+      - odyssey

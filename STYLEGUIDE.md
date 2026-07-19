@@ -315,7 +315,7 @@ Each is defined once in `cockpit.css` and reused across pages:
 | `.text-sm` | Smaller text step (`var(--text-sm)`) |
 | `.mt-2xl` / `.mb-0` / `.mb-md` | Spacing utilities (top margin 2xl, bottom margin 0, bottom margin md) — prefer layout primitives (`.stack`, card gaps) for routine stacking; these are for one-off overrides only |
 | `.card--center` | Centers a card's content (used for narrow centered cards like auth/error states) |
-| `.empty-state` / `.empty-state--hero` / `.empty-state__icon` / `.empty-state__hint` | Empty / first-run state shell. Outcome-first copy + optional icon + optional primary CTA. Phase 4 populates; the macro lives at `macros/empty_state.html`. |
+| `.empty-state` / `.empty-state--hero` / `.empty-state__icon` / `.empty-state__hint` | Empty / first-run state shell. Outcome-first copy + optional icon + optional primary CTA; the macro lives at `macros/empty_state.html`. |
 | `macros/page_header.html` | Page header macro — single source for `.page-header` / `.page-header--split` with eyebrow, title, subtitle, optional back URL. |
 | `macros/form_actions.html` | Save / Cancel (or Save / Test) footer cluster macro — primary with check icon + optional secondary. |
 | `macros/status_badge.html` | State→badge mapping macro — routes every status badge through the fixed palette so no inline `badge--{{ ternary }}` patterns drift. |
