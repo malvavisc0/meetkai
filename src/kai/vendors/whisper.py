@@ -18,7 +18,7 @@ import subprocess
 import tempfile
 from pathlib import Path
 
-from kai.vendors.download import download
+from kai.vendors.download import download, remote_size
 from kai.vendors.manager import Vendor, VendorResult
 
 logger = logging.getLogger(__name__)
@@ -158,10 +158,22 @@ class WhisperVendor(Vendor):
         # Honour an explicit override path if set (matches the shell behavior).
         override = os.environ.get("KAI_WAHA_WHISPER_MODEL_PATH", "")
         dest = Path(override) if override else self.model_dir / fname
-        if dest.exists():
-            logger.info("whisper model already present at %s — skipping", dest)
-            return dest
         url = f"https://huggingface.co/ggerganov/whisper.cpp/resolve/main/{fname}"
+        if dest.exists():
+            # Guard against truncated/partial downloads (e.g. a prior
+            # container restart mid-download): if the remote reports a
+            # Content-Length and the local file is smaller, re-download.
+            expected = remote_size(url)
+            actual = dest.stat().st_size
+            if expected and actual != expected:
+                logger.warning(
+                    "whisper model at %s is %s bytes, expected %s — re-downloading",
+                    dest, actual, expected,
+                )
+                dest.unlink(missing_ok=True)
+            else:
+                logger.info("whisper model already present at %s — skipping", dest)
+                return dest
         logger.info("downloading whisper model %s (lang=%s)", fname, language)
         download(url, dest)
         return dest

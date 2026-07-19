@@ -13,7 +13,7 @@ import shutil
 import subprocess
 from pathlib import Path
 
-from kai.vendors.download import download
+from kai.vendors.download import download, remote_size
 from kai.vendors.manager import Vendor, VendorResult
 
 logger = logging.getLogger(__name__)
@@ -97,16 +97,26 @@ class KokoroVendor(Vendor):
         self.model_dir.mkdir(parents=True, exist_ok=True)
         model_path = self.model_dir / MODEL_FILE
         voices_path = self.model_dir / VOICES_FILE
-        if not model_path.exists():
-            logger.info("downloading %s (~88MB)", MODEL_FILE)
-            download(f"{_BASE_URL}/{MODEL_FILE}", model_path)
-        else:
-            logger.info("model already present at %s — skipping", model_path)
-        if not voices_path.exists():
-            logger.info("downloading %s (~27MB)", VOICES_FILE)
-            download(f"{_BASE_URL}/{VOICES_FILE}", voices_path)
-        else:
-            logger.info("voices already present at %s — skipping", voices_path)
+        for path, label, approx in (
+            (model_path, MODEL_FILE, "~88MB"),
+            (voices_path, VOICES_FILE, "~27MB"),
+        ):
+            url = f"{_BASE_URL}/{path.name}"
+            if path.exists():
+                # Re-download if a prior download was truncated.
+                expected = remote_size(url)
+                actual = path.stat().st_size
+                if expected and actual != expected:
+                    logger.warning(
+                        "%s at %s is %s bytes, expected %s — re-downloading",
+                        label, path, actual, expected,
+                    )
+                    path.unlink(missing_ok=True)
+                else:
+                    logger.info("%s already present at %s — skipping", label, path)
+                    continue
+            logger.info("downloading %s (%s)", label, approx)
+            download(url, path)
         return model_path, voices_path
 
     def install(self) -> VendorResult:

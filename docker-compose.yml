@@ -1,5 +1,18 @@
 name: meetkai
 
+networks:
+  meetkai-net:
+
+volumes:
+  redis-data:
+  waha-sessions:
+  lightrag-storage:
+  lightrag-inputs:
+  cockpit-data:
+  cockpit-vendor:
+  cockpit-models:
+  https-portal-data:
+
 services:
   redis:
     image: redis/redis-stack-server:7.4.0-v8
@@ -10,6 +23,14 @@ services:
       TZ: ${TZ}
     volumes:
       - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+    networks:
+      - meetkai-net
 
   waha:
     image: devlikeapro/waha:latest
@@ -46,8 +67,16 @@ services:
       WAHA_APPS_ENABLED: ${WAHA_APPS_ENABLED}
     volumes:
       - waha-sessions:/app/.sessions
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:3000/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
     depends_on:
       - redis
+    networks:
+      - meetkai-net
 
   lightrag:
     image: ghcr.io/hkuds/lightrag:v1.5.4
@@ -85,6 +114,14 @@ services:
     volumes:
       - lightrag-storage:/app/data/rag_storage
       - lightrag-inputs:/app/data/inputs
+    healthcheck:
+      test: ["CMD-SHELL", "/app/.venv/bin/python3 -c \"import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:9621/health').status==200 else 1)\""]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    networks:
+      - meetkai-net
 
   crawl4ai:
     image: unclecode/crawl4ai:0
@@ -99,6 +136,14 @@ services:
     environment:
       TZ: ${TZ}
       CRAWL4AI_API_TOKEN: ${KAI_BRAIN_CRAWL4AI_TOKEN}
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:11235/health >/dev/null 2>&1 || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 60s
+    networks:
+      - meetkai-net
 
   cockpit:
     image: ghcr.io/malvavisc0/meetkai-cockpit:${KAI_IMAGE_TAG:-latest}
@@ -108,8 +153,8 @@ services:
     hostname: cockpit
     restart: unless-stopped
     command: kai cockpit serve --host 0.0.0.0 --port 8080
-    ports:
-      - "8080:8080"
+    expose:
+      - "8080"
     volumes:
       - cockpit-data:/app/data
       - cockpit-vendor:/app/vendor
@@ -119,12 +164,39 @@ services:
       - waha
       - crawl4ai
       - lightrag
+    healthcheck:
+      test: ["CMD-SHELL", "/app/.venv/bin/python3 -c \"import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8080/health').status==200 else 1)\""]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 60s
+    networks:
+      - meetkai-net
 
-volumes:
-  redis-data:
-  waha-sessions:
-  lightrag-storage:
-  lightrag-inputs:
-  cockpit-data:
-  cockpit-vendor:
-  cockpit-models:
+  https-portal:
+    image: steveltn/https-portal:1
+    container_name: https-portal
+    hostname: https-portal
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      DOMAINS: >
+        ${SITE_DOMAIN:-meetk.ai} -> http://cockpit:8080,
+        www.${SITE_DOMAIN:-meetk.ai} -> http://cockpit:8080
+      STAGE: ${HTTPS_PORTAL_STAGE:-staging}
+      WEBSOCKET: "true"
+      CLIENT_MAX_BODY_SIZE: ${CLIENT_MAX_BODY_SIZE:-1M}
+    volumes:
+      - https-portal-data:/var/lib/https-portal
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost/ >/dev/null 2>&1 || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+    depends_on:
+      - cockpit
+    networks:
+      - meetkai-net
