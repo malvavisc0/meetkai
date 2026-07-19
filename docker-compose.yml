@@ -8,6 +8,7 @@ volumes:
   waha-sessions:
   lightrag-storage:
   lightrag-inputs:
+  lightrag-pg-data:
   cockpit-data:
   cockpit-vendor:
   cockpit-models:
@@ -111,15 +112,56 @@ services:
       SUMMARY_LANGUAGE: English
       ENTITY_EXTRACTION_USE_JSON: true
       VLM_PROCESS_ENABLE: false
+      # Postgres backend — workspace is a column on every table, so the
+      # per-request workspace kai sends is actually honored (the JSON/KV
+      # backend ignores it and mixes users into one flat store).
+      LIGHTRAG_KV_STORAGE: PGKVStorage
+      LIGHTRAG_DOC_STATUS_STORAGE: PGDocStatusStorage
+      LIGHTRAG_GRAPH_STORAGE: PGGraphStorage
+      LIGHTRAG_VECTOR_STORAGE: PGVectorStorage
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: "5432"
+      POSTGRES_USER: ${LIGHTRAG_POSTGRES_USER}
+      POSTGRES_PASSWORD: ${LIGHTRAG_POSTGRES_PASSWORD}
+      POSTGRES_DATABASE: ${LIGHTRAG_POSTGRES_DATABASE}
+      POSTGRES_MAX_CONNECTIONS: "25"
+      # HNSW_HALFVEC supports the 2560-dim embeddings in use; plain HNSW
+      # caps at 2000 dims. Requires pgvector >= 0.7.0 (pgvector/pgvector:pg16).
+      POSTGRES_VECTOR_INDEX_TYPE: HNSW_HALFVEC
     volumes:
       - lightrag-storage:/app/data/rag_storage
       - lightrag-inputs:/app/data/inputs
+    depends_on:
+      postgres:
+        condition: service_healthy
     healthcheck:
       test: ["CMD-SHELL", "/app/.venv/bin/python3 -c \"import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:9621/health').status==200 else 1)\""]
       interval: 15s
       timeout: 5s
       retries: 10
       start_period: 30s
+    networks:
+      - meetkai-net
+
+  postgres:
+    image: pgvector/pgvector:pg18-trixie
+    container_name: postgres
+    hostname: postgres
+    restart: unless-stopped
+    environment:
+      TZ: ${TZ}
+      POSTGRES_USER: ${LIGHTRAG_POSTGRES_USER}
+      POSTGRES_PASSWORD: ${LIGHTRAG_POSTGRES_PASSWORD}
+      POSTGRES_DB: ${LIGHTRAG_POSTGRES_DATABASE}
+    volumes:
+      - lightrag-pg-data:/var/lib/postgresql
+      - ./docker/lightrag-pg-init.sql:/docker-entrypoint-initdb.d/01-vector.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${LIGHTRAG_POSTGRES_USER} -d ${LIGHTRAG_POSTGRES_DATABASE}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
     networks:
       - meetkai-net
 
