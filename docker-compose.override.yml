@@ -1,0 +1,30 @@
+name: meetkai-dev
+
+services:
+  cockpit:
+    build: .
+    image: meetkai-dev-cockpit
+    pull_policy: never
+    ports:
+      - "8080:8080"
+    depends_on:
+      waha:
+        condition: service_started
+      mailpit:
+        condition: service_started
+      crawl4ai:
+        condition: service_started
+      morphik:
+        condition: service_healthy
+
+  mailpit:
+    image: axllent/mailpit:v1.30
+    container_name: mailpit
+    hostname: mailpit
+    restart: unless-stopped
+    expose:
+      - 1025
+    ports:
+      - "8025:8025"
+    networks:
+      - odyssey

@@ -229,6 +229,44 @@ uv run ruff check .
 uv lock --upgrade && uv sync
 ```
 
+## Running Locally (Dev Stack)
+
+The repo ships a single `docker-compose.yml` (base, what Coolify deploys to
+production) plus a `docker-compose.override.yml` (dev-only, auto-loaded by
+`docker compose`). Local dev runs the full stack — redis, waha, morphik,
+morphik-postgres, crawl4ai, mailpit — and builds the cockpit image from the
+working tree instead of pulling it.
+
+Prerequisites:
+- Docker + Docker Compose v2
+- A `.env` file at the repo root with all variables referenced by the
+  compose files (copy from `.env.example` and fill in secrets)
+
+Start the dev stack:
+
+```bash
+docker compose up -d --build
+```
+
+`docker compose` automatically merges `docker-compose.yml` +
+`docker-compose.override.yml`, so dev gets:
+- the cockpit built locally (`build: .`, image `meetkai-dev-cockpit`)
+- mailpit (SMTP catch + web UI on host port 8025)
+- a separate `meetkai-dev` compose project (isolated volumes)
+
+Reach the cockpit at `http://localhost:8080`, mailpit UI at
+`http://localhost:8025`, and morphik at `http://localhost:8000` (internal only
+unless you publish it).
+
+Notes:
+- The morphik config lives inline in `docker-compose.yml` under
+  `configs.morphik_config` (mounted at `/app/morphik.toml`); edit it there,
+  not in a separate file.
+- Production (Coolify) deploys with `docker compose -f docker-compose.yml`,
+  which ignores the override: no mailpit, cockpit pulls the published image
+  and exposes `8080` (no published host port; Coolify's Caddy proxy routes
+  the public domain to it).
+
 ## Layout
 
 ```text
