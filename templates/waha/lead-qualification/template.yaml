@@ -28,19 +28,17 @@ config:
     image_enabled: true
     video_enabled: false
 
-# escalate + schedule_task are required: qualifying leads means flagging the
-# hot ones and booking follow-ups for the warm ones.
 tools:
   required:
-    - escalate
     - schedule_task
   optional:
-    - list_tasks
-    - cancel_task
     - brain_query
     - sql_query
     - calcom
     - send_email
+    - list_tasks
+    - cancel_task
+  bot_tools:
     - record_note
     - get_conversation_messages
 

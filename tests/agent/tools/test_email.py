@@ -181,7 +181,7 @@ class TestRegisterEmailTool:
             instruction="reply when asked",
         )
         assert agent.register_tool.call_count == 1
-        agent.set_tool_workflow.assert_called_once()
-        workflow = agent.set_tool_workflow.call_args[0][0]
+        agent.add_tool_workflow.assert_called_once()
+        workflow = agent.add_tool_workflow.call_args[0][0]
         assert "send_email" in workflow
         assert "reply when asked" in workflow

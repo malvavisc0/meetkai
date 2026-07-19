@@ -91,7 +91,9 @@ class TestSettingsToolOverridePersistence:
 
         svc = DeploymentsService(db)
         svc.db.refresh(dep)
-        assert "web_search" in dep.tool_overrides.get("enable", [])
+        # web_search is optional and was checked — leave it as default (on).
+        # It should NOT be in the disable list.
+        assert "web_search" not in dep.tool_overrides.get("disable", [])
 
     def test_save_on_stopped_dep_no_restart_needed(self, client, db):
         user = _create_user(db)

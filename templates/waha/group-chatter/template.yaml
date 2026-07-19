@@ -32,6 +32,10 @@ tools:
   required: []
   optional:
     - brain_query
+    - web_search
+    - get_webpage_content
+    - get_time_in_timezone
+  bot_tools:
     - record_note
     - get_conversation_messages
     - get_whatsapp_history

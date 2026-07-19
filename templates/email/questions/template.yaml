@@ -18,12 +18,9 @@ tools:
   required: []
   optional:
     - brain_query
+  bot_tools:
     - record_note
     - get_conversation_messages
-    - escalate
-    - schedule_task
-    - list_tasks
-    - cancel_task
 
 post_processing:
   profile: none

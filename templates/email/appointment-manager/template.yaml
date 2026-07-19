@@ -13,20 +13,18 @@ actions:
 config:
   temperature: 0.2
 
-# calcom + schedule_task are required: an appointment bot with no calendar
-# cannot book. KAI_CALCOM_API_KEY must be set or boot fails fast.
 tools:
   required:
     - calcom
     - schedule_task
   optional:
+    - brain_query
+    - send_email
     - list_tasks
     - cancel_task
-    - brain_query
+  bot_tools:
     - record_note
     - get_conversation_messages
-    - escalate
-    - send_email
 
 post_processing:
   profile: none

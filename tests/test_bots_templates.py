@@ -93,11 +93,12 @@ class TestTemplatesCatalog:
         assert "send_to_group" in waha_actions["group-chatter"]
         assert "send_voice_note" not in waha_actions["group-chatter"]
 
-    def test_customer_support_requires_brain_and_escalate(self):
+    def test_customer_support_requires_brain_and_bot_tools(self):
         for transport in ("waha", "email"):
             tmpl = _tmpl(transport, "customer-support")
-            assert "escalate" in tmpl.tools.required
             assert "brain_query" in tmpl.tools.required
+            assert "record_note" in tmpl.tools.bot_tools
+            assert "get_conversation_messages" in tmpl.tools.bot_tools
 
     def test_order_status_requires_sql(self):
         tmpl = _tmpl("email", "order-status")

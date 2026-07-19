@@ -12,7 +12,11 @@ reply, silent, sleep, send_dm, console
 
 ## Tools
 
-**Optional:** web_search, get_webpage_content, get_current_datetime, get_weather, calculate, escalate, blacklist_contact, schedule_task, list_tasks, cancel_task, record_note, get_conversation_messages, get_whatsapp_history, brain_query, sql_query, send_email, calcom
+**Mandatory (always on):** escalate, blacklist, calculate
+
+**Optional:** brain_query, sql_query, send_email, calcom, web_search, get_webpage_content, get_time_in_timezone, get_weather
+
+**Bot-internal (always wired, not shown in settings):** record_note, get_conversation_messages, get_whatsapp_history, schedule_task, list_tasks, cancel_task
 
 ## Required environment
 

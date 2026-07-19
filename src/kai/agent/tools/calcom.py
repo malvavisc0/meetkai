@@ -44,7 +44,7 @@ def get_calcom_settings() -> CalcomSettings:
 class _CalcomToolAgent(Protocol):
     def register_tool(self, tool: FunctionTool) -> None: ...
 
-    def set_tool_workflow(self, workflow: str | None) -> None: ...
+    def add_tool_workflow(self, workflow: str | None) -> None: ...
 
 
 def _headers(api_key: str, version: str) -> dict[str, str]:
@@ -414,4 +414,4 @@ def register_calcom_tool(
     """
     for tool in make_calcom_tools(api_key, base_url):
         agent.register_tool(tool)
-    agent.set_tool_workflow(build_calcom_workflow_instruction(instruction))
+    agent.add_tool_workflow(build_calcom_workflow_instruction(instruction))

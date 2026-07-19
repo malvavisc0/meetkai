@@ -2,7 +2,7 @@
 
 Uses lightweight fakes for ``LightRagClient`` and ``KaiAgent`` rather than
 the real classes — this module tests the tool's async call contract and the
-registration wiring (register_tool + set_tool_workflow), not LightRAG's HTTP
+registration wiring (register_tool + add_tool_workflow), not LightRAG's HTTP
 layer (covered by ``brain/tests/test_client.py``).
 """
 
@@ -52,7 +52,7 @@ class _FakeAgent:
     def register_tool(self, tool: FunctionTool) -> None:
         self.registered_tools.append(tool)
 
-    def set_tool_workflow(self, workflow: str | None) -> None:
+    def add_tool_workflow(self, workflow: str | None) -> None:
         if workflow is not None:
             self.workflows.append(workflow)
 

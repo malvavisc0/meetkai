@@ -36,8 +36,11 @@ tools:
     - sql_query
     - send_email
     - calcom
-    # Bot-owned tools — no env vars, so they resolve as present. Declared so
-    # gating on the resolved tool set keeps today's behavior for `general`.
+    - web_search
+    - get_webpage_content
+    - get_time_in_timezone
+    - get_weather
+  bot_tools:
     - record_note
     - get_conversation_messages
     - get_whatsapp_history

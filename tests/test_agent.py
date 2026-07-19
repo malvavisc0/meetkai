@@ -1062,18 +1062,18 @@ class TestAuditFixes:
         assert agent._tools_by_name == {}
         assert agent._tool_instructions == ""
 
-    def test_set_tool_workflow_appends_to_instructions(self):
+    def test_add_tool_workflow_appends_to_instructions(self):
         from kai.agent.tools import WEB_WORKFLOW_INSTRUCTIONS
 
         agent = KaiAgent(settings=None, goal_manager=GoalManager())
         # Default: clean slate, no chat-bot workflow baked in.
         assert "fact-checking" not in agent._tool_instructions.lower()
-        agent.set_tool_workflow(WEB_WORKFLOW_INSTRUCTIONS)
+        agent.add_tool_workflow(WEB_WORKFLOW_INSTRUCTIONS)
         assert "fact-checking" in agent._tool_instructions
         prompt = agent._get_system_prompt()
         assert "fact-checking" in prompt
         # Turning it back off removes the workflow from the rendered prompt.
-        agent.set_tool_workflow(None)
+        agent.add_tool_workflow(None)
         assert "fact-checking" not in agent._get_system_prompt()
 
     def test_clear_tools_then_register_keeps_clean_slate(self):

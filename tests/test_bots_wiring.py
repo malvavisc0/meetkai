@@ -62,12 +62,12 @@ def _fake_agent() -> MagicMock:
     def _register_tool(tool):
         agent._registered.append(tool.metadata.name)
 
-    def _set_tool_workflow(workflow):
+    def _add_tool_workflow(workflow):
         if workflow is not None:
             agent._workflows.append(workflow)
 
     agent.register_tool.side_effect = _register_tool
-    agent.set_tool_workflow.side_effect = _set_tool_workflow
+    agent.add_tool_workflow.side_effect = _add_tool_workflow
     return agent
 
 

@@ -85,7 +85,7 @@ def get_sql_settings() -> SqlSettings:
 class _SqlToolAgent(Protocol):
     def register_tool(self, tool: FunctionTool) -> None: ...
 
-    def set_tool_workflow(self, workflow: str | None) -> None: ...
+    def add_tool_workflow(self, workflow: str | None) -> None: ...
 
 
 def build_sql_workflow_instruction(instruction: str) -> str:
@@ -230,5 +230,5 @@ def register_sql_tool(
     query_tool, describe_tool, engine = make_sql_query_tool(dsn, row_limit=row_limit)
     agent.register_tool(describe_tool)
     agent.register_tool(query_tool)
-    agent.set_tool_workflow(build_sql_workflow_instruction(instruction))
+    agent.add_tool_workflow(build_sql_workflow_instruction(instruction))
     return engine

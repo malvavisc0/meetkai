@@ -27,16 +27,13 @@ config:
     image_enabled: true
     video_enabled: false
 
-# escalate is required: a community manager without escalation can't handle
-# harassment, threats, or anything beyond their moderation scope.
-# brain_query, web_search, record_note are optional — useful for FAQ lookups
-# and tracking member interactions.
 tools:
-  required:
-    - escalate
+  required: []
   optional:
     - brain_query
     - web_search
+    - get_webpage_content
+  bot_tools:
     - record_note
     - get_conversation_messages
     - get_whatsapp_history

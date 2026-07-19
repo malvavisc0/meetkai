@@ -180,8 +180,8 @@ class TestRegisterSqlTool:
         engine = register_sql_tool(agent, "sqlite://", instruction="test rules")
         try:
             assert agent.register_tool.call_count == 2
-            agent.set_tool_workflow.assert_called_once()
-            workflow = agent.set_tool_workflow.call_args[0][0]
+            agent.add_tool_workflow.assert_called_once()
+            workflow = agent.add_tool_workflow.call_args[0][0]
             assert "describe_database" in workflow
             assert "sql_query" in workflow
             assert "test rules" in workflow

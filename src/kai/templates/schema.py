@@ -8,6 +8,7 @@ from pydantic import BaseModel, Field, model_validator
 class TemplateTools(BaseModel):
     required: list[str] = Field(default_factory=list)
     optional: list[str] = Field(default_factory=list)
+    bot_tools: list[str] = Field(default_factory=list)
 
 
 class PostProcessingConfig(BaseModel):

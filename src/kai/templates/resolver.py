@@ -16,7 +16,7 @@ _DEFAULT_TOOL_NAMES: frozenset[str] = frozenset(
 
 # Non-disableable defaults: safety tools that must stay available on every
 # deployment regardless of template or operator preference.
-_NON_DISABLEABLE_DEFAULTS: frozenset[str] = frozenset({"escalate", "blacklist_contact"})
+_NON_DISABLEABLE_DEFAULTS: frozenset[str] = frozenset({"escalate", "blacklist", "calculate"})
 
 _TOOL_ENV_MAP: dict[str, list[str]] = {
     "brain_query": ["KAI_BRAIN_BASE_URL", "KAI_BRAIN_LIGHTRAG_API_KEY"],
@@ -48,11 +48,11 @@ _EMAIL_VALID_ACTIONS = {
 
 # Every tool name the system can ever register. Used to reject phantom
 # ``--enable-tools`` typos (e.g. ``barin_query``) at boot — see resolve_tools.
-_KNOWN_TOOL_NAMES: frozenset[str] = frozenset(
+KNOWN_TOOL_NAMES: frozenset[str] = frozenset(
     [
         "web_search",
         "get_webpage_content",
-        "get_current_datetime",
+        "get_time_in_timezone",
         "get_weather",
         "calculate",
         "schedule_task",
@@ -62,25 +62,19 @@ _KNOWN_TOOL_NAMES: frozenset[str] = frozenset(
         "get_conversation_messages",
         "brain_query",
         "sql_query",
-        "describe_tables",
+        "describe_database",
         "send_email",
         "calcom",
-        "get_available_slots",
-        "schedule_event",
+        "list_event_types",
+        "find_available_slots",
+        "book_appointment",
+        "reschedule_booking",
+        "cancel_booking",
         "get_whatsapp_history",
         "escalate",
-        "blacklist_contact",
+        "blacklist",
     ]
 )
-
-TEMPLATE_TOGGLE_TOOLS: frozenset[str] = _KNOWN_TOOL_NAMES - {
-    "send_email",
-    "sql_query",
-    "describe_tables",
-    "calcom",
-    "get_available_slots",
-    "schedule_event",
-}
 
 _VALID_ACTIONS_BY_TRANSPORT = {
     "waha": _WAHA_VALID_ACTIONS,
@@ -117,6 +111,7 @@ def resolve_tools(
 ) -> ToolResolution:
     default_tools = frozenset(_DEFAULT_TOOL_NAMES)
     template_required = frozenset(template.tools.required)
+    template_bot_tools = frozenset(template.tools.bot_tools)
 
     cannot_disable = _NON_DISABLEABLE_DEFAULTS | template_required
 
@@ -132,15 +127,16 @@ def resolve_tools(
     # ``--enable-tools`` names must exist in the real tool registry, otherwise
     # a typo (``barin_query``) is silently accepted and the operator believes
     # a tool is loaded when it isn't.
-    rejected_unknown = [t for t in operator_enable if t not in _KNOWN_TOOL_NAMES]
+    rejected_unknown = [t for t in operator_enable if t not in KNOWN_TOOL_NAMES]
 
     tools: set[str] = set(default_tools)
     tools |= template_required
+    tools |= template_bot_tools
     for tool in template.tools.optional:
         if _is_tool_configured(tool):
             tools.add(tool)
     for tool in operator_enable:
-        if tool in _KNOWN_TOOL_NAMES:
+        if tool in KNOWN_TOOL_NAMES:
             tools.add(tool)
     for tool in operator_disable:
         if tool not in cannot_disable and tool in tools:

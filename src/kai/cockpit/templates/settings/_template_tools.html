@@ -1,7 +1,7 @@
-{# Template-owned tool toggles. Required tools are locked; optional tools
-   can be unchecked to disable them; enableable extras default to off.
-   Connection-gated tools (smtp/database/calcom) are NOT shown here —
-   they live in the existing settings/_tools.html card. #}
+{# Template optional tool toggles. Each row is a checkbox the operator can
+   uncheck to disable that optional tool. Connection-gated tools
+   (smtp/database/calcom) are NOT shown here — they live in the existing
+   settings/_tools.html card. #}
 {% if template_tools %}
 <div class="card">
   <p class="card__eyebrow">Tools</p>
@@ -17,16 +17,14 @@
   </div>
   {% endif %}
   <div class="checkbox-grid">
-    {% for tool_name, is_optional, is_on in template_tools %}
-      {% set ts = tools_state.get(tool_name, {}) %}
-      <label class="checkbox-row{% if not is_optional and not is_on %} checkbox-row--locked{% endif %}">
+    {% for tool_name, is_on in template_tools %}
+      <label class="checkbox-row">
         <input type="checkbox" name="tool_override_{{ tool_name }}" value="true"
-          {% if is_on %}checked{% endif %}
-          {% if not is_optional %}disabled{% endif %}>
+          {% if is_on %}checked{% endif %}>
         {{ tool_name }}
       </label>
     {% endfor %}
   </div>
-  <p class="field__help">Required tools (greyed out) cannot be disabled. Uncheck optional tools to remove them; check extras to enable them.</p>
+  <p class="field__help">Uncheck an optional tool to disable it for this deployment.</p>
 </div>
 {% endif %}

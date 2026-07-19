@@ -284,7 +284,7 @@ async def escalate(
     return f"escalation recorded (severity={severity}): {reason}"
 
 
-async def blacklist_contact(contact_id: str = "") -> str:
+async def blacklist(contact_id: str = "") -> str:
     """Add the current chat's contact to the blacklist to prevent further messages.
 
     Use for contacts that are spamming, abusive, or otherwise undesired. After
@@ -330,7 +330,7 @@ async def blacklist_contact(contact_id: str = "") -> str:
         try:
             await handler(esc)
         except Exception:
-            logger.exception("escalation handler raised for blacklist_contact")
+            logger.exception("escalation handler raised for blacklist")
 
     return f"contact blacklisted: {resolved}"
 

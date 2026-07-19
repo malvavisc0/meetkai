@@ -136,7 +136,7 @@ class Bot(BaseBot):
         agent.set_temperature(self._config.temperature)
         agent.set_timezone(self._config.timezone)
         if self._has_tool("web_search"):
-            agent.set_tool_workflow(WEB_WORKFLOW_INSTRUCTIONS)
+            agent.add_tool_workflow(WEB_WORKFLOW_INSTRUCTIONS)
         if self._has_tool("record_note") or self._has_tool("get_conversation_messages"):
             register_conversation_tools(agent, tool_context=self._tool_context)
         self.setup_task_scheduler(agent, settings)

@@ -321,7 +321,7 @@ class KaiAgent:
             self._tools, workflow_preamble=self._tool_workflow
         )
 
-    def set_tool_workflow(self, workflow: str | None) -> None:
+    def add_tool_workflow(self, workflow: str | None) -> None:
         """Add an optional tool-usage guidance block to the system prompt.
 
         Multiple calls compose (deduplicated). Pass ``None`` to clear all

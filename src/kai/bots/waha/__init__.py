@@ -212,7 +212,7 @@ class Bot(BaseBot):
         agent.set_system_prompt(self._prompt)
         agent.set_temperature(self._config.temperature)
         if self._has_tool("web_search"):
-            agent.set_tool_workflow(WEB_WORKFLOW_INSTRUCTIONS)
+            agent.add_tool_workflow(WEB_WORKFLOW_INSTRUCTIONS)
         agent.set_tool_call_callback(self._render_tool_call)
         agent.set_timezone(self._config.timezone)
         if self._has_tool("get_whatsapp_history"):

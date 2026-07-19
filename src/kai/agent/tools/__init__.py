@@ -3,18 +3,31 @@ from __future__ import annotations
 import functools
 import logging
 from collections.abc import Callable
+from pathlib import Path
 from typing import Any
 
 from llama_index.core.tools import FunctionTool
 
 from kai.agent.tools.calculator import calculate
-from kai.agent.tools.escalate import blacklist_contact, escalate
-from kai.agent.tools.time import get_current_datetime, get_weather
+from kai.agent.tools.escalate import blacklist, escalate
+from kai.agent.tools.time import get_time_in_timezone, get_weather
 from kai.agent.tools.web import _get_webpage_content, _web_search
 
 logger = logging.getLogger(__name__)
 
 _LOG_REPR_LIMIT = 200
+
+# Path to the mandatory tools block — loaded once and cached.
+_MANDATORY_BLOCK_PATH = (
+    Path(__file__).resolve().parents[4] / "templates" / "_tools" / "mandatory.md"
+)
+
+
+def _load_mandatory_block() -> str:
+    """Read ``templates/_tools/mandatory.md`` once, return its contents."""
+    if _MANDATORY_BLOCK_PATH.is_file():
+        return _MANDATORY_BLOCK_PATH.read_text(encoding="utf-8").strip()
+    return ""
 
 
 def _short_repr(value: Any, limit: int = _LOG_REPR_LIMIT) -> str:
@@ -58,17 +71,15 @@ def get_tools() -> list[FunctionTool]:
             "the page cannot be fetched.",
         ),
         (
-            get_current_datetime,
-            "get_current_datetime",
-            "Get the current date and time, optionally for a specific IANA "
-            "timezone (e.g. Europe/Berlin). Use when someone asks the time "
-            "in another region.",
+            get_time_in_timezone,
+            "get_time_in_timezone",
+            "Get the current time in an IANA timezone, e.g. Europe/Berlin. "
+            "Use when someone asks the time in another region.",
         ),
         (
             get_weather,
             "get_weather",
-            "Get current weather for a city, airport code, or lat,lon. "
-            "Returns a concise summary. No API key needed.",
+            "Get current weather for a city, airport code, or lat,lon. Returns a concise summary.",
         ),
         (
             calculate,
@@ -86,8 +97,8 @@ def get_tools() -> list[FunctionTool]:
             "threats or legal issues, or you cannot answer an important question.",
         ),
         (
-            blacklist_contact,
-            "blacklist_contact",
+            blacklist,
+            "blacklist",
             "Add the current chat's contact to the blacklist to prevent further "
             "messages. Use for spamming, abusive, or otherwise undesired contacts. "
             "Only the current conversation's contact can be blacklisted — leave "
@@ -106,17 +117,26 @@ def get_tools() -> list[FunctionTool]:
 
 
 def get_tool_instructions(
-    tools: list[FunctionTool], *, workflow_preamble: str | None = None
+    tools: list[FunctionTool],
+    *,
+    workflow_preamble: str | None = None,
 ) -> str:
     """Render the tool section appended to the system prompt.
 
-    Always emits a generic tool table. ``workflow_preamble`` is an optional
-    block of tool-usage guidance a bot opts into (e.g. the web fact-checking
-    workflow); ``None`` means a clean-slate bot that only wants the tool list
-    with no chat-bot-specific workflow baked in.
+    Always emits the mandatory tools block (loaded from
+    ``templates/_tools/mandatory.md``), then a generic tool table.
+    ``workflow_preamble`` is an optional block of tool-usage guidance a bot
+    opts into (e.g. the web fact-checking workflow); ``None`` means a
+    clean-slate bot that only wants the tool list with no chat-bot-specific
+    workflow baked in.
     """
     if not tools:
         return ""
+
+    out = ""
+    mandatory = _load_mandatory_block()
+    if mandatory:
+        out += "\n\n# Safety & math\n\n" + mandatory + "\n"
 
     rows = []
     for tool in tools:
@@ -125,7 +145,7 @@ def get_tool_instructions(
         rows.append(f"| `{name}` | {desc} |")
 
     table = "\n".join(rows)
-    out = (
+    out += (
         "\n\n# Tools\n"
         "\n"
         "You have access to the following tools. "
@@ -133,13 +153,14 @@ def get_tool_instructions(
         "\n"
         f"| Tool | Description |\n|------|-------------|\n{table}\n"
     )
+
     if workflow_preamble:
         out += "\n" + workflow_preamble
     return out
 
 
 # Fact-checking workflow for chat bots that expose web search/fetch. Opt in via
-# ``KaiAgent.set_tool_workflow(WEB_WORKFLOW_INSTRUCTIONS)``; non-chat bots pass
+# ``KaiAgent.add_tool_workflow(WEB_WORKFLOW_INSTRUCTIONS)``; non-chat bots pass
 # ``None`` (the default) for a clean prompt with no web-search assumptions.
 WEB_WORKFLOW_INSTRUCTIONS = (
     "**Workflow for answering factual questions:**\n"

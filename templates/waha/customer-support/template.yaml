@@ -26,23 +26,19 @@ config:
     image_enabled: true
     video_enabled: false
 
-# escalate + brain_query are required: a support bot that can't ground
-# answers in the knowledge base or flag a human is not a support bot.
-# brain_query requires KAI_BRAIN_BASE_URL AND KAI_BRAIN_LIGHTRAG_API_KEY —
-# boot fails fast (clear error) if those are unset.
 tools:
   required:
-    - escalate
     - brain_query
-    - get_conversation_messages
-    - record_note
   optional:
-    - schedule_task
-    - list_tasks
-    - cancel_task
     - sql_query
     - send_email
     - calcom
+  bot_tools:
+    - schedule_task
+    - list_tasks
+    - cancel_task
+    - record_note
+    - get_conversation_messages
 
 post_processing:
   profile: custom

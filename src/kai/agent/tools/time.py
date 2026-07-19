@@ -7,8 +7,12 @@ import httpx
 logger = logging.getLogger(__name__)
 
 
-def get_current_datetime(timezone: str | None = None) -> dict[str, str]:
-    """Get the current date and time.
+def get_time_in_timezone(timezone: str | None = None) -> dict[str, str]:
+    """Get the current time in an IANA timezone, e.g. Europe/Berlin.
+
+    Use when someone asks the time in another region. Returns UTC and the
+    server-local time always; when ``timezone`` is given, the time in that
+    zone is included as well.
 
     Args:
         timezone: Optional IANA timezone name (e.g. ``Europe/Berlin``).

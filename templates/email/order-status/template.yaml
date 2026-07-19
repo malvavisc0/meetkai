@@ -14,16 +14,14 @@ actions:
 config:
   temperature: 0.1
 
-# sql_query is required: an order-status bot with no database cannot look up
-# orders. KAI_SQL_DSN must be set or boot fails fast.
 tools:
   required:
     - sql_query
   optional:
     - brain_query
+  bot_tools:
     - record_note
     - get_conversation_messages
-    - escalate
 
 post_processing:
   profile: none

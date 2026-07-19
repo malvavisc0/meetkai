@@ -1,9 +1,9 @@
-"""Tests for the escalate and blacklist_contact tools.
+"""Tests for the escalate and blacklist tools.
 
 These tools are default tools registered in get_tools() and rely on
 module-level _DYN state set by Bot.configure(). The tests verify:
 - escalate() persists (via EscalationStore) and fires callback
-- blacklist_contact() modifies the bot's blacklist
+- blacklist() modifies the bot's blacklist
 - _resolve_chat_id() works with explicit ID, ToolContext, and no context
 - list_escalations() and get_active_escalations() filter correctly
 - resolve_escalation() marks escalations as resolved
@@ -26,7 +26,7 @@ from kai.agent.tools.escalate import (
     Escalation,
     EscalationStore,
     active_escalation_count,
-    blacklist_contact,
+    blacklist,
     clear_escalations,
     escalate,
     forward_to_cockpit,
@@ -154,7 +154,7 @@ class TestBlacklistContact:
         bl = ["existing@example.com"]
         set_blacklist(bl)
         set_tool_context(ToolContext(chat_id="new@example.com"))
-        result = await blacklist_contact()
+        result = await blacklist()
         assert "new@example.com" in bl
         assert "blacklisted" in result
         assert "new@example.com" in result
@@ -163,7 +163,7 @@ class TestBlacklistContact:
     async def test_explicit_contact_id(self):
         bl = []
         set_blacklist(bl)
-        result = await blacklist_contact("someone@example.com")
+        result = await blacklist("someone@example.com")
         assert "someone@example.com" in bl
         assert "someone@example.com" in result
 
@@ -172,12 +172,12 @@ class TestBlacklistContact:
         bl = ["duplicated@example.com"]
         set_blacklist(bl)
         set_tool_context(ToolContext(chat_id="duplicated@example.com"))
-        await blacklist_contact()
+        await blacklist()
         assert bl.count("duplicated@example.com") == 1
 
     @pytest.mark.asyncio
     async def test_error_when_no_blacklist(self):
-        result = await blacklist_contact("test@example.com")
+        result = await blacklist("test@example.com")
         assert "Error" in result
         assert "not configured" in result
 
@@ -186,7 +186,7 @@ class TestBlacklistContact:
         bl = []
         set_blacklist(bl)
         set_tool_context(ToolContext())
-        result = await blacklist_contact()
+        result = await blacklist()
         assert "Error" in result
 
     @pytest.mark.asyncio
@@ -194,7 +194,7 @@ class TestBlacklistContact:
         bl = []
         set_blacklist(bl)
         set_tool_context(ToolContext(chat_id="ctx-chat"))
-        await blacklist_contact()
+        await blacklist()
         assert "ctx-chat" in bl
 
     @pytest.mark.asyncio
@@ -202,7 +202,7 @@ class TestBlacklistContact:
         bl = ["alpha@example.com"]
         set_blacklist(bl)
         set_tool_context(ToolContext(chat_id="beta@example.com"))
-        await blacklist_contact()
+        await blacklist()
         assert "alpha@example.com" in bl
         assert "beta@example.com" in bl
 
@@ -211,7 +211,7 @@ class TestBlacklistContact:
         bl = []
         set_blacklist(bl)
         set_tool_context(ToolContext(chat_id="spammer@example.com"))
-        await blacklist_contact()
+        await blacklist()
         escs = await list_escalations()
         blacklist_esc = [e for e in escs if "blacklisted" in e.reason]
         assert len(blacklist_esc) == 1
@@ -228,7 +228,7 @@ class TestBlacklistContact:
         bl = []
         set_blacklist(bl)
         set_tool_context(ToolContext(chat_id="handler-test@example.com"))
-        await blacklist_contact()
+        await blacklist()
         assert len(received) == 1
         assert received[0].chat_id == "handler-test@example.com"
         assert "blacklisted" in received[0].reason
@@ -239,7 +239,7 @@ class TestResolveChatId:
     async def test_tool_context_provides_chat_id(self):
         set_tool_context(ToolContext(chat_id="from-context"))
         set_blacklist([])
-        await blacklist_contact()
+        await blacklist()
         escs = await list_escalations()
         assert any(e.chat_id == "from-context" for e in escs)
 
@@ -250,7 +250,7 @@ class TestResolveChatId:
         # it's currently talking to.
         set_tool_context(ToolContext(chat_id="from-context"))
         set_blacklist([])
-        result = await blacklist_contact("explicit-contact")
+        result = await blacklist("explicit-contact")
         assert "Error" in result
         assert "from-context" in result
         escs = await list_escalations()
@@ -263,7 +263,7 @@ class TestResolveChatId:
         set_tool_context(ToolContext(chat_id="same@example.com"))
         bl = []
         set_blacklist(bl)
-        result = await blacklist_contact("same@example.com")
+        result = await blacklist("same@example.com")
         assert "same@example.com" in bl
         assert "blacklisted" in result
 
@@ -404,10 +404,10 @@ class TestDefaultToolsIncludeNewTools:
         names = [t.metadata.name for t in tools]
         assert "escalate" in names, "escalate should be in default tools"
 
-    def test_blacklist_contact_in_default_tools(self):
+    def test_blacklist_in_default_tools(self):
         tools = get_tools()
         names = [t.metadata.name for t in tools]
-        assert "blacklist_contact" in names, "blacklist_contact must be in default tools"
+        assert "blacklist" in names, "blacklist must be in default tools"
 
     def test_original_default_tools_still_present(self):
         tools = get_tools()
@@ -415,7 +415,7 @@ class TestDefaultToolsIncludeNewTools:
         for expected in (
             "web_search",
             "get_webpage_content",
-            "get_current_datetime",
+            "get_time_in_timezone",
             "get_weather",
             "calculate",
         ):
@@ -423,7 +423,7 @@ class TestDefaultToolsIncludeNewTools:
 
     def test_tool_count_includes_new_tools(self):
         tools = get_tools()
-        # 5 original + escalate + blacklist_contact = 7
+        # 5 original + escalate + blacklist = 7
         assert len(tools) == 7, f"Expected 7 tools, got {len(tools)}"
 
 

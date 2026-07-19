@@ -17,9 +17,9 @@ tools:
   required:
     - brain_query
   optional:
-    - sql_query
-    - send_email
-    - calcom
+    - web_search
+    - get_webpage_content
+  bot_tools:
     - record_note
     - get_conversation_messages
 

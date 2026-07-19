@@ -14,10 +14,6 @@ config:
   temperature: 0.3
   timezone: ""
 
-# schedule_task is required: drip campaigns live and die by timing. Without
-# scheduling, this bot can't send follow-ups at the right cadence.
-# brain_query and send_email are optional — useful for content research and
-# when SMTP is configured for outbound delivery.
 tools:
   required:
     - schedule_task
@@ -26,9 +22,9 @@ tools:
     - send_email
     - list_tasks
     - cancel_task
+  bot_tools:
     - record_note
     - get_conversation_messages
-    - escalate
 
 post_processing:
   profile: none

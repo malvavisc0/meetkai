@@ -1,11 +1,4 @@
-"""Deployment settings: ``GET``/``POST /deployments/{dep_id}/settings``.
-
-Per-bot-type settings parsing is dispatched through ``_SETTINGS_PARSERS``
-(mirroring ``_shared.SETTINGS_TEMPLATES``'s per-bot-type template dispatch)
-instead of an ``if/elif dep.bot_type == ...`` chain growing in the POST
-handler. Adding a new bot type's settings means adding a parser function
-and a table entry here — the handler itself doesn't change.
-"""
+"""Deployment settings: ``GET``/``POST /deployments/{dep_id}/settings``."""
 
 from __future__ import annotations
 
@@ -42,7 +35,7 @@ from kai.cockpit.routes.deployments._shared import (
 )
 from kai.templates import TemplateRegistry
 from kai.templates.resolver import (
-    TEMPLATE_TOGGLE_TOOLS,
+    KNOWN_TOOL_NAMES,
     resolve_tools,
     tool_configured_map,
     validate_tools,
@@ -201,21 +194,20 @@ async def deployment_settings_page(
             "available": available,
         }
 
-    # Template-owned tool toggles: required tools (locked/read-only), optional
-    # tools (toggleable), and enableable extras (checkboxes defaulting off).
+    # Template optional tool toggles: each row is a checkbox the operator
+    # can uncheck to disable that optional tool for the deployment.
     try:
         tmpl = TemplateRegistry.bundled().get(dep.bot_type, dep.template)
     except FileNotFoundError:
         tmpl = None
-    template_tools: list[tuple[str, bool, bool]] = []
+    template_tools: list[tuple[str, bool]] = []
     template_warnings: list[str] = []
     if tmpl:
         configured = tool_configured_map(tmpl)
         saved = dep.tool_overrides or {}
         saved_enable = set(saved.get("enable", []))
         saved_disable = set(saved.get("disable", []))
-        for tool_name in sorted(TEMPLATE_TOGGLE_TOOLS):
-            is_optional = tool_name in tmpl.tools.optional
+        for tool_name in sorted(set(tmpl.tools.optional) & KNOWN_TOOL_NAMES):
             is_configured = configured.get(tool_name, True)
             # Reflect persisted overrides: explicitly-disabled stays unchecked;
             # explicitly-enabled stays checked; otherwise default to "on" for
@@ -225,8 +217,8 @@ async def deployment_settings_page(
             elif tool_name in saved_enable:
                 is_on = True
             else:
-                is_on = is_optional and is_configured
-            template_tools.append((tool_name, is_optional, is_on))
+                is_on = is_configured
+            template_tools.append((tool_name, is_on))
         template_warnings = validate_tools(tmpl)
 
     flash = request.session.pop("flash", None)
@@ -306,9 +298,10 @@ async def deployment_settings(
         "tools": build_tools_update(supported_svcs, form_fields),
     }
 
-    # Parse template tool overrides from the form. Checked checkboxes for
-    # enableable tools go into the "enable" list; unchecked optional tools
-    # go into the "disable" list.
+    # Parse template tool overrides from the form. Unchecked optional tools
+    # go into the "disable" list; checked ones stay on (the resolver still
+    # env-gates any optional tool, so enabling an unconfigured tool is a
+    # no-op rather than a crash).
     try:
         tmpl = TemplateRegistry.bundled().get(dep.bot_type, dep.template)
     except FileNotFoundError:
@@ -316,16 +309,10 @@ async def deployment_settings(
 
     tool_overrides: dict = {"enable": [], "disable": []}
     if tmpl:
-        for tool_name in sorted(TEMPLATE_TOGGLE_TOOLS):
-            is_optional = tool_name in tmpl.tools.optional
+        for tool_name in sorted(tmpl.tools.optional):
             is_on = f"tool_override_{tool_name}" in form_fields
-            if is_optional:
-                # Unchecked optional tools are disabled. Checked = leave on.
-                if not is_on:
-                    tool_overrides["disable"].append(tool_name)
-            elif is_on:
-                # Enableable extras default to off; a checked box means enable.
-                tool_overrides["enable"].append(tool_name)
+            if not is_on:
+                tool_overrides["disable"].append(tool_name)
 
     # Server-side validation: reject disabling default/required tools and
     # unknown tool names. Uses resolve_tools() so the resolver rules are the

@@ -55,7 +55,7 @@ class _BrainQueryClient(Protocol):
 class _BrainToolAgent(Protocol):
     def register_tool(self, tool: FunctionTool) -> None: ...
 
-    def set_tool_workflow(self, workflow: str | None) -> None: ...
+    def add_tool_workflow(self, workflow: str | None) -> None: ...
 
 
 def make_brain_query_tool(
@@ -137,9 +137,9 @@ def register_brain_tool(
     This is the bot-agnostic seam: called once from ``cli/bot.py``
     ``_start()`` after ``bot.configure()``, never from a bot's own
     ``configure()``. The workflow instruction is *added* (not replacing any
-    web-search workflow a bot may already have set — ``KaiAgent.set_tool_workflow``
+    web-search workflow a bot may already have set — ``KaiAgent.add_tool_workflow``
     composes, see ``agent/core.py``).
     """
     tool = make_brain_query_tool(client, workspace=workspace, default_mode=default_mode)
     agent.register_tool(tool)
-    agent.set_tool_workflow(build_brain_workflow_instruction(instruction, mandatory))
+    agent.add_tool_workflow(build_brain_workflow_instruction(instruction, mandatory))

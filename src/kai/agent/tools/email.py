@@ -11,7 +11,7 @@ and never appears in any tool argument, result, or log record.
 
 The workflow instruction composes — appended alongside any other workflow
 blocks (the waha bot's web-search, the Brain's, the SQL tool's) rather
-than replacing them (``agent/core.py:set_tool_workflow``).
+than replacing them (``agent/core.py:add_tool_workflow``).
 """
 
 from __future__ import annotations
@@ -70,7 +70,7 @@ def get_smtp_settings() -> SmtpSettings:
 class _EmailToolAgent(Protocol):
     def register_tool(self, tool: FunctionTool) -> None: ...
 
-    def set_tool_workflow(self, workflow: str | None) -> None: ...
+    def add_tool_workflow(self, workflow: str | None) -> None: ...
 
 
 def _valid_recipient(addr: str) -> bool:
@@ -270,4 +270,4 @@ def register_email_tool(
         display_name=display_name,
     )
     agent.register_tool(tool)
-    agent.set_tool_workflow(build_email_workflow_instruction(instruction))
+    agent.add_tool_workflow(build_email_workflow_instruction(instruction))
