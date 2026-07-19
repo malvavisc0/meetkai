@@ -109,7 +109,10 @@ class KokoroVendor(Vendor):
                 if expected and actual != expected:
                     logger.warning(
                         "%s at %s is %s bytes, expected %s — re-downloading",
-                        label, path, actual, expected,
+                        label,
+                        path,
+                        actual,
+                        expected,
                     )
                     path.unlink(missing_ok=True)
                 else:

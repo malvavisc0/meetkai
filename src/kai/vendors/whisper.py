@@ -168,7 +168,9 @@ class WhisperVendor(Vendor):
             if expected and actual != expected:
                 logger.warning(
                     "whisper model at %s is %s bytes, expected %s — re-downloading",
-                    dest, actual, expected,
+                    dest,
+                    actual,
+                    expected,
                 )
                 dest.unlink(missing_ok=True)
             else:

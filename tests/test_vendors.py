@@ -117,8 +117,9 @@ class TestWhisperVendor:
         v.model_dir.mkdir(parents=True)
         (v.model_dir / "ggml-base.bin").write_bytes(b"model")
         # remote_size returns 0 (unknown) -> existing file is trusted.
-        with mock.patch("kai.vendors.whisper.download") as dl, mock.patch(
-            "kai.vendors.whisper.remote_size", return_value=0
+        with (
+            mock.patch("kai.vendors.whisper.download") as dl,
+            mock.patch("kai.vendors.whisper.remote_size", return_value=0),
         ):
             path = v._download_model("auto")
         assert path.name == "ggml-base.bin"
@@ -129,8 +130,9 @@ class TestWhisperVendor:
         v.model_dir.mkdir(parents=True)
         (v.model_dir / "ggml-base.bin").write_bytes(b"model")
         # remote reports a size that doesn't match the local stub -> redownload.
-        with mock.patch("kai.vendors.whisper.download") as dl, mock.patch(
-            "kai.vendors.whisper.remote_size", return_value=147951465
+        with (
+            mock.patch("kai.vendors.whisper.download") as dl,
+            mock.patch("kai.vendors.whisper.remote_size", return_value=147951465),
         ):
             v._download_model("auto")
         dl.assert_called_once()
@@ -175,8 +177,9 @@ class TestKokoroVendor:
         (v.model_dir / "kokoro-v1.0.int8.onnx").write_bytes(b"m")
         (v.model_dir / "voices-v1.0.bin").write_bytes(b"v")
         # remote_size returns 0 (unknown) -> existing files are trusted.
-        with mock.patch("kai.vendors.kokoro.download") as dl, mock.patch(
-            "kai.vendors.kokoro.remote_size", return_value=0
+        with (
+            mock.patch("kai.vendors.kokoro.download") as dl,
+            mock.patch("kai.vendors.kokoro.remote_size", return_value=0),
         ):
             model, voices = v._download_model()
         dl.assert_not_called()
@@ -189,8 +192,9 @@ class TestKokoroVendor:
         (v.model_dir / "kokoro-v1.0.int8.onnx").write_bytes(b"m")
         (v.model_dir / "voices-v1.0.bin").write_bytes(b"v")
         # remote reports mismatched sizes -> both files redownload.
-        with mock.patch("kai.vendors.kokoro.download") as dl, mock.patch(
-            "kai.vendors.kokoro.remote_size", return_value=999999
+        with (
+            mock.patch("kai.vendors.kokoro.download") as dl,
+            mock.patch("kai.vendors.kokoro.remote_size", return_value=999999),
         ):
             v._download_model()
         assert dl.call_count == 2

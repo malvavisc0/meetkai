@@ -54,9 +54,7 @@ def download(url: str, dest: Path, *, client: httpx.Client | None = None) -> Pat
                         logger.info("  %s  %s", dest.name, _human(written))
             if total and written != total:
                 part.unlink(missing_ok=True)
-                raise RuntimeError(
-                    f"download of {url} truncated: wrote {written} of {total} bytes"
-                )
+                raise RuntimeError(f"download of {url} truncated: wrote {written} of {total} bytes")
         # fsync before rename so the renamed file is fully on disk even if
         # the host crashes immediately after.
         with part.open("rb") as f:
