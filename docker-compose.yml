@@ -37,13 +37,14 @@ configs:
 
       #### Registered models
       [registered_models]
-      openrouter_ministral_3b = { model_name = "openai/mistralai/ministral-3b-2512", api_base = "https://openrouter.ai/api/v1" }
+      openrouter_granite_8b = { model_name = "openai/ibm-granite/granite-4.1-8b", api_base = "https://openrouter.ai/api/v1" }
+      openrouter_qwen_vl = { model_name = "openai/qwen/qwen3-vl-8b-instruct", api_base = "https://openrouter.ai/api/v1" }
       openrouter_embed_3_small = { model_name = "openai/text-embedding-3-small", api_base = "https://openrouter.ai/api/v1" }
 
       #### Component configurations ####
 
       [completion]
-      model = "openrouter_ministral_3b"
+      model = "openrouter_granite_8b"
       default_max_tokens = "262144"
       default_temperature = 0.3
 
@@ -66,7 +67,7 @@ configs:
       chunk_size = 6000
       chunk_overlap = 300
       use_contextual_chunking = false
-      contextual_chunking_model = "openrouter_ministral_3b"
+      contextual_chunking_model = "openrouter_granite_8b"
 
       [parser.xml]
       max_tokens = 350
@@ -74,10 +75,10 @@ configs:
       ignore_tags = ["TOC", "INDEX"]
 
       [document_analysis]
-      model = "openrouter_ministral_3b"
+      model = "openrouter_granite_8b"
 
       [parser.vision]
-      model = "openrouter_ministral_3b"
+      model = "openrouter_qwen_vl"
       frame_sample_rate = -1
 
       [reranker]
