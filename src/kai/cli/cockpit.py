@@ -318,7 +318,7 @@ def cockpit_request_approve(
     from kai.cockpit.auth_backends import MagicLinkProvider
     from kai.cockpit.cli_helpers import build_magic_link_url
     from kai.cockpit.db import SessionLocal, create_all
-    from kai.cockpit.mailer import send_magic_link
+    from kai.cockpit.mailer import MailError, send_magic_link
     from kai.cockpit.models import User
 
     create_all()
@@ -339,7 +339,11 @@ def cockpit_request_approve(
             raise typer.Exit(1) from exc
 
         magic_url = build_magic_link_url(token.token)
-        send_magic_link(email, magic_url)
+        try:
+            send_magic_link(email, magic_url)
+        except MailError as exc:
+            err_line(str(exc))
+            raise typer.Exit(1) from exc
         console.print(f"{GL_OK} [{OK}]token minted[/{OK}]  {email}")
     finally:
         db.close()

@@ -84,21 +84,43 @@ class TestWhisperCppSTT:
 
     @pytest.mark.asyncio
     @patch("kai.bots.waha.stt.subprocess.run")
-    async def test_temp_dir_cleaned_up(self, mock_run, tmp_path):
+    @patch("kai.bots.waha.stt._stt_work_dir")
+    async def test_temp_dir_cleaned_up(self, mock_work_dir, mock_run, tmp_path):
         """Confirm the STT work dir is removed after transcribe() — happy path."""
-        mock_run.return_value = MagicMock(returncode=0, stderr=b"")
+
+        def side_effect(cmd, **kwargs):
+            if "ffmpeg" in cmd[0]:
+                wav_path = Path(cmd[-1])
+                wav_path.write_bytes(b"RIFF....WAVE")
+                return MagicMock(returncode=0, stderr=b"")
+            if "whisper" in cmd[0] or "main" in cmd[0]:
+                prefix = cmd[cmd.index("-of") + 1]
+                Path(f"{prefix}.txt").write_text("hello world")
+                return MagicMock(returncode=0, stderr=b"")
+            return MagicMock(returncode=1, stderr=b"unknown command")
+
+        mock_run.side_effect = side_effect
+
+        work_dir = tmp_path / "stt_work"
+        work_dir.mkdir()
+
+        ctx = MagicMock()
+        ctx.__enter__ = MagicMock(return_value=work_dir)
+        ctx.__exit__ = MagicMock(return_value=False)
+        mock_work_dir.return_value = ctx
 
         stt = WhisperCppSTT(
             ffmpeg_path="/usr/bin/ffmpeg",
             whisper_cpp_path="/usr/bin/whisper",
             model_path="/models/ggml-base.bin",
         )
-        before = set(Path("/tmp").glob("kai/media/*"))
         await stt.transcribe(b"fake-audio-bytes")
-        after = set(Path("/tmp").glob("kai/media/*"))
-        new_dirs = after - before
-        for d in new_dirs:
-            assert not d.exists()
+
+        assert (work_dir / "input").exists()
+        assert (work_dir / "output.wav").exists()
+        assert (work_dir / "whisper_out.txt").exists()
+        assert mock_work_dir.called
+        mock_work_dir.return_value.__exit__.assert_called_once()
 
 
 class TestWhisperServerSTT:

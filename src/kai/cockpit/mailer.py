@@ -1,10 +1,16 @@
 """Send magic-link emails via stdlib smtplib, or print to stdout."""
 
+from __future__ import annotations
+
 import smtplib
 from email.message import EmailMessage
 from email.utils import formataddr
 
 from kai.cockpit.settings import get_cockpit_settings
+
+
+class MailError(RuntimeError):
+    """Raised when an email cannot be sent."""
 
 
 def send_magic_link(user_email: str, magic_url: str) -> None:
@@ -31,12 +37,37 @@ def send_magic_link(user_email: str, magic_url: str) -> None:
         f"safely ignore this email — no one else can use this link."
     )
 
-    with smtplib.SMTP(smtp_host, smtp_port) as server:
+    try:
+        with _smtp_server(smtp_host, smtp_port, smtp_user, smtp_pass) as server:
+            server.send_message(msg)
+    except MailError:
+        raise
+    except smtplib.SMTPException as exc:
+        raise MailError(f"Failed to send email: {exc}") from exc
+
+
+def _smtp_server(host: str, port: int, user: str, password: str) -> smtplib.SMTP:
+    if port == 465:
+        server = smtplib.SMTP_SSL(host, port)
+        try:
+            server.ehlo()
+            if user and password:
+                server.login(user, password)
+        except Exception:
+            server.close()
+            raise
+        return server
+
+    server = smtplib.SMTP(host, port)
+    try:
         server.ehlo()
-        if smtp_user and smtp_pass:
-            has_tls = server.has_extn("starttls")
-            if has_tls:
-                server.starttls()
-                server.ehlo()
-            server.login(smtp_user, smtp_pass)
-        server.send_message(msg)
+        if user and password:
+            if not server.has_extn("starttls"):
+                raise MailError(f"SMTP server {host}:{port} does not support STARTTLS")
+            server.starttls()
+            server.ehlo()
+            server.login(user, password)
+    except Exception:
+        server.close()
+        raise
+    return server

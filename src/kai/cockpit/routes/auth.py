@@ -1,5 +1,7 @@
 """Auth routes: /login, /login/auth (magic link), /logout."""
 
+import logging
+
 from fastapi import APIRouter, Depends, Form, Request
 from fastapi.responses import RedirectResponse
 from sqlalchemy.orm import Session
@@ -10,9 +12,11 @@ from kai.cockpit.auth import get_current_user
 from kai.cockpit.auth_backends import MagicLinkProvider
 from kai.cockpit.cli_helpers import build_magic_link_url
 from kai.cockpit.db import get_db
-from kai.cockpit.mailer import send_magic_link
+from kai.cockpit.mailer import MailError, send_magic_link
 from kai.cockpit.models import User
 from kai.cockpit.settings import get_cockpit_settings
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -42,7 +46,10 @@ async def login_post(
             provider = MagicLinkProvider(db)
             token = provider.initiate_login(user.id)
             magic_url = build_magic_link_url(token.token)
-            send_magic_link(email, magic_url)
+            try:
+                send_magic_link(email, magic_url)
+            except MailError:
+                logger.exception("Failed to send magic link email to %s", email)
         requested = True
     return templates.TemplateResponse(request, "login.html", {"user": None, "requested": requested})
 
