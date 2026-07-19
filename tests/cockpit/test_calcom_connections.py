@@ -1,7 +1,5 @@
 """Tests for the CalcomConnectionsService."""
 
-from __future__ import annotations
-
 import httpx
 import pytest
 

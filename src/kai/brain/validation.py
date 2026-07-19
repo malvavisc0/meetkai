@@ -1,10 +1,10 @@
 """SSRF and file-type/size guards for Operator-submitted Brain ingestion input.
 
 Two entry points into the Brain accept untrusted Operator input handed to
-shared, network-connected containers (crawl4ai, LightRAG):
+shared, network-connected containers (crawl4ai, Morphik):
 
 - ``POST /brain/ingest-url`` — a URL crawl4ai's headless Chromium fetches.
-- ``POST /brain/upload`` — a file forwarded byte-for-byte to LightRAG.
+- ``POST /brain/upload`` — a file forwarded byte-for-byte to Morphik.
 
 Callers should run these checks *before* any network I/O; treat ``ValueError``
 as an Operator-facing message.
@@ -19,7 +19,7 @@ from urllib.parse import urlparse
 
 _ALLOWED_URL_SCHEMES = {"http", "https"}
 
-# Extensions LightRAG's own docs list as supported ingest formats (allowlist).
+# Extensions Morphik's own docs list as supported ingest formats (allowlist).
 ALLOWED_UPLOAD_EXTENSIONS = frozenset(
     {
         ".txt",
@@ -113,7 +113,7 @@ def validate_upload_size(file: BinaryIO, *, max_bytes: int = MAX_UPLOAD_BYTES) -
 
     Reads the stream's size via seek/tell rather than buffering the whole
     file into memory, then rewinds it so the caller can still read it from
-    the start (e.g. to forward it to LightRAG).
+    the start (e.g. to forward it to Morphik).
     """
     file.seek(0, os.SEEK_END)
     size = file.tell()

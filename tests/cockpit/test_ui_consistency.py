@@ -14,8 +14,6 @@ A written guardrail nobody has to run is not a guardrail — this module
 makes both rules an actual, always-run check instead of a reminder.
 """
 
-from __future__ import annotations
-
 import re
 from pathlib import Path
 

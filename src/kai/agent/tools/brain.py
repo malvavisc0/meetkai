@@ -1,10 +1,10 @@
-"""``brain_query`` — the agent-facing tool over a user's LightRAG Brain.
+"""``brain_query`` — the agent-facing tool over a user's Morphik Brain.
 
 Bot-agnostic by design: no bot module imports this directly. Instead
 ``cli/bot.py``'s ``_start()`` is the single funnel every bot passes through;
-after ``bot.configure()`` it builds a ``LightRagClient`` from
+after ``bot.configure()`` it builds a ``MorphikClient`` from
 ``BrainSettings`` and calls :func:`register_brain_tool` here, which is the
-only place that touches both the agent and the LightRAG client.
+only place that touches both the agent and the Morphik client.
 
 The tool itself is an ``async def`` (the agent's tool dispatch is already
 async, so no thread/executor wrapping is needed and no second sync client
@@ -30,7 +30,7 @@ _VALID_MODES: frozenset[QueryMode] = frozenset({"naive", "local", "global", "hyb
 
 # Structural contracts for the two collaborators ``register_brain_tool``
 # depends on. Declaring them as Protocols (rather than the concrete
-# ``LightRagClient`` / ``KaiAgent``) lets unit tests pass lightweight fakes
+# ``MorphikClient`` / ``KaiAgent``) lets unit tests pass lightweight fakes
 # without ``# type: ignore`` while still type-checking the real call sites.
 # Both concrete classes structurally satisfy these protocols.
 

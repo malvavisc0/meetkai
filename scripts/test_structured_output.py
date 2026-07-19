@@ -16,8 +16,6 @@ Run from the project root:
     .venv/bin/python scripts/test_structured_output.py
 """
 
-from __future__ import annotations
-
 import asyncio
 import logging
 import sys

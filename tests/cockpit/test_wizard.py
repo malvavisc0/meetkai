@@ -1,7 +1,5 @@
 """Tests for the deployment wizard: GET, POST, template picker."""
 
-from __future__ import annotations
-
 import secrets
 from datetime import UTC, datetime
 

@@ -23,8 +23,8 @@ def _clean_brain_env(monkeypatch):
 @pytest.fixture
 def settings():
     return BrainSettings.for_test(
-        base_url="http://localhost:9621",
-        lightrag_api_key="lightrag-test-key",
+        base_url="http://localhost:8000",
+        morphik_token="morphik-test-token",
         workspace="kai-test",
         crawler_url="http://localhost:11235",
         crawl4ai_token="crawl4ai-test-token",

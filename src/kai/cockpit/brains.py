@@ -1,5 +1,10 @@
-"""BrainsService — Brain (LightRAG workspace) provisioning + operator config
+"""BrainsService — Brain (Morphik end-user scope) provisioning + operator config
 + document management (upload / paste text / crawl a URL / list / delete).
+
+The user's Brain is a ``Connection`` row with ``service="morphik"`` whose
+``config["workspace"]`` holds the Morphik ``end_user_id`` (the user slug).
+Morphik enforces isolation at the row level via that field; the previous
+LightRAG backend ignored it, which is why we switched.
 """
 
 import re
@@ -9,7 +14,7 @@ from urllib.parse import urldefrag, urljoin, urlparse
 
 from sqlalchemy.orm import Session
 
-from kai.brain.client import DocumentRecord, IngestResult, LightRagClient
+from kai.brain.client import DocumentRecord, IngestResult, MorphikClient
 from kai.brain.config import get_brain_settings
 from kai.brain.crawler import Crawl4aiClient
 from kai.brain.validation import (
@@ -55,15 +60,15 @@ class BrainsService:
         self.db = db
 
     def get_brain(self, user: User) -> Connection | None:
-        """Get the user's Brain (lightrag) connection row, or None."""
+        """Get the user's Brain (morphik) connection row, or None."""
         return (
             self.db.query(Connection)
-            .filter(Connection.user_id == user.id, Connection.service == "lightrag")
+            .filter(Connection.user_id == user.id, Connection.service == "morphik")
             .first()
         )
 
     def create_brain(self, user: User) -> Connection:
-        """Provision the user's Brain: allocate a workspace, write the row.
+        """Provision the user's Brain: allocate an end-user scope, write the row.
 
         Idempotent — calling this again for a user who already has a Brain
         just returns the existing row unchanged (mirrors
@@ -71,12 +76,12 @@ class BrainsService:
         this one is reached only via an explicit "Create my Brain" click,
         never lazily from an unrelated flow).
 
-        No external HTTP call is made: LightRAG workspaces aren't created
-        via an API — a workspace is just a partition key the shared
-        LightRAG container recognizes on first write via ``workspace=`` on
-        ingest/query calls. So "creating" a Brain is purely a kai-side
-        row; the workspace comes into existence in LightRAG the moment the
-        first document is ingested into it.
+        No external HTTP call is made: Morphik end-user scopes aren't created
+        via an API — an ``end_user_id`` is a row-level partition key the
+        shared Morphik container honors on first write via the per-request
+        ``end_user_id`` field on ingest/query/list/delete. So "creating" a
+        Brain is purely a kai-side row; the scope comes into existence in
+        Morphik the moment the first document is ingested into it.
         """
         existing = self.get_brain(user)
         if existing is not None:
@@ -84,7 +89,7 @@ class BrainsService:
 
         conn = Connection(
             user_id=user.id,
-            service="lightrag",
+            service="morphik",
             status="ready",
             config={
                 "workspace": user_slug(user.kai_slug),
@@ -139,8 +144,8 @@ class BrainsService:
     def delete_brain(self, user: User) -> None:
         """Remove the user's Brain connection row (kai-side only).
 
-        Does NOT clear the workspace's documents/vectors inside LightRAG —
-        that is ``LightRagClient.clear_workspace`` (a separate, explicit,
+        Does NOT clear the end-user scope's documents/vectors inside Morphik —
+        that is ``MorphikClient.clear_workspace`` (a separate, explicit,
         dangerous admin action per ``brain/client.py``), not part of this
         lightweight "un-provision the row" flow.
         """
@@ -150,10 +155,10 @@ class BrainsService:
         self.db.delete(conn)
         self.db.commit()
 
-    # --- External clients (shared lightrag/crawl4ai containers) ---
+    # --- External clients (shared morphik/crawl4ai containers) ---
 
-    def _lightrag_client(self) -> LightRagClient:
-        return LightRagClient(get_brain_settings())
+    def _morphik_client(self) -> MorphikClient:
+        return MorphikClient(get_brain_settings())
 
     def _crawler_client(self) -> Crawl4aiClient:
         return Crawl4aiClient(get_brain_settings())
@@ -169,11 +174,11 @@ class BrainsService:
     async def ingest_text(self, user: User, *, name: str, text: str) -> IngestResult:
         """Ingest pasted/raw text under the operator-supplied ``name``.
 
-        ``name`` becomes LightRAG's ``file_source`` — the single
-        display name shown in the Documents table.
+        ``name`` becomes Morphik's ``filename`` — the single display name
+        shown in the Documents table.
         """
         brain = self._require_brain(user)
-        client = self._lightrag_client()
+        client = self._morphik_client()
         try:
             return await client.ingest_text(
                 file_source=name, text=text, workspace=brain.config["workspace"]
@@ -186,13 +191,13 @@ class BrainsService:
 
         Raises ``ValueError`` if the file extension isn't in the ingest
         allowlist, or if the file is empty or over the size cap — checked
-        here (before any network I/O against LightRAG) so an untyped or
-        oversized upload never reaches the shared LightRAG container.
+        here (before any network I/O against Morphik) so an untyped or
+        oversized upload never reaches the shared Morphik container.
         """
         validate_upload_filename(filename)
         validate_upload_size(file)
         brain = self._require_brain(user)
-        client = self._lightrag_client()
+        client = self._morphik_client()
         try:
             return await client.ingest_file(
                 file=file, filename=filename, workspace=brain.config["workspace"]
@@ -211,7 +216,7 @@ class BrainsService:
         and the returned ``links.internal`` drives the frontier. Only
         same-host links are followed; the seed host gates the frontier.
 
-        All fetched pages are batch-ingested into LightRAG via
+        All fetched pages are batch-ingested into Morphik via
         ``ingest_texts`` (one track_id for the whole crawl) under per-page
         ``file_source`` slugs (e.g. ``transmissionbt-com-download``).
 
@@ -265,7 +270,7 @@ class BrainsService:
 
         file_sources = [_slug_for_url(u) for u, _ in pages]
         texts = [md for _, md in pages]
-        client = self._lightrag_client()
+        client = self._morphik_client()
         try:
             result = await client.ingest_texts(
                 file_sources=file_sources, texts=texts, workspace=brain.config["workspace"]
@@ -288,7 +293,7 @@ class BrainsService:
         brain = self.get_brain(user)
         if brain is None:
             return []
-        client = self._lightrag_client()
+        client = self._morphik_client()
         try:
             return await client.list_docs(workspace=brain.config["workspace"])
         finally:
@@ -297,7 +302,7 @@ class BrainsService:
     async def delete_doc(self, user: User, *, doc_id: str) -> str:
         """Delete one document from the Brain, scoped to its workspace."""
         brain = self._require_brain(user)
-        client = self._lightrag_client()
+        client = self._morphik_client()
         try:
             return await client.delete_doc(doc_id=doc_id, workspace=brain.config["workspace"])
         finally:

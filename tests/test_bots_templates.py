@@ -10,8 +10,6 @@ Verifies the Phase 3 success criteria:
   email templates).
 """
 
-from __future__ import annotations
-
 from pathlib import Path
 from unittest.mock import MagicMock
 
@@ -131,7 +129,7 @@ class TestEscalationInjection:
     def test_bot_prompt_includes_escalation_block(self, monkeypatch):
         # Required brain env vars so resolve_tools/boot guards pass.
         monkeypatch.setenv("KAI_BRAIN_BASE_URL", "http://test")
-        monkeypatch.setenv("KAI_BRAIN_LIGHTRAG_API_KEY", "secret")
+        monkeypatch.setenv("KAI_BRAIN_MORPHIK_TOKEN", "secret")
         tmpl = _tmpl("waha", "customer-support")
         bot = WahaBot(_waha_dir(), config=WahaBotConfig(trigger_keyword="kai"))
         agent = _fake_agent()

@@ -281,7 +281,7 @@ class TestStart:
         assert dep.status == "running"
         assert dep.desired_state == "running"
 
-    def test_start_injects_brain_env_when_lightrag_connection_exists(
+    def test_start_injects_brain_env_when_morphik_connection_exists(
         self, db, user, monkeypatch, tmp_path
     ):
         svc = DeploymentsService(db)
@@ -291,7 +291,7 @@ class TestStart:
         db.add(
             Connection(
                 user_id=user.id,
-                service="lightrag",
+                service="morphik",
                 status="ready",
                 config={
                     "workspace": "kai-v001-bob_at_test_com",
@@ -350,7 +350,7 @@ class TestStart:
         assert captured_env["KAI_BRAIN_INSTRUCTION"] == "how to do X from section Y"
         assert captured_env["KAI_BRAIN_MANDATORY"] == "true"
 
-    def test_start_omits_brain_env_when_no_lightrag_connection(
+    def test_start_omits_brain_env_when_no_morphik_connection(
         self, db, user, monkeypatch, tmp_path
     ):
         svc = DeploymentsService(db)

@@ -34,7 +34,7 @@ class User(Base):
     created_at: Mapped[str] = mapped_column(String, nullable=False)
     # Stable external-service identifier generated once at user creation
     # (kai.cockpit.naming.kai_slug_for) and reused as both WAHA session
-    # name and LightRAG workspace name. Nullable for lazy backfill.
+    # name and Morphik end_user_id. Nullable for lazy backfill.
     kai_slug: Mapped[str | None] = mapped_column(String, nullable=True)
 
 

@@ -1,7 +1,5 @@
 """Tests for template tool overrides on the settings page."""
 
-from __future__ import annotations
-
 import secrets
 from datetime import UTC, datetime
 

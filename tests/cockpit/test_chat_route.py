@@ -7,8 +7,6 @@ the delivery target is decided by the agent's structured action, not a form
 field.
 """
 
-from __future__ import annotations
-
 from unittest.mock import MagicMock
 
 import pytest

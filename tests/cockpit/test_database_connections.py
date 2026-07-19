@@ -1,7 +1,5 @@
 """Tests for the DatabaseConnectionsService (Fix 05)."""
 
-from __future__ import annotations
-
 import pytest
 
 

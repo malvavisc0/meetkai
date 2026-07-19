@@ -4,8 +4,6 @@ Covers happy path, WAHA-unreachable (graceful empty 200), pagination flag,
 unauthenticated redirect, and not-owner (silent empty) cases.
 """
 
-from __future__ import annotations
-
 from datetime import UTC, datetime
 from unittest.mock import AsyncMock
 

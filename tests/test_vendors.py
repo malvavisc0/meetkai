@@ -4,8 +4,6 @@ These use a temp project root and monkeypatch the network/build surfaces
 (httpx download, git clone, uv venv) so the tests run fast and offline.
 """
 
-from __future__ import annotations
-
 from pathlib import Path
 from unittest import mock
 

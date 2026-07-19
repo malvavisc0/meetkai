@@ -1,7 +1,5 @@
 """Tests for the SQL query + describe_database tools (Fix 05)."""
 
-from __future__ import annotations
-
 import json
 from unittest.mock import MagicMock
 

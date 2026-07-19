@@ -19,8 +19,6 @@ The model set is discovered automatically by walking the ``kai`` package,
 so new pydantic models are covered without touching this file.
 """
 
-from __future__ import annotations
-
 import importlib
 import inspect
 import pkgutil

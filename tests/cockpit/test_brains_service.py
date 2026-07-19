@@ -16,7 +16,7 @@ class TestCreateBrain:
         svc = BrainsService(db)
         assert svc.get_brain(user) is None
         brain = svc.create_brain(user)
-        assert brain.service == "lightrag"
+        assert brain.service == "morphik"
         assert brain.status == "ready"
         # bob@test.com -> kai-v001-bob_at_test_com (same scheme as WAHA)
         assert brain.config["workspace"] == "kai-v001-bob_at_test_com"
@@ -65,7 +65,7 @@ class TestDeleteBrain:
         svc.create_brain(user)
         svc.delete_brain(user)
         assert svc.get_brain(user) is None
-        assert db.query(Connection).filter(Connection.service == "lightrag").count() == 0
+        assert db.query(Connection).filter(Connection.service == "morphik").count() == 0
 
     def test_noop_when_no_brain(self, db, user):
         svc = BrainsService(db)
@@ -87,11 +87,11 @@ class TestSlugForUrl:
 
 
 @pytest.fixture
-def fake_lightrag_client(monkeypatch):
-    """Patch BrainsService._lightrag_client with an AsyncMock LightRagClient."""
+def fake_morphik_client(monkeypatch):
+    """Patch BrainsService._morphik_client with an AsyncMock MorphikClient."""
     client = AsyncMock()
     client.close = AsyncMock()
-    monkeypatch.setattr("kai.cockpit.brains.BrainsService._lightrag_client", lambda self: client)
+    monkeypatch.setattr("kai.cockpit.brains.BrainsService._morphik_client", lambda self: client)
     return client
 
 
@@ -125,65 +125,65 @@ def fake_dns(monkeypatch):
 
 
 class TestIngestText:
-    async def test_raises_without_a_brain(self, db, user, fake_lightrag_client):
+    async def test_raises_without_a_brain(self, db, user, fake_morphik_client):
         svc = BrainsService(db)
         with pytest.raises(ValueError):
             await svc.ingest_text(user, name="notes", text="hello")
 
-    async def test_calls_client_with_workspace_and_closes(self, db, user, fake_lightrag_client):
+    async def test_calls_client_with_workspace_and_closes(self, db, user, fake_morphik_client):
         svc = BrainsService(db)
         svc.create_brain(user)
-        fake_lightrag_client.ingest_text.return_value = IngestResult(
+        fake_morphik_client.ingest_text.return_value = IngestResult(
             track_id="insert_1", status="success", message="ok"
         )
         result = await svc.ingest_text(user, name="Onboarding notes", text="Refund: 30 days.")
         assert result.track_id == "insert_1"
-        fake_lightrag_client.ingest_text.assert_awaited_once_with(
+        fake_morphik_client.ingest_text.assert_awaited_once_with(
             file_source="Onboarding notes",
             text="Refund: 30 days.",
             workspace="kai-v001-bob_at_test_com",
         )
-        fake_lightrag_client.close.assert_awaited_once()
+        fake_morphik_client.close.assert_awaited_once()
 
 
 class TestIngestFile:
-    async def test_calls_client_with_filename_and_workspace(self, db, user, fake_lightrag_client):
+    async def test_calls_client_with_filename_and_workspace(self, db, user, fake_morphik_client):
         svc = BrainsService(db)
         svc.create_brain(user)
-        fake_lightrag_client.ingest_file.return_value = IngestResult(
+        fake_morphik_client.ingest_file.return_value = IngestResult(
             track_id="upload_1", status="success", message="ok"
         )
         fake_file = io.BytesIO(b"dummy")
         result = await svc.ingest_file(user, filename="handbook.pdf", file=fake_file)
         assert result.track_id == "upload_1"
-        fake_lightrag_client.ingest_file.assert_awaited_once_with(
+        fake_morphik_client.ingest_file.assert_awaited_once_with(
             file=fake_file, filename="handbook.pdf", workspace="kai-v001-bob_at_test_com"
         )
-        fake_lightrag_client.close.assert_awaited_once()
+        fake_morphik_client.close.assert_awaited_once()
 
-    async def test_rejects_disallowed_extension(self, db, user, fake_lightrag_client):
+    async def test_rejects_disallowed_extension(self, db, user, fake_morphik_client):
         svc = BrainsService(db)
         svc.create_brain(user)
         fake_file = io.BytesIO(b"dummy")
         with pytest.raises(ValueError, match="Unsupported file type"):
             await svc.ingest_file(user, filename="malware.exe", file=fake_file)
-        fake_lightrag_client.ingest_file.assert_not_awaited()
+        fake_morphik_client.ingest_file.assert_not_awaited()
 
-    async def test_rejects_oversized_file(self, db, user, fake_lightrag_client):
+    async def test_rejects_oversized_file(self, db, user, fake_morphik_client):
         svc = BrainsService(db)
         svc.create_brain(user)
         fake_file = io.BytesIO(b"x" * (26 * 1024 * 1024))
         with pytest.raises(ValueError, match="too large"):
             await svc.ingest_file(user, filename="big.txt", file=fake_file)
-        fake_lightrag_client.ingest_file.assert_not_awaited()
+        fake_morphik_client.ingest_file.assert_not_awaited()
 
-    async def test_rejects_empty_file(self, db, user, fake_lightrag_client):
+    async def test_rejects_empty_file(self, db, user, fake_morphik_client):
         svc = BrainsService(db)
         svc.create_brain(user)
         fake_file = io.BytesIO(b"")
         with pytest.raises(ValueError, match="empty"):
             await svc.ingest_file(user, filename="empty.txt", file=fake_file)
-        fake_lightrag_client.ingest_file.assert_not_awaited()
+        fake_morphik_client.ingest_file.assert_not_awaited()
 
 
 class TestIngestUrl:
@@ -197,7 +197,7 @@ class TestIngestUrl:
         )
 
     async def test_crawls_seed_plus_linked_pages_then_batch_ingests(
-        self, db, user, fake_lightrag_client, fake_crawler_client
+        self, db, user, fake_morphik_client, fake_crawler_client
     ):
         svc = BrainsService(db)
         svc.create_brain(user)
@@ -212,7 +212,7 @@ class TestIngestUrl:
             return self._page(url, f"# {url}\nbody")
 
         fake_crawler_client.crawl = AsyncMock(side_effect=_crawl)
-        fake_lightrag_client.ingest_texts.return_value = IngestResult(
+        fake_morphik_client.ingest_texts.return_value = IngestResult(
             track_id="insert_2", status="success", message="ok"
         )
 
@@ -222,8 +222,8 @@ class TestIngestUrl:
         # depth 1 (default): seed + 2 linked pages = 3 fetches
         assert fake_crawler_client.crawl.await_count == 3
         fake_crawler_client.close.assert_awaited_once()
-        fake_lightrag_client.ingest_texts.assert_awaited_once()
-        _, kwargs = fake_lightrag_client.ingest_texts.await_args
+        fake_morphik_client.ingest_texts.assert_awaited_once()
+        _, kwargs = fake_morphik_client.ingest_texts.await_args
         assert kwargs["workspace"] == "kai-v001-bob_at_test_com"
         assert kwargs["file_sources"] == [
             "example-com-docs",
@@ -232,10 +232,10 @@ class TestIngestUrl:
         ]
         assert len(kwargs["texts"]) == 3
         assert kwargs["texts"][0] == "# Docs\nSome content."
-        fake_lightrag_client.close.assert_awaited_once()
+        fake_morphik_client.close.assert_awaited_once()
 
     async def test_does_not_follow_external_or_non_http_links(
-        self, db, user, fake_lightrag_client, fake_crawler_client
+        self, db, user, fake_morphik_client, fake_crawler_client
     ):
         svc = BrainsService(db)
         svc.create_brain(user)
@@ -253,7 +253,7 @@ class TestIngestUrl:
             )
 
         fake_crawler_client.crawl = AsyncMock(side_effect=_crawl)
-        fake_lightrag_client.ingest_texts.return_value = IngestResult(
+        fake_morphik_client.ingest_texts.return_value = IngestResult(
             track_id="t", status="success", message="ok"
         )
 
@@ -268,7 +268,7 @@ class TestIngestUrl:
         assert all(not u.startswith("mailto:") for u in fetched)
 
     async def test_raises_when_no_content_crawled(
-        self, db, user, fake_lightrag_client, fake_crawler_client
+        self, db, user, fake_morphik_client, fake_crawler_client
     ):
         svc = BrainsService(db)
         svc.create_brain(user)
@@ -285,7 +285,7 @@ class TestIngestUrl:
         with pytest.raises(ValueError):
             await svc.ingest_url(user, url="https://example.com/empty")
 
-        fake_lightrag_client.ingest_texts.assert_not_awaited()
+        fake_morphik_client.ingest_texts.assert_not_awaited()
 
     async def test_raises_without_a_brain(self, db, user, fake_crawler_client):
         svc = BrainsService(db)
@@ -323,13 +323,13 @@ class TestIngestUrl:
 
 
 class TestListDocs:
-    async def test_returns_empty_list_without_a_brain(self, db, user, fake_lightrag_client):
+    async def test_returns_empty_list_without_a_brain(self, db, user, fake_morphik_client):
         svc = BrainsService(db)
         docs = await svc.list_docs(user)
         assert docs == []
-        fake_lightrag_client.list_docs.assert_not_awaited()
+        fake_morphik_client.list_docs.assert_not_awaited()
 
-    async def test_lists_docs_for_the_workspace(self, db, user, fake_lightrag_client):
+    async def test_lists_docs_for_the_workspace(self, db, user, fake_morphik_client):
         svc = BrainsService(db)
         svc.create_brain(user)
         record = DocumentRecord(
@@ -342,33 +342,31 @@ class TestListDocs:
             created_at="t1",
             updated_at="t2",
         )
-        fake_lightrag_client.list_docs.return_value = [record]
+        fake_morphik_client.list_docs.return_value = [record]
 
         docs = await svc.list_docs(user)
 
         assert docs == [record]
-        fake_lightrag_client.list_docs.assert_awaited_once_with(
-            workspace="kai-v001-bob_at_test_com"
-        )
-        fake_lightrag_client.close.assert_awaited_once()
+        fake_morphik_client.list_docs.assert_awaited_once_with(workspace="kai-v001-bob_at_test_com")
+        fake_morphik_client.close.assert_awaited_once()
 
 
 class TestDeleteDoc:
-    async def test_raises_without_a_brain(self, db, user, fake_lightrag_client):
+    async def test_raises_without_a_brain(self, db, user, fake_morphik_client):
         svc = BrainsService(db)
         with pytest.raises(ValueError):
             await svc.delete_doc(user, doc_id="doc-1")
-        fake_lightrag_client.delete_doc.assert_not_awaited()
+        fake_morphik_client.delete_doc.assert_not_awaited()
 
-    async def test_calls_client_and_closes(self, db, user, fake_lightrag_client):
+    async def test_calls_client_and_closes(self, db, user, fake_morphik_client):
         svc = BrainsService(db)
         svc.create_brain(user)
-        fake_lightrag_client.delete_doc.return_value = "deletion_started"
+        fake_morphik_client.delete_doc.return_value = "deletion_started"
 
         status = await svc.delete_doc(user, doc_id="doc-1")
 
         assert status == "deletion_started"
-        fake_lightrag_client.delete_doc.assert_awaited_once_with(
+        fake_morphik_client.delete_doc.assert_awaited_once_with(
             doc_id="doc-1", workspace="kai-v001-bob_at_test_com"
         )
-        fake_lightrag_client.close.assert_awaited_once()
+        fake_morphik_client.close.assert_awaited_once()

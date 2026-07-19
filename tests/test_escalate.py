@@ -11,8 +11,6 @@ module-level _DYN state set by Bot.configure(). The tests verify:
 - Tools are included in get_tools()
 """
 
-from __future__ import annotations
-
 from datetime import UTC, datetime
 
 import httpx

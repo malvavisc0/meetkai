@@ -11,27 +11,30 @@ from kai.brain.client import (
     DOC_STATUS_PROCESSING,
     DocumentRecord,
     IngestResult,
-    LightRagClient,
+    MorphikClient,
     QueryResult,
 )
 
 
 @pytest.fixture
 def client(settings):
-    return LightRagClient(settings)
+    return MorphikClient(settings)
 
 
 class TestIngestText:
     @respx.mock
     @pytest.mark.asyncio
-    async def test_returns_track_id(self, client):
-        respx.post("/documents/text").mock(
+    async def test_returns_external_id(self, client):
+        respx.post("/ingest/text").mock(
             return_value=Response(
                 200,
                 json={
-                    "status": "success",
-                    "message": "Text successfully received.",
-                    "track_id": "insert_20260706_075218_03b54836",
+                    "external_id": "doc-abc123",
+                    "content_type": "text/plain",
+                    "filename": "onboarding-notes.txt",
+                    "system_metadata": {"status": "pending"},
+                    "metadata": {},
+                    "chunk_ids": [],
                 },
             )
         )
@@ -41,19 +44,19 @@ class TestIngestText:
             workspace="kai-test",
         )
         assert isinstance(result, IngestResult)
-        assert result.track_id == "insert_20260706_075218_03b54836"
-        assert result.status == "success"
+        assert result.track_id == "doc-abc123"
+        assert result.status == "pending"
 
-        # Verify the body shape sent (file_source + workspace required)
+        # Verify the body shape sent (content + filename + end_user_id)
         body = json.loads(respx.calls[0].request.content)
-        assert body["file_source"] == "onboarding-notes.txt"
-        assert body["workspace"] == "kai-test"
-        assert body["text"] == "Refund policy: 30 days."
+        assert body["content"] == "Refund policy: 30 days."
+        assert body["filename"] == "onboarding-notes.txt"
+        assert body["end_user_id"] == "kai-test"
 
     @respx.mock
     @pytest.mark.asyncio
     async def test_raises_on_http_error(self, client):
-        respx.post("/documents/text").mock(return_value=Response(500))
+        respx.post("/ingest/text").mock(return_value=Response(500))
         with pytest.raises(httpx.HTTPStatusError):
             await client.ingest_text(file_source="x", text="y", workspace="ws")
 
@@ -61,13 +64,17 @@ class TestIngestText:
 class TestIngestFile:
     @respx.mock
     @pytest.mark.asyncio
-    async def test_uploads_multipart_with_workspace_query_param(self, client):
-        respx.post("/documents/upload").mock(
+    async def test_uploads_multipart_with_end_user_id_form_field(self, client):
+        respx.post("/ingest/file").mock(
             return_value=Response(
                 200,
                 json={
-                    "status": "success",
-                    "track_id": "upload_20260706_083651_45f299b1",
+                    "external_id": "doc-upload456",
+                    "content_type": "application/pdf",
+                    "filename": "handbook.pdf",
+                    "system_metadata": {"status": "pending"},
+                    "metadata": {},
+                    "chunk_ids": [],
                 },
             )
         )
@@ -75,107 +82,89 @@ class TestIngestFile:
         result = await client.ingest_file(
             file=file_bytes, filename="handbook.pdf", workspace="kai-test"
         )
-        assert result.track_id == "upload_20260706_083651_45f299b1"
+        assert result.track_id == "doc-upload456"
 
-        # workspace must be a query param, NOT in the body.
+        # end_user_id is a multipart form field, NOT a query param.
         req = respx.calls[0].request
-        assert "workspace=kai-test" in str(req.url)
-        # multipart content-type
+        body_text = req.content.decode("utf-8", errors="ignore")
+        assert 'name="end_user_id"' in body_text
+        assert "kai-test" in body_text
         assert "multipart/form-data" in req.headers.get("content-type", "")
+
+
+class TestIngestTexts:
+    @respx.mock
+    @pytest.mark.asyncio
+    async def test_batch_loops_ingest_text(self, client):
+        # Two sequential ingest_text calls; respx matches any /ingest/text.
+        respx.post("/ingest/text").mock(
+            return_value=Response(
+                200,
+                json={
+                    "external_id": "doc-first",
+                    "content_type": "text/plain",
+                    "system_metadata": {"status": "pending"},
+                    "metadata": {},
+                    "chunk_ids": [],
+                },
+            )
+        )
+        result = await client.ingest_texts(
+            file_sources=["page-1", "page-2"],
+            texts=["content 1", "content 2"],
+            workspace="kai-test",
+        )
+        # Returns the first doc's id as track_id
+        assert result.track_id == "doc-first"
+        # Both pages were ingested (two calls)
+        assert len(respx.calls) == 2
+
+    @respx.mock
+    @pytest.mark.asyncio
+    async def test_empty_batch_returns_empty(self, client):
+        result = await client.ingest_texts(file_sources=[], texts=[], workspace="kai-test")
+        assert result.track_id == ""
+        assert len(respx.calls) == 0
 
 
 class TestTrackStatus:
     @respx.mock
     @pytest.mark.asyncio
-    async def test_returns_documents_list(self, client):
-        track_id = "insert_20260706_075218_03b54836"
-        respx.get(f"/documents/track_status/{track_id}").mock(
+    async def test_returns_single_doc_list(self, client):
+        doc_id = "doc-abc123"
+        respx.get(f"/documents/{doc_id}/status").mock(
             return_value=Response(
                 200,
-                json={
-                    "track_id": track_id,
-                    "documents": [
-                        {
-                            "id": "doc-79cc14d91766f64cdd6e4cae4e6d0cd5",
-                            "status": "processed",
-                            "file_path": "kai-refund-policy.txt",
-                            "chunks_count": 1,
-                            "content_length": 312,
-                            "created_at": "2026-07-06T07:52:18+00:00",
-                            "updated_at": "2026-07-06T07:52:24+00:00",
-                            "metadata": {"parse_engine": "legacy"},
-                        }
-                    ],
-                    "total_count": 1,
-                },
+                json={"status": "completed", "progress": 100},
             )
         )
-        docs = await client.track_status(track_id=track_id)
+        docs = await client.track_status(track_id=doc_id)
         assert len(docs) == 1
         d = docs[0]
         assert isinstance(d, DocumentRecord)
-        assert d.id == "doc-79cc14d91766f64cdd6e4cae4e6d0cd5"
-        assert d.track_id == track_id
-        assert d.status == "processed"
-        assert d.file_path == "kai-refund-policy.txt"
-        assert d.chunks_count == 1
+        assert d.id == doc_id
+        assert d.status == "completed"
         assert d.is_terminal is True
-        assert d.metadata == {"parse_engine": "legacy"}
 
     @respx.mock
     @pytest.mark.asyncio
     async def test_failed_status_is_terminal(self, client):
-        track_id = "upload_20260706_083651_45f299b1"
-        respx.get(f"/documents/track_status/{track_id}").mock(
-            return_value=Response(
-                200,
-                json={
-                    "track_id": track_id,
-                    "documents": [
-                        {
-                            "id": "doc-3fcb9b343f00da18fa17f6792851860b",
-                            "status": "failed",
-                            "file_path": "test-upload.pdf",
-                            "error_msg": "invalid literal for int()",
-                            "content_length": 0,
-                            "created_at": "",
-                            "updated_at": "",
-                        }
-                    ],
-                    "total_count": 1,
-                },
-            )
+        doc_id = "doc-failed1"
+        respx.get(f"/documents/{doc_id}/status").mock(
+            return_value=Response(200, json={"status": "failed", "error": "parse error"})
         )
-        docs = await client.track_status(track_id=track_id)
+        docs = await client.track_status(track_id=doc_id)
         assert docs[0].status == DOC_STATUS_FAILED
         assert docs[0].is_terminal is True
-        assert docs[0].error_msg == "invalid literal for int()"
 
     @respx.mock
     @pytest.mark.asyncio
     async def test_processing_status_not_terminal(self, client):
-        track_id = "insert_1"
-        respx.get(f"/documents/track_status/{track_id}").mock(
-            return_value=Response(
-                200,
-                json={
-                    "track_id": track_id,
-                    "documents": [
-                        {
-                            "id": "doc-x",
-                            "status": "processing",
-                            "file_path": "f",
-                            "chunks_count": None,
-                            "content_length": 0,
-                            "created_at": "",
-                            "updated_at": "",
-                        }
-                    ],
-                    "total_count": 1,
-                },
-            )
+        doc_id = "doc-proc1"
+        respx.get(f"/documents/{doc_id}/status").mock(
+            return_value=Response(200, json={"status": "processing"})
         )
-        docs = await client.track_status(track_id=track_id)
+        docs = await client.track_status(track_id=doc_id)
         assert docs[0].status == DOC_STATUS_PROCESSING
         assert docs[0].is_terminal is False
 
@@ -183,133 +172,109 @@ class TestTrackStatus:
 class TestListDocs:
     @respx.mock
     @pytest.mark.asyncio
-    async def test_posts_paginated_with_workspace_in_body(self, client):
-        respx.post("/documents/paginated").mock(
+    async def test_posts_list_docs_with_end_user_id_query(self, client):
+        respx.post("/documents/list_docs").mock(
             return_value=Response(
                 200,
                 json={
                     "documents": [
                         {
-                            "id": "doc-1",
-                            "track_id": "insert_1",
-                            "status": "processed",
-                            "file_path": "a.txt",
-                            "chunks_count": 2,
-                            "content_length": 100,
-                            "created_at": "",
-                            "updated_at": "",
+                            "external_id": "doc-1",
+                            "content_type": "text/plain",
+                            "filename": "a.txt",
+                            "system_metadata": {
+                                "status": "completed",
+                                "content_length": 100,
+                                "created_at": "2026-07-06T00:00:00Z",
+                                "updated_at": "2026-07-06T00:01:00Z",
+                            },
+                            "chunk_ids": ["c1", "c2"],
+                            "metadata": {"source": "upload"},
                         },
                         {
-                            "id": "doc-2",
-                            "track_id": "insert_2",
-                            "status": "processing",
-                            "file_path": "b.txt",
-                            "chunks_count": None,
-                            "content_length": 50,
-                            "created_at": "",
-                            "updated_at": "",
+                            "external_id": "doc-2",
+                            "content_type": "text/plain",
+                            "filename": "b.txt",
+                            "system_metadata": {"status": "processing"},
+                            "chunk_ids": [],
+                            "metadata": {},
                         },
                     ],
-                    "pagination": {"total_count": 2},
+                    "skip": 0,
+                    "limit": 50,
+                    "returned_count": 2,
                 },
             )
         )
         docs = await client.list_docs(workspace="kai-test")
         assert len(docs) == 2
         assert docs[0].id == "doc-1"
-        assert docs[0].status == "processed"
+        assert docs[0].status == "completed"
+        assert docs[0].file_path == "a.txt"
+        assert docs[0].chunks_count == 2
+        assert docs[0].metadata == {"source": "upload"}
 
-        # workspace must be in the BODY (hidden param), not query
-        body = json.loads(respx.calls[0].request.content)
-        assert body["workspace"] == "kai-test"
+        # end_user_id must be a query param.
+        req = respx.calls[0].request
+        assert "end_user_id=kai-test" in str(req.url)
 
     @respx.mock
     @pytest.mark.asyncio
-    async def test_status_filters_passes_through(self, client):
-        respx.post("/documents/paginated").mock(
-            return_value=Response(200, json={"documents": [], "pagination": {"total_count": 0}})
+    async def test_status_filters_maps_to_document_filters(self, client):
+        respx.post("/documents/list_docs").mock(
+            return_value=Response(
+                200, json={"documents": [], "skip": 0, "limit": 50, "returned_count": 0}
+            )
         )
         await client.list_docs(workspace="ws", status_filters=["failed"])
         body = json.loads(respx.calls[0].request.content)
-        assert body["status_filters"] == ["failed"]
+        assert body["document_filters"] == {"status": {"$in": ["failed"]}}
 
 
 class TestDeleteDoc:
     @respx.mock
     @pytest.mark.asyncio
-    async def test_sends_doc_ids_array(self, client):
-        respx.delete("/documents/delete_document").mock(
-            return_value=Response(
-                200,
-                json={
-                    "status": "deletion_started",
-                    "message": "Deletion job started.",
-                    "doc_id": "doc-79cc14d91766f64cdd6e4cae4e6d0cd5",
-                },
-            )
+    async def test_deletes_by_path_id(self, client):
+        respx.delete("/documents/doc-abc123").mock(
+            return_value=Response(200, json={"status": "deleted", "message": "ok"})
         )
-        status = await client.delete_doc(
-            doc_id="doc-79cc14d91766f64cdd6e4cae4e6d0cd5", workspace="kai-test"
-        )
-        assert status == "deletion_started"
-
-        req = respx.calls[0].request
-        assert "workspace=kai-test" in str(req.url)
-        body = json.loads(req.content)
-        # doc_ids is an ARRAY (batch delete supported)
-        assert body["doc_ids"] == ["doc-79cc14d91766f64cdd6e4cae4e6d0cd5"]
-        assert body["delete_file"] is True
-
-
-class TestClearWorkspace:
-    @respx.mock
-    @pytest.mark.asyncio
-    async def test_workspace_in_query_param(self, client):
-        respx.delete("/documents").mock(
-            return_value=Response(200, json={"status": "success", "message": "cleared"})
-        )
-        status = await client.clear_workspace(workspace="kai-test")
-        assert status == "success"
-        req = respx.calls[0].request
-        assert "workspace=kai-test" in str(req.url)
+        status = await client.delete_doc(doc_id="doc-abc123", workspace="kai-test")
+        assert status == "deleted"
 
 
 class TestQuery:
     @respx.mock
     @pytest.mark.asyncio
-    async def test_returns_response_and_references(self, client):
+    async def test_returns_completion_and_sources(self, client):
         respx.post("/query").mock(
             return_value=Response(
                 200,
                 json={
-                    "response": "Refunds are available within 30 days.",
-                    "references": [
-                        {"file_path": "handbook.pdf"},
-                        {"file_path": "pricing.docx"},
+                    "completion": "Refunds are available within 30 days.",
+                    "usage": {"total_tokens": 50},
+                    "sources": [
+                        {"document_id": "doc-handbook", "chunk_number": 0, "score": 0.9},
+                        {"document_id": "doc-pricing", "chunk_number": 2, "score": 0.8},
                     ],
                 },
             )
         )
-        result = await client.query(
-            query="What is the refund policy?",
-            workspace="kai-test",
-        )
+        result = await client.query(query="What is the refund policy?", workspace="kai-test")
         assert isinstance(result, QueryResult)
         assert "30 days" in result.response
         assert len(result.references) == 2
-        assert result.references[0].file_path == "handbook.pdf"
+        assert result.references[0].file_path == "doc-handbook"
 
         body = json.loads(respx.calls[0].request.content)
-        assert body["mode"] == "mix"
-        assert body["enable_rerank"] is True
-        assert body["include_references"] is True
-        assert body["workspace"] == "kai-test"
+        assert body["query"] == "What is the refund policy?"
+        assert body["end_user_id"] == "kai-test"
+        assert body["use_reranking"] is True
 
     @respx.mock
     @pytest.mark.asyncio
-    async def test_no_references_returns_empty_list(self, client):
+    async def test_no_sources_returns_empty_list(self, client):
         respx.post("/query").mock(
-            return_value=Response(200, json={"response": "no context", "references": []})
+            return_value=Response(200, json={"completion": "no context", "sources": []})
         )
         result = await client.query(query="?", workspace="ws")
         assert result.references == []
@@ -317,17 +282,16 @@ class TestQuery:
 
     @respx.mock
     @pytest.mark.asyncio
-    async def test_mode_override(self, client):
+    async def test_disable_rerank_sends_null(self, client):
         respx.post("/query").mock(
-            return_value=Response(200, json={"response": "ok", "references": []})
+            return_value=Response(200, json={"completion": "ok", "sources": []})
         )
-        await client.query(query="?", workspace="ws", mode="local", enable_rerank=False)
+        await client.query(query="?", workspace="ws", enable_rerank=False)
         body = json.loads(respx.calls[0].request.content)
-        assert body["mode"] == "local"
-        assert body["enable_rerank"] is False
+        assert body["use_reranking"] is None
 
 
 class TestHeaders:
-    def test_api_key_header_set(self, settings):
-        client = LightRagClient(settings)
-        assert client._client.headers["X-API-Key"] == "lightrag-test-key"
+    def test_bearer_token_header_set(self, settings):
+        client = MorphikClient(settings)
+        assert client._client.headers["Authorization"] == "Bearer morphik-test-token"

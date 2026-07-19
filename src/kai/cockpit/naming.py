@@ -27,7 +27,7 @@ def kai_slug_for(email: str, *, version: str | None = None) -> str:
     """Return a ``kai-v<version>-<slug>`` identifier derived from ``email``.
 
     ``@`` becomes ``_at_``, ``.`` becomes ``_``, other illegal runs collapse
-    to a single ``-``. Result is legal in both WAHA and LightRAG identifiers.
+    to a single ``-``. Result is legal in both WAHA and Morphik identifiers.
     ``version`` defaults to :func:`kai_version_slug` (kai's installed package
     version).
     """

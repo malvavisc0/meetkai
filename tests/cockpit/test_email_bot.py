@@ -6,8 +6,6 @@ SMTP reply path (mocked ``smtplib``), image attachment handling (mocked
 and unsupported event rejection.
 """
 
-from __future__ import annotations
-
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 

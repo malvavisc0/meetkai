@@ -1,8 +1,12 @@
-"""Brain settings — LightRAG + crawl4ai connection config + agent instructions.
+"""Brain settings — Morphik + crawl4ai connection config + agent instructions.
 
 Loaded from ``KAI_BRAIN_*`` env vars (or ``.env``). Per-user fields
 (``workspace``, ``instruction``, ``mandatory``) live on the user's
 ``Connection.config`` JSON and are injected at runtime by ``deployments.start()``.
+
+``workspace`` is the Morphik ``end_user_id`` (the user slug); Morphik enforces
+row-level isolation via this field, unlike the previous LightRAG backend which
+ignored it.
 """
 
 import logging
@@ -15,9 +19,9 @@ logger = logging.getLogger(__name__)
 
 
 class BrainSettings(BaseSettings):
-    """LightRAG + crawl4ai settings + per-Brain agent instructions.
+    """Morphik + crawl4ai settings + per-Brain agent instructions.
 
-    The connection fields (base_url, lightrag_api_key, crawler_url,
+    The connection fields (base_url, morphik_token, crawler_url,
     crawl4ai_token) are static — one shared container for the deployment.
     The per-user fields (workspace, instruction, mandatory) are injected at runtime.
     """
@@ -26,15 +30,15 @@ class BrainSettings(BaseSettings):
 
     base_url: str = Field(
         default="",
-        description="LightRAG API base URL (e.g. http://lightrag:9621).",
+        description="Morphik API base URL (e.g. http://morphik:8000).",
     )
-    lightrag_api_key: str = Field(
+    morphik_token: str = Field(
         default="",
-        description="LightRAG X-API-Key (KAI_BRAIN_LIGHTRAG_API_KEY).",
+        description="Morphik Bearer token (KAI_BRAIN_MORPHIK_TOKEN).",
     )
     workspace: str = Field(
         default="default",
-        description="LightRAG workspace — injected per-user by deployments.start()",
+        description="Morphik end_user_id — injected per-user by deployments.start()",
     )
 
     crawler_url: str = Field(
@@ -95,13 +99,13 @@ class BrainSettings(BaseSettings):
         return v
 
     def validate_startup(self) -> list[str]:
-        """Return startup warnings (non-fatal). A missing key means the
+        """Return startup warnings (non-fatal). A missing token means the
         Brain tool simply isn't registered; this never blocks bot startup."""
         warnings: list[str] = []
         if not self.base_url:
             warnings.append("KAI_BRAIN_BASE_URL is not set — brain tool disabled")
-        if not self.lightrag_api_key:
-            warnings.append("KAI_BRAIN_LIGHTRAG_API_KEY is not set — brain tool disabled")
+        if not self.morphik_token:
+            warnings.append("KAI_BRAIN_MORPHIK_TOKEN is not set — brain tool disabled")
         if not self.crawler_url:
             warnings.append("KAI_BRAIN_CRAWLER_URL is not set — website ingest disabled")
         if not self.crawl4ai_token:
@@ -112,8 +116,8 @@ class BrainSettings(BaseSettings):
 
     @property
     def brain_enabled(self) -> bool:
-        """True when the lightrag connection is fully configured."""
-        return bool(self.base_url and self.lightrag_api_key)
+        """True when the morphik connection is fully configured."""
+        return bool(self.base_url and self.morphik_token)
 
     def workflow_instruction(self) -> str:
         """Build the agent tool-workflow prompt block from

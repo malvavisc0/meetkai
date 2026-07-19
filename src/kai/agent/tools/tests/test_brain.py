@@ -1,8 +1,8 @@
 """Tests for the ``brain_query`` tool (agent/tools/brain.py).
 
-Uses lightweight fakes for ``LightRagClient`` and ``KaiAgent`` rather than
+Uses lightweight fakes for ``MorphikClient`` and ``KaiAgent`` rather than
 the real classes — this module tests the tool's async call contract and the
-registration wiring (register_tool + add_tool_workflow), not LightRAG's HTTP
+registration wiring (register_tool + add_tool_workflow), not Morphik's HTTP
 layer (covered by ``brain/tests/test_client.py``).
 """
 
@@ -17,7 +17,7 @@ def _query_result(response: str, references: list[QueryReference] | None = None)
     return QueryResult(response=response, references=references or [])
 
 
-class _FakeLightRagClient:
+class _FakeMorphikClient:
     """Records calls; returns a canned QueryResult or raises.
 
     Structurally satisfies the ``_BrainQueryClient`` Protocol in
@@ -57,12 +57,12 @@ class _FakeAgent:
 
 class TestMakeBrainQueryTool:
     def test_tool_name_matches_constant(self):
-        client = _FakeLightRagClient(result=_query_result(response="ok"))
+        client = _FakeMorphikClient(result=_query_result(response="ok"))
         tool = make_brain_query_tool(client, workspace="kai-test")
         assert tool.metadata.name == BRAIN_TOOL_NAME
 
     async def test_calls_client_with_workspace_and_mode(self):
-        client = _FakeLightRagClient(result=_query_result(response="answer"))
+        client = _FakeMorphikClient(result=_query_result(response="answer"))
         tool = make_brain_query_tool(client, workspace="kai-test")
         result = await tool.acall(query="how do I reset my password?", mode="hybrid")
         assert client.calls == [
@@ -71,26 +71,26 @@ class TestMakeBrainQueryTool:
         assert "answer" in str(result)
 
     async def test_default_mode_used_when_invalid(self):
-        client = _FakeLightRagClient(result=_query_result(response="answer"))
+        client = _FakeMorphikClient(result=_query_result(response="answer"))
         tool = make_brain_query_tool(client, workspace="kai-test", default_mode="mix")
         await tool.acall(query="q", mode="not-a-real-mode")
         assert client.calls[0]["mode"] == "mix"
 
     async def test_empty_query_returns_error_without_calling_client(self):
-        client = _FakeLightRagClient(result=_query_result(response="answer"))
+        client = _FakeMorphikClient(result=_query_result(response="answer"))
         tool = make_brain_query_tool(client, workspace="kai-test")
         result = await tool.acall(query="   ")
         assert "Error" in str(result)
         assert client.calls == []
 
     async def test_no_relevant_info(self):
-        client = _FakeLightRagClient(result=_query_result(response=""))
+        client = _FakeMorphikClient(result=_query_result(response=""))
         tool = make_brain_query_tool(client, workspace="kai-test")
         result = await tool.acall(query="anything")
         assert "no relevant information" in str(result).lower()
 
     async def test_references_appended_as_sources(self):
-        client = _FakeLightRagClient(
+        client = _FakeMorphikClient(
             result=_query_result(
                 response="30 days",
                 references=[
@@ -110,7 +110,7 @@ class TestMakeBrainQueryTool:
         assert text.count("refund-policy.pdf") == 1
 
     async def test_client_exception_surfaced_as_error_string(self):
-        client = _FakeLightRagClient(exc=RuntimeError("boom"))
+        client = _FakeMorphikClient(exc=RuntimeError("boom"))
         tool = make_brain_query_tool(client, workspace="kai-test")
         result = await tool.acall(query="q")
         assert "Error" in str(result)
@@ -120,7 +120,7 @@ class TestMakeBrainQueryTool:
 class TestRegisterBrainTool:
     def test_registers_tool_and_sets_workflow(self):
         agent = _FakeAgent()
-        client = _FakeLightRagClient(result=_query_result(response="ok"))
+        client = _FakeMorphikClient(result=_query_result(response="ok"))
         register_brain_tool(
             agent,
             client,
@@ -136,7 +136,7 @@ class TestRegisterBrainTool:
 
     def test_registers_general_awareness_even_without_instruction(self):
         agent = _FakeAgent()
-        client = _FakeLightRagClient(result=_query_result(response="ok"))
+        client = _FakeMorphikClient(result=_query_result(response="ok"))
         register_brain_tool(agent, client, workspace="kai-test")
         assert agent.workflows[0]  # never empty
         assert BRAIN_TOOL_NAME in agent.workflows[0]

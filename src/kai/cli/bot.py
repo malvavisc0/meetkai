@@ -13,7 +13,7 @@ from kai.agent.core import KaiAgent
 from kai.agent.goal import GoalManager
 from kai.agent.tools.brain import register_brain_tool
 from kai.bots import list_bots, load_bot
-from kai.brain.client import LightRagClient
+from kai.brain.client import MorphikClient
 from kai.brain.config import get_brain_settings
 from kai.cli.style import (
     ACCENT,
@@ -383,7 +383,7 @@ def _start(
     async def _main() -> int:
         stop_task: asyncio.Task | None = None
         run_id: str | None = None
-        brain_client: LightRagClient | None = None
+        brain_client: MorphikClient | None = None
         sql_engine = None
 
         try:
@@ -397,7 +397,7 @@ def _start(
         brain_settings = get_brain_settings()
         if brain_settings.brain_enabled and "brain_query" in tool_resolution.final_tools:
             try:
-                brain_client = LightRagClient(brain_settings)
+                brain_client = MorphikClient(brain_settings)
                 register_brain_tool(
                     agent,
                     brain_client,
@@ -405,7 +405,9 @@ def _start(
                     instruction=brain_settings.instruction,
                     mandatory=brain_settings.mandatory,
                 )
-                logger.info("brain_query tool registered (workspace=%s)", brain_settings.workspace)
+                logger.info(
+                    "brain_query tool registered (end_user_id=%s)", brain_settings.workspace
+                )
                 if brain_settings.mandatory:
                     # Mandatory Brain: the workflow prompt (built with
                     # mandatory=True) instructs the model to call brain_query

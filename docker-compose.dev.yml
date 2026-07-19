@@ -3,8 +3,6 @@ name: meetkai-dev
 # Dev override. The cockpit image runs as non-root uid 1000 (see Dockerfile),
 # so the bind-mounted ./data/* dirs below must be owned by uid 1000 on the
 # host. If they're root-owned, fix once: sudo chown -R 1000:1000 data/
-# (postgres is the exception — it runs as uid 999, so ./data/lightrag/postgres
-# must be owned by 999:999.)
 
 services:
   redis:
@@ -63,74 +61,53 @@ services:
     ports:
       - "8025:8025"
 
-  lightrag:
-    image: ghcr.io/hkuds/lightrag:v1.5.4
-    container_name: lightrag
-    hostname: lightrag
+  morphik:
+    image: ghcr.io/morphik-org/morphik-core:2026-07-05
+    container_name: morphik
+    hostname: morphik
     restart: unless-stopped
     expose:
-      - 9621
+      - 8000
     environment:
-      HOST: 0.0.0.0
-      PORT: "9621"
-      LIGHTRAG_API_KEY: ${KAI_BRAIN_LIGHTRAG_API_KEY}
-      WHITELIST_PATHS: /health
-      WORKERS: 2
-      MAX_PARALLEL_INSERT: 3
-      MAX_ASYNC_LLM: 4
-      MAX_ASYNC_RERANK: 4
-      LLM_BINDING: openai
-      LLM_BINDING_HOST: ${LIGHTRAG_LLM_BINDING_HOST}
-      LLM_BINDING_API_KEY: ${OPENROUTER_API_KEY}
-      LLM_MODEL: ${LIGHTRAG_LLM_MODEL}
-      EMBEDDING_BINDING: openai
-      EMBEDDING_BINDING_HOST: ${LIGHTRAG_EMBEDDING_BINDING_HOST}
-      EMBEDDING_BINDING_API_KEY: ${OPENROUTER_API_KEY}
-      EMBEDDING_MODEL: ${LIGHTRAG_EMBEDDING_MODEL}
-      EMBEDDING_DIM: 2560
-      RERANK_BINDING: cohere
-      RERANK_BINDING_HOST: ${LIGHTRAG_RERANK_BINDING_HOST}
-      RERANK_BINDING_API_KEY: ${OPENROUTER_API_KEY}
-      RERANK_MODEL: ${LIGHTRAG_RERANK_MODEL}
-      SUMMARY_LANGUAGE: English
-      ENTITY_EXTRACTION_USE_JSON: true
-      VLM_PROCESS_ENABLE: false
-      # Postgres backend — workspace is a column on every table, so the
-      # per-request workspace kai sends is actually honored (the JSON/KV
-      # backend ignores it and mixes users into one flat store).
-      LIGHTRAG_KV_STORAGE: PGKVStorage
-      LIGHTRAG_DOC_STATUS_STORAGE: PGDocStatusStorage
-      LIGHTRAG_GRAPH_STORAGE: PGGraphStorage
-      LIGHTRAG_VECTOR_STORAGE: PGVectorStorage
-      POSTGRES_HOST: postgres
-      POSTGRES_PORT: "5432"
-      POSTGRES_USER: ${LIGHTRAG_POSTGRES_USER}
-      POSTGRES_PASSWORD: ${LIGHTRAG_POSTGRES_PASSWORD}
-      POSTGRES_DATABASE: ${LIGHTRAG_POSTGRES_DATABASE}
-      POSTGRES_MAX_CONNECTIONS: "25"
-      POSTGRES_VECTOR_INDEX_TYPE: HNSW_HALFVEC
+      JWT_SECRET_KEY: ${KAI_BRAIN_MORPHIK_JWT_SECRET}
+      LOCAL_URI_PASSWORD: ${KAI_BRAIN_MORPHIK_LOCAL_PASSWORD}
+      POSTGRES_URI: postgresql+asyncpg://morphik:morphik@morphik-postgres:5432/morphik
+      PGPASSWORD: morphik
+      PGHOST: morphik-postgres
+      PGPORT: "5432"
+      PGUSER: morphik
+      PGDATABASE: morphik
+      REDIS_HOST: redis
+      REDIS_PORT: "6379"
+      OPENAI_API_KEY: ${OPENROUTER_API_KEY}
     volumes:
-      - ./data/lightrag/storage:/app/data/rag_storage
-      - ./data/lightrag/inputs:/app/data/inputs
+      - ./data/morphik/storage:/app/storage
+      - ./docker/morphik.toml:/app/morphik.toml:ro
     depends_on:
-      postgres:
+      morphik-postgres:
         condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "/app/.venv/bin/python3 -c \"import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8000/health').status==200 else 1)\""]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
 
-  postgres:
-    image: pgvector/pgvector:pg18-trixie
+  morphik-postgres:
+    image: pgvector/pgvector:pg18
     container_name: postgres
     hostname: postgres
     restart: unless-stopped
     environment:
       TZ: ${TZ}
-      POSTGRES_USER: ${LIGHTRAG_POSTGRES_USER}
-      POSTGRES_PASSWORD: ${LIGHTRAG_POSTGRES_PASSWORD}
-      POSTGRES_DB: ${LIGHTRAG_POSTGRES_DATABASE}
+      POSTGRES_USER: morphik
+      POSTGRES_PASSWORD: morphik
+      POSTGRES_DB: morphik
+      PGDATA: /var/lib/postgresql/data/pgdata
     volumes:
-      - ./data/lightrag/postgres:/var/lib/postgresql
-      - ./docker/lightrag-pg-init.sql:/docker-entrypoint-initdb.d/01-vector.sql:ro
+      - ./data/morphik/postgres:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${LIGHTRAG_POSTGRES_USER} -d ${LIGHTRAG_POSTGRES_DATABASE}"]
+      test: ["CMD-SHELL", "pg_isready -U morphik -d morphik"]
       interval: 10s
       timeout: 5s
       retries: 10
@@ -151,6 +128,8 @@ services:
 
   cockpit:
     build: .
+    image: meetkai-dev-cockpit
+    pull_policy: never
     user: appuser
     container_name: cockpit
     hostname: cockpit
@@ -164,7 +143,11 @@ services:
       - ./data/models:/app/models
     env_file: .env
     depends_on:
-      - waha
-      - mailpit
-      - crawl4ai
-      - lightrag
+      waha:
+        condition: service_started
+      mailpit:
+        condition: service_started
+      crawl4ai:
+        condition: service_started
+      morphik:
+        condition: service_healthy

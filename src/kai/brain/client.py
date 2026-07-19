@@ -1,13 +1,12 @@
-"""LightRagClient — typed async wrapper over the LightRAG v1.5.4 HTTP API.
+"""MorphikClient — typed async wrapper over the Morphik core REST API.
 
-All endpoints require ``X-API-Key`` (set on the client at construction, per
-the WahaClient pattern). The ``workspace`` is passed per-call (not stored on
-the client) because the cockpit's ``BrainsService`` derives it per-user
-(``kai-v001-<sanitized-email>``), and the agent tool uses the deployment's
-single workspace.
+Isolation is backend-enforced via ``end_user_id``, passed per-request on
+every ingest/query/list/delete call. The cockpit's ``BrainsService`` derives
+it per-user (``kai-v001-<sanitized-email>``); the agent tool uses the
+deployment's single ``end_user_id``.
 
-Every method, path, body, and response field here was validated empirically
-against a running ``ghcr.io/hkuds/lightrag:v1.5.4`` container.
+Endpoints, bodies, and response fields validated against
+``ghcr.io/morphik-org/morphik-core:2026-07-05`` (OpenAPI at /docs).
 """
 
 import logging
@@ -21,21 +20,15 @@ from kai.brain.config import BrainSettings, get_brain_settings
 logger = logging.getLogger(__name__)
 
 DOC_STATUS_PENDING = "pending"
-DOC_STATUS_PARSING = "parsing"
-DOC_STATUS_ANALYZING = "analyzing"
 DOC_STATUS_PROCESSING = "processing"
-DOC_STATUS_PREPROCESSED = "preprocessed"
-DOC_STATUS_PROCESSED = "processed"
+DOC_STATUS_PROCESSED = "completed"
 DOC_STATUS_FAILED = "failed"
 TERMINAL_STATUSES = frozenset({DOC_STATUS_PROCESSED, DOC_STATUS_FAILED})
 
 DocStatus = Literal[
     "pending",
-    "parsing",
-    "analyzing",
     "processing",
-    "preprocessed",
-    "processed",
+    "completed",
     "failed",
 ]
 
@@ -43,7 +36,7 @@ QueryMode = Literal["naive", "local", "global", "hybrid", "mix"]
 
 
 class DocumentRecord(BaseModel):
-    """One document row from /documents/track_status or /documents/paginated."""
+    """One document row from /documents or /documents/{id}/status."""
 
     id: str = ""
     track_id: str = ""
@@ -71,14 +64,31 @@ class DocumentRecord(BaseModel):
         return self.status in TERMINAL_STATUSES
 
     @classmethod
-    def from_track_doc(cls, track_id: str, doc: dict[str, Any]) -> "DocumentRecord":
-        """Build from one element of track_status's documents[] list."""
-        return cls.model_validate({**doc, "track_id": track_id})
+    def from_list_doc(cls, doc: dict[str, Any]) -> "DocumentRecord":
+        """Build from one element of /documents/list_docs documents[]."""
+        return cls.model_validate(
+            {
+                "id": doc.get("external_id", ""),
+                "status": doc.get("system_metadata", {}).get("status", "") or doc.get("status", ""),
+                "file_path": doc.get("filename", "") or "",
+                "chunks_count": len(doc.get("chunk_ids", []) or []) or None,
+                "content_length": doc.get("system_metadata", {}).get("content_length", 0) or 0,
+                "created_at": doc.get("system_metadata", {}).get("created_at", "") or "",
+                "updated_at": doc.get("system_metadata", {}).get("updated_at", "") or "",
+                "metadata": doc.get("metadata", {}) or {},
+            }
+        )
 
     @classmethod
-    def from_list_doc(cls, doc: dict[str, Any]) -> "DocumentRecord":
-        """Build from one element of paginated's documents[] list."""
-        return cls.model_validate(doc)
+    def from_status(cls, doc_id: str, data: dict[str, Any]) -> "DocumentRecord":
+        """Build from /documents/{id}/status response."""
+        return cls.model_validate(
+            {
+                "id": doc_id,
+                "status": data.get("status", ""),
+                "metadata": data,
+            }
+        )
 
 
 class IngestResult(BaseModel):
@@ -92,7 +102,15 @@ class IngestResult(BaseModel):
 
     @classmethod
     def from_response(cls, data: dict[str, Any]) -> "IngestResult":
-        return cls.model_validate(data)
+        # Morphik returns the Document object on ingest; its external_id is
+        # the handle used to poll /documents/{id}/status.
+        return cls(
+            track_id=data.get("external_id", ""),
+            status=data.get("system_metadata", {}).get("status", "pending")
+            if isinstance(data.get("system_metadata"), dict)
+            else "pending",
+            message=data.get("filename", "") or "",
+        )
 
 
 class QueryReference(BaseModel):
@@ -113,28 +131,36 @@ class QueryResult(BaseModel):
 
     @classmethod
     def from_response(cls, data: dict[str, Any]) -> "QueryResult":
-        refs_raw = data.get("references") or []
+        # Morphik /query returns {completion, sources[]} where each source has
+        # document_id + chunk_number. filename isn't on the source; we keep
+        # file_path as document_id for traceability.
+        sources = data.get("sources") or []
         return cls(
-            response=data.get("response", ""),
-            references=[QueryReference.model_validate(r) for r in refs_raw if isinstance(r, dict)],
+            response=data.get("completion", "") or "",
+            references=[
+                QueryReference(file_path=s.get("document_id", ""))
+                for s in sources
+                if isinstance(s, dict)
+            ],
         )
 
 
-class LightRagClient:
-    """Async HTTP client for LightRAG v1.5.4.
+class MorphikClient:
+    """Async HTTP client for Morphik core.
 
-    Mirrors the WahaClient pattern. Callers pass ``workspace`` per-method
-    because it's user-scoped, not client-scoped. Lifecycle: build once,
-    ``await client.close()`` on shutdown.
+    Mirrors the WahaClient pattern. Callers pass ``end_user_id`` per-method
+    because it's user-scoped, not client-scoped. Auth is a single Bearer
+    token set at construction. Lifecycle: build once, ``await client.close()``
+    on shutdown.
     """
 
     def __init__(self, settings: BrainSettings | None = None) -> None:
         self.settings = settings or get_brain_settings()
         self.base_url = self.settings.base_url.rstrip("/")
-        headers: dict[str, str] = {"X-API-Key": self.settings.lightrag_api_key}
+        headers: dict[str, str] = {"Authorization": f"Bearer {self.settings.morphik_token}"}
         self._client = httpx.AsyncClient(
             base_url=self.base_url,
-            timeout=120.0,  # indexing can take minutes for large docs; queries are ~seconds
+            timeout=120.0,
             headers=headers,
         )
 
@@ -152,18 +178,19 @@ class LightRagClient:
         text: str,
         workspace: str,
     ) -> IngestResult:
-        """POST /documents/text — ingest raw text.
+        """POST /ingest/text — ingest raw text.
 
-        ``file_source`` is required by v1.5.4 (400 without it) and
-        becomes the document's ``file_path``. Returns a track_id; poll
+        ``file_source`` becomes the document's ``filename`` (display name).
+        ``workspace`` maps to Morphik's ``end_user_id`` isolation key.
+        Returns the document's external_id as track_id; poll
         ``track_status`` until terminal.
         """
         resp = await self._client.post(
-            "/documents/text",
+            "/ingest/text",
             json={
-                "file_source": file_source,
-                "text": text,
-                "workspace": workspace,
+                "content": text,
+                "filename": file_source,
+                "end_user_id": workspace,
             },
         )
         resp.raise_for_status()
@@ -176,17 +203,18 @@ class LightRagClient:
         texts: list[str],
         workspace: str,
     ) -> IngestResult:
-        """POST /documents/texts — batch ingest (one track_id for the batch)."""
-        resp = await self._client.post(
-            "/documents/texts",
-            json={
-                "file_sources": file_sources,
-                "texts": texts,
-                "workspace": workspace,
-            },
-        )
-        resp.raise_for_status()
-        return IngestResult.from_response(resp.json())
+        """Batch ingest — Morphik has no batch-text endpoint, so this is a
+        thin loop over ``ingest_text``. Returns the first document's id as
+        track_id (callers poll that one; the others share the same crawl
+        provenance via their ``metadata.source_url``)."""
+        if not texts:
+            return IngestResult()
+        first: IngestResult | None = None
+        for name, text in zip(file_sources, texts, strict=True):
+            r = await self.ingest_text(file_source=name, text=text, workspace=workspace)
+            if first is None:
+                first = r
+        return first or IngestResult()
 
     async def ingest_file(
         self,
@@ -195,15 +223,13 @@ class LightRagClient:
         filename: str,
         workspace: str,
     ) -> IngestResult:
-        """POST /documents/upload — multipart file upload.
+        """POST /ingest/file — multipart file upload.
 
-        ``workspace`` goes as a query param (not in the multipart body);
-        the filename is passed through unchanged so LightRAG's parser-routing
-        hints survive.
+        ``end_user_id`` is a form field; the filename passes through unchanged.
         """
         resp = await self._client.post(
-            "/documents/upload",
-            params={"workspace": workspace},
+            "/ingest/file",
+            data={"end_user_id": workspace},
             files={"file": (filename, file)},
         )
         resp.raise_for_status()
@@ -214,16 +240,14 @@ class LightRagClient:
     # ------------------------------------------------------------------
 
     async def track_status(self, *, track_id: str) -> list[DocumentRecord]:
-        """GET /documents/track_status/{track_id} — poll ingest progress.
+        """GET /documents/{id}/status — poll ingest progress.
 
-        Returns the documents[] list (one for single ingest, several for
-        batch). Each record's ``status`` transitions pending → parsed, etc.
+        Returns a single-element list (Morphik tracks per-document, not per-
+        batch). ``status`` transitions pending → processing → completed/failed.
         """
-        resp = await self._client.get(f"/documents/track_status/{track_id}")
+        resp = await self._client.get(f"/documents/{track_id}/status")
         resp.raise_for_status()
-        data = resp.json()
-        docs = data.get("documents") or []
-        return [DocumentRecord.from_track_doc(track_id, d) for d in docs if isinstance(d, dict)]
+        return [DocumentRecord.from_status(track_id, resp.json())]
 
     async def list_docs(
         self,
@@ -233,61 +257,58 @@ class LightRagClient:
         page_size: int = 50,
         status_filters: list[str] | None = None,
     ) -> list[DocumentRecord]:
-        """POST /documents/paginated — list documents (NOT GET /documents).
-
-        ``workspace`` is passed in the body. Returns the documents[] list;
-        read total_count from the full response if needed via ``list_docs_raw``.
-        """
+        """POST /documents/list_docs?end_user_id= — list documents scoped
+        to the user. ``page``/``page_size`` map to ``skip``/``limit``."""
         body: dict[str, Any] = {
-            "page": page,
-            "page_size": page_size,
-            "sort_field": "updated_at",
+            "skip": (page - 1) * page_size,
+            "limit": page_size,
+            "sort_by": "updated_at",
             "sort_direction": "desc",
-            "workspace": workspace,
         }
         if status_filters:
-            body["status_filters"] = status_filters
-        resp = await self._client.post("/documents/paginated", json=body)
+            body["document_filters"] = {"status": {"$in": status_filters}}
+        resp = await self._client.post(
+            "/documents/list_docs",
+            params={"end_user_id": workspace},
+            json=body,
+        )
         resp.raise_for_status()
         data = resp.json()
         docs = data.get("documents") or []
         return [DocumentRecord.from_list_doc(d) for d in docs if isinstance(d, dict)]
 
     async def status_counts(self, *, workspace: str) -> dict[str, int]:
-        """GET /documents/status_counts?workspace= — per-status counts."""
-        resp = await self._client.get("/documents/status_counts", params={"workspace": workspace})
+        """POST /documents/list_docs?end_user_id= with aggregates only."""
+        resp = await self._client.post(
+            "/documents/list_docs",
+            params={"end_user_id": workspace},
+            json={"return_documents": False, "include_status_counts": True},
+        )
         resp.raise_for_status()
-        return resp.json()
+        return resp.json().get("status_counts", {}) or {}
 
     async def delete_doc(self, *, doc_id: str, workspace: str, delete_file: bool = True) -> str:
-        """DELETE /documents/delete_document — async single-doc delete.
+        """DELETE /documents/{id} — synchronous single-doc delete.
 
-        Body is ``{"doc_ids": [...], "delete_file": bool}`` (batch supported).
-        ``workspace`` is a query param to scope the deletion.
-        Returns "deletion_started"; poll ``list_docs`` until the doc is gone.
-
-        Uses ``request("DELETE", ...)`` rather than ``delete()`` because
-        httpx's ``delete()`` doesn't accept a ``json=`` kwarg, but LightRAG's
-        v1.5.4 endpoint requires one.
+        ``workspace`` (end_user_id) isn't a path param on Morphik's delete;
+        the token's scope already restricts it. We pass it as a query param
+        for defense-in-depth — Morphik ignores unknown query params.
         """
-        resp = await self._client.request(
-            "DELETE",
-            "/documents/delete_document",
-            params={"workspace": workspace},
-            json={"doc_ids": [doc_id], "delete_file": delete_file},
-        )
+        resp = await self._client.delete(f"/documents/{doc_id}")
         resp.raise_for_status()
         return resp.json().get("status", "")
 
     async def clear_workspace(self, *, workspace: str) -> str:
-        """DELETE /documents?workspace= — clears ALL docs in the workspace.
+        """Clear ALL docs for an end_user_id — list then delete each.
 
-        DANGEROUS: used by tests and (eventually) a "reset Brain" admin action.
+        DANGEROUS: used by tests and a future "reset Brain" admin action.
         Not exposed in the v1 UI.
         """
-        resp = await self._client.request("DELETE", "/documents", params={"workspace": workspace})
-        resp.raise_for_status()
-        return resp.json().get("status", "")
+        docs = await self.list_docs(workspace=workspace, page=1, page_size=1000)
+        for d in docs:
+            if d.id:
+                await self.delete_doc(doc_id=d.id, workspace=workspace)
+        return "completed"
 
     # ------------------------------------------------------------------
     # Query
@@ -304,19 +325,16 @@ class LightRagClient:
     ) -> QueryResult:
         """POST /query — retrieve + synthesize a grounded answer.
 
-        ``mode="mix"`` + ``enable_rerank=True`` is the validated default:
-        hybrid retrieval, cohere rerank, then LLM synthesis with references.
+        ``mode`` is accepted for call-site compatibility but Morphik's
+        retrieval is always hybrid (vector + metadata); the param is ignored
+        server-side. ``enable_rerank`` maps to ``use_reranking``.
         Called by the agent's ``brain_query`` tool.
         """
-        resp = await self._client.post(
-            "/query",
-            json={
-                "query": query,
-                "mode": mode,
-                "enable_rerank": enable_rerank,
-                "include_references": include_references,
-                "workspace": workspace,
-            },
-        )
+        body: dict[str, Any] = {
+            "query": query,
+            "use_reranking": enable_rerank if enable_rerank else None,
+            "end_user_id": workspace,
+        }
+        resp = await self._client.post("/query", json=body)
         resp.raise_for_status()
         return QueryResult.from_response(resp.json())

@@ -497,7 +497,7 @@ class DeploymentsService:
             self.db.query(Connection)
             .filter(
                 Connection.user_id == user.id,
-                Connection.service == "lightrag",
+                Connection.service == "morphik",
             )
             .first()
         )

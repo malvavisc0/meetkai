@@ -1,7 +1,5 @@
 """Tests for the Cal.com agent tools + CalcomSettings."""
 
-from __future__ import annotations
-
 import inspect
 import json
 from unittest.mock import MagicMock, patch

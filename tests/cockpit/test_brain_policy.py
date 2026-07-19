@@ -20,7 +20,7 @@ def _whatsapp_connected(user, db):
 def _brain_conn(user_id: int, *, instruction: str = "default rules") -> Connection:
     return Connection(
         user_id=user_id,
-        service="lightrag",
+        service="morphik",
         status="ready",
         config={
             "workspace": "kai-v001-bob_at_test_com",

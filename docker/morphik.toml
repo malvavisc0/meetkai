@@ -1,0 +1,113 @@
+# Morphik core config — mounted at /app/morphik.toml.
+# Based on the image's /app/morphik.toml.default, with the completion and
+# embedding models repointed at OpenRouter (one provider, one key) and the
+# reranker disabled.
+
+[api]
+host = "0.0.0.0"
+port = 8000
+reload = false
+
+[service]
+environment = "docker"
+version = "unknown"
+enable_profiling = false
+
+[auth]
+jwt_algorithm = "HS256"
+bypass_auth_mode = true
+dev_user_id = "dev_user"
+
+#### Registered models
+[registered_models]
+openrouter_ministral_3b = { model_name = "openai/mistralai/ministral-3b-2512", api_base = "https://openrouter.ai/api/v1" }
+openrouter_pplx_embed = { model_name = "openai/perplexity/pplx-embed-v1-4b", api_base = "https://openrouter.ai/api/v1" }
+
+#### Component configurations ####
+
+[completion]
+model = "openrouter_ministral_3b"
+default_max_tokens = "1000"
+default_temperature = 0.3
+
+[database]
+provider = "postgres"
+pool_size = 10
+max_overflow = 15
+pool_recycle = 3600
+pool_timeout = 10
+pool_pre_ping = true
+max_retries = 3
+retry_delay = 1.0
+
+[embedding]
+model = "openrouter_pplx_embed"
+dimensions = 2560
+similarity_metric = "cosine"
+
+[parser]
+chunk_size = 6000
+chunk_overlap = 300
+use_contextual_chunking = false
+contextual_chunking_model = "openrouter_ministral_3b"
+
+[parser.xml]
+max_tokens = 350
+preferred_unit_tags = ["SECTION", "Section", "Article", "clause"]
+ignore_tags = ["TOC", "INDEX"]
+
+[document_analysis]
+model = "openrouter_ministral_3b"
+
+[parser.vision]
+model = "openrouter_ministral_3b"
+frame_sample_rate = -1
+
+[reranker]
+use_reranker = false
+provider = "flag"
+model_name = "BAAI/bge-reranker-large"
+query_max_length = 256
+passage_max_length = 512
+use_fp16 = true
+device = "cpu"
+
+[storage]
+provider = "local"
+storage_path = "/app/storage"
+s3_upload_concurrency = 16
+
+[vector_store]
+provider = "pgvector"
+
+[multivector_store]
+provider = "postgres"
+
+[redis]
+url = "redis://redis:6379/0"
+host = "redis"
+port = 6379
+
+[worker]
+arq_max_jobs = 1
+colpali_store_batch_size = 16
+
+[pdf]
+colpali_pdf_dpi = 150
+
+[morphik]
+enable_colpali = false
+mode = "self_hosted"
+secret_manager = "env"
+api_domain = "api.morphik.ai"
+morphik_embedding_api_domain = ["http://localhost:6000"]
+colpali_mode = "off"
+
+[pdf_viewer]
+frontend_url = "http://localhost:3000/api/pdf"
+
+[telemetry]
+service_name = "databridge-core"
+project_name = "oss_docker"
+upload_interval_hours = 4.0
+max_local_bytes = 1073741824

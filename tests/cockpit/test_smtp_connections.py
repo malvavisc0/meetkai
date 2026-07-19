@@ -1,7 +1,5 @@
 """Tests for the SmtpConnectionsService (Fix 06)."""
 
-from __future__ import annotations
-
 import pytest
 
 

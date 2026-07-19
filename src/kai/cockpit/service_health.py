@@ -93,8 +93,8 @@ async def _check_kokoro(host: str, port: int) -> HealthCheck:
     return HealthCheck(label="Text to Speech Service", ok=ok, detail=detail)
 
 
-async def _check_lightrag(base_url: str, api_key: str) -> HealthCheck:
-    headers = {"X-API-Key": api_key} if api_key else None
+async def _check_morphik(base_url: str, token: str) -> HealthCheck:
+    headers = {"Authorization": f"Bearer {token}"} if token else None
     ok, detail = await _probe(f"{base_url.rstrip('/')}/health", headers=headers)
     return HealthCheck(label="RAG Server", ok=ok, detail=detail)
 
@@ -148,7 +148,7 @@ async def check_service_health() -> list[HealthCheck]:
     try:
         bs = get_brain_settings()
         if bs.base_url:
-            probes.append(_check_lightrag(bs.base_url, bs.lightrag_api_key))
+            probes.append(_check_morphik(bs.base_url, bs.morphik_token))
         if bs.crawler_url:
             probes.append(_check_crawl4ai(bs.crawler_url, bs.crawl4ai_token))
     except Exception as exc:  # noqa: BLE001

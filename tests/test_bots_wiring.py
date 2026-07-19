@@ -9,8 +9,6 @@ Verifies the Phase 2 success criteria:
 - The ``general`` default reproduces the previous hardcoded behavior.
 """
 
-from __future__ import annotations
-
 from pathlib import Path
 from unittest.mock import MagicMock
 

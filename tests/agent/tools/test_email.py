@@ -1,7 +1,5 @@
 """Tests for the send_email tool + SmtpSettings (Fix 06)."""
 
-from __future__ import annotations
-
 import inspect
 from unittest.mock import MagicMock, patch
 

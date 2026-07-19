@@ -7,8 +7,6 @@ stop. Also confirms the whatsapp (bespoke) path does NOT get the generic
 ``KAI_BOT_*`` env.
 """
 
-from __future__ import annotations
-
 import subprocess
 from datetime import UTC, datetime
 

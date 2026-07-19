@@ -17,7 +17,7 @@ _DEFAULT_TOOL_NAMES: frozenset[str] = frozenset(
 _NON_DISABLEABLE_DEFAULTS: frozenset[str] = frozenset({"escalate", "blacklist", "calculate"})
 
 _TOOL_ENV_MAP: dict[str, list[str]] = {
-    "brain_query": ["KAI_BRAIN_BASE_URL", "KAI_BRAIN_LIGHTRAG_API_KEY"],
+    "brain_query": ["KAI_BRAIN_BASE_URL", "KAI_BRAIN_MORPHIK_TOKEN"],
     "sql_query": ["KAI_SQL_DSN"],
     "send_email": [
         "KAI_SMTP_TOOL_HOST",

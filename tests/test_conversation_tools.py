@@ -8,8 +8,6 @@ transport API. The tests verify:
 - Errors are returned as strings when no conversation can be resolved
 """
 
-from __future__ import annotations
-
 import pytest
 from llama_index.core.llms import ChatMessage, MessageRole
 

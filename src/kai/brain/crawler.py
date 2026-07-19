@@ -98,7 +98,7 @@ class CrawlPage(BaseModel):
 class Crawl4aiClient:
     """Async HTTP client for crawl4ai v0.9.0.
 
-    Mirrors the LightRagClient / WahaClient pattern. The bearer token
+    Mirrors the MorphikClient / WahaClient pattern. The bearer token
     (``KAI_BRAIN_CRAWL4AI_TOKEN``) is set on construction.
     """
 

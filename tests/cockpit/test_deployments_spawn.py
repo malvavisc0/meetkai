@@ -1,7 +1,5 @@
 """Tests for argv passed when spawning a bot subprocess with template/tool overrides."""
 
-from __future__ import annotations
-
 import subprocess
 from collections.abc import Callable
 

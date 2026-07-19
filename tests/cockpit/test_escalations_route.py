@@ -8,8 +8,6 @@ calls ``forward_to_cockpit`` to POST the escalation to the cockpit's
 badge read a single source of truth. These tests exercise that cockpit side.
 """
 
-from __future__ import annotations
-
 from kai.cockpit import tokens
 from kai.cockpit.auth_backends import MagicLinkProvider
 

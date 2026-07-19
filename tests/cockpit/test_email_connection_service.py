@@ -9,8 +9,6 @@ the ingress-only connection as connected only when both secret fields
 are present.
 """
 
-from __future__ import annotations
-
 import pytest
 
 from kai.cockpit.connections.secrets import decrypt_config, is_encrypted

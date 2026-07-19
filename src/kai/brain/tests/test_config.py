@@ -8,7 +8,7 @@ class TestBrainSettings:
     def test_defaults(self):
         s = BrainSettings.for_test()
         assert s.base_url == ""
-        assert s.lightrag_api_key == ""
+        assert s.morphik_token == ""
         assert s.workspace == "default"
         assert s.crawler_url == ""
         assert s.crawl4ai_token == ""
@@ -19,9 +19,9 @@ class TestBrainSettings:
 
     def test_env_prefix_kai_brain(self):
         # KAI_BRAIN_* env vars map to fields (env_prefix)
-        s = BrainSettings.for_test(base_url="http://lightrag:9621", lightrag_api_key="k")
-        assert s.base_url == "http://lightrag:9621"
-        assert s.lightrag_api_key == "k"
+        s = BrainSettings.for_test(base_url="http://morphik:8000", morphik_token="k")
+        assert s.base_url == "http://morphik:8000"
+        assert s.morphik_token == "k"
 
     def test_invalid_base_url_scheme(self):
         with pytest.raises(ValidationError):
@@ -47,27 +47,27 @@ class TestBrainSettings:
         s = BrainSettings.for_test()
         warnings = s.validate_startup()
         assert any("BASE_URL" in w for w in warnings)
-        assert any("LIGHTRAG_API_KEY" in w for w in warnings)
+        assert any("MORPHIK_TOKEN" in w for w in warnings)
         assert any("CRAWLER_URL" in w for w in warnings)
         assert any("CRAWL4AI_TOKEN" in w for w in warnings)
 
     def test_validate_startup_clean_when_set(self):
         s = BrainSettings.for_test(
-            base_url="http://lightrag:9621",
-            lightrag_api_key="k",
+            base_url="http://morphik:8000",
+            morphik_token="k",
             crawler_url="http://crawl4ai:11235",
             crawl4ai_token="t",
         )
         assert s.validate_startup() == []
 
     def test_base_url_trailing_slash_stripped(self):
-        s = BrainSettings.for_test(base_url="http://lightrag:9621/")
-        assert s.base_url == "http://lightrag:9621"
+        s = BrainSettings.for_test(base_url="http://morphik:8000/")
+        assert s.base_url == "http://morphik:8000"
 
     def test_brain_enabled_requires_base_url_and_api_key(self):
         s = BrainSettings.for_test()
         assert s.brain_enabled is False
-        s = BrainSettings.for_test(base_url="http://lightrag:9621", lightrag_api_key="k")
+        s = BrainSettings.for_test(base_url="http://morphik:8000", morphik_token="k")
         assert s.brain_enabled is True
 
     def test_workflow_instruction_delegates_to_builder(self):

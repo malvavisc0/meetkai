@@ -6,8 +6,6 @@ marking unentitled ones disabled + unchecked; a direct POST can spoof
 checkbox names — the server must clamp them server-side.
 """
 
-from __future__ import annotations
-
 import re
 from datetime import UTC, datetime
 from unittest.mock import AsyncMock

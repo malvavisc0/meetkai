@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 from typing import get_args
 
 from kai.bots.email import EmailAction
@@ -57,7 +55,7 @@ class TestResolveTools:
             tools=TemplateTools(optional=["brain_query"]),
         )
         monkeypatch.delenv("KAI_BRAIN_BASE_URL", raising=False)
-        monkeypatch.delenv("KAI_BRAIN_LIGHTRAG_API_KEY", raising=False)
+        monkeypatch.delenv("KAI_BRAIN_MORPHIK_TOKEN", raising=False)
         result = resolve_tools(tmpl, [], [])
         assert "brain_query" not in result.final_tools
 
@@ -70,9 +68,9 @@ class TestResolveTools:
             actions=["reply"],
             tools=TemplateTools(optional=["brain_query"]),
         )
-        # Brain needs BOTH base_url AND lightrag_api_key (mirrors brain_enabled).
+        # Brain needs BOTH base_url AND morphik_api_key (mirrors brain_enabled).
         monkeypatch.setenv("KAI_BRAIN_BASE_URL", "http://test")
-        monkeypatch.setenv("KAI_BRAIN_LIGHTRAG_API_KEY", "secret")
+        monkeypatch.setenv("KAI_BRAIN_MORPHIK_TOKEN", "secret")
         result = resolve_tools(tmpl, [], [])
         assert "brain_query" in result.final_tools
 
@@ -98,7 +96,7 @@ class TestResolveTools:
             tools=TemplateTools(optional=["brain_query"]),
         )
         monkeypatch.setenv("KAI_BRAIN_BASE_URL", "http://test")
-        monkeypatch.setenv("KAI_BRAIN_LIGHTRAG_API_KEY", "secret")
+        monkeypatch.setenv("KAI_BRAIN_MORPHIK_TOKEN", "secret")
         # sanity: brain_query would be added without the disable
         assert "brain_query" in resolve_tools(tmpl, [], []).final_tools
         result = resolve_tools(tmpl, [], ["brain_query"])
@@ -363,7 +361,7 @@ class TestValidateTools:
         assert validate_tools(tmpl) == []
 
     def test_brain_requires_both_env_vars(self, monkeypatch):
-        # brain_enabled = base_url AND lightrag_api_key — only one is not enough.
+        # brain_enabled = base_url AND morphik_api_key — only one is not enough.
         tmpl = TemplateDef(
             name="test",
             transport="waha",
@@ -373,10 +371,10 @@ class TestValidateTools:
             tools=TemplateTools(required=["brain_query"]),
         )
         monkeypatch.delenv("KAI_BRAIN_BASE_URL", raising=False)
-        monkeypatch.delenv("KAI_BRAIN_LIGHTRAG_API_KEY", raising=False)
+        monkeypatch.delenv("KAI_BRAIN_MORPHIK_TOKEN", raising=False)
         monkeypatch.setenv("KAI_BRAIN_BASE_URL", "http://test")
         assert validate_tools(tmpl)  # still missing — needs the key too
-        monkeypatch.setenv("KAI_BRAIN_LIGHTRAG_API_KEY", "secret")
+        monkeypatch.setenv("KAI_BRAIN_MORPHIK_TOKEN", "secret")
         assert validate_tools(tmpl) == []
 
     def test_send_email_requires_all_smtp_vars(self, monkeypatch):
