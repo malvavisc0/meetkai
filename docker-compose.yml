@@ -44,7 +44,7 @@ configs:
 
       [completion]
       model = "openrouter_ministral_3b"
-      default_max_tokens = "1000"
+      default_max_tokens = "262144"
       default_temperature = 0.3
 
       [database]
