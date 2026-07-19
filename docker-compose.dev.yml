@@ -1,4 +1,8 @@
-name: meetkai
+name: meetkai-dev
+
+# Dev override. The cockpit image runs as non-root uid 1000 (see Dockerfile),
+# so the bind-mounted ./data/* dirs below must be owned by uid 1000 on the
+# host. If they're root-owned, fix once: sudo chown -R 1000:1000 data/
 
 services:
   redis:
@@ -6,10 +10,8 @@ services:
     container_name: redis
     hostname: redis
     restart: unless-stopped
-    environment:
-      TZ: ${TZ}
     volumes:
-      - redis-data:/data
+      - ./data/redis:/data
 
   waha:
     image: devlikeapro/waha:latest
@@ -45,9 +47,19 @@ services:
       WHATSAPP_API_PORT: ${WHATSAPP_API_PORT}
       WAHA_APPS_ENABLED: ${WAHA_APPS_ENABLED}
     volumes:
-      - waha-sessions:/app/.sessions
+      - ./data/waha:/app/.sessions
     depends_on:
       - redis
+
+  mailpit:
+    image: axllent/mailpit:v1.30
+    container_name: mailpit
+    hostname: mailpit
+    restart: unless-stopped
+    expose:
+      - 1025
+    ports:
+      - "8025:8025"
 
   lightrag:
     image: ghcr.io/hkuds/lightrag:v1.5.4
@@ -57,7 +69,6 @@ services:
     expose:
       - 9621
     environment:
-      TZ: ${TZ}
       HOST: 0.0.0.0
       PORT: "9621"
       LIGHTRAG_API_KEY: ${KAI_BRAIN_LIGHTRAG_API_KEY}
@@ -83,8 +94,8 @@ services:
       ENTITY_EXTRACTION_USE_JSON: true
       VLM_PROCESS_ENABLE: false
     volumes:
-      - lightrag-storage:/app/data/rag_storage
-      - lightrag-inputs:/app/data/inputs
+      - ./data/lightrag/storage:/app/data/rag_storage
+      - ./data/lightrag/inputs:/app/data/inputs
 
   crawl4ai:
     image: unclecode/crawl4ai:0
@@ -97,12 +108,10 @@ services:
     command: >-
       bash -c "python -m playwright install chromium && exec bash entrypoint.sh"
     environment:
-      TZ: ${TZ}
       CRAWL4AI_API_TOKEN: ${KAI_BRAIN_CRAWL4AI_TOKEN}
 
   cockpit:
-    image: ghcr.io/malvavisc0/meetkai-cockpit:${KAI_IMAGE_TAG:-latest}
-    pull_policy: always
+    build: .
     user: appuser
     container_name: cockpit
     hostname: cockpit
@@ -111,20 +120,12 @@ services:
     ports:
       - "8080:8080"
     volumes:
-      - cockpit-data:/app/data
-      - cockpit-vendor:/app/vendor
-      - cockpit-models:/app/models
+      - ./data/kai:/app/data
+      - ./data/vendor:/app/vendor
+      - ./data/models:/app/models
     env_file: .env
     depends_on:
       - waha
+      - mailpit
       - crawl4ai
       - lightrag
-
-volumes:
-  redis-data:
-  waha-sessions:
-  lightrag-storage:
-  lightrag-inputs:
-  cockpit-data:
-  cockpit-vendor:
-  cockpit-models:

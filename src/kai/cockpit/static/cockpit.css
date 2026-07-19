@@ -1557,9 +1557,9 @@
 
   .landing-hero__grid {
     display: grid;
-    grid-template-columns: minmax(0, 1.05fr) minmax(280px, 0.95fr);
+    grid-template-columns: minmax(0, 0.85fr) minmax(280px, 1.15fr);
     align-items: center;
-    gap: calc(var(--space-3xl) + var(--space-xl));
+    gap: var(--space-3xl);
   }
 
   .landing-copy {
@@ -1582,7 +1582,7 @@
   }
 
   .landing-title {
-    max-width: 13ch;
+    max-width: 17ch;
     margin: 0;
     color: var(--color-ink);
     font-family: var(--font-display);
@@ -2083,7 +2083,7 @@
     }
 
     .landing-title {
-      max-width: 12ch;
+      max-width: 16ch;
     }
 
     .landing-steps__path,

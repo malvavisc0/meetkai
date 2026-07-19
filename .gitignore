@@ -21,11 +21,5 @@ build/
 # so the directory itself survives a fresh clone for bare-metal dev.
 /data/*
 !/data/.gitkeep
-vendor/ffmpeg/
-vendor/whisper.cpp/
-vendor/waveshare/
-vendor/kokoro/
-models/whisper/
-models/kokoro/
 scripts/test_media/*.webp
 scripts/test_media/*.oga
