@@ -21,5 +21,11 @@ build/
 # so the directory itself survives a fresh clone for bare-metal dev.
 /data/*
 !/data/.gitkeep
+# Bot escalation/task stores fall back to <bot_dir>/data/ when their
+# *_FOLDER setting is unset or misconfigured to a relative path. That
+# should never happen with KAI_ESCALATIONS_FOLDER/KAI_TASKS_FOLDER set
+# absolute in .env, but ignore it defensively so a regression can't
+# get runtime JSON committed again (see waha/email.escalations.json leak).
+src/kai/bots/*/data/
 scripts/test_media/*.webp
 scripts/test_media/*.oga
