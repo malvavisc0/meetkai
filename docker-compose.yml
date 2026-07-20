@@ -298,9 +298,9 @@ services:
     env_file: .env
     depends_on:
       waha:
-        condition: service_started
+        condition: service_healthy
       crawl4ai:
-        condition: service_started
+        condition: service_healthy
       morphik:
         condition: service_healthy
     healthcheck:

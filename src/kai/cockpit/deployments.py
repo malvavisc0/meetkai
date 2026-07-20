@@ -92,7 +92,10 @@ def attention_reason(
     if dep.status == "running" and status_data is not None and "connected" in status_data:
         live_connected = status_data["connected"]
 
-    if dep.desired_state == "running" and not live_connected:
+    bt = BOT_TYPES.get(dep.bot_type)
+    needs_whatsapp = bool(bt and "whatsapp" in bt.required_connections)
+
+    if needs_whatsapp and dep.desired_state == "running" and not live_connected:
         return "WhatsApp down, wants running"
     if dep.status == "running":
         if status_data is None:
