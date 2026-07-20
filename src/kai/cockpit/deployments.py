@@ -4,6 +4,7 @@ Authorization scope differs (CLI: admin/any user; web: self only), but both
 call the same methods.
 """
 
+import importlib
 import json
 import logging
 import os
@@ -352,9 +353,11 @@ class DeploymentsService:
         _require_valid_voice(voice)
         _require_voice_matches_language(language, voice)
 
-        from kai.bots.waha.setup import BotConfig
-
-        default_config = BotConfig(language=language, timezone=user.timezone)
+        # Seed settings from the bot type's own BotConfig so each transport
+        # carries only its own schema (e.g. email has no ``media`` block).
+        # Both bots follow the ``kai.bots.{bot_type}.setup.BotConfig`` convention.
+        setup = importlib.import_module(f"kai.bots.{bot_type}.setup")
+        default_config = setup.BotConfig(language=language, timezone=user.timezone)
         settings = default_config.model_dump()
 
         feature_flags = {f: False for f in bt.feature_flags}
@@ -451,13 +454,16 @@ class DeploymentsService:
             deployment.needs_restart = True
 
         deployment.updated_at = now_iso()
-        self.db.commit()
 
+        # write_config may normalize ``deployment.settings`` (e.g. strip a
+        # stale ``media`` block from an email deployment), so run it before
+        # the commit to persist any such mutation alongside the edit.
         try:
             config_writer.write_config(deployment, self._instance_id(deployment))
         except OSError:
             logger.warning("Failed to write config for deployment %s", deployment.id, exc_info=True)
 
+        self.db.commit()
         return deployment
 
     def start(self, deployment: Deployment) -> None:
@@ -465,20 +471,26 @@ class DeploymentsService:
         from kai.bots.waha.config import get_waha_settings
         from kai.cockpit.media_services import MEDIA_READY
 
-        waha = get_waha_settings()
-        timeout = waha.media_ready_timeout
-        if not MEDIA_READY.wait(timeout=timeout):
-            raise DeploymentStartupError(
-                f"media services not ready after waiting {timeout}s — "
-                "STT/TTS servers have not started yet"
-            )
-
-        user = self._user_for(deployment)
-        instance_id = self._instance_id(deployment, user=user)
-
         bt = BOT_TYPES.get(deployment.bot_type)
         if bt is None:
             raise ValueError(f"unknown bot type: {deployment.bot_type}")
+
+        waha = get_waha_settings()
+
+        # Media services (whisper/kokoro) exist for STT/TTS. Only gate startup
+        # on their readiness when this bot type actually uses them — an email
+        # bot (feature_flags=["image"]) must not be blocked by a waha media
+        # service that failed to start.
+        if {"stt", "tts"} & set(bt.feature_flags):
+            timeout = waha.media_ready_timeout
+            if not MEDIA_READY.wait(timeout=timeout):
+                raise DeploymentStartupError(
+                    f"media services not ready after waiting {timeout}s — "
+                    "STT/TTS servers have not started yet"
+                )
+
+        user = self._user_for(deployment)
+        instance_id = self._instance_id(deployment, user=user)
 
         required_conns: dict[str, Connection] = {}
         for service in bt.required_connections:

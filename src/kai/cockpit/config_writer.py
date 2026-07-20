@@ -19,11 +19,22 @@ def write_config(deployment: Deployment, instance_id: str) -> Path:
 
     ``instance_id`` is the per-bot namespace that the spawned bot process uses
     to locate its external config. Returns the path written.
+
+    May mutate ``deployment.settings`` to drop stale keys that don't belong on
+    this bot type's schema (e.g. a ``media`` block left on an email deployment
+    by an older ``create()``). Callers must commit afterward to persist it.
     """
+    if deployment.bot_type == "email" and "media" in deployment.settings:
+        # Email's BotConfig has no ``media`` field; a stale block here is a
+        # leftover from when ``create()`` seeded every deployment from the
+        # waha BotConfig. Strip it at the source so the DB row matches the
+        # schema, not just the written file.
+        deployment.settings = {k: v for k, v in deployment.settings.items() if k != "media"}
+
     config = dict(deployment.settings)
     flags = deployment.feature_flags
 
-    if "media" in config or deployment.bot_type == "waha":
+    if deployment.bot_type == "waha":
         media = dict(config.get("media", {}))
         media["image_enabled"] = flags.get("image", False)
         media["stt_enabled"] = flags.get("stt", False)

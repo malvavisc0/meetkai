@@ -134,3 +134,38 @@ class TestEmailVisionFlag:
         path = config_writer.write_config(dep, "email-bob@test.com")
         data = json.loads(path.read_text())
         assert "media" not in data
+
+    def test_email_vision_set_even_with_stale_waha_media_in_settings(self):
+        """Regression: ``create()`` previously seeded every deployment's
+        settings from the waha BotConfig, so an email deployment's settings
+        carried a ``media`` block. The writer must still take the email
+        branch (set ``vision``) and drop the stale ``media`` — not let the
+        accidental ``media`` key hijack it into the waha path."""
+        dep = _make_deployment(
+            bot_type="email",
+            feature_flags={"image": True},
+            settings={
+                "language": "English",
+                "timezone": "UTC",
+                "display_name": "kAI",
+                "blacklist": [],
+                "media": {"image_enabled": True, "stt_enabled": True},
+            },
+        )
+        path = config_writer.write_config(dep, "email-bob@test.com")
+        data = json.loads(path.read_text())
+        assert data["vision"] is True
+        assert "media" not in data
+
+    def test_write_config_strips_stale_media_from_email_settings(self):
+        """The writer strips a stale ``media`` block from the email
+        deployment's ``settings`` at the source so the DB row matches the
+        email schema, not just the written file."""
+        dep = _make_deployment(
+            bot_type="email",
+            feature_flags={"image": True},
+            settings={"blacklist": [], "media": {"image_enabled": True}},
+        )
+        assert "media" in dep.settings  # precondition
+        config_writer.write_config(dep, "email-bob@test.com")
+        assert "media" not in dep.settings

@@ -38,6 +38,48 @@ class TestCreate:
         assert dep.settings["language"] == "English"
         assert dep.feature_flags == {"image": False, "stt": False, "tts": False, "video": False}
 
+    def test_create_email_seeds_email_schema_not_waha(self, db, user):
+        """Regression: ``create()`` previously seeded every deployment from
+        the waha BotConfig, so an email deployment's settings carried a waha
+        ``media`` block. It must now seed the email BotConfig (``vision``,
+        no ``media``)."""
+        from datetime import UTC, datetime
+
+        from kai.cockpit.models import Connection
+
+        now = datetime.now(UTC).isoformat()
+        for service, cfg in (
+            ("resend", {"signing_secret": "x", "api_key": "y"}),
+            (
+                "smtp",
+                {
+                    "host": "smtp.example.com",
+                    "port": 587,
+                    "username": "u",
+                    "password": "p",
+                    "from_address": "a@b.c",
+                    "use_tls": True,
+                },
+            ),
+        ):
+            db.add(
+                Connection(
+                    user_id=user.id,
+                    service=service,
+                    status="connected",
+                    config=cfg,
+                    created_at=now,
+                    updated_at=now,
+                )
+            )
+        db.commit()
+
+        svc = DeploymentsService(db)
+        dep = svc.create(user, "email", "answer support emails", "English")
+        assert "media" not in dep.settings
+        assert "vision" in dep.settings
+        assert dep.settings["language"] == "English"
+
     def test_voice_auto_pick(self, db, user):
         svc = DeploymentsService(db)
         dep = svc.create(user, "waha", "be helpful", "Spanish")
@@ -208,6 +250,60 @@ class TestStartMediaReadinessGate:
                 svc.start(dep)
         finally:
             MEDIA_READY.clear()
+
+    def test_email_start_not_blocked_by_media_not_ready(self, db, user, monkeypatch):
+        """Email has no STT/TTS dependency, so start() must not gate on
+        MEDIA_READY. With media not ready, an email deployment must sail past
+        the media gate and fail later on a connection check instead — not
+        raise DeploymentStartupError("media services not ready")."""
+        from datetime import UTC, datetime
+
+        from kai.cockpit.media_services import MEDIA_READY
+        from kai.cockpit.models import Connection
+
+        MEDIA_READY.clear()
+        monkeypatch.setattr(
+            "kai.bots.waha.config.get_waha_settings",
+            lambda: WahaSettings.for_test(media_ready_timeout=0.05, hmac_key="test-secret"),
+        )
+        now = datetime.now(UTC).isoformat()
+        for service, cfg in (
+            ("resend", {"signing_secret": "x", "api_key": "y"}),
+            (
+                "smtp",
+                {
+                    "host": "smtp.example.com",
+                    "port": 587,
+                    "username": "u",
+                    "password": "p",
+                    "from_address": "a@b.c",
+                    "use_tls": True,
+                },
+            ),
+        ):
+            db.add(
+                Connection(
+                    user_id=user.id,
+                    service=service,
+                    status="connected",
+                    config=cfg,
+                    created_at=now,
+                    updated_at=now,
+                )
+            )
+        db.commit()
+
+        svc = DeploymentsService(db)
+        dep = svc.create(user, "email", "answer support emails", "English")
+        # Disconnect resend after creation so start() fails at the connection
+        # gate — which comes *after* the media gate. Reaching it proves the
+        # media gate was skipped for email.
+        resend = db.query(Connection).filter_by(user_id=user.id, service="resend").first()
+        resend.status = "disconnected"
+        db.commit()
+
+        with pytest.raises(ConnectionRequiredError, match="resend"):
+            svc.start(dep)
 
 
 class TestStart:
