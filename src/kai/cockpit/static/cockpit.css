@@ -99,7 +99,7 @@
     --text-xl: 1.5rem;     /* 24px — page titles */
     --text-2xl: clamp(1.75rem, 3vw, 2.25rem); /* hero/display */
     --text-landing-display: clamp(2.75rem, 3.75vw, 4rem); /* landing promise */
-    --text-landing-email: clamp(1.75rem, 2vw, 2.5rem); /* landing proof address */
+    --text-landing-email: clamp(1.125rem, 1.5vw, 1.375rem); /* landing proof address */
 
     /* Spacing */
     --space-3xs: 2px;
@@ -2004,20 +2004,55 @@
   }
 
   .landing-proof__email {
-    display: inline-block;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--space-sm);
     max-width: 100%;
-    margin: var(--space-md) 0 0;
+    margin: var(--space-md) auto 0;
+    padding: var(--space-sm) var(--space-md);
+    border: 1px solid var(--color-accent-100);
+    border-radius: var(--radius-md);
+    background: var(--color-accent-50);
+    box-shadow: var(--shadow-sm);
     color: var(--color-ink);
     font-family: var(--font-mono);
     font-size: var(--text-landing-email);
     font-weight: 600;
     letter-spacing: -0.02em;
     text-decoration: none;
-    overflow-wrap: anywhere;
+    white-space: nowrap;
+    min-width: 0;
   }
 
   .landing-proof__email:hover {
-    color: var(--color-accent-600);
+    border-color: var(--color-accent-500);
+    background: color-mix(in srgb, var(--color-accent-50) 60%, var(--color-surface));
+  }
+
+  .landing-proof__email:focus-visible {
+    outline: none;
+    border-color: var(--color-accent-600);
+    box-shadow: var(--shadow-focus-accent);
+  }
+
+  .landing-proof__email-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    color: var(--color-accent-700);
+  }
+
+  .landing-proof__email-icon svg {
+    width: 0.9em;
+    height: 0.9em;
+  }
+
+  .landing-proof__email-text {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    min-width: 0;
   }
 
   .landing-proof__action {
@@ -2114,6 +2149,13 @@
     .landing-proof__action .button {
       width: 100%;
       justify-content: center;
+    }
+
+    .landing-proof__email {
+      width: 100%;
+      padding: var(--space-xs) var(--space-sm);
+      font-size: clamp(14px, 4.8vw, 16px);
+      letter-spacing: -0.01em;
     }
 
     .landing-actions .button {
