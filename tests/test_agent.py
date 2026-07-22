@@ -1440,6 +1440,59 @@ class TestStructuredPredictionContract:
             )
 
 
+class TestLiteralNewlineUnescape:
+    """Models sometimes serialize a multi-line reply as a single line with
+    literal backslash-n tokens (double-escaped JSON value, or a ``key: value``
+    line). The terminal normalization step must turn those into real line
+    breaks so the delivered message isn't full of visible ``\\n`` garbage.
+    """
+
+    def test_unescapes_literal_newlines_when_no_real_newlines(self):
+        from kai.agent.core import _unescape_literal_newlines
+
+        body = "Hello there,\\n\\nhere is the comparison:\\n\\n### 1. GPU"
+        out = _unescape_literal_newlines(body)
+        assert out == "Hello there,\n\nhere is the comparison:\n\n### 1. GPU"
+
+    def test_leaves_real_newlines_untouched(self):
+        from kai.agent.core import _unescape_literal_newlines
+
+        body = "line one\nline two\\nstill line two?"
+        # Already has a real newline -> nothing is mangled, literal \\n kept.
+        assert _unescape_literal_newlines(body) == body
+
+    def test_does_not_mangle_single_literal_backslash_n(self):
+        from kai.agent.core import _unescape_literal_newlines
+
+        # A Windows-style path has one literal \\n; not the multi-line
+        # signature, so it must be preserved verbatim.
+        assert _unescape_literal_newlines("C:\\new folder") == "C:\\new folder"
+
+    def test_parse_structured_text_unescapes_double_escaped_json(self):
+        # The model returned valid JSON but double-escaped the newlines in the
+        # body (``\\n`` in the JSON source -> literal backslash-n after parse).
+        # The terminal step must recover real line breaks so the email body
+        # doesn't render as a wall of ``\\n`` tokens.
+        from llama_index.core.output_parsers.pydantic import PydanticOutputParser
+
+        from kai.agent.core import KaiAgent
+
+        parser = PydanticOutputParser(output_cls=_TestAction)
+        # json.dumps escapes the real newlines once; the literal doubling here
+        # mimics the model emitting ``\\n`` in the JSON string value.
+        payload = json.dumps(
+            {
+                "action": "reply",
+                "text": "Hello there,\\n\\nhere is the plan:\\n\\n1. step",
+            }
+        )
+
+        action = KaiAgent._parse_structured_text(payload, _TestAction, parser)
+
+        assert action.action == "reply"
+        assert action.text == "Hello there,\n\nhere is the plan:\n\n1. step"
+
+
 class TestVideoBlockShim:
     """The import-time monkeypatch in ``kai.agent.core`` makes llama_index's
     OpenAI adapter serialize ``VideoBlock`` as the verified ``video_url``

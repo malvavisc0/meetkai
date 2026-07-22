@@ -165,6 +165,43 @@ def strip_reasoning_channels(text: str) -> str:
 _KV_LINE_RE = re.compile(r'^[\s\-*]*["\']?(\w+)["\']?\s*[:=]\s*(.*)$')
 
 
+def _unescape_literal_newlines(text: str) -> str:
+    """Convert literal ``\\n``/``\\r`` tokens into real line breaks.
+
+    Some models serialize a multi-line reply as a single line with literal
+    backslash-n tokens (a double-escaping of the JSON string value, or a
+    ``key: value`` line that can't hold real newlines). Left alone the
+    recipient sees visible ``\\n`` garbage instead of line breaks.
+
+    This only fires when the text contains *no* real newline yet holds at
+    least two literal ``\\n`` tokens — the signature of an escaped multi-line
+    body. A reply that already has real newlines is left untouched (so a
+    legit literal backslash-n is preserved), and a stray single ``\\n`` (e.g.
+    a Windows path like ``C:\\new``) is not mangled.
+    """
+    if not text or "\n" in text:
+        return text
+    if text.count("\\n") < 2:
+        return text
+    return text.replace("\\r\\n", "\r\n").replace("\\n", "\n").replace("\\r", "\r")
+
+
+def _normalize_action_text(action: ActionResult) -> ActionResult:
+    """Strip reasoning-channel artifacts and unescape literal newlines in text.
+
+    Shared by the structured-output parser and the action-as-tool path so the
+    two can't drift on what a cleaned ``text`` looks like before dispatch.
+    Returns the same instance when there is nothing to normalize.
+    """
+    text = action.text
+    if not text:
+        return action
+    cleaned = _unescape_literal_newlines(strip_reasoning_channels(text))
+    if cleaned == text:
+        return action
+    return action.model_copy(update={"text": cleaned})
+
+
 def _parse_kv_lines(text: str) -> dict[str, str]:
     """Parse ``key: value`` lines into a dict.
 
@@ -973,8 +1010,7 @@ class KaiAgent:
             # asserts) so a logic drift surfaces as a clear error, not a None
             # returned where an ActionResult is required.
             raise RuntimeError("structured output parsing returned None unexpectedly")
-        if action.text:
-            action = action.model_copy(update={"text": strip_reasoning_channels(action.text)})
+        action = _normalize_action_text(action)
         return action, tool_call_records
 
     @staticmethod
@@ -991,8 +1027,8 @@ class KaiAgent:
         try:
             result = parser.parse(text)
             if isinstance(result, output_cls):
-                return result
-            return output_cls.model_validate(result.model_dump())
+                return _normalize_action_text(result)
+            return _normalize_action_text(output_cls.model_validate(result.model_dump()))
         except Exception:
             pass
 
@@ -1000,7 +1036,7 @@ class KaiAgent:
         kv = _parse_kv_lines(text)
         if kv:
             try:
-                return output_cls.model_validate(kv)
+                return _normalize_action_text(output_cls.model_validate(kv))
             except Exception:
                 pass
 
@@ -1008,7 +1044,7 @@ class KaiAgent:
         repaired = _repair_json(text)
         if repaired:
             try:
-                return output_cls.model_validate_json(repaired)
+                return _normalize_action_text(output_cls.model_validate_json(repaired))
             except Exception:
                 pass
 
@@ -1045,7 +1081,7 @@ class KaiAgent:
                     base.action,
                     output_cls.__name__,
                 )
-                return base
+                return _normalize_action_text(base)
 
         raise ValueError(f"Could not parse structured output from: {text[:200]!r}")
 
@@ -1063,9 +1099,7 @@ class KaiAgent:
         try:
             payload = {**tool_kwargs, "action": action_name}
             action = output_cls.model_validate(payload)
-            if action.text:
-                action = action.model_copy(update={"text": strip_reasoning_channels(action.text)})
-            return action
+            return _normalize_action_text(action)
         except Exception:
             return None
 

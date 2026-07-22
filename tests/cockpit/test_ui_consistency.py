@@ -107,7 +107,11 @@ def test_no_hardcoded_px_outside_tokens_layer():
     for lineno, line in enumerate(scoped.splitlines(), start=1):
         for match in _PX_LITERAL_RE.finditer(line):
             value = match.group("value")
-            if "var(" in value:
+            # ``var(...)`` and ``clamp(...)`` are responsive/token-backed
+            # expressions, not one-off literals — the styleguide documents
+            # ``clamp(14px, 4.8vw, 16px)`` as an intentional responsive
+            # override (STYLEGUIDE.md, ``.landing-proof__email``).
+            if "var(" in value or "clamp(" in value:
                 continue
             if re.search(r"\d+(\.\d+)?px", value):
                 offenders.append(f"cockpit.css:{lineno}: {line.strip()}")
