@@ -33,14 +33,14 @@
         <p class="landing-invite muted">Private beta. Describe a workflow you want automated, and we'll put an agent on it at <a href="mailto:{{ contact_email }}">{{ contact_email }}</a>.</p>
       </div>
 
-      <div class="landing-workflow" role="img" aria-label="Example workflow: work arrives through WhatsApp or Resend Email Inbox, a support agent consults the Brain and connected tools, then chooses an action.">
+      <div class="landing-workflow" role="img" aria-label="Example workflow: work arrives through message, email, or webhook; a support agent consults the Brain and database, then uses SMTP or Cal.com to act.">
         <div class="landing-workflow__topline">
           <span>Workflow</span>
-          <span>kAI agent</span>
+          <span class="landing-workflow__agent-status"><span class="status-dot status-dot--running" aria-hidden="true"></span>Status</span>
         </div>
         <div class="landing-workflow__diagram">
-          <div class="landing-workflow__stage">
-            <p class="landing-workflow__label">Work arrives</p>
+          <div class="landing-workflow__stage landing-workflow__stage--incoming">
+            <p class="landing-workflow__label">Incoming request</p>
             <div class="landing-workflow__sources">
               <span>Message</span>
               <span>Email</span>
@@ -52,22 +52,32 @@
             <img class="landing-agent__avatar" src="/static/icon-192.png" alt="">
             <span>
               <strong>Support agent</strong>
-              <small>Selected role for incoming events</small>
+              <small>Understands the request, then decides what to do</small>
             </span>
           </div>
-          <div class="landing-workflow__resources">
-            <div class="landing-workflow__resource landing-workflow__resource--brain">
-              <span class="landing-workflow__resource-icon" aria-hidden="true">{% include "icons/brain.svg" %}</span>
-              <span><strong>Brain</strong><small>Documents, website, notes</small></span>
-            </div>
-            <div class="landing-workflow__resource">
-              <span><strong>Connected tools</strong><small>Database, SMTP, Cal.com</small></span>
+          <div class="landing-workflow__stage landing-workflow__stage--context">
+            <p class="landing-workflow__label">Consults context</p>
+            <div class="landing-workflow__resources">
+              <div class="landing-workflow__resource landing-workflow__resource--brain">
+                <span class="landing-workflow__resource-icon" aria-hidden="true">{% include "icons/brain.svg" %}</span>
+                <span><strong>Brain</strong><small>Company knowledge</small></span>
+              </div>
+              <div class="landing-workflow__resource">
+                <span><strong>Database</strong><small>Customer records</small></span>
+              </div>
             </div>
           </div>
           <div class="landing-workflow__connector" aria-hidden="true"></div>
+          <div class="landing-workflow__stage landing-workflow__stage--action">
+            <p class="landing-workflow__label">Takes action</p>
+            <div class="landing-workflow__actions-list">
+              <span><strong>SMTP</strong><small>Send a reply or follow-up</small></span>
+              <span><strong>Cal.com</strong><small>Book an appointment</small></span>
+            </div>
+          </div>
           <div class="landing-workflow__decision">
-            <p class="landing-workflow__label">Chooses the next action</p>
-            <p>Reply, follow up or escalate.</p>
+            <p class="landing-workflow__label">Or escalates</p>
+            <p>Hands off to a colleague.</p>
           </div>
         </div>
       </div>
@@ -104,59 +114,47 @@
   <section class="landing-section landing-connections" aria-labelledby="connections-title">
     <div class="landing-section__intro">
       <p class="landing-eyebrow">Connections</p>
-<h2 id="connections-title" class="landing-section__title">Connect the services your team uses today.</h2>
-<p class="landing-section__copy">Knowledge tells an agent what to say—connections give it the ability to act. Channels bring incoming requests in, while Tools let your agent execute tasks. Configure every permission agent-by-agent right from your Cockpit.</p>
+<h2 id="connections-title" class="landing-section__title">Connect the services your team uses.</h2>
+<p class="landing-section__copy">Knowledge tells an agent what to say. Connections define where work arrives and what an agent can do once it does.</p>
+        <div class="landing-connections__summary">
+          <p>Route customer conversations, inboxes, and HTTP events into an agent workflow, then give agents the tools to access customer records, send follow-ups, and manage appointments.</p>
+        </div>
     </div>
     <div class="landing-connections__content">
       <div class="landing-connections__group">
-        <h3 class="landing-connections__label">Channels <span>Where work arrives</span></h3>
         <ul class="landing-connections__items">
           <li>
-            <span class="landing-connections__icon" aria-hidden="true">{% include "icons/message-circle.svg" %}</span>
             <span class="landing-connections__body">
               <strong>Message</strong>
-              <span>Customer conversations, end to end</span>
             </span>
           </li>
           <li>
-            <span class="landing-connections__icon" aria-hidden="true">{% include "icons/mail.svg" %}</span>
             <span class="landing-connections__body">
               <strong>Email</strong>
-              <span>Inbound email becomes agent work</span>
             </span>
           </li>
           <li>
-            <span class="landing-connections__icon" aria-hidden="true">{% include "icons/plug.svg" %}</span>
             <span class="landing-connections__body">
               <strong>Webhook</strong>
-              <span>Any HTTP event routed to an agent</span>
             </span>
           </li>
         </ul>
       </div>
       <div class="landing-connections__group">
-        <h3 class="landing-connections__label">Tools <span>What the agent can do</span></h3>
         <ul class="landing-connections__items">
           <li>
-            <span class="landing-connections__icon" aria-hidden="true">{% include "icons/layout-dashboard.svg" %}</span>
             <span class="landing-connections__body">
               <strong>Database</strong>
-              <span>Customer records, read-only</span>
-              <span class="landing-connections__dialects mono">PostgreSQL · MySQL · SQL Server</span>
             </span>
           </li>
           <li>
-            <span class="landing-connections__icon" aria-hidden="true">{% include "icons/send.svg" %}</span>
             <span class="landing-connections__body">
               <strong>SMTP</strong>
-              <span>Replies and follow-ups</span>
             </span>
           </li>
           <li>
-            <span class="landing-connections__icon" aria-hidden="true">{% include "icons/check.svg" %}</span>
             <span class="landing-connections__body">
               <strong>Cal.com</strong>
-              <span>Meetings booked on your behalf</span>
             </span>
           </li>
         </ul>
