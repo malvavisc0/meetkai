@@ -734,7 +734,7 @@
     width: var(--space-lg);
     height: var(--space-lg);
     border-radius: var(--radius-md);
-    background: var(--color-ink);
+    background: var(--color-panel);
     color: var(--color-action-text);
     font-size: var(--text-base);
     font-weight: 600;
