@@ -1674,17 +1674,6 @@
     gap: var(--space-md);
   }
 
-  .landing-nav__github {
-    color: color-mix(in srgb, var(--color-panel-text) 76%, transparent);
-    font-size: var(--text-sm);
-    font-weight: 600;
-    text-decoration: none;
-  }
-
-  .landing-nav__github:hover {
-    color: var(--color-panel-text);
-  }
-
   .landing-workflow {
     display: grid;
     gap: var(--space-lg);
@@ -1706,12 +1695,6 @@
   .landing-workflow__topline > span:first-child {
     color: var(--color-ink);
     font-weight: 600;
-  }
-
-  .landing-workflow__agent-status {
-    display: inline-flex;
-    align-items: center;
-    gap: var(--space-xs);
   }
 
   .landing-workflow__diagram {
@@ -2024,19 +2007,8 @@
     border-top: 1px solid var(--color-border);
   }
 
-  .landing-connections__label,
   .landing-connections__items {
     margin: 0;
-  }
-
-  .landing-connections__label {
-    color: var(--color-ink);
-    font-size: var(--text-xl);
-    font-weight: 600;
-    letter-spacing: -0.02em;
-  }
-
-  .landing-connections__items {
     display: grid;
     grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: var(--space-sm);
