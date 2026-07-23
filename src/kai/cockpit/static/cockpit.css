@@ -727,6 +727,20 @@
     text-decoration: none;
   }
 
+  .auth-hero__brand-mark,
+  .landing-brand__mark {
+    display: inline-grid;
+    place-items: center;
+    width: var(--space-lg);
+    height: var(--space-lg);
+    border-radius: var(--radius-md);
+    background: var(--color-ink);
+    color: var(--color-action-text);
+    font-size: var(--text-base);
+    font-weight: 600;
+    letter-spacing: -0.04em;
+  }
+
   .auth-hero__copy {
     display: grid;
     gap: var(--space-sm);
