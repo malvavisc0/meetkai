@@ -32,7 +32,7 @@ def _email_dir() -> Path:
 
 def _fake_agent() -> MagicMock:
     agent = MagicMock()
-    agent._registered: list[str] = []
+    agent._registered = []
 
     def _register_tool(tool):
         agent._registered.append(tool.metadata.name)

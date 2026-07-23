@@ -45,8 +45,8 @@ def _email_dir() -> Path:
 def _fake_agent() -> MagicMock:
     """A MagicMock agent that records registered tool names + workflow calls."""
     agent = MagicMock()
-    agent._registered: list[str] = []
-    agent._workflows: list[str] = []
+    agent._registered = []
+    agent._workflows = []
 
     def _register_tool(tool):
         agent._registered.append(tool.metadata.name)

@@ -202,6 +202,7 @@ class TestSmtpReply:
     @pytest.mark.asyncio
     async def test_smtp_not_configured_returns_false(self, tmp_path):
         bot = _make_bot(tmp_path)
+        bot._smtp = MagicMock()
         bot._smtp.smtp_enabled = False
         bot._agent = AsyncMock()
         bot._agent.chat = AsyncMock(return_value=_chat_result("reply", text="hi"))

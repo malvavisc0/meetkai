@@ -93,6 +93,7 @@ class TestDecryptConfig:
             from_address="user@example.com",
         )
         cfg = svc.decrypt_config(user)
+        assert cfg is not None
         assert cfg["host"] == "smtp.example.com"
         assert cfg["port"] == 587
         assert cfg["username"] == "user"

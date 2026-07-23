@@ -16,6 +16,8 @@ import hmac
 import time
 
 import pytest
+from fastapi import Request
+from starlette.datastructures import Headers
 
 from kai.cockpit.bots import BOT_TYPES, BotType
 from kai.cockpit.connections.secrets import encrypt_config
@@ -96,15 +98,15 @@ def _svix_sign(secret: str, svix_id: str, ts: int, body: bytes) -> str:
 # ---------------------------------------------------------------------------
 
 
-class _FakeRequest:
+class _FakeRequest(Request):
     """Minimal stand-in for Starlette Request — only headers are read by
     _verify_resend (the body is passed separately as the 2nd positional arg)."""
 
     def __init__(self, headers: dict[str, str]):
-        self._headers = headers
+        self._headers = Headers(headers)
 
     @property
-    def headers(self):
+    def headers(self) -> Headers:
         return self._headers
 
 
