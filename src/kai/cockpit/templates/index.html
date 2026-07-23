@@ -1,35 +1,36 @@
 {% extends "base.html" %}
 {% block topbar %}{% endblock %}
 {% block content %}
+<header class="landing-nav">
+  <div class="landing-nav__inner">
+    <a class="landing-brand" href="/" aria-label="kAI home">
+      <img class="landing-brand__mark" src="/static/icon-192.png" alt="">
+      <span>kAI</span>
+    </a>
+    <div class="landing-nav__actions">
+      {% if user %}
+      <a class="button" href="/console">Manage your agents</a>
+      {% else %}
+      <a class="button button--primary" href="/login">Login</a>
+      {% endif %}
+    </div>
+  </div>
+</header>
+
 <div class="page landing-page">
   <section class="landing-hero">
-    <header class="landing-nav">
-      <a class="landing-brand" href="/" aria-label="kAI home">
-        <img class="landing-brand__mark" src="/static/icon-192.png" alt="">
-        <span>kAI</span>
-      </a>
-      <div class="landing-nav__actions">
-        <a class="landing-nav__github" href="https://github.com/malvavisc0/meetkai">Explore on GitHub</a>
-        {% if user %}
-        <a class="button" href="/console">Manage your agents</a>
-        {% else %}
-        <a class="button" href="/login">Log in to Beta</a>
-        {% endif %}
-      </div>
-    </header>
-
     <div class="landing-hero__grid">
       <div class="landing-copy landing-copy--hero">
         <p class="landing-eyebrow">Knowledgeable Artificial Intelligence</p>
-        <h1 class="landing-title">Your next hire doesn't need a salary.</h1>
-        <p class="landing-lede">Add a kAI agent to support, inbox, or intake. It handles each request using your own Knowledge Base, operates overnight, and escalates only when needed.</p>
+<h1 class="landing-title">Ready-to-run workflow agents for your business.</h1>
+<p class="landing-lede">We took the most powerful workflow architectures and packaged them into ready-to-use AI bots. Deploy robust, automated processes in minutes. Just connect your apps, set your rules, and go.</p>
         <div class="landing-actions">
           <a href="mailto:{{ contact_email }}" class="button button--primary">
             <span class="icon">{% include "icons/send.svg" %}</span>
-            Request an invite
+            Request beta access
           </a>
         </div>
-        <p class="landing-invite muted">Private beta. Tell us how you'd put kAI to work at <a href="mailto:{{ contact_email }}">{{ contact_email }}</a>.</p>
+        <p class="landing-invite muted">Private beta. Describe a workflow you want automated, and we'll put an agent on it at <a href="mailto:{{ contact_email }}">{{ contact_email }}</a>.</p>
       </div>
 
       <div class="landing-workflow" role="img" aria-label="Example workflow: work arrives through WhatsApp or Resend Email Inbox, a support agent consults the Brain and connected tools, then chooses an action.">
@@ -75,25 +76,25 @@
 
   <section class="landing-section landing-steps" aria-labelledby="onboard-title">
     <div class="landing-section__intro">
-      <p class="landing-eyebrow">Onboard one agent</p>
-      <h2 id="onboard-title" class="landing-section__title">From a role you need covered to an agent you supervise.</h2>
-      <p class="landing-section__copy">The job you'd hand a person — not the tool you'd configure. Four steps put an agent on the floor, and you stay in control at every one of them.</p>
+<p class="landing-eyebrow">Onboarding</p>
+<h2 id="onboard-title" class="landing-section__title">Set up, guide, and supervise your agents.</h2>
+<p class="landing-section__copy">Delegate full roles instead of wiring together nodes. kAI packages complex automation architecture into agents you can guide, review, and scale.</p>
     </div>
     <ol class="landing-steps__path">
-      <li><span class="landing-step__number">01</span><h3>Choose a role</h3><p>Pick the seat you'd hire for: support, inbox, or triage.</p></li>
-      <li><span class="landing-step__number">02</span><h3>Train its Brain</h3><p>Give it the briefing you'd give a new hire — documents, your website, notes, the rules you'd repeat out loud.</p></li>
-      <li><span class="landing-step__number">03</span><h3>Connect work</h3><p>Point it at where work already arrives and the systems it's allowed to touch.</p></li>
-      <li><span class="landing-step__number">04</span><h3>Supervise</h3><p>Watch what it handles, correct course, and take it off the floor whenever you want.</p></li>
+      <li><span class="landing-step__number">01</span><h3>Pick a role</h3><p>Select the position you need filled: customer support, inbox management, or DevOps.</p></li>
+      <li><span class="landing-step__number">02</span><h3>Feed the Brain</h3><p>Connect your docs, website, and company guidelines. No code required.</p></li>
+      <li><span class="landing-step__number">03</span><h3>Connect your stack</h3><p>Integrate email, databases, and webhooks so agents can execute tasks safely.</p></li>
+      <li><span class="landing-step__number">04</span><h3>Supervise and scale</h3><p>Monitor actions, approve responses, and jump in whenever you need.</p></li>
     </ol>
   </section>
 
   <section class="landing-section landing-brain" aria-labelledby="brain-title">
     <div class="landing-section__intro">
       <p class="landing-eyebrow">Shared knowledge</p>
-      <h2 id="brain-title" class="landing-section__title">Train it on what your company knows.</h2>
-      <p class="landing-section__copy">The Knowledge Base, also known as the Brain, is shared company knowledge that agents consult before providing company-specific replies — add documents, a website, or notes once, and a single Brain gives every configured agent the relevant context before it decides what to do.</p>
+<h2 id="brain-title" class="landing-section__title">Give agents the context your company already has.</h2>
+<p class="landing-section__copy">The Brain is your centralized knowledge base. Add your docs, website, or notes once—and every agent gets instant, accurate context before taking action.</p>
     </div>
-    <div class="landing-brain__diagram" role="img" aria-label="Documents, a website, and notes feed the Brain, which provides shared knowledge to support and inbox agents.">
+    <div class="landing-brain__diagram" role="img" aria-label="Documents, a website, and notes flow into the Brain, which provides shared knowledge to support and inbox agents.">
       <div class="landing-brain__sources"><span>Documents</span><span>Website</span><span>Notes / text</span></div>
       <div class="landing-brain__node"><span class="landing-brain__icon" aria-hidden="true">{% include "icons/brain.svg" %}</span><strong>Brain</strong></div>
       <div class="landing-brain__agents"><span>Support agent</span><span>Inbox agent</span><span>Chat agent</span></div>
@@ -103,8 +104,8 @@
   <section class="landing-section landing-connections" aria-labelledby="connections-title">
     <div class="landing-section__intro">
       <p class="landing-eyebrow">Connections</p>
-      <h2 id="connections-title" class="landing-section__title">Connect the systems where the work already lives.</h2>
-      <p class="landing-section__copy">Knowledge tells it what to say; connections let it do something about it. Channels bring work in. Tools let the agent act on it. Each connection is configured per agent in the cockpit.</p>
+<h2 id="connections-title" class="landing-section__title">Connect the services your team uses today.</h2>
+<p class="landing-section__copy">Knowledge tells an agent what to say—connections give it the ability to act. Channels bring incoming requests in, while Tools let your agent execute tasks. Configure every permission agent-by-agent right from your Cockpit.</p>
     </div>
     <div class="landing-connections__content">
       <div class="landing-connections__group">
@@ -165,23 +166,27 @@
 
   <section id="see-it-working" class="landing-section landing-proof" aria-labelledby="proof-title">
     <div>
-      <p class="landing-eyebrow">See it working</p>
-      <h2 id="proof-title" class="landing-proof__title">Give the agent a question you actually care about.</h2>
-      <p class="landing-proof__copy">You don't have to take our word for it — there's already one on the payroll. Email the address below and your message goes to a deployed kAI support agent. Its answer comes back to your inbox.</p>
-      <a class="landing-proof__email" href="mailto:questions@support.meetk.ai">
-        <span class="landing-proof__email-icon" aria-hidden="true">{% include "icons/mail.svg" %}</span>
-        <span class="landing-proof__email-text">questions@support.meetk.ai</span>
-      </a>
+<p class="landing-eyebrow">See it working</p>
+<h2 id="proof-title" class="landing-proof__title">Test a live agent right now.</h2>
+<p class="landing-proof__copy">We put a kAI support agent directly on our team. Send your questions to the address below to see how it responds in real time.</p>
     </div>
-    <div class="landing-proof__action">
-      <p class="landing-proof__path"><span>Your email</span><span>Deployed agent</span><span>Reply in your inbox</span></p>
-      <a href="mailto:questions@support.meetk.ai" class="button">Ask the working agent</a>
-    </div>
+      <div class="landing-proof__action">
+        <p class="landing-proof__path"><span>Your email</span><span>Deployed agent</span><span>Reply in your inbox</span></p>
+        <a href="mailto:questions@support.meetk.ai" class="button landing-proof__cta">
+          <span class="icon" aria-hidden="true">{% include "icons/mail.svg" %}</span>
+          questions@support.meetk.ai
+        </a>
+      </div>
   </section>
-
-  <footer class="landing-footer">
-    <p>Private beta. Tell us how you'd put kAI to work at <a href="mailto:{{ contact_email }}">{{ contact_email }}</a>.</p>
-    <p><a class="landing-footer__github" href="https://github.com/malvavisc0/meetkai">Explore on GitHub</a></p>
-  </footer>
 </div>
+
+<footer class="landing-footer">
+  <div class="landing-footer__inner">
+    <p>Private beta for teams ready to put an agent to work.</p>
+    <a class="landing-footer__github" href="https://github.com/malvavisc0/meetkai">
+      <span class="icon" aria-hidden="true">{% include "icons/github.svg" %}</span>
+      Explore kAI on GitHub
+    </a>
+  </div>
+</footer>
 {% endblock %}

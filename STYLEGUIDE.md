@@ -26,7 +26,6 @@ else, use tokens/classes.
 | Help text, metadata, eyebrows, table headers | `--text-sm` | 400 |
 | Micro labels / badges | `--text-xs` | 600 |
 | Landing promise (`.landing-title`) | `--text-landing-display` (44-64px clamp) | 600 |
-| Landing proof address (`.landing-proof__email`) | `--text-landing-email` (18-22px clamp) | 600 |
 
 - `--text-md` (17px) is reserved for genuinely emphasized inline body copy
   (`.chat-reply`). It is never used for standard labels, help text, or
@@ -36,7 +35,6 @@ else, use tokens/classes.
   screen. It stays reserved for pre-auth hero/display use.
 - `--text-landing-display` is reserved for the single pre-auth landing promise.
   It is not reused for section titles.
-- `--text-landing-email` is reserved for the deployed-agent email focal point.
 - No page introduces a font size outside this table without updating this
   table first.
 
@@ -289,10 +287,9 @@ use concise static text or a stable progress indicator.
 | `.landing-brain` / `.landing-brain__diagram` | Shared-knowledge explanation showing documents, website, and notes feeding the Brain and configured agent roles. |
 | `.landing-connections` / `.landing-connections__group` | Semantic connection band grouping channels where work arrives separately from tools agents use; visible text labels are retained until approved local integration assets are available. |
 | `.landing-connections__dialects` | `.mono` micro-line beneath a connection item for code-like detail that recedes for the casual reader (e.g. the Database row's `PostgreSQL · MySQL · SQL Server` dialect list); uses the `.mono` utility, no new font size outside the table. |
-| `.landing-proof` / `.landing-proof__path` | Editorial proof invitation with the deployed support email and factual email-to-agent-to-inbox path; its mail action stays secondary to the invite CTA. |
-| `.landing-proof__email` | Focal-point treatment for the deployed-agent email address on the proof section. Uses the reserved `--text-landing-email` token (18-22px clamp) and `--font-mono`; the address is the visual climax of the section, with the `Ask the working agent` button as the secondary action. |
-| `.landing-proof__email-icon` / `.landing-proof__email-text` | Contained-pill parts: a leading mail icon (`icons/mail.svg`) and the address text. The pill is `white-space: nowrap` with `text-overflow: ellipsis` so the `.ai` suffix never wraps to its own line; below tablet width the clamp minimum is overridden to `clamp(14px, 4.8vw, 16px)` so the address shrinks to fit instead of breaking mid-domain. |
-| `.landing-footer` | Quiet closing reassurance at the foot of the landing page: private-beta language, the configured contact address, and the GitHub link. Muted text on the open canvas, separated by a `--color-divider` top border; no new surface primitive. |
+| `.landing-proof` / `.landing-proof__path` / `__cta` | Editorial proof invitation with the factual email-to-agent-to-inbox path and one compact mail action. The CTA uses the shared emerald surface tokens and monospace face to make the support address actionable without competing with the invite CTA. |
+| `.landing-nav` / `__inner` | Full-width navigation bar on pre-auth surfaces. `__inner` shares the landing content width so brand and CTA align with the page grid; the outer bar uses the shared `--color-page` canvas and a neutral divider. It is not sticky, so it never obscures landing content. |
+| `.landing-footer` / `__inner` | Full-width closing reassurance at the foot of the landing page. A restrained slate surface and emerald top rule create the light-to-dark transition; `__inner` aligns its beta statement and GitHub link to the landing content grid. |
 | `.deployment-card__summary` | Compact, right-aligned operational summary on an agent card; collapses below the card content on mobile. |
 | `.deployment-card--attention` / `--running` / `--stopped` | State modifier on `.deployment-card`. Attention gets a danger-tinted border (4% danger mix on surface). Running uses a stronger neutral border. Stopped dims the whole card to 0.85. |
 | `.readiness-summary` / `.readiness-summary__section` | Exception-led infrastructure health summary: a concise readiness state followed by divided attention and available-service sections. |
@@ -325,7 +322,7 @@ Each is defined once in `cockpit.css` and reused across pages:
 | `.field--error` / `.field__error` | Validation error primitive. `.field--error` on the parent `.field` turns the control border red; the error message renders in the `.field__help` slot in `--color-danger`. Use `.field__error` for a single explicit error block above the form. The affected control gets `aria-invalid="true"` and `aria-describedby` pointing at the help text id. |
 
 New local icons: `icons/search.svg`, `icons/upload.svg`, `icons/check.svg`,
-`icons/bot.svg`, `icons/brain.svg`.
+`icons/bot.svg`, `icons/brain.svg`, `icons/github.svg`.
 
 ## Page shells
 
