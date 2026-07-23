@@ -727,13 +727,6 @@
     text-decoration: none;
   }
 
-  .auth-hero__brand-mark {
-    width: var(--space-lg);
-    height: var(--space-lg);
-    border-radius: var(--radius-sm);
-    box-shadow: 0 4px 12px -6px color-mix(in srgb, var(--color-accent-600) 70%, transparent);
-  }
-
   .auth-hero__copy {
     display: grid;
     gap: var(--space-sm);
@@ -1603,13 +1596,6 @@
     font-size: var(--text-sm);
     letter-spacing: -0.01em;
     text-decoration: none;
-  }
-
-  .landing-brand__mark {
-    width: var(--space-lg);
-    height: var(--space-lg);
-    border-radius: var(--radius-sm);
-    box-shadow: 0 4px 12px -6px color-mix(in srgb, var(--color-accent-600) 70%, transparent);
   }
 
   .landing-hero__grid {
