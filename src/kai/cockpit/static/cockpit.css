@@ -41,48 +41,61 @@
   }
 
   :root {
-    /* Color — a single neutral, high-contrast surface system with one */
-    /* intentional accent (green) reserved for active/positive states. */
-    --color-ink: #0d1117;                    /* headings, primary text */
-    --color-ink-secondary: #3f4653;          /* body text */
-    --color-muted: #5b6470;                  /* meta, secondary labels */
-    --color-subtle: #7a8696;                 /* placeholders, disabled text */
+    /* Color — crisp, cobalt-tinted cool neutrals with a single cobalt brand */
+    /* accent. The accent is the operator identity (primary actions, focus, the */
+    /* agent's own reply/voice); live/ready/healthy *status* is green, */
+    /* decoupled from the brand so a running agent no longer reads as a generic */
+    /* AI-green UI. The page tint borrows the accent hue for a fresh, on-brand */
+    /* surface that stays distinct from generic neutral-gray AI sites. */
+    --color-ink: #0b1220;                    /* headings, primary text (cool) */
+    --color-ink-secondary: #2a3550;          /* body text (cool) */
+    --color-muted: #5b6781;                  /* meta, secondary labels (cool) */
+    --color-subtle: #7c8aa8;                 /* placeholders, disabled text (cool) */
 
-    --color-border: #d7dae0;                 /* default 1px borders */
-    --color-border-strong: #c3c7d0;          /* emphasized borders, dividers */
+    --color-border: #dce3ef;                 /* default 1px borders (cool) */
+    --color-border-strong: #c7d1e4;          /* emphasized borders, dividers (cool) */
 
-    --color-page: #fafafa;                   /* app background */
+    --color-page: #f6f8fc;                   /* app background (cobalt-tinted) */
     --color-surface: #ffffff;                /* card / panel surface */
-    --color-surface-alt: #f5f6f8;            /* nested surface (hover rows, avatars) */
-    --color-surface-hover: #f2f3f5;
+    --color-surface-alt: #eef2f9;            /* nested surface (cool) */
+    --color-surface-hover: #e6ecf6;          /* nested hover (cool) */
 
-    --color-panel: #0a0c10;                  /* dark topbar / log panel */
-    --color-panel-text: #e7e9ec;
-    --color-panel-border: #1c2029;
+    --color-panel: #0b1220;                  /* dark topbar / log panel (cool) */
+    --color-panel-text: #e4e9f2;             /* dark panel text (cool) */
+    --color-panel-border: #1e2a44;           /* dark panel divider (cool) */
 
-    /* Accent — vibrant emerald provides a clear action and live-state signal. */
-    --color-accent-50: #ecfdf5;
-    --color-accent-100: #d1fae5;
-    --color-accent-500: #10b981;
-    --color-accent-600: #059669;
-    --color-accent-700: #047857;
+    /* Accent — cobalt is the brand identity for actions, focus, links, and the
+       agent's own reply/voice. It is deliberately not the status color. See
+       STYLEGUIDE.md for the brand/status split. */
+    --color-accent-50: #eef3fd;
+    --color-accent-100: #dbe5fb;
+    --color-accent-500: #3b6df0;
+    --color-accent-600: #2954d6;
+    --color-accent-700: #1f44b0;
     --color-tertiary: var(--color-accent-600);
     --color-action: var(--color-accent-600);
     --color-action-text: #ffffff;
-    --color-status-live: var(--color-accent-600);
-    --color-status-live-bg: var(--color-accent-50);
+
+    /* Status green — reused for live/ready/healthy. Independent of the cobalt
+       brand accent so the operator console does not read as a generic
+       emerald-on-gray AI surface. */
+    --color-status-green-500: #22c55e;
+    --color-status-green-600: #16a34a;
+    --color-status-green-700: #15803d;
+    --color-status-live: var(--color-status-green-600);
+    --color-status-live-bg: #f0fdf4;
 
     --color-warn: #b45309;
     --color-warn-bg: #fef3c7;
-    --color-success: #15803d;
+    --color-success: var(--color-status-green-700);
     --color-success-bg: #f0fdf4;
     --color-danger: #c4373a;
-    --color-danger-bg: #fef2f2;
+    --color-danger-bg: #fbf1f0;
 
     /* Table row divider on white — a transparent mix was even less visible
        than the solid border it replaced; use a slightly stronger solid
        tone instead. */
-    --color-divider: #e2e4e9;
+    --color-divider: #e3e9f3;
 
     /* Type — one neo-grotesque sans for all UI text; monospace is reserved */
     /* strictly for code, IDs, ports and raw log/terminal output. */
@@ -327,7 +340,7 @@
     align-items: center;
     gap: var(--space-lg);
     background: var(--color-panel);
-    color: #e5e7eb;
+    color: var(--color-panel-text);
     padding: var(--space-sm) var(--space-lg);
     border-bottom: 1px solid var(--color-panel-border);
   }
@@ -337,7 +350,7 @@
     font-weight: 600;
     letter-spacing: -0.01em;
     font-size: var(--text-sm);
-    color: #f4f5f7;
+    color: var(--color-panel-text);
     display: inline-flex;
     align-items: center;
     gap: var(--space-2xs);
@@ -349,15 +362,15 @@
     width: 6px;
     height: 6px;
     border-radius: 50%;
-    background: var(--color-accent-500);
-    box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-accent-500) 30%, transparent);
+    background: var(--color-status-green-500);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-status-green-500) 30%, transparent);
   }
 
   /* Overall deployment health: green = all bots running, orange = some
      running, red = none running, gray = logged out / no deployments yet. */
   .topbar__brand--ok::before {
-    background: var(--color-accent-600);
-    box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-accent-600) 30%, transparent);
+    background: var(--color-status-green-600);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-status-green-600) 30%, transparent);
   }
 
   .topbar__brand--warn::before {
@@ -371,8 +384,8 @@
   }
 
   .topbar__brand--none::before {
-    background: #9ca3af;
-    box-shadow: 0 0 0 3px color-mix(in srgb, #9ca3af 30%, transparent);
+    background: var(--color-subtle);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-subtle) 30%, transparent);
   }
 
   .topbar__nav {
@@ -389,13 +402,13 @@
     position: relative;
     font-family: var(--font-display);
     font-weight: 600;
-    color: #e5e7eb;
+    color: var(--color-panel-text);
     text-decoration: none;
     font-size: var(--text-sm);
   }
 
   .topbar__nav a .icon {
-    color: #9ca3af;
+    color: var(--color-subtle);
   }
 
   .topbar__nav a .icon svg,
@@ -415,7 +428,7 @@
   }
 
   .topbar__escalations--active .icon {
-    color: var(--danger, #ef4444);
+    color: var(--color-danger);
   }
 
   .topbar__badge {
@@ -427,7 +440,7 @@
     padding: 0 0.3rem;
     margin-left: 0.15rem;
     border-radius: 999px;
-    background: var(--danger, #ef4444);
+    background: var(--color-danger);
     color: #fff;
     font-size: var(--text-2xs, 0.625rem);
     font-weight: 700;
@@ -439,7 +452,7 @@
     display: flex;
     align-items: center;
     gap: var(--space-sm);
-    color: #9ca3af;
+    color: var(--color-subtle);
     font-size: var(--text-sm);
     min-width: 0;
   }
@@ -459,7 +472,7 @@
     width: 28px;
     height: 28px;
     border-radius: var(--radius-sm);
-    color: #e5e7eb;
+    color: var(--color-panel-text);
     text-decoration: none;
   }
 
@@ -772,9 +785,9 @@
     height: calc(var(--space-lg) + var(--space-md));
     justify-content: center;
     border-radius: 50%;
-    color: var(--color-accent-700);
-    background: var(--color-accent-50);
-    box-shadow: 0 0 0 var(--radius-md) color-mix(in srgb, var(--color-accent-100) 70%, transparent);
+    color: var(--color-success);
+    background: var(--color-success-bg);
+    box-shadow: 0 0 0 var(--radius-md) color-mix(in srgb, var(--color-success-bg) 70%, transparent);
   }
 
   .auth-error {
@@ -841,8 +854,8 @@
 
   .status-dot--running {
     position: relative;
-    background: var(--color-accent-600);
-    box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-accent-600) 18%, transparent);
+    background: var(--color-status-green-600);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-status-green-600) 18%, transparent);
   }
 
   /* Radar-ping: a second ring expands and fades from the live dot to read
@@ -853,7 +866,7 @@
     position: absolute;
     inset: -3px;
     border-radius: 50%;
-    border: 1px solid var(--color-accent-600);
+    border: 1px solid var(--color-status-green-600);
     animation: status-pulse-ring 2.4s cubic-bezier(0.2, 0.6, 0.4, 1) infinite;
   }
 
@@ -890,7 +903,7 @@
   }
 
   .status-card--running {
-    border-color: color-mix(in srgb, var(--color-accent-600) 45%, var(--color-border));
+    border-color: color-mix(in srgb, var(--color-status-green-600) 45%, var(--color-border));
     background: var(--color-status-live-bg);
   }
 
@@ -1336,7 +1349,7 @@
   }
 
   .badge--live {
-    color: var(--color-accent-700);
+    color: var(--color-status-green-700);
     background: var(--color-status-live-bg);
   }
 
@@ -2084,7 +2097,7 @@
   .landing-footer {
     padding: var(--space-xl);
     border-top: var(--space-2xs) solid var(--color-accent-500);
-    background: #172033;
+    background: var(--color-panel);
     color: color-mix(in srgb, var(--color-panel-text) 76%, transparent);
     font-size: var(--text-sm);
   }
@@ -2257,7 +2270,7 @@
     padding: var(--space-lg);
     border: 1px solid color-mix(in srgb, var(--color-tertiary) 22%, var(--color-border));
     border-left: 4px solid var(--color-tertiary);
-    background: color-mix(in srgb, var(--color-status-live-bg) 65%, var(--color-surface));
+    background: color-mix(in srgb, var(--color-accent-50) 65%, var(--color-surface));
     color: var(--color-ink);
     font-family: var(--font-ui);
     font-size: var(--text-md);
@@ -2319,9 +2332,9 @@
     background: var(--color-surface-alt);
   }
   .flash--success {
-    background: color-mix(in srgb, var(--color-accent-600) 8%, var(--color-surface));
-    border-bottom-color: var(--color-accent-600);
-    color: var(--color-accent-700);
+    background: color-mix(in srgb, var(--color-success) 10%, var(--color-surface));
+    border-bottom-color: var(--color-status-green-600);
+    color: var(--color-success);
   }
   .flash--info {
     background: var(--color-surface-alt);

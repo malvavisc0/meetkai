@@ -102,7 +102,7 @@ else, use tokens/classes.
 
 Five variants, and only five:
 
-1. **Primary** (`.button--primary`) — green. One per page: the page's single
+1. **Primary** (`.button--primary`) — cobalt (the brand accent). One per page: the page's single
    dominant commit action (Save / Create / the action the page exists to
    perform).
 2. **Secondary** (`.button`, unstyled base) — white surface. Default for
@@ -199,7 +199,10 @@ time. See `deployment.html:91` (`Start`) and `deployment.html:152` (`Send`).
   as a clickable filter or button.
 - Color mapping is fixed: green = Running/Ready/Healthy, amber = Not
   connected/Reading/Restart needed, red = Failed/Down/Attention, gray =
-  Stopped/zero counts.
+  Stopped/zero counts. Green is the **status** color only — it is decoupled
+  from the cobalt brand accent, so live/ready states never read as a generic
+  emerald-on-gray AI surface. Brand accent (cobalt) is reserved for actions,
+  focus, links, and the agent's own reply/voice.
 - Status dots represent entity state; badges represent textual state. Both are
   used together where relevant, never as substitutes for each other.
 - Decorative green borders on cards are not used outside genuine state
@@ -287,9 +290,9 @@ use concise static text or a stable progress indicator.
 | `.landing-brain` / `.landing-brain__diagram` | Shared-knowledge explanation showing documents, website, and notes feeding the Brain and configured agent roles. |
 | `.landing-connections` / `.landing-connections__group` | Semantic connection band grouping channels where work arrives separately from tools agents use; visible text labels are retained until approved local integration assets are available. |
 | `.landing-connections__dialects` | `.mono` micro-line beneath a connection item for code-like detail that recedes for the casual reader (e.g. the Database row's `PostgreSQL · MySQL · SQL Server` dialect list); uses the `.mono` utility, no new font size outside the table. |
-| `.landing-proof` / `.landing-proof__path` / `__cta` | Editorial proof invitation with the factual email-to-agent-to-inbox path and one compact mail action. The CTA uses the shared emerald surface tokens and monospace face to make the support address actionable without competing with the invite CTA. |
+| `.landing-proof` / `.landing-proof__path` / `__cta` | Editorial proof invitation with the factual email-to-agent-to-inbox path and one compact mail action. The CTA uses the shared cobalt surface tokens and monospace face to make the support address actionable without competing with the invite CTA. |
 | `.landing-nav` / `__inner` | Full-width navigation bar on pre-auth surfaces. `__inner` shares the landing content width so brand and CTA align with the page grid; the outer bar uses the shared `--color-page` canvas and a neutral divider. It is not sticky, so it never obscures landing content. |
-| `.landing-footer` / `__inner` | Full-width closing reassurance at the foot of the landing page. A restrained slate surface and emerald top rule create the light-to-dark transition; `__inner` aligns its beta statement and GitHub link to the landing content grid. |
+| `.landing-footer` / `__inner` | Full-width closing reassurance at the foot of the landing page. A restrained cobalt-tinted dark surface and cobalt top rule create the light-to-dark transition; `__inner` aligns its beta statement and GitHub link to the landing content grid. |
 | `.deployment-card__summary` | Compact, right-aligned operational summary on an agent card; collapses below the card content on mobile. |
 | `.deployment-card--attention` / `--running` / `--stopped` | State modifier on `.deployment-card`. Attention gets a danger-tinted border (4% danger mix on surface). Running uses a stronger neutral border. Stopped dims the whole card to 0.85. |
 | `.readiness-summary` / `.readiness-summary__section` | Exception-led infrastructure health summary: a concise readiness state followed by divided attention and available-service sections. |
