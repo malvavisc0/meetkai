@@ -22,6 +22,7 @@ flagged as down.
 """
 
 import asyncio
+from collections.abc import Awaitable
 from dataclasses import dataclass
 
 import httpx
@@ -32,16 +33,6 @@ from kai.config.settings import get_settings
 
 _TIMEOUT = 3.0
 
-_client: httpx.AsyncClient | None = None
-
-
-async def _get_client() -> httpx.AsyncClient:
-    """Return a shared AsyncClient so TCP/TLS connections are pooled across probes."""
-    global _client
-    if _client is None or _client.is_closed:
-        _client = httpx.AsyncClient(timeout=_TIMEOUT)
-    return _client
-
 
 @dataclass
 class HealthCheck:
@@ -50,9 +41,10 @@ class HealthCheck:
     detail: str = ""
 
 
-async def _probe(url: str, *, headers: dict[str, str] | None = None) -> tuple[bool, str]:
+async def _probe(
+    client: httpx.AsyncClient, url: str, *, headers: dict[str, str] | None = None
+) -> tuple[bool, str]:
     """Single-shot GET; (ok, detail). 200 only."""
-    client = await _get_client()
     try:
         resp = await client.get(url, headers=headers)
         if resp.status_code == 200:
@@ -68,40 +60,42 @@ def _config_error(label: str, exc: Exception) -> HealthCheck:
     return HealthCheck(label=label, ok=False, detail=f"config error: {type(exc).__name__}")
 
 
-async def _check_waha(base_url: str, api_key: str) -> HealthCheck:
+async def _check_waha(client: httpx.AsyncClient, base_url: str, api_key: str) -> HealthCheck:
     headers = {"X-Api-Key": api_key} if api_key else None
-    ok, detail = await _probe(f"{base_url.rstrip('/')}/health", headers=headers)
+    ok, detail = await _probe(client, f"{base_url.rstrip('/')}/health", headers=headers)
     return HealthCheck(label="WhatsApp service (WAHA)", ok=ok, detail=detail)
 
 
-async def _check_llm() -> HealthCheck:
+async def _check_llm(client: httpx.AsyncClient) -> HealthCheck:
     settings = get_settings()
     if not settings.llm_api_key:
         return HealthCheck(label="LLM API", detail="no API key configured")
     headers = {"Authorization": f"Bearer {settings.llm_api_key}"}
-    ok, detail = await _probe(f"{settings.llm_api_base.rstrip('/')}/models", headers=headers)
+    ok, detail = await _probe(
+        client, f"{settings.llm_api_base.rstrip('/')}/models", headers=headers
+    )
     return HealthCheck(label="LLM API", ok=ok, detail=detail)
 
 
-async def _check_whisper(host: str, port: int) -> HealthCheck:
-    ok, detail = await _probe(f"http://{host}:{port}/health")
+async def _check_whisper(client: httpx.AsyncClient, host: str, port: int) -> HealthCheck:
+    ok, detail = await _probe(client, f"http://{host}:{port}/health")
     return HealthCheck(label="Speech to Text Service", ok=ok, detail=detail)
 
 
-async def _check_kokoro(host: str, port: int) -> HealthCheck:
-    ok, detail = await _probe(f"http://{host}:{port}/health")
+async def _check_kokoro(client: httpx.AsyncClient, host: str, port: int) -> HealthCheck:
+    ok, detail = await _probe(client, f"http://{host}:{port}/health")
     return HealthCheck(label="Text to Speech Service", ok=ok, detail=detail)
 
 
-async def _check_morphik(base_url: str, token: str) -> HealthCheck:
+async def _check_morphik(client: httpx.AsyncClient, base_url: str, token: str) -> HealthCheck:
     headers = {"Authorization": f"Bearer {token}"} if token else None
-    ok, detail = await _probe(f"{base_url.rstrip('/')}/health", headers=headers)
+    ok, detail = await _probe(client, f"{base_url.rstrip('/')}/health", headers=headers)
     return HealthCheck(label="RAG Server", ok=ok, detail=detail)
 
 
-async def _check_crawl4ai(crawler_url: str, token: str) -> HealthCheck:
+async def _check_crawl4ai(client: httpx.AsyncClient, crawler_url: str, token: str) -> HealthCheck:
     headers = {"Authorization": f"Bearer {token}"} if token else None
-    ok, detail = await _probe(f"{crawler_url.rstrip('/')}/health", headers=headers)
+    ok, detail = await _probe(client, f"{crawler_url.rstrip('/')}/health", headers=headers)
     return HealthCheck(label="Crawler", ok=ok, detail=detail)
 
 
@@ -119,7 +113,19 @@ async def check_crawler_health() -> HealthCheck | None:
         return None
     if not bs.crawler_url:
         return None
-    return await _check_crawl4ai(bs.crawler_url, bs.crawl4ai_token)
+    async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
+        return await _check_crawl4ai(client, bs.crawler_url, bs.crawl4ai_token)
+
+
+async def _gather_probes(probes: list[Awaitable[HealthCheck]]) -> list[HealthCheck]:
+    results = await asyncio.gather(*probes, return_exceptions=True)
+    checks: list[HealthCheck] = []
+    for r in results:
+        if isinstance(r, HealthCheck):
+            checks.append(r)
+        else:
+            checks.append(HealthCheck(label="Probe", detail=f"{type(r).__name__}"))
+    return checks
 
 
 async def check_service_health() -> list[HealthCheck]:
@@ -132,33 +138,33 @@ async def check_service_health() -> list[HealthCheck]:
     """
     checks: list[HealthCheck] = []
 
-    # --- Concurrent network probes ---
-    probes: list = [_check_llm()]
+    async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
+        # --- Concurrent network probes ---
+        probes: list[Awaitable[HealthCheck]] = [_check_llm(client)]
 
-    try:
-        waha = get_waha_settings()
-        probes.append(_check_waha(waha.url, waha.api_key))
-        if waha.whisper_server_mode:
-            probes.append(_check_whisper(waha.whisper_server_host, waha.whisper_server_port))
-        if waha.kokoro_enabled:
-            probes.append(_check_kokoro(waha.kokoro_server_host, waha.kokoro_server_port))
-    except Exception as exc:  # noqa: BLE001 - config error shouldn't kill the card
-        checks.append(_config_error("WAHA / media services", exc))
+        try:
+            waha = get_waha_settings()
+            probes.append(_check_waha(client, waha.url, waha.api_key))
+            if waha.whisper_server_mode:
+                probes.append(
+                    _check_whisper(client, waha.whisper_server_host, waha.whisper_server_port)
+                )
+            if waha.kokoro_enabled:
+                probes.append(
+                    _check_kokoro(client, waha.kokoro_server_host, waha.kokoro_server_port)
+                )
+        except Exception as exc:  # noqa: BLE001 - config error shouldn't kill the card
+            checks.append(_config_error("WAHA / media services", exc))
 
-    try:
-        bs = get_brain_settings()
-        if bs.base_url:
-            probes.append(_check_morphik(bs.base_url, bs.morphik_token))
-        if bs.crawler_url:
-            probes.append(_check_crawl4ai(bs.crawler_url, bs.crawl4ai_token))
-    except Exception as exc:  # noqa: BLE001
-        checks.append(_config_error("Brain", exc))
+        try:
+            bs = get_brain_settings()
+            if bs.base_url:
+                probes.append(_check_morphik(client, bs.base_url, bs.morphik_token))
+            if bs.crawler_url:
+                probes.append(_check_crawl4ai(client, bs.crawler_url, bs.crawl4ai_token))
+        except Exception as exc:  # noqa: BLE001
+            checks.append(_config_error("Brain", exc))
 
-    results = await asyncio.gather(*probes, return_exceptions=True)
-    for r in results:
-        if isinstance(r, HealthCheck):
-            checks.append(r)
-        else:
-            checks.append(HealthCheck(label="Probe", detail=f"{type(r).__name__}"))
+        checks.extend(await _gather_probes(probes))
 
     return checks

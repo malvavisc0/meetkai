@@ -24,31 +24,45 @@ import json
 import logging
 import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from typing import TYPE_CHECKING, cast
+
+if TYPE_CHECKING:
+    from kokoro_onnx import Kokoro  # type: ignore[import-untyped]
 
 logger = logging.getLogger(__name__)
 
-_kokoro = None
-_lock = threading.Lock()
-_model_ready = False
 
+class KokoroServer(ThreadingHTTPServer):
+    """ThreadingHTTPServer holding the loaded Kokoro model and its lock."""
 
-def _load_model(model_path: str, voices_path: str) -> None:
-    global _kokoro, _model_ready
-    from kokoro_onnx import Kokoro  # type: ignore[import-untyped]
+    def __init__(
+        self, server_address: tuple[str, int], handler_cls: type[BaseHTTPRequestHandler]
+    ) -> None:
+        super().__init__(server_address, handler_cls)
+        self.kokoro: Kokoro | None = None
+        self.model_ready = False
+        self.lock = threading.Lock()
 
-    logger.info("loading kokoro model from %s", model_path)
-    _kokoro = Kokoro(model_path, voices_path)
-    _model_ready = True
-    logger.info("kokoro model loaded")
+    def load_model(self, model_path: str, voices_path: str) -> None:
+        from kokoro_onnx import Kokoro  # type: ignore[import-untyped]
+
+        logger.info("loading kokoro model from %s", model_path)
+        self.kokoro = Kokoro(model_path, voices_path)
+        self.model_ready = True
+        logger.info("kokoro model loaded")
 
 
 class _Handler(BaseHTTPRequestHandler):
+    @property
+    def kokoro_server(self) -> KokoroServer:
+        return cast(KokoroServer, self.server)
+
     def log_message(self, format: str, *args: object) -> None:  # noqa: N803
         logger.debug(format, *args)
 
     def do_GET(self) -> None:
         if self.path == "/health":
-            if _model_ready:
+            if self.kokoro_server.model_ready:
                 self.send_response(200)
                 self.end_headers()
                 self.wfile.write(b'{"status":"ok"}')
@@ -66,7 +80,7 @@ class _Handler(BaseHTTPRequestHandler):
             self.end_headers()
             return
 
-        if not _model_ready:
+        if not self.kokoro_server.model_ready:
             self.send_response(503)
             self.end_headers()
             self.wfile.write(b'{"error":"model not loaded"}')
@@ -96,9 +110,11 @@ class _Handler(BaseHTTPRequestHandler):
         try:
             import soundfile as sf  # type: ignore[import-untyped]
 
-            with _lock:
-                assert _kokoro is not None
-                samples, sr = _kokoro.create(text, voice=voice, speed=speed, lang=lang)
+            with self.kokoro_server.lock:
+                assert self.kokoro_server.kokoro is not None
+                samples, sr = self.kokoro_server.kokoro.create(
+                    text, voice=voice, speed=speed, lang=lang
+                )
             buf = io.BytesIO()
             sf.write(buf, samples, sr, format="WAV", subtype="PCM_16")
             wav_bytes = buf.getvalue()
@@ -126,9 +142,8 @@ def main() -> None:
 
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(message)s")
 
-    _load_model(args.model, args.voices)
-
-    server = ThreadingHTTPServer((args.host, args.port), _Handler)
+    server = KokoroServer((args.host, args.port), _Handler)
+    server.load_model(args.model, args.voices)
     logger.info("kokoro server listening on %s:%d", args.host, args.port)
     try:
         server.serve_forever()

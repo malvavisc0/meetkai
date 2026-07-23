@@ -30,14 +30,14 @@ def _clean_kai_env(monkeypatch):
     worker_id = os.environ.get("PYTEST_XDIST_WORKER", "master")
     monkeypatch.setenv("KAI_LOG_DIR", f"/tmp/kai-{worker_id}")
 
-    # setup_logging() is guarded by a module-level _configured flag, so the
-    # FIRST call in the process wins and later calls are no-ops. Reset it per
-    # test so the /tmp/kai redirect above is actually honoured regardless of
-    # whether an earlier test already configured logging against the default
+    # setup_logging() only adds handlers that are absent, so the FIRST call in
+    # the process wins and later calls are no-ops. Reset it per test so the
+    # /tmp/kai redirect above is actually honoured regardless of whether an
+    # earlier test already configured logging against the default
     # data/kai/logs path.
-    import kai.logging.logger as logger_mod
+    from kai.logging.logger import reset_logging
 
-    monkeypatch.setattr(logger_mod, "_configured", False)
+    reset_logging()
 
 
 def make_test_settings() -> Settings:
