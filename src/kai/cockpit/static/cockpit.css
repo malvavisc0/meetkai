@@ -1697,6 +1697,12 @@
     font-weight: 600;
   }
 
+  .landing-workflow__agent-status {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-xs);
+  }
+
   .landing-workflow__diagram {
     display: grid;
     gap: var(--space-md);
