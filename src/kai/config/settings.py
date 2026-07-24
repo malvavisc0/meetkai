@@ -26,6 +26,11 @@ class Settings(BaseSettings):
         default=False,
         description="Enable thinking/reasoning blocks in LLM responses",
     )
+    llm_max_tokens: int = Field(
+        default=2048,
+        gt=0,
+        description="Max output tokens per LLM completion (bounds per-call spend)",
+    )
 
     agent_max_history_messages: int = Field(
         default=100,

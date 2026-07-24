@@ -11,6 +11,7 @@ volumes:
   kai-data:
   kai-vendor:
   kai-models:
+  glitchtip-postgres-data:
 
 configs:
   morphik_config:
@@ -196,7 +197,7 @@ services:
       - odyssey
 
   morphik:
-    image: ghcr.io/morphik-org/morphik-core:2026-07-05
+    image: ghcr.io/morphik-org/morphik-core:2026-07-23
     container_name: morphik
     hostname: morphik
     restart: unless-stopped
@@ -309,5 +310,55 @@ services:
       timeout: 5s
       retries: 10
       start_period: 60s
+    networks:
+      - odyssey
+
+  # GlitchTip Error Monitoring (main compose - no ports exposed)
+  glitchtip-postgres:
+    image: postgres:18
+    container_name: glitchtip-postgres
+    hostname: glitchtip-postgres
+    restart: unless-stopped
+    environment:
+      TZ: ${TZ}
+      POSTGRES_USER: ${GLITCHTIP_POSTGRES_USER}
+      POSTGRES_PASSWORD: ${GLITCHTIP_POSTGRES_PASSWORD}
+      POSTGRES_DB: ${GLITCHTIP_POSTGRES_DB}
+      PGDATA: /var/lib/postgresql/data/pgdata
+    volumes:
+      - glitchtip-postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${GLITCHTIP_POSTGRES_USER} -d ${GLITCHTIP_POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+    networks:
+      - odyssey
+
+  glitchtip:
+    image: glitchtip/glitchtip:6
+    container_name: glitchtip
+    hostname: glitchtip
+    restart: unless-stopped
+    command: /code/bin/run-all-in-one.sh
+    expose:
+      - "8000"
+    environment:
+      TZ: ${TZ}
+      DATABASE_URL: postgresql://${GLITCHTIP_POSTGRES_USER}:${GLITCHTIP_POSTGRES_PASSWORD}@glitchtip-postgres:5432/${GLITCHTIP_POSTGRES_DB}
+      VALKEY_URL: redis://redis:6379
+      SECRET_KEY: ${GLITCHTIP_SECRET_KEY}
+      EMAIL_URL: consolemail://
+      GLITCHTIP_DOMAIN: ${GLITCHTIP_DOMAIN:-http://localhost:8001}
+      DEFAULT_FROM_EMAIL: ${GLITCHTIP_DEFAULT_FROM_EMAIL:-noreply@localhost}
+      ENABLE_ADMIN: "True"
+      ENABLE_USER_REGISTRATION: "False"
+      GLITCHTIP_EMBED_WORKER: "True"
+    depends_on:
+      glitchtip-postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
     networks:
       - odyssey

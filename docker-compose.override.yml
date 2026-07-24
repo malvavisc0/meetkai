@@ -28,3 +28,9 @@ services:
       - "8025:8025"
     networks:
       - odyssey
+
+  # Port mapping for GlitchTip - DEV ONLY (expose service from docker-compose.yml to localhost)
+  # Host port 8001 avoids conflict with common local services on 8000 (e.g. vLLM, dev servers)
+  glitchtip:
+    ports:
+      - "8001:8000"

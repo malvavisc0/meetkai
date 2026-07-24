@@ -21,10 +21,13 @@ from kai.agent.tools.escalate import (
     set_tool_context,
 )
 from kai.config.settings import Settings, get_settings
+from kai.observability import init_sentry
 from kai.templates.resolver import ToolResolution
 from kai.templates.schema import TemplateDef
 
 logger = logging.getLogger(__name__)
+
+init_sentry("bot", profiles_sample_rate=0.01)
 
 
 class TaskAction(ActionResult):

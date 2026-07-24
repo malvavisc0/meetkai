@@ -6,7 +6,10 @@ from kai.cli.connection import connection_app
 from kai.cli.deployment import deployment_app
 from kai.cli.style import BotStartupError
 from kai.cli.templates import app as templates_app
+from kai.observability import init_sentry
 from kai.vendors.cli import app as vendors_app
+
+init_sentry("cli")
 
 app = typer.Typer(name="kai", no_args_is_help=True)
 

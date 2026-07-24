@@ -1,8 +1,11 @@
 """Auth routes: /login, /login/auth (magic link), /logout."""
 
 import logging
+import time
+from collections import deque
+from threading import Lock
 
-from fastapi import APIRouter, BackgroundTasks, Depends, Form, Request
+from fastapi import APIRouter, BackgroundTasks, Depends, Form, HTTPException, Request
 from fastapi.responses import RedirectResponse
 from sqlalchemy.orm import Session
 
@@ -19,6 +22,28 @@ from kai.cockpit.settings import get_cockpit_settings
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
+
+# Simple in-memory sliding-window rate limit for login requests. The cockpit is
+# a single-process server-rendered app, so a process-local limiter is sufficient
+# to blunt magic-link request spam without adding a dependency.
+_LOGIN_WINDOW_SECONDS = 300
+_LOGIN_MAX_ATTEMPTS = 5
+_login_hits: dict[str, deque[float]] = {}
+_login_lock = Lock()
+
+
+def _enforce_login_rate_limit(request: Request) -> None:
+    if get_cockpit_settings().cockpit_testing:
+        return
+    client = request.client.host if request.client else "unknown"
+    now = time.monotonic()
+    with _login_lock:
+        hits = _login_hits.setdefault(client, deque())
+        while hits and now - hits[0] > _LOGIN_WINDOW_SECONDS:
+            hits.popleft()
+        if len(hits) >= _LOGIN_MAX_ATTEMPTS:
+            raise HTTPException(status_code=429, detail="Too many login requests. Try again later.")
+        hits.append(now)
 
 
 def _auto_approve_enabled() -> bool:
@@ -39,8 +64,8 @@ async def login_post(
     email: str = Form(...),
     db: Session = Depends(get_db),
 ):
+    _enforce_login_rate_limit(request)
     user = db.query(User).filter(User.email == email).first()
-    requested = False
     if user and not user.is_disabled:
         req = tokens.create_login_request(db, user.id)
         if _auto_approve_enabled() and req is not None:
@@ -48,8 +73,9 @@ async def login_post(
             token = provider.initiate_login(user.id)
             magic_url = build_magic_link_url(token.token)
             background_tasks.add_task(send_magic_link, email, magic_url)
-        requested = True
-    return templates.TemplateResponse(request, "login.html", {"user": None, "requested": requested})
+    # Always render the same "requested" state regardless of whether the email
+    # maps to an existing, enabled user — never leak allowlist membership.
+    return templates.TemplateResponse(request, "login.html", {"user": None, "requested": True})
 
 
 @router.get("/login/auth")

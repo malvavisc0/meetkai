@@ -10,6 +10,8 @@ from fastapi import FastAPI, Request
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from markupsafe import Markup
+from sentry_sdk.integrations.fastapi import FastApiIntegration
+from sentry_sdk.integrations.starlette import StarletteIntegration
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.middleware.sessions import SessionMiddleware
 
@@ -17,6 +19,7 @@ from kai.cockpit.auth import get_cockpit_secret, get_current_user
 from kai.cockpit.csrf import CSRFMiddleware, _csrf_token
 from kai.cockpit.db import SessionLocal, run_migrations
 from kai.cockpit.settings import get_cockpit_settings
+from kai.observability import init_sentry
 
 templates = Jinja2Templates(directory=Path(__file__).parent / "templates")
 templates.env.globals["csrf_token"] = lambda: _csrf_token.get() or ""
@@ -24,6 +27,20 @@ templates.env.globals["csrf_field"] = lambda: Markup(
     f'<input type="hidden" name="_csrf" value="{_csrf_token.get() or ""}">'
 )
 logger = logging.getLogger(__name__)
+
+_PLACEHOLDER_SECRETS = frozenset(
+    {"", "change-me", "change-me-openssl-rand-hex-16", "change-me-openssl-rand-hex-32"}
+)
+
+
+def _require_real_secret(name: str, value: str) -> None:
+    """Fail fast at boot when a required secret is unset or a known placeholder."""
+    if value in _PLACEHOLDER_SECRETS:
+        raise RuntimeError(
+            f"{name} is not set to a real value (generate: openssl rand -hex 32). "
+            "Set it, or run with KAI_COCKPIT_TESTING=1 for local dev."
+        )
+
 
 # Registered as a Jinja global (not threaded through every route's context)
 # so the topbar's status dot can render the same way on every page. See
@@ -125,6 +142,12 @@ async def _lifespan(app: FastAPI):
 
 
 def create_app() -> FastAPI:
+    init_sentry(
+        "cockpit",
+        extra_integrations=[FastApiIntegration(), StarletteIntegration()],
+        profiles_sample_rate=0.01,
+    )
+
     settings = get_cockpit_settings()
     app = FastAPI(title="kai cockpit", lifespan=_lifespan)
 
@@ -147,13 +170,14 @@ def create_app() -> FastAPI:
 
     if not settings.cockpit_testing:
         run_migrations()
-        if settings.cockpit_escalation_secret in (
-            "",
-            "change-me-openssl-rand-hex-32",
-        ):
-            raise RuntimeError(
-                "KAI_COCKPIT_ESCALATION_SECRET is required (generate: openssl rand -hex 32)."
-            )
+        _require_real_secret("KAI_COCKPIT_SECRET", settings.cockpit_secret)
+        _require_real_secret("KAI_COCKPIT_ESCALATION_SECRET", settings.cockpit_escalation_secret)
+        from kai.cockpit.connections.secrets import get_encryption_settings
+
+        _require_real_secret(
+            "KAI_CREDENTIAL_ENCRYPTION_KEY",
+            get_encryption_settings().credential_encryption_key,
+        )
 
     # Cockpit's aggregated escalation store. Bots POST to /api/escalations
     # and this store holds them so the dashboard + sidebar badge read a

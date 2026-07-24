@@ -432,6 +432,7 @@ class KaiAgent:
             api_base=self.settings.llm_api_base,
             api_key=self.settings.llm_api_key,
             is_chat_model=True,
+            max_tokens=self.settings.llm_max_tokens,
             additional_kwargs=additional_kwargs,
             is_function_calling_model=True,
             pydantic_program_mode=PydanticProgramMode.LLM,

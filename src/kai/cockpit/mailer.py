@@ -15,7 +15,7 @@ class MailError(RuntimeError):
 
 
 def send_magic_link(user_email: str, magic_url: str) -> None:
-    """Send magic link email. Falls back to print if SMTP not configured."""
+    """Send magic link email. Only falls back to stdout under KAI_COCKPIT_TESTING."""
     settings = get_cockpit_settings()
     smtp_host = settings.smtp_host
     smtp_from = settings.smtp_from
@@ -24,6 +24,14 @@ def send_magic_link(user_email: str, magic_url: str) -> None:
     smtp_pass = settings.smtp_password
 
     if not smtp_host:
+        # Only tolerate a stdout fallback in local dev/testing. In a real
+        # deployment a missing SMTP host must fail loudly rather than silently
+        # dropping magic links to the process log.
+        if not settings.cockpit_testing:
+            raise MailError(
+                "KAI_SMTP_HOST is not configured; cannot send magic-link email. "
+                "Set SMTP settings, or run with KAI_COCKPIT_TESTING=1 for local dev."
+            )
         print(f"Magic link for {user_email}: {magic_url}")
         return
 
