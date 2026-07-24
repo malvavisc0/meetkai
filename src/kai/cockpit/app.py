@@ -152,8 +152,7 @@ def create_app() -> FastAPI:
             "change-me-openssl-rand-hex-32",
         ):
             raise RuntimeError(
-                "KAI_COCKPIT_ESCALATION_SECRET is required "
-                "(generate: openssl rand -hex 32)."
+                "KAI_COCKPIT_ESCALATION_SECRET is required (generate: openssl rand -hex 32)."
             )
 
     # Cockpit's aggregated escalation store. Bots POST to /api/escalations
