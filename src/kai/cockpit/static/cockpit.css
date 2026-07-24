@@ -1892,7 +1892,7 @@
     grid-template-columns: repeat(4, minmax(0, 1fr));
     gap: var(--space-xl);
     margin: 0;
-    padding: var(--space-lg) 0 0;
+    padding: 0;
     list-style: none;
     position: relative;
   }
@@ -1900,21 +1900,40 @@
   .landing-steps__path::before {
     content: "";
     position: absolute;
-    top: 0;
+    top: calc(var(--space-xl) / 2);
     right: 0;
     left: 0;
     height: 1px;
     background: var(--color-border-strong);
+    z-index: 0;
   }
 
-  .landing-step__number {
+  .landing-steps__path li {
+    position: relative;
+    z-index: 1;
+  }
+
+  .landing-step__marker {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-xs);
     color: var(--color-accent-600);
     font-size: var(--text-xs);
     font-weight: 600;
   }
 
+  .landing-step__number {
+    display: inline-grid;
+    place-items: center;
+    width: var(--space-xl);
+    height: var(--space-xl);
+    border: 1px solid var(--color-accent-600);
+    border-radius: 50%;
+    background: var(--color-page);
+  }
+
   .landing-steps__path h3 {
-    margin: var(--space-xs) 0 var(--space-2xs);
+    margin: var(--space-sm) 0 var(--space-2xs);
     font-size: var(--text-lg);
   }
 
@@ -2156,6 +2175,19 @@
     .landing-proof,
     .landing-connections {
       grid-template-columns: 1fr;
+    }
+
+    .landing-steps__path {
+      gap: var(--space-xl);
+    }
+
+    .landing-steps__path::before {
+      top: calc(var(--space-xl) / 2);
+      right: auto;
+      bottom: calc(var(--space-xl) / 2);
+      left: calc(var(--space-xl) / 2);
+      width: 1px;
+      height: auto;
     }
 
     .landing-brain__diagram {
