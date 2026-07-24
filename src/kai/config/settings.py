@@ -92,6 +92,14 @@ class Settings(BaseSettings):
         description="Shared secret for the bot escalation webhook. Empty = no auth.",
     )
 
+    owner_slug: str = Field(
+        default="",
+        description=(
+            "Stable operator slug (User.kai_slug) the bot was spawned for. "
+            "Stamped onto every Escalation so the cockpit dashboard scopes per-owner."
+        ),
+    )
+
     log_dir: Path = Field(
         default=Path("data/kai/logs"),
         description="Directory for log files",

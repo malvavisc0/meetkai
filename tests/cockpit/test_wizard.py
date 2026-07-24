@@ -3,6 +3,8 @@
 import secrets
 from datetime import UTC, datetime
 
+from tests.cockpit.helpers import csrf_post
+
 from kai.cockpit import tokens
 from kai.cockpit.auth_backends import MagicLinkProvider
 from kai.cockpit.models import Connection, User
@@ -50,7 +52,8 @@ def _create_user(db):
 
 
 def _post_deploy(client, bot_type="waha", template="general", goal="test goal", language="English"):
-    return client.post(
+    return csrf_post(
+        client,
         "/deployments/new",
         data={
             "bot_type": bot_type,

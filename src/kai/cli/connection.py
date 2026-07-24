@@ -25,10 +25,9 @@ def connection_connect(
 ):
     """Connect a service for a user."""
     from kai.cockpit.connections.service import ConnectionsService
-    from kai.cockpit.db import SessionLocal, create_all
+    from kai.cockpit.db import SessionLocal
     from kai.cockpit.models import User
 
-    create_all()
     db = SessionLocal()
     try:
         db_user = db.query(User).filter(User.email == user).first()
@@ -61,10 +60,9 @@ def connection_status(
 ):
     """Show connection status for a user."""
     from kai.cockpit.connections.service import ConnectionsService
-    from kai.cockpit.db import SessionLocal, create_all
+    from kai.cockpit.db import SessionLocal
     from kai.cockpit.models import User
 
-    create_all()
     db = SessionLocal()
     try:
         db_user = db.query(User).filter(User.email == user).first()
@@ -92,10 +90,9 @@ def connection_disconnect(
 ):
     """Disconnect a service for a user."""
     from kai.cockpit.connections.service import ConnectionsService
-    from kai.cockpit.db import SessionLocal, create_all
+    from kai.cockpit.db import SessionLocal
     from kai.cockpit.models import User
 
-    create_all()
     db = SessionLocal()
     try:
         db_user = db.query(User).filter(User.email == user).first()

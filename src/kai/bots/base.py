@@ -17,6 +17,7 @@ from kai.agent.tools.escalate import (
     set_escalation_handler,
     set_escalation_secret,
     set_escalation_store,
+    set_owner_slug,
     set_tool_context,
 )
 from kai.config.settings import Settings, get_settings
@@ -222,6 +223,7 @@ class BaseBot(ABC):
         set_escalation_store(self._escalation_store)
         set_cockpit_url(settings.cockpit_url)
         set_escalation_secret(settings.cockpit_escalation_secret)
+        set_owner_slug(settings.owner_slug)
         logger.info("Escalation store wired for bot %s", self.name)
 
     def _wire_escalation_tools(self, settings: Settings, blacklist: list[str]) -> None:

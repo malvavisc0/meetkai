@@ -8,6 +8,7 @@ from datetime import UTC, datetime
 from unittest.mock import AsyncMock
 
 import pytest
+from tests.cockpit.helpers import csrf_post
 
 from kai.cockpit import tokens
 from kai.cockpit.auth_backends import MagicLinkProvider
@@ -223,7 +224,8 @@ class TestWhitelistBlacklistRoundTrip:
     def test_normalizes_whitespace_and_blank_lines(self, client, db, bob, conn, dep, monkeypatch):
         _login(client, db, bob)
         messy = "  120363@g.us  \n\n 591@c.us \n\n  \n 154@lid "
-        r = client.post(
+        r = csrf_post(
+            client,
             f"/deployments/{dep.id}/settings",
             data={"goal": "be helpful", "language": "English", "whitelist": messy},
             follow_redirects=False,

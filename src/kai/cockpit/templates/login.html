@@ -30,6 +30,7 @@
         </div>
 
         <form method="post" class="auth-form stack text-left">
+          {{ csrf_field() }}
           <div class="field">
             <label class="field__label" for="email">Email address</label>
             <input

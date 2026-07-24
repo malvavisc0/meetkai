@@ -26,11 +26,10 @@ def deployment_create(
     voice: str = typer.Option("", "--voice", help="Kokoro voice (auto-picked if empty)"),
 ):
     """Create a new deployment for a user."""
-    from kai.cockpit.db import SessionLocal, create_all
+    from kai.cockpit.db import SessionLocal
     from kai.cockpit.deployments import ConnectionRequiredError, DeploymentsService
     from kai.cockpit.models import User
 
-    create_all()
     db = SessionLocal()
     try:
         db_user = db.query(User).filter(User.email == user).first()
@@ -62,11 +61,10 @@ def deployment_list(
     user: str = typer.Option(..., "--user", help="User email"),
 ):
     """List deployments for a user."""
-    from kai.cockpit.db import SessionLocal, create_all
+    from kai.cockpit.db import SessionLocal
     from kai.cockpit.deployments import DeploymentsService
     from kai.cockpit.models import User
 
-    create_all()
     db = SessionLocal()
     try:
         db_user = db.query(User).filter(User.email == user).first()
@@ -108,14 +106,13 @@ def deployment_start(
     deployment_id: int = typer.Argument(...),
 ):
     """Start a deployment."""
-    from kai.cockpit.db import SessionLocal, create_all
+    from kai.cockpit.db import SessionLocal
     from kai.cockpit.deployments import (
         ConnectionRequiredError,
         DeploymentsService,
         DeploymentStartupError,
     )
 
-    create_all()
     db = SessionLocal()
     try:
         svc = DeploymentsService(db)
@@ -141,10 +138,9 @@ def deployment_stop(
     deployment_id: int = typer.Argument(...),
 ):
     """Stop a deployment."""
-    from kai.cockpit.db import SessionLocal, create_all
+    from kai.cockpit.db import SessionLocal
     from kai.cockpit.deployments import DeploymentsService
 
-    create_all()
     db = SessionLocal()
     try:
         svc = DeploymentsService(db)
@@ -166,10 +162,9 @@ def deployment_edit(
     voice: str = typer.Option(None, "--voice"),
 ):
     """Edit deployment fields (partial update)."""
-    from kai.cockpit.db import SessionLocal, create_all
+    from kai.cockpit.db import SessionLocal
     from kai.cockpit.deployments import DeploymentsService
 
-    create_all()
     db = SessionLocal()
     try:
         svc = DeploymentsService(db)
@@ -199,10 +194,9 @@ def deployment_delete(
     yes: bool = typer.Option(False, "--yes", "-y", help="Skip confirmation prompt"),
 ):
     """Delete a deployment (stops it first if running; WhatsApp is left connected)."""
-    from kai.cockpit.db import SessionLocal, create_all
+    from kai.cockpit.db import SessionLocal
     from kai.cockpit.deployments import DeploymentsService
 
-    create_all()
     db = SessionLocal()
     try:
         svc = DeploymentsService(db)

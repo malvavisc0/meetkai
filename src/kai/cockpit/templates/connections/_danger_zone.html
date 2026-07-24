@@ -9,6 +9,7 @@
   <p><strong>{{ danger_title }}</strong></p>
   <p class="muted">{{ danger_impact }}</p>
   <form method="post" action="{{ danger_action }}" data-confirm="{{ danger_confirm }}">
+    {{ csrf_field() }}
     <button type="submit" class="button button--danger"><span class="icon">{% include "icons/trash-2.svg" %}</span> Delete connection</button>
   </form>
 </div>

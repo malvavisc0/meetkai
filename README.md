@@ -285,3 +285,7 @@ kai/
 │   └── vendors/
 └── tests/
 ```
+
+## License
+
+kAI is licensed under AGPL-3.0-only. Self-hosters and forks offering the software over a network must provide users access to the corresponding source under the license's Section 13 network-use obligation.

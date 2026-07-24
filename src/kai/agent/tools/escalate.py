@@ -29,6 +29,7 @@ class Escalation(BaseModel):
     reason: str
     severity: Severity = "medium"
     summary: str = ""
+    user_id: str = ""
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     resolved: bool = False
     resolved_at: datetime | None = None
@@ -52,6 +53,7 @@ class Escalation(BaseModel):
             reason=str(data.get("reason", "")),
             severity=data.get("severity", "medium"),
             summary=str(data.get("summary", "")),
+            user_id=str(data.get("user_id", "")),
             created_at=created_at,
             resolved=bool(data.get("resolved", False)),
             resolved_at=parse_iso(str(data["resolved_at"])) if data.get("resolved_at") else None,
@@ -110,10 +112,18 @@ class EscalationStore:
             self._escalations[escalation.id] = escalation
             self._save_locked()
 
-    async def resolve(self, escalation_id: str, *, resolved_by: str | None = None) -> bool:
+    async def resolve(
+        self,
+        escalation_id: str,
+        *,
+        resolved_by: str | None = None,
+        owner_slug: str | None = None,
+    ) -> bool:
         async with self._lock_for():
             esc = self._escalations.get(escalation_id)
             if esc is None or esc.resolved:
+                return False
+            if owner_slug is not None and esc.user_id != owner_slug:
                 return False
             updated = esc.model_copy(
                 update={
@@ -137,6 +147,16 @@ class EscalationStore:
 
     async def list_for_chat(self, chat_id: str) -> list[Escalation]:
         return [e for e in await self.list_all() if e.chat_id == chat_id]
+
+    async def list_for_user(self, owner_slug: str) -> list[Escalation]:
+        """Return escalations owned by ``owner_slug``.
+
+        Unowned escalations (``user_id == ""``) are excluded so the cockpit
+        dashboard does not leak legacy / standalone-bot data to every
+        operator. The bearer-authed ``/api/escalations`` endpoints still
+        return them via ``list_all``.
+        """
+        return [e for e in await self.list_all() if e.user_id == owner_slug]
 
     async def clear(self) -> None:
         """Remove all escalation events. Used for testing."""
@@ -163,6 +183,7 @@ class _State:
         self.store: EscalationStore = EscalationStore(None)
         self.cockpit_url: str = ""
         self.cockpit_escalation_secret: str = ""
+        self.owner_slug: str = ""
 
 
 _DYN = _State()
@@ -227,6 +248,19 @@ def set_escalation_secret(secret: str) -> None:
     _DYN.cockpit_escalation_secret = secret
 
 
+def set_owner_slug(slug: str) -> None:
+    """Stamp ``slug`` onto every new Escalation for cockpit-side per-user scoping.
+
+    Called from ``BaseBot.setup_escalation_store()`` (which reads
+    ``Settings.owner_slug``). The slug is injected by the cockpit at spawn
+    time (see ``DeploymentsService.start``), so a bot run independently
+    (``kai start`` without a cockpit) leaves it "" and escalations are
+    unowned. The dashboard routes refuse to show unowned escalations to any
+    user; the bearer-authed ``/api/escalations`` endpoints still return them.
+    """
+    _DYN.owner_slug = slug
+
+
 # ── Tool functions (bound in get_tools()) ────────────────────────────
 
 
@@ -265,6 +299,7 @@ async def escalate(
         reason=reason,
         severity=severity,
         summary=summary,
+        user_id=_DYN.owner_slug,
         created_at=datetime.now(UTC),
     )
     await _DYN.store.add(esc)
@@ -317,6 +352,7 @@ async def blacklist(contact_id: str = "") -> str:
         reason="contact blacklisted",
         severity="low",
         summary=f"Contact {resolved} blacklisted by the model.",
+        user_id=_DYN.owner_slug,
     )
     await _DYN.store.add(esc)
 
@@ -348,9 +384,24 @@ async def list_escalations_for_chat(chat_id: str) -> list[Escalation]:
     return await _DYN.store.list_for_chat(chat_id)
 
 
-async def resolve_escalation(esc_id: str, *, resolved_by: str | None = None) -> bool:
-    """Mark an escalation as resolved. Returns True if found and unresolved."""
-    return await _DYN.store.resolve(esc_id, resolved_by=resolved_by)
+async def list_escalations_for_user(owner_slug: str) -> list[Escalation]:
+    """Return escalation events owned by ``owner_slug`` (cockpit dashboard)."""
+    return await _DYN.store.list_for_user(owner_slug)
+
+
+async def resolve_escalation(
+    esc_id: str,
+    *,
+    resolved_by: str | None = None,
+    owner_slug: str | None = None,
+) -> bool:
+    """Mark an escalation as resolved. Returns True if found, unresolved, and owned.
+
+    When ``owner_slug`` is provided, an escalation whose ``user_id`` differs
+    (including empty/unowned) is refused. The bearer-authed API routes omit
+    ``owner_slug`` so they can still resolve any escalation.
+    """
+    return await _DYN.store.resolve(esc_id, resolved_by=resolved_by, owner_slug=owner_slug)
 
 
 async def clear_escalations() -> None:

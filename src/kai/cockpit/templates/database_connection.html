@@ -6,6 +6,7 @@
   {{ page_header(eyebrow="Tool setup", title="Database connection", subtitle="Let agents look up live information before replying, with read-only access to your database.", back_url="/connections") }}
 
   <form method="post" action="/connections/database" class="card">
+    {{ csrf_field() }}
     <div class="field">
       <label class="field__label" for="label">Label</label>
       <input id="label" type="text" name="label" value="{{ conn.config.get('label', '') if conn else '' }}" required>

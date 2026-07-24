@@ -540,6 +540,12 @@ class DeploymentsService:
             argv += ["--disable-tools", t]
 
         env: dict[str, str] = {**os.environ}
+        # Operator slug for per-user escalation scoping. fail-fast here
+        # (before the subprocess spawns) so the error is clear; the DB NOT
+        # NULL constraint on users.kai_slug is the persistence guarantee.
+        if not user.kai_slug:
+            raise DeploymentStartupError(f"cannot spawn bot: user {user.email!r} has no kai_slug")
+        env["KAI_OWNER_SLUG"] = user.kai_slug
         # Cockpit URL for bot→cockpit escalation forwarding. Sourced from
         # CockpitSettings.cockpit_internal_url (loopback address bots can
         # reach), not public_url (the browser-facing URL bots can't resolve).

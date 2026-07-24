@@ -6,7 +6,9 @@ login links, and behaviour flags.
 """
 
 from pathlib import Path
+from typing import Self
 
+from pydantic import model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -18,6 +20,7 @@ class CockpitSettings(BaseSettings):
     cockpit_testing: bool = False
     cockpit_auto_approve_login: bool = False
     public_url: str = ""
+    cookie_secure: bool | None = None
     contact_email: str = "hello@meetk.ai"
     cockpit_internal_url: str = "http://127.0.0.1:8080"
     cockpit_escalation_secret: str = ""
@@ -28,6 +31,12 @@ class CockpitSettings(BaseSettings):
     smtp_from: str = "kai@dev"
     smtp_user: str = ""
     smtp_password: str = ""
+
+    @model_validator(mode="after")
+    def set_cookie_secure_default(self) -> Self:
+        if self.cookie_secure is None:
+            self.cookie_secure = self.public_url.lower().startswith("https://")
+        return self
 
 
 def get_cockpit_settings() -> CockpitSettings:

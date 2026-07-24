@@ -83,6 +83,7 @@
     </dl>
     {% if dep.status == "running" %}
       <form method="post" action="/deployments/{{ dep.id }}/stop">
+        {{ csrf_field() }}
         <button type="submit" class="button button--warn"><span class="icon">{% include "icons/square.svg" %}</span> Stop</button>
       </form>
     {% else %}
@@ -92,6 +93,7 @@
           <a href="/connections" class="button">Connect</a>
         {% else %}
           <form method="post" action="/deployments/{{ dep.id }}/start">
+            {{ csrf_field() }}
             <button type="submit" class="button button--primary"><span class="icon">{% include "icons/play.svg" %}</span> Start</button>
           </form>
         {% endif %}
@@ -104,6 +106,7 @@
     <div class="card cluster">
       <p class="mb-0"><strong>Restart to apply changes.</strong></p>
       <form method="post" action="/deployments/{{ dep.id }}/restart">
+        {{ csrf_field() }}
         <button type="submit" class="button"><span class="icon">{% include "icons/rotate-cw.svg" %}</span> Restart</button>
       </form>
     </div>
@@ -140,6 +143,7 @@
               {% endif %}
             {% endif %}
             <form method="post" action="/deployments/{{ dep.id }}/chat" class="stack chat-form">
+              {{ csrf_field() }}
               <div class="field">
                 <label class="sr-only" for="message">Message</label>
                 <textarea id="message" name="message" rows="3" required data-autosize
@@ -174,6 +178,7 @@
               <div class="sleep-panel__section">
                 <p class="sleep-panel__title"><span class="icon">{% include "icons/moon.svg" %}</span> Put a chat to sleep</p>
                 <form method="post" action="/deployments/{{ dep.id }}/sleep">
+                  {{ csrf_field() }}
                   <label class="sr-only" for="sleep_chat_id">Chat ID</label>
                   <input id="sleep_chat_id" type="text" name="chat_id" placeholder="chat ID">
                   <button type="submit" class="button">Sleep</button>
@@ -187,6 +192,7 @@
                       <li class="sleep-list__item">
                         <span class="mono sleep-list__id">{{ chat_id }}</span>
                         <form method="post" action="/deployments/{{ dep.id }}/wake">
+                          {{ csrf_field() }}
                           <input type="hidden" name="chat_id" value="{{ chat_id }}">
                           <button type="submit" class="button button--sm">Wake</button>
                         </form>

@@ -8,21 +8,26 @@ calls ``forward_to_cockpit`` to POST the escalation to the cockpit's
 badge read a single source of truth. These tests exercise that cockpit side.
 """
 
+from tests.cockpit.helpers import csrf_post
+
 from kai.cockpit import tokens
 from kai.cockpit.auth_backends import MagicLinkProvider
 
-_ESCALATION_PAYLOAD = {
-    "id": "esc-test-1",
-    "chat_id": "120363@g.us",
-    "conversation_id": "120363@g.us",
-    "reason": "Customer wants a human agent",
-    "severity": "high",
-    "summary": "Customer is frustrated after a billing error",
-    "created_at": "2026-07-17T18:05:58+00:00",
-    "resolved": False,
-    "resolved_at": None,
-    "resolved_by": None,
-}
+
+def _escalation_payload(user_id: str = "") -> dict:
+    return {
+        "id": "esc-test-1",
+        "chat_id": "120363@g.us",
+        "conversation_id": "120363@g.us",
+        "reason": "Customer wants a human agent",
+        "severity": "high",
+        "summary": "Customer is frustrated after a billing error",
+        "user_id": user_id,
+        "created_at": "2026-07-17T18:05:58+00:00",
+        "resolved": False,
+        "resolved_at": None,
+        "resolved_by": None,
+    }
 
 
 def _login(client, db, user) -> None:
@@ -36,7 +41,7 @@ def _login(client, db, user) -> None:
 
 class TestIngestEndpoint:
     def test_post_stores_escalation(self, client):
-        resp = client.post("/api/escalations", json=_ESCALATION_PAYLOAD)
+        resp = client.post("/api/escalations", json=_escalation_payload())
         assert resp.status_code == 201
         body = resp.json()
         assert body["ok"] is True
@@ -47,13 +52,13 @@ class TestIngestEndpoint:
         assert listing["escalations"][0]["reason"] == "Customer wants a human agent"
 
     def test_post_appears_in_active(self, client):
-        client.post("/api/escalations", json=_ESCALATION_PAYLOAD)
+        client.post("/api/escalations", json=_escalation_payload())
         active = client.get("/api/escalations/active").json()
         assert active["count"] == 1
         assert active["escalations"][0]["severity"] == "high"
 
     def test_post_preserves_bot_generated_id_and_created_at(self, client):
-        client.post("/api/escalations", json=_ESCALATION_PAYLOAD)
+        client.post("/api/escalations", json=_escalation_payload())
         esc = client.get("/api/escalations").json()["escalations"][0]
         assert esc["id"] == "esc-test-1"
         # created_at round-trips as an ISO 8601 UTC timestamp (Pydantic's JSON
@@ -70,14 +75,14 @@ class TestIngestEndpoint:
         assert resp.status_code == 400
 
     def test_post_rejects_missing_reason(self, client):
-        bad = dict(_ESCALATION_PAYLOAD)
+        bad = dict(_escalation_payload())
         del bad["reason"]
         resp = client.post("/api/escalations", json=bad)
         assert resp.status_code == 400
         assert "invalid escalation" in resp.json()["error"]
 
     def test_post_rejects_bad_severity(self, client):
-        bad = dict(_ESCALATION_PAYLOAD)
+        bad = dict(_escalation_payload())
         bad["severity"] = "extreme"
         resp = client.post("/api/escalations", json=bad)
         assert resp.status_code == 400
@@ -86,14 +91,18 @@ class TestIngestEndpoint:
 class TestIngestAuth:
     def test_rejects_missing_token_when_secret_set(self, client, monkeypatch):
         monkeypatch.setenv("KAI_COCKPIT_ESCALATION_SECRET", "s3cret")
-        resp = client.post("/api/escalations", json=_ESCALATION_PAYLOAD)
+        resp = client.post(
+            "/api/escalations",
+            json=_escalation_payload(),
+            headers={"Authorization": ""},
+        )
         assert resp.status_code == 401
 
     def test_rejects_wrong_token(self, client, monkeypatch):
         monkeypatch.setenv("KAI_COCKPIT_ESCALATION_SECRET", "s3cret")
         resp = client.post(
             "/api/escalations",
-            json=_ESCALATION_PAYLOAD,
+            json=_escalation_payload(),
             headers={"Authorization": "Bearer wrong"},
         )
         assert resp.status_code == 401
@@ -102,7 +111,7 @@ class TestIngestAuth:
         monkeypatch.setenv("KAI_COCKPIT_ESCALATION_SECRET", "s3cret")
         resp = client.post(
             "/api/escalations",
-            json=_ESCALATION_PAYLOAD,
+            json=_escalation_payload(),
             headers={"Authorization": "Bearer s3cret"},
         )
         assert resp.status_code == 201
@@ -115,7 +124,7 @@ class TestDashboardRoute:
         assert "/login" in resp.headers["location"]
 
     def test_dashboard_shows_active_escalation(self, client, db, user):
-        client.post("/api/escalations", json=_ESCALATION_PAYLOAD)
+        client.post("/api/escalations", json=_escalation_payload(user.kai_slug))
         _login(client, db, user)
         resp = client.get("/escalations")
         assert resp.status_code == 200
@@ -123,9 +132,9 @@ class TestDashboardRoute:
         assert "active escalation" in resp.text
 
     def test_dashboard_shows_resolved_in_history(self, client, db, user):
-        client.post("/api/escalations", json=_ESCALATION_PAYLOAD)
+        client.post("/api/escalations", json=_escalation_payload(user.kai_slug))
         _login(client, db, user)
-        client.post("/escalations/esc-test-1/resolve", follow_redirects=False)
+        csrf_post(client, "/escalations/esc-test-1/resolve", follow_redirects=False)
         resp = client.get("/escalations")
         assert resp.status_code == 200
         assert "Nothing needs attention" in resp.text
@@ -134,31 +143,31 @@ class TestDashboardRoute:
 
 class TestResolveEndpoint:
     def test_resolve_marks_resolved(self, client, db, user):
-        client.post("/api/escalations", json=_ESCALATION_PAYLOAD)
+        client.post("/api/escalations", json=_escalation_payload(user.kai_slug))
         _login(client, db, user)
-        resp = client.post("/api/escalations/esc-test-1/resolve")
+        resp = csrf_post(client, "/api/escalations/esc-test-1/resolve")
         assert resp.json()["ok"] is True
         active = client.get("/api/escalations/active").json()
         assert active["count"] == 0
 
     def test_resolve_records_resolved_by(self, client, db, user):
-        client.post("/api/escalations", json=_ESCALATION_PAYLOAD)
+        client.post("/api/escalations", json=_escalation_payload(user.kai_slug))
         _login(client, db, user)
-        client.post("/api/escalations/esc-test-1/resolve")
+        csrf_post(client, "/api/escalations/esc-test-1/resolve")
         esc = client.get("/api/escalations").json()["escalations"][0]
         assert esc["resolved"] is True
         assert esc["resolved_by"] == user.email
 
     def test_resolve_nonexistent_returns_error(self, client, db, user):
         _login(client, db, user)
-        resp = client.post("/api/escalations/esc-does-not-exist/resolve")
+        resp = csrf_post(client, "/api/escalations/esc-does-not-exist/resolve")
         assert resp.json()["ok"] is False
 
     def test_resolve_twice_second_fails(self, client, db, user):
-        client.post("/api/escalations", json=_ESCALATION_PAYLOAD)
+        client.post("/api/escalations", json=_escalation_payload(user.kai_slug))
         _login(client, db, user)
-        assert client.post("/api/escalations/esc-test-1/resolve").json()["ok"] is True
-        assert client.post("/api/escalations/esc-test-1/resolve").json()["ok"] is False
+        assert csrf_post(client, "/api/escalations/esc-test-1/resolve").json()["ok"] is True
+        assert csrf_post(client, "/api/escalations/esc-test-1/resolve").json()["ok"] is False
 
 
 class TestSidebarBadge:
@@ -169,9 +178,9 @@ class TestSidebarBadge:
         assert "topbar__badge" not in resp.text
 
     def test_badge_shows_count(self, client, db, user):
-        client.post("/api/escalations", json=_ESCALATION_PAYLOAD)
+        client.post("/api/escalations", json=_escalation_payload(user.kai_slug))
         # Second escalation to verify the count is > 1.
-        second = dict(_ESCALATION_PAYLOAD)
+        second = _escalation_payload(user.kai_slug)
         second["id"] = "esc-test-2"
         second["reason"] = "Second issue"
         client.post("/api/escalations", json=second)
@@ -181,9 +190,9 @@ class TestSidebarBadge:
         assert ">2<" in resp.text
 
     def test_badge_disappears_after_resolve(self, client, db, user):
-        client.post("/api/escalations", json=_ESCALATION_PAYLOAD)
+        client.post("/api/escalations", json=_escalation_payload(user.kai_slug))
         _login(client, db, user)
-        client.post("/escalations/esc-test-1/resolve", follow_redirects=False)
+        csrf_post(client, "/escalations/esc-test-1/resolve", follow_redirects=False)
         resp = client.get("/escalations")
         assert "topbar__badge" not in resp.text
 

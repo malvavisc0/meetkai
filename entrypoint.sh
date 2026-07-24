@@ -58,4 +58,7 @@ print(rest.split('@')[0])
   fi
 fi
 
+echo "[entrypoint] running DB migrations..."
+alembic upgrade head || { echo "[entrypoint] migrations failed"; exit 1; }
+
 exec "$@"

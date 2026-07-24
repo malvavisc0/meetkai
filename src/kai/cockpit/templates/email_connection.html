@@ -6,6 +6,7 @@
   {{ page_header(eyebrow="Channel setup", title="Email connection", subtitle="Turn incoming Resend email into work your agents can receive and respond to.", back_url="/connections") }}
 
   <form method="post" action="/connections/resend" class="card">
+    {{ csrf_field() }}
     <div class="field">
       <label class="field__label" for="signing_secret">Signing secret</label>
       {% if has_secret %}

@@ -20,6 +20,8 @@ RUN groupadd -r appuser \
 WORKDIR /app
 
 COPY pyproject.toml uv.lock README.md ./
+COPY alembic.ini ./
+COPY migrations/ migrations/
 COPY src/ src/
 COPY templates/ templates/
 COPY entrypoint.sh /entrypoint.sh

@@ -22,6 +22,7 @@
         <span>{{ esc.reason }}</span>
         <span class="field__help">chat: {{ esc.chat_id or '—' }} · {{ format_timestamp(esc.created_at) }}</span>
         <form method="post" action="/escalations/{{ esc.id }}/resolve">
+          {{ csrf_field() }}
           <button type="submit" class="button button--sm">Resolve</button>
         </form>
       </div>

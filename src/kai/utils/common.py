@@ -16,13 +16,13 @@ def now_iso() -> str:
     return datetime.now(UTC).isoformat()
 
 
-def user_slug(kai_slug: str | None) -> str:
-    """Normalize a user's ``kai_slug`` (None -> "") for WAHA/Brain naming.
+def user_slug(kai_slug: str) -> str:
+    """Return the user's ``kai_slug`` for WAHA/Brain naming.
 
     Accepts the raw slug value rather than a ``User`` object so this module
     stays free of SQLAlchemy imports; callers pass ``user.kai_slug``.
     """
-    return kai_slug or ""
+    return kai_slug
 
 
 def compute_hmac(key: str, body: bytes, algorithm: str = "sha512") -> str:

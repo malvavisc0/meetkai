@@ -6,6 +6,7 @@
   {{ page_header(eyebrow="Tool setup", title="Cal.com connection", subtitle="Let agents list event types, find open slots, and book or cancel appointments on your Cal.com calendar.", back_url="/connections") }}
 
   <form method="post" action="/connections/calcom" class="card">
+    {{ csrf_field() }}
     <div class="field">
       <label class="field__label" for="api_key">API key</label>
       {% if has_key %}

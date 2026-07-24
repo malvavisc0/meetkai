@@ -34,5 +34,22 @@ def get_db(request: Request) -> Generator[Session]:
 
 
 def create_all():
-    """Create all tables. Idempotent."""
+    """Create all tables. Idempotent. Used by tests (in-memory StaticPool);
+    production schema is managed by Alembic via ``run_migrations``.
+    """
     Base.metadata.create_all(engine)
+
+
+def run_migrations() -> None:
+    """Apply Alembic migrations to the configured DB (``alembic upgrade head``).
+
+    Reads the DB URL from ``CockpitSettings.cockpit_db`` so the same code
+    path works for SQLite today and MySQL tomorrow (the Alembic URL is
+    never hardcoded — the future MySQL switch needs no Alembic change).
+    """
+    from alembic import command
+    from alembic.config import Config
+
+    cfg = Config("alembic.ini")
+    cfg.set_main_option("sqlalchemy.url", get_cockpit_settings().cockpit_db)
+    command.upgrade(cfg, "head")

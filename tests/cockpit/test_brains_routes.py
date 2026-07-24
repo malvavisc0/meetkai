@@ -4,6 +4,7 @@ import io
 from unittest.mock import AsyncMock
 
 import pytest
+from tests.cockpit.helpers import csrf_post
 
 from kai.brain.client import DocumentRecord, IngestResult
 from kai.brain.crawler import CrawlLinks, CrawlPage, MarkdownResult
@@ -98,7 +99,7 @@ class TestBrainsPage:
 
     def test_shows_brain_after_creation(self, client, db, bob):
         _login(client, db, bob)
-        client.post("/brain/create", follow_redirects=False)
+        csrf_post(client, "/brain/create", follow_redirects=False)
         r = client.get("/brain")
         assert r.status_code == 200
         assert "Ready" in r.text  # brain exists → status summary badge
@@ -110,7 +111,7 @@ class TestBrainsCreate:
 
         _login(client, db, bob)
         assert BrainsService(db).get_brain(bob) is None
-        resp = client.post("/brain/create", follow_redirects=False)
+        resp = csrf_post(client, "/brain/create", follow_redirects=False)
         assert resp.status_code == 302
         assert resp.headers["location"] == "/brain"
         brain = BrainsService(db).get_brain(bob)
@@ -121,8 +122,8 @@ class TestBrainsCreate:
         from kai.cockpit.brains import BrainsService
 
         _login(client, db, bob)
-        client.post("/brain/create", follow_redirects=False)
-        client.post("/brain/create", follow_redirects=False)
+        csrf_post(client, "/brain/create", follow_redirects=False)
+        csrf_post(client, "/brain/create", follow_redirects=False)
         assert (
             db.query(BrainsService(db).get_brain(bob).__class__)
             .filter_by(service="morphik", user_id=bob.id)
@@ -134,7 +135,8 @@ class TestBrainsCreate:
 class TestBrainsInstruction:
     def test_requires_existing_brain(self, client, db, bob):
         _login(client, db, bob)
-        resp = client.post(
+        resp = csrf_post(
+            client,
             "/brain/instruction",
             data={"instruction": "ask about pricing"},
             follow_redirects=False,
@@ -147,8 +149,9 @@ class TestBrainsInstruction:
         from kai.cockpit.brains import BrainsService
 
         _login(client, db, bob)
-        client.post("/brain/create", follow_redirects=False)
-        resp = client.post(
+        csrf_post(client, "/brain/create", follow_redirects=False)
+        resp = csrf_post(
+            client,
             "/brain/instruction",
             data={"instruction": "how to do X from section Y"},
             follow_redirects=False,
@@ -166,12 +169,13 @@ class TestBrainsInstruction:
 class TestBrainsUpload:
     def test_uploads_file_and_flashes_success(self, client, db, bob, fake_morphik_client):
         _login(client, db, bob)
-        client.post("/brain/create", follow_redirects=False)
+        csrf_post(client, "/brain/create", follow_redirects=False)
         fake_morphik_client.ingest_file.return_value = IngestResult(
             track_id="upload_1", status="success", message="ok"
         )
 
-        resp = client.post(
+        resp = csrf_post(
+            client,
             "/brain/upload",
             files={"file": ("handbook.pdf", io.BytesIO(b"hello world"), "application/pdf")},
             follow_redirects=False,
@@ -187,7 +191,8 @@ class TestBrainsUpload:
 
     def test_fails_gracefully_without_a_brain(self, client, db, bob, fake_morphik_client):
         _login(client, db, bob)
-        resp = client.post(
+        resp = csrf_post(
+            client,
             "/brain/upload",
             files={"file": ("notes.txt", io.BytesIO(b"hi"), "text/plain")},
             follow_redirects=False,
@@ -198,8 +203,9 @@ class TestBrainsUpload:
 
     def test_rejects_disallowed_file_extension(self, client, db, bob, fake_morphik_client):
         _login(client, db, bob)
-        client.post("/brain/create", follow_redirects=False)
-        resp = client.post(
+        csrf_post(client, "/brain/create", follow_redirects=False)
+        resp = csrf_post(
+            client,
             "/brain/upload",
             files={"file": ("payload.exe", io.BytesIO(b"MZ..."), "application/octet-stream")},
             follow_redirects=False,
@@ -211,8 +217,9 @@ class TestBrainsUpload:
 
     def test_rejects_oversized_file(self, client, db, bob, fake_morphik_client):
         _login(client, db, bob)
-        client.post("/brain/create", follow_redirects=False)
-        resp = client.post(
+        csrf_post(client, "/brain/create", follow_redirects=False)
+        resp = csrf_post(
+            client,
             "/brain/upload",
             files={"file": ("big.txt", io.BytesIO(b"x" * (26 * 1024 * 1024)), "text/plain")},
             follow_redirects=False,
@@ -235,7 +242,7 @@ class TestBrainsIngestUrl:
 
     def test_fetches_and_ingests(self, client, db, bob, fake_morphik_client, fake_crawler_client):
         _login(client, db, bob)
-        client.post("/brain/create", follow_redirects=False)
+        csrf_post(client, "/brain/create", follow_redirects=False)
 
         def _crawl(*, url: str) -> CrawlPage:
             if url == "https://example.com/docs":
@@ -247,7 +254,8 @@ class TestBrainsIngestUrl:
             track_id="insert_1", status="success", message="ok"
         )
 
-        resp = client.post(
+        resp = csrf_post(
+            client,
             "/brain/ingest-url",
             data={"url": "https://example.com/docs"},
             follow_redirects=False,
@@ -265,16 +273,16 @@ class TestBrainsIngestUrl:
 
     def test_empty_url_rejected(self, client, db, bob, fake_morphik_client, fake_crawler_client):
         _login(client, db, bob)
-        client.post("/brain/create", follow_redirects=False)
-        resp = client.post("/brain/ingest-url", data={"url": "   "}, follow_redirects=False)
+        csrf_post(client, "/brain/create", follow_redirects=False)
+        resp = csrf_post(client, "/brain/ingest-url", data={"url": "   "}, follow_redirects=False)
         assert resp.status_code == 302
         fake_crawler_client.crawl.assert_not_awaited()
 
     def test_rejects_loopback_url(self, client, db, bob, fake_morphik_client, fake_crawler_client):
         _login(client, db, bob)
-        client.post("/brain/create", follow_redirects=False)
-        resp = client.post(
-            "/brain/ingest-url", data={"url": "http://localhost/"}, follow_redirects=False
+        csrf_post(client, "/brain/create", follow_redirects=False)
+        resp = csrf_post(
+            client, "/brain/ingest-url", data={"url": "http://localhost/"}, follow_redirects=False
         )
         assert resp.status_code == 302
         fake_crawler_client.crawl.assert_not_awaited()
@@ -285,8 +293,9 @@ class TestBrainsIngestUrl:
         self, client, db, bob, fake_morphik_client, fake_crawler_client
     ):
         _login(client, db, bob)
-        client.post("/brain/create", follow_redirects=False)
-        resp = client.post(
+        csrf_post(client, "/brain/create", follow_redirects=False)
+        resp = csrf_post(
+            client,
             "/brain/ingest-url",
             data={"url": "http://metadata.internal/latest/meta-data/"},
             follow_redirects=False,
@@ -300,12 +309,13 @@ class TestBrainsIngestUrl:
 class TestBrainsIngestText:
     def test_adds_text(self, client, db, bob, fake_morphik_client):
         _login(client, db, bob)
-        client.post("/brain/create", follow_redirects=False)
+        csrf_post(client, "/brain/create", follow_redirects=False)
         fake_morphik_client.ingest_text.return_value = IngestResult(
             track_id="insert_1", status="success", message="ok"
         )
 
-        resp = client.post(
+        resp = csrf_post(
+            client,
             "/brain/ingest-text",
             data={"name": "Onboarding notes", "text": "Refund: 30 days."},
             follow_redirects=False,
@@ -322,8 +332,9 @@ class TestBrainsIngestText:
 
     def test_empty_text_rejected(self, client, db, bob, fake_morphik_client):
         _login(client, db, bob)
-        client.post("/brain/create", follow_redirects=False)
-        resp = client.post(
+        csrf_post(client, "/brain/create", follow_redirects=False)
+        resp = csrf_post(
+            client,
             "/brain/ingest-text",
             data={"name": "notes", "text": "   "},
             follow_redirects=False,
@@ -335,7 +346,7 @@ class TestBrainsIngestText:
 class TestBrainsDocumentsList:
     def test_lists_documents_from_morphik(self, client, db, bob, fake_morphik_client):
         _login(client, db, bob)
-        client.post("/brain/create", follow_redirects=False)
+        csrf_post(client, "/brain/create", follow_redirects=False)
         fake_morphik_client.list_docs.return_value = [
             DocumentRecord(
                 id="doc-1",
@@ -355,7 +366,7 @@ class TestBrainsDocumentsList:
 
     def test_shows_error_when_morphik_unreachable(self, client, db, bob, fake_morphik_client):
         _login(client, db, bob)
-        client.post("/brain/create", follow_redirects=False)
+        csrf_post(client, "/brain/create", follow_redirects=False)
         fake_morphik_client.list_docs.side_effect = RuntimeError("connection refused")
 
         r = client.get("/brain")
@@ -365,7 +376,7 @@ class TestBrainsDocumentsList:
         self, client, db, bob, fake_morphik_client
     ):
         _login(client, db, bob)
-        client.post("/brain/create", follow_redirects=False)
+        csrf_post(client, "/brain/create", follow_redirects=False)
         fake_morphik_client.list_docs.return_value = [
             DocumentRecord(
                 id="doc-1",
@@ -389,11 +400,11 @@ class TestBrainsDocumentsList:
 class TestBrainsDeleteDocument:
     def test_deletes_document(self, client, db, bob, fake_morphik_client):
         _login(client, db, bob)
-        client.post("/brain/create", follow_redirects=False)
+        csrf_post(client, "/brain/create", follow_redirects=False)
         fake_morphik_client.delete_doc.return_value = "deletion_started"
 
-        resp = client.post(
-            "/brain/documents/delete", data={"doc_id": "doc-1"}, follow_redirects=False
+        resp = csrf_post(
+            client, "/brain/documents/delete", data={"doc_id": "doc-1"}, follow_redirects=False
         )
         assert resp.status_code == 302
         fake_morphik_client.delete_doc.assert_awaited_once_with(

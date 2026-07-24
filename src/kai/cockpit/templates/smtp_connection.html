@@ -6,6 +6,7 @@
   {{ page_header(eyebrow="Tool setup", title="SMTP connection", subtitle="Let agents send follow-ups and resolutions from your team inbox.", back_url="/connections") }}
 
   <form method="post" action="/connections/smtp" class="card">
+    {{ csrf_field() }}
     {% set c = conn.config if conn else {} %}
     <div class="field">
       <label class="field__label" for="host">Host</label>

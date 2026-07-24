@@ -6,17 +6,23 @@ from contextlib import asynccontextmanager
 from datetime import UTC, datetime
 from pathlib import Path
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
+from markupsafe import Markup
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.middleware.sessions import SessionMiddleware
 
 from kai.cockpit.auth import get_cockpit_secret, get_current_user
-from kai.cockpit.db import SessionLocal, create_all
+from kai.cockpit.csrf import CSRFMiddleware, _csrf_token
+from kai.cockpit.db import SessionLocal, run_migrations
 from kai.cockpit.settings import get_cockpit_settings
 
 templates = Jinja2Templates(directory=Path(__file__).parent / "templates")
+templates.env.globals["csrf_token"] = lambda: _csrf_token.get() or ""
+templates.env.globals["csrf_field"] = lambda: Markup(
+    f'<input type="hidden" name="_csrf" value="{_csrf_token.get() or ""}">'
+)
 logger = logging.getLogger(__name__)
 
 # Registered as a Jinja global (not threaded through every route's context)
@@ -119,9 +125,17 @@ async def _lifespan(app: FastAPI):
 
 
 def create_app() -> FastAPI:
+    settings = get_cockpit_settings()
     app = FastAPI(title="kai cockpit", lifespan=_lifespan)
 
-    app.add_middleware(SessionMiddleware, secret_key=get_cockpit_secret())
+    app.add_middleware(CSRFMiddleware)
+    app.add_middleware(
+        SessionMiddleware,
+        secret_key=get_cockpit_secret(),
+        https_only=bool(settings.cookie_secure),
+        same_site="lax",
+        max_age=172800,
+    )
 
     # Serve self-hosted CSS, icons, and fonts. The cockpit is a no-JavaScript
     # server-rendered app — all static assets are vendored locally.
@@ -131,7 +145,16 @@ def create_app() -> FastAPI:
         name="static",
     )
 
-    create_all()
+    if not settings.cockpit_testing:
+        run_migrations()
+        if settings.cockpit_escalation_secret in (
+            "",
+            "change-me-openssl-rand-hex-32",
+        ):
+            raise RuntimeError(
+                "KAI_COCKPIT_ESCALATION_SECRET is required "
+                "(generate: openssl rand -hex 32)."
+            )
 
     # Cockpit's aggregated escalation store. Bots POST to /api/escalations
     # and this store holds them so the dashboard + sidebar badge read a
@@ -174,6 +197,12 @@ def create_app() -> FastAPI:
     app.include_router(health.router)
     app.include_router(smtp.router)
     app.include_router(webhooks.router)
+
+    if settings.cockpit_testing:
+
+        @app.get("/_csrf")
+        async def get_csrf_token(request: Request) -> dict[str, str]:
+            return {"token": request.session.get("csrf_token", "")}
 
     @app.exception_handler(StarletteHTTPException)
     async def http_exception_handler(request, exc):

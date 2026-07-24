@@ -10,6 +10,7 @@ field.
 from unittest.mock import MagicMock
 
 import pytest
+from tests.cockpit.helpers import csrf_post
 
 from kai.cockpit import tokens
 from kai.cockpit.auth_backends import MagicLinkProvider
@@ -83,7 +84,8 @@ class TestChatSendConfirmation:
             ),
         )
         _login(client, db, bob)
-        r = client.post(
+        r = csrf_post(
+            client,
             f"/deployments/{email_dep.id}/chat",
             data={"message": "send an email to alice@example.com saying hello"},
             follow_redirects=False,
@@ -108,7 +110,8 @@ class TestChatSendConfirmation:
             MagicMock(return_value={"ok": True, "reply": "answered"}),
         )
         _login(client, db, bob)
-        r = client.post(
+        r = csrf_post(
+            client,
             f"/deployments/{email_dep.id}/chat",
             data={"message": "what's the status?"},
             follow_redirects=False,

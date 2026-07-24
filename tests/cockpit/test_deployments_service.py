@@ -132,6 +132,7 @@ class TestCreateConnectionGate:
         from datetime import UTC, datetime
 
         from kai.cockpit.models import User
+        from kai.cockpit.naming import kai_slug_for
 
         lonely_user = User(
             email="lonely@test.com",
@@ -139,6 +140,7 @@ class TestCreateConnectionGate:
             timezone="UTC",
             hmac_key=secrets.token_hex(32),
             created_at=datetime.now(UTC).isoformat(),
+            kai_slug=kai_slug_for("lonely@test.com"),
         )
         db.add(lonely_user)
         db.commit()
@@ -766,6 +768,7 @@ class TestReconcileDeployments:
 
         from kai.cockpit.deployments import DeploymentsService, reconcile_deployments
         from kai.cockpit.models import User
+        from kai.cockpit.naming import kai_slug_for
 
         user2 = User(
             email="alice@test.com",
@@ -773,6 +776,7 @@ class TestReconcileDeployments:
             timezone="UTC",
             hmac_key=secrets.token_hex(32),
             created_at=datetime.now(UTC).isoformat(),
+            kai_slug=kai_slug_for("alice@test.com"),
         )
         db.add(user2)
         db.commit()

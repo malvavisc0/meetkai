@@ -13,6 +13,7 @@
       <p>No shared knowledge yet.</p>
       <p class="empty-state__hint">Give your agents a source of truth with documents, notes, and websites they can consult before replying.</p>
       <form method="post" action="/brain/create">
+        {{ csrf_field() }}
         <button type="submit" class="button button--primary"><span class="icon">{% include "icons/plus.svg" %}</span> Create Brain</button>
       </form>
     </div>
@@ -71,6 +72,7 @@
                 <td data-label="Added"><span class="mono">{{ format_timestamp(doc.updated_at) }}</span></td>
                 <td data-label="">
                   <form method="post" action="/brain/documents/delete" data-confirm="Delete this document?">
+                    {{ csrf_field() }}
                     <input type="hidden" name="doc_id" value="{{ doc.id }}">
                     <button type="submit" class="button button--danger"><span class="icon">{% include "icons/trash-2.svg" %}</span></button>
                   </form>
@@ -90,6 +92,7 @@
         <h3 class="card__title">When should agents check the Brain?</h3>
         <p class="field__help">Write the situations where company knowledge is required before replying. Add one rule per line.</p>
         <form method="post" action="/brain/instruction" class="stack">
+          {{ csrf_field() }}
           <div class="field">
             <label class="sr-only" for="instruction">Brain usage rules</label>
             <textarea id="instruction" name="instruction" rows="4" data-autosize
@@ -108,6 +111,7 @@
 
         <div class="source-list">
           <form method="post" action="/brain/upload" enctype="multipart/form-data" class="source-item">
+            {{ csrf_field() }}
             <div class="source-item__copy">
               <strong>Upload a document</strong>
               <span>Product docs, policies, manuals, PDFs, markdown, and other text files. 100MB max.</span>
@@ -123,6 +127,7 @@
           </form>
 
           <form method="post" action="/brain/ingest-url" class="source-item field--error{% if not crawler_ok %} source-item--unavailable{% endif %}">
+            {{ csrf_field() }}
             <div class="source-item__copy">
               <strong>Add a website</strong>
               <span>Import public documentation or support pages into the Brain.</span>
@@ -138,6 +143,7 @@
           </form>
 
           <form method="post" action="/brain/ingest-text" class="source-item source-item--text">
+            {{ csrf_field() }}
             <div class="source-item__copy">
               <strong>Paste text</strong>
               <span>Add short knowledge directly, such as product notes, policies, or support guidance.</span>

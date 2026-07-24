@@ -5,6 +5,7 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
 import pytest
+from tests.cockpit.helpers import csrf_post
 
 from kai.cockpit import tokens
 from kai.cockpit.auth_backends import MagicLinkProvider
@@ -77,7 +78,7 @@ class TestFullDeploymentFlow:
         assert r.status_code == 200
 
         # 7. POST /connections/whatsapp/connect -> (mock WAHA) -> connected
-        r = client.post("/connections/whatsapp/connect", follow_redirects=False)
+        r = csrf_post(client, "/connections/whatsapp/connect", follow_redirects=False)
         assert r.status_code == 302
 
         from kai.cockpit.connections.service import ConnectionsService
@@ -91,7 +92,8 @@ class TestFullDeploymentFlow:
         assert r.status_code == 200
 
         # 9. POST /deployments/new -> deployment created, redirect to detail
-        r = client.post(
+        r = csrf_post(
+            client,
             "/deployments/new",
             data={"bot_type": "waha", "goal": "be helpful", "language": "English"},
             follow_redirects=False,
@@ -147,7 +149,7 @@ class TestFullDeploymentFlow:
             ),
         )
 
-        r = client.post(f"/deployments/{dep.id}/start", follow_redirects=False)
+        r = csrf_post(client, f"/deployments/{dep.id}/start", follow_redirects=False)
         assert r.status_code == 302
         db.refresh(dep)
         assert dep.status == "running"
@@ -171,15 +173,16 @@ class TestFullDeploymentFlow:
             "send_message",
             lambda self, d, message, persist=False, to="": {"ok": True, "reply": "sure thing"},
         )
-        r = client.post(
-            f"/deployments/{dep.id}/chat", data={"message": "hello"}, follow_redirects=False
+        r = csrf_post(
+            client, f"/deployments/{dep.id}/chat", data={"message": "hello"}, follow_redirects=False
         )
         assert r.status_code == 302
         r2 = client.get(f"/deployments/{dep.id}")
         assert "sure thing" in r2.text
 
         # 13. POST /deployments/{id}/settings -> save settings
-        r = client.post(
+        r = csrf_post(
+            client,
             f"/deployments/{dep.id}/settings",
             data={"goal": "be nicer", "language": "English"},
             follow_redirects=False,
@@ -196,13 +199,14 @@ class TestFullDeploymentFlow:
 
         # 14. POST /deployments/{id}/stop -> stopped
         monkeypatch.setattr("kai.cockpit.deployments.pid_alive", lambda pid: False)
-        r = client.post(f"/deployments/{dep.id}/stop", follow_redirects=False)
+        r = csrf_post(client, f"/deployments/{dep.id}/stop", follow_redirects=False)
         assert r.status_code == 302
         db.refresh(dep)
         assert dep.status == "stopped"
 
         # 15. POST /deployments/{id}/delete -> row gone, redirect to /
-        r = client.post(
+        r = csrf_post(
+            client,
             f"/deployments/{dep.id}/delete",
             data={"confirm_delete": "true"},
             follow_redirects=False,
@@ -221,13 +225,13 @@ class TestStartGatedOnWhatsApp:
         # Connect, create the deployment, then disconnect: create() now
         # requires WhatsApp connected, but an operator can disconnect any
         # time afterward — Start must still be hidden once that happens.
-        client.post("/connections/whatsapp/connect", follow_redirects=False)
+        csrf_post(client, "/connections/whatsapp/connect", follow_redirects=False)
 
         from kai.cockpit.deployments import DeploymentsService
 
         dep = DeploymentsService(db).create(bob, "waha", "be helpful", "English")
 
-        client.post("/connections/whatsapp/disconnect", follow_redirects=False)
+        csrf_post(client, "/connections/whatsapp/disconnect", follow_redirects=False)
 
         r = client.get(f"/deployments/{dep.id}")
         assert r.status_code == 200
@@ -237,7 +241,7 @@ class TestStartGatedOnWhatsApp:
     def test_start_shown_once_whatsapp_connected(self, client, db, bob, fake_waha_client):
         _login(client, db, bob)
         # Connect WhatsApp (mocked WAHA returns WORKING immediately).
-        client.post("/connections/whatsapp/connect", follow_redirects=False)
+        csrf_post(client, "/connections/whatsapp/connect", follow_redirects=False)
 
         from kai.cockpit.deployments import DeploymentsService
 

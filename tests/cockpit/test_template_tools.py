@@ -3,6 +3,8 @@
 import secrets
 from datetime import UTC, datetime
 
+from tests.cockpit.helpers import csrf_post
+
 from kai.cockpit import tokens
 from kai.cockpit.auth_backends import MagicLinkProvider
 from kai.cockpit.deployments import DeploymentsService
@@ -72,7 +74,8 @@ class TestSettingsToolOverridePersistence:
         dep = _create_and_get_dep(db, user)
 
         # POST with a tool override enable
-        resp = client.post(
+        resp = csrf_post(
+            client,
             f"/deployments/{dep.id}/settings",
             data={
                 "goal": "test",
@@ -98,7 +101,8 @@ class TestSettingsToolOverridePersistence:
         _login(client, db, user)
         dep = _create_and_get_dep(db, user)
 
-        resp = client.post(
+        resp = csrf_post(
+            client,
             f"/deployments/{dep.id}/settings",
             data={
                 "goal": "test",
@@ -124,7 +128,8 @@ class TestSettingsToolOverridePersistence:
         dep.desired_state = "running"
         db.commit()
 
-        resp = client.post(
+        resp = csrf_post(
+            client,
             f"/deployments/{dep.id}/settings",
             data={
                 "goal": "test",
@@ -149,7 +154,8 @@ class TestSettingsToolOverridePersistence:
 
         # General has brain_query as an optional tool; unchecking it should
         # add it to the disable list.
-        resp = client.post(
+        resp = csrf_post(
+            client,
             f"/deployments/{dep.id}/settings",
             data={
                 "goal": "test",
@@ -195,7 +201,8 @@ class TestSettingsToolOverridePersistence:
 
         # Attempting to disable a tool that resolve_tools considers required
         # (a default tool) should be rejected.
-        resp = client.post(
+        resp = csrf_post(
+            client,
             f"/deployments/{dep.id}/settings",
             data={
                 "goal": "test",

@@ -39,21 +39,27 @@ cockpit_app.add_typer(cockpit_request_app, name="request")
 def cockpit_serve(
     host: str = typer.Option("127.0.0.1", "--host"),
     port: int = typer.Option(8080, "--port"),
-    init_db: bool = typer.Option(False, "--init-db", help="Force create_all()"),
 ):
     """Launch the cockpit web UI (uvicorn)."""
     import uvicorn
 
-    from kai.cockpit.db import create_all
     from kai.logging.logger import setup_logging
 
     setup_logging()
-    create_all()
-    if init_db:
-        console.print(f"{GL_OK} [{OK}]database tables created[/{OK}]")
     console.print(f"[bold]kai cockpit[/bold] {GL_ARROW} {host}:{port}")
     app_obj = __import__("kai.cockpit.app", fromlist=["create_app"]).create_app()
     uvicorn.run(app_obj, host=host, port=port)
+
+
+@cockpit_app.command("migrate")
+def cockpit_migrate():
+    """Apply Alembic migrations to the cockpit DB (idempotent at head)."""
+    from kai.cockpit.db import run_migrations
+    from kai.logging.logger import setup_logging
+
+    setup_logging()
+    run_migrations()
+    console.print(f"{GL_OK} [{OK}]migrations applied[/{OK}]")
 
 
 @cockpit_app.command("rotate-credential-key")
@@ -64,10 +70,9 @@ def cockpit_rotate_credential_key():
     Connection under the new derived key, and updates ``.env``. The root
     secret (``KAI_CREDENTIAL_ENCRYPTION_KEY``) is never touched.
     """
-    from kai.cockpit.db import SessionLocal, create_all
+    from kai.cockpit.db import SessionLocal
     from kai.cockpit.key_rotation import rotate_credential_key
 
-    create_all()
     db = SessionLocal()
     try:
         try:
@@ -98,7 +103,7 @@ def cockpit_user_create(
     import secrets
 
     from kai.cockpit.bots import ALL_LANGUAGES
-    from kai.cockpit.db import SessionLocal, create_all
+    from kai.cockpit.db import SessionLocal
     from kai.cockpit.models import User
     from kai.cockpit.naming import kai_slug_for
 
@@ -109,7 +114,6 @@ def cockpit_user_create(
         )
         raise typer.Exit(1)
 
-    create_all()
     db = SessionLocal()
     try:
         existing = db.query(User).filter(User.email == email).first()
@@ -142,10 +146,9 @@ def cockpit_user_create(
 @cockpit_user_app.command("list")
 def cockpit_user_list():
     """List all cockpit users."""
-    from kai.cockpit.db import SessionLocal, create_all
+    from kai.cockpit.db import SessionLocal
     from kai.cockpit.models import User
 
-    create_all()
     db = SessionLocal()
     try:
         users = db.query(User).all()
@@ -183,10 +186,9 @@ def cockpit_user_disable(
     email: str = typer.Argument(...),
 ):
     """Disable a cockpit user."""
-    from kai.cockpit.db import SessionLocal, create_all
+    from kai.cockpit.db import SessionLocal
     from kai.cockpit.models import User
 
-    create_all()
     db = SessionLocal()
     try:
         user = db.query(User).filter(User.email == email).first()
@@ -219,10 +221,9 @@ def cockpit_user_flags(
     ``--no-image`` to disable. Omitting a flag leaves it unchanged. With
     ``--show`` the current entitlements are printed without modifying.
     """
-    from kai.cockpit.db import SessionLocal, create_all
+    from kai.cockpit.db import SessionLocal
     from kai.cockpit.models import User
 
-    create_all()
     db = SessionLocal()
     try:
         user = db.query(User).filter(User.email == email).first()
@@ -252,10 +253,9 @@ def cockpit_user_flags(
 @cockpit_request_app.command("list")
 def cockpit_request_list():
     """List pending login requests."""
-    from kai.cockpit.db import SessionLocal, create_all
+    from kai.cockpit.db import SessionLocal
     from kai.cockpit.models import LoginRequest, User
 
-    create_all()
     db = SessionLocal()
     try:
         requests = db.query(LoginRequest).filter(LoginRequest.status == "pending").all()
@@ -277,10 +277,9 @@ def cockpit_request_create(
     email: str = typer.Argument(...),
 ):
     """Admin: seed a login request for a user (no browser needed)."""
-    from kai.cockpit.db import SessionLocal, create_all
+    from kai.cockpit.db import SessionLocal
     from kai.cockpit.models import LoginRequest, User
 
-    create_all()
     db = SessionLocal()
     try:
         user = db.query(User).filter(User.email == email).first()
@@ -317,11 +316,10 @@ def cockpit_request_approve(
     """Approve a pending login request and mint a magic link token."""
     from kai.cockpit.auth_backends import MagicLinkProvider
     from kai.cockpit.cli_helpers import build_magic_link_url
-    from kai.cockpit.db import SessionLocal, create_all
+    from kai.cockpit.db import SessionLocal
     from kai.cockpit.mailer import MailError, send_magic_link
     from kai.cockpit.models import User
 
-    create_all()
     db = SessionLocal()
     try:
         user = db.query(User).filter(User.email == email).first()

@@ -24,6 +24,8 @@ from kai.cockpit.models import User
 def _cockpit_env(monkeypatch):
     """Provide the env vars the cockpit modules require to construct at all."""
     monkeypatch.setenv("KAI_COCKPIT_SECRET", "test-secret")
+    monkeypatch.setenv("KAI_COCKPIT_ESCALATION_SECRET", "test-esc-secret")
+    monkeypatch.setenv("KAI_COCKPIT_COOKIE_SECURE", "0")
     monkeypatch.setenv("KAI_WAHA_HMAC_KEY", "test-waha-hmac-key")
     # Tells kai.cockpit.app to skip the startup deployment-reconciliation
     # background thread — it would race the isolated in-memory SQLite
@@ -58,10 +60,10 @@ def _isolated_db_engine(monkeypatch):
     ``kai.cockpit.db`` creates its module-level ``engine`` /
     ``SessionLocal`` at import time, defaulting to
     ``sqlite:///data/cockpit.db`` (a production file). ``app.py`` imports
-    ``create_all`` by reference at module load, so patching
-    ``cockpit_db.create_all`` *after* import does not stop ``create_app()``
+    ``run_migrations`` by reference at module load, so patching
+    ``cockpit_db.run_migrations`` *after* import does not stop ``create_app()``
     from calling the real one. Patching the module-global ``engine`` (and
-    the already-imported ``app.create_all``) is the only airtight way to
+    the already-imported ``app.run_migrations``) is the only airtight way to
     guarantee no test ever creates ``data/cockpit.db``.
     """
     import kai.cockpit.app as cockpit_app
@@ -76,10 +78,8 @@ def _isolated_db_engine(monkeypatch):
 
     monkeypatch.setattr(cockpit_db, "engine", eng)
     monkeypatch.setattr(cockpit_db, "SessionLocal", sessionmaker(bind=eng))
-    # ``app.py`` already bound ``create_all`` by reference at import time,
-    # so patch the name in ``app``'s namespace too.
-    monkeypatch.setattr(cockpit_app, "create_all", lambda: None)
-    monkeypatch.setattr(cockpit_db, "create_all", lambda: None)
+    monkeypatch.setattr(cockpit_app, "run_migrations", lambda: None)
+    monkeypatch.setattr(cockpit_db, "run_migrations", lambda: None)
     return eng
 
 
@@ -149,5 +149,8 @@ def client(db, monkeypatch):
 
     app.dependency_overrides[cockpit_db.get_db] = _override_get_db
 
-    with TestClient(app) as c:
+    with TestClient(
+        app,
+        headers={"Authorization": "Bearer test-esc-secret"},
+    ) as c:
         yield c

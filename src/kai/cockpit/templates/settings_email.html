@@ -13,6 +13,7 @@
   </header>
 
   <form method="post" action="/deployments/{{ dep.id }}/settings" class="stack">
+    {{ csrf_field() }}
     {# --- Identity --- #}
     <div class="card">
       <p class="card__eyebrow">Identity</p>

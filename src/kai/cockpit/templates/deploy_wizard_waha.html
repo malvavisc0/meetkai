@@ -19,6 +19,7 @@
   {% include "wizard/_card.html" %}
 
   <form method="post" action="/deployments/new" class="card">
+    {{ csrf_field() }}
     <p class="card__eyebrow">Configuration</p>
     <h3 class="card__title">Agent role</h3>
     <input type="hidden" name="bot_type" value="{{ bot_type }}">

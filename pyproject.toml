@@ -25,9 +25,10 @@ dependencies = [
     "jinja2",
     "python-multipart",
     "sqlalchemy",
+    "alembic",
     "itsdangerous",
     "cryptography",
-    "pyyaml>=6.0.3",
+    "pyyaml",
 ]
 
 [project.optional-dependencies]

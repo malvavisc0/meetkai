@@ -11,10 +11,12 @@ from datetime import UTC, datetime
 from unittest.mock import AsyncMock
 
 import pytest
+from tests.cockpit.helpers import csrf_post
 
 from kai.cockpit import tokens
 from kai.cockpit.auth_backends import MagicLinkProvider
 from kai.cockpit.models import User
+from kai.cockpit.naming import kai_slug_for
 
 
 @pytest.fixture
@@ -26,6 +28,7 @@ def bob(db):
         hmac_key="bob-hmac-key",
         feature_flags={"image": True, "video": False, "stt": False, "tts": False, "sso": False},
         created_at=datetime.now(UTC).isoformat(),
+        kai_slug=kai_slug_for("bob@x.com"),
     )
     db.add(u)
     db.commit()
@@ -83,7 +86,8 @@ class TestEntitlementGate:
         entitlement must NOT enable video on the deployment."""
         _login(client, db, bob)
         # video is NOT in bob's entitlements (False). Spoof it on.
-        client.post(
+        csrf_post(
+            client,
             f"/deployments/{dep.id}/settings",
             data={
                 "goal": "be helpful",
@@ -103,7 +107,8 @@ class TestEntitlementGate:
     def test_entitled_flag_can_be_disabled(self, client, db, bob, dep, fake_waha_client):
         """An entitled flag can be turned off via the form."""
         _login(client, db, bob)
-        client.post(
+        csrf_post(
+            client,
             f"/deployments/{dep.id}/settings",
             data={
                 "goal": "be helpful",

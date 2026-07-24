@@ -34,8 +34,11 @@ class User(Base):
     created_at: Mapped[str] = mapped_column(String, nullable=False)
     # Stable external-service identifier generated once at user creation
     # (kai.cockpit.naming.kai_slug_for) and reused as both WAHA session
-    # name and Morphik end_user_id. Nullable for lazy backfill.
-    kai_slug: Mapped[str | None] = mapped_column(String, nullable=True)
+    # name and Morphik end_user_id. NOT NULL UNIQUE — pre-MVP there is no
+    # legacy data, so this is enforced at the schema level rather than
+    # backfilled. Used as a lookup key in webhooks.py, so uniqueness is
+    # required there.
+    kai_slug: Mapped[str] = mapped_column(String, unique=True, nullable=False)
 
 
 class Deployment(Base):

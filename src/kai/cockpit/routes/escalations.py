@@ -24,6 +24,7 @@ from kai.agent.tools.escalate import (
     EscalationStore,
     get_active_escalations,
     list_escalations,
+    list_escalations_for_user,
     resolve_escalation,
 )
 from kai.cockpit.app import templates
@@ -54,10 +55,10 @@ def _check_escalation_secret(request: Request) -> JSONResponse | None:
 
 @router.get("/escalations")
 async def dashboard(request: Request, user: User = Depends(require_user)):
-    """Escalation dashboard: active escalations + resolved history."""
-    all_escs = await list_escalations()
-    active = [e for e in all_escs if not e.resolved]
-    resolved = [e for e in all_escs if e.resolved]
+    """Escalation dashboard: active escalations + resolved history (owner-scoped)."""
+    user_escs = await list_escalations_for_user(user.kai_slug)
+    active = [e for e in user_escs if not e.resolved]
+    resolved = [e for e in user_escs if e.resolved]
     return templates.TemplateResponse(
         request,
         "escalations.html",
@@ -67,14 +68,23 @@ async def dashboard(request: Request, user: User = Depends(require_user)):
 
 @router.get("/api/escalations")
 async def list_all() -> dict:
-    """Return all escalation events (JSON)."""
+    """Return all escalation events (JSON).
+
+    Bearer-authed ingestion endpoint — intentionally returns every escalation
+    regardless of owner. Per-user scoping is enforced by the dashboard and
+    resolve routes; this route is for the bot→cockpit webhook surface.
+    """
     escalations = await list_escalations()
     return {"escalations": [e.model_dump(mode="json") for e in escalations]}
 
 
 @router.get("/api/escalations/active")
 async def list_active() -> dict:
-    """Return active (unresolved) escalation events (JSON)."""
+    """Return active (unresolved) escalation events (JSON).
+
+    Bearer-authed ingestion endpoint — see ``list_all`` for the no-scoping
+    rationale.
+    """
     active = await get_active_escalations()
     return {
         "escalations": [e.model_dump(mode="json") for e in active],
@@ -120,8 +130,14 @@ async def resolve(
     user: User = Depends(require_user),
     db: Session = Depends(get_db),
 ):
-    """Mark an escalation as resolved. Requires auth (mutates state)."""
-    await resolve_escalation(esc_id, resolved_by=user.email)
+    """Mark an escalation as resolved. Requires auth (mutates state).
+
+    Owner-scoped: refuses to resolve an escalation whose ``user_id`` is set
+    to a different slug.
+    """
+    ok = await resolve_escalation(esc_id, resolved_by=user.email, owner_slug=user.kai_slug)
+    if not ok:
+        return RedirectResponse(url="/escalations", status_code=303)
     return RedirectResponse(url="/escalations", status_code=303)
 
 
@@ -131,8 +147,12 @@ async def resolve_api(
     user: User = Depends(require_user),
     db: Session = Depends(get_db),
 ) -> dict:
-    """Mark an escalation as resolved (JSON). Requires auth (mutates state)."""
-    ok = await resolve_escalation(esc_id, resolved_by=user.email)
+    """Mark an escalation as resolved (JSON). Requires auth (mutates state).
+
+    Owner-scoped: refuses to resolve an escalation whose ``user_id`` is set
+    to a different slug.
+    """
+    ok = await resolve_escalation(esc_id, resolved_by=user.email, owner_slug=user.kai_slug)
     if not ok:
         return {"ok": False, "error": f"escalation {esc_id} not found or already resolved"}
     return {"ok": True, "escalation": esc_id}

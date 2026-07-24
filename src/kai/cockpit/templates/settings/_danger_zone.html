@@ -4,6 +4,7 @@
   <p><strong>Delete agent</strong></p>
   <p class="muted">This removes the agent configuration. You can create another agent of the same type without reconnecting channels.</p>
   <form method="post" action="/deployments/{{ dep.id }}/delete" data-confirm="Delete this agent? This stops it if running and removes its configuration.">
+    {{ csrf_field() }}
     <label class="checkbox-row text-danger mb-md">
       <input type="checkbox" name="confirm_delete" value="true" required>
       I understand this stops the agent if it is running and removes its configuration.

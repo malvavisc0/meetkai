@@ -24,9 +24,11 @@
       </dl>
       <div class="cluster">
         <form method="post" action="/connections/whatsapp/refresh">
+          {{ csrf_field() }}
           <button type="submit" class="button button--primary"><span class="icon">{% include "icons/rotate-cw.svg" %}</span> Refresh</button>
         </form>
         <form method="post" action="/connections/whatsapp/disconnect" data-confirm="Disconnect WhatsApp?">
+          {{ csrf_field() }}
           <button type="submit" class="button">Disconnect</button>
         </form>
       </div>
@@ -50,6 +52,7 @@
       {% endif %}
 
       <form method="post" action="/connections/whatsapp/disconnect">
+        {{ csrf_field() }}
         <button type="submit" class="button">Cancel</button>
       </form>
     </div>
@@ -63,6 +66,7 @@
       </div>
       <p class="field__help">Connect WhatsApp to let agents receive and reply to customer conversations.</p>
       <form method="post" action="/connections/whatsapp/connect">
+        {{ csrf_field() }}
         <button type="submit" class="button"><span class="icon">{% include "icons/plus.svg" %}</span> Connect</button>
       </form>
     </div>
