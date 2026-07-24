@@ -2060,8 +2060,11 @@
   .landing-proof {
     grid-template-columns: minmax(0, 0.8fr) minmax(280px, 1.2fr);
     align-items: center;
-    border-top: 0;
-    padding-block: var(--space-2xl);
+    gap: var(--space-3xl);
+    padding: var(--space-2xl);
+    border: 1px solid var(--color-accent-100);
+    border-radius: var(--radius-lg);
+    background: var(--color-accent-50);
   }
 
   .landing-proof__copy {
@@ -2072,22 +2075,13 @@
 
   .landing-proof__action {
     display: grid;
-    justify-items: start;
+    width: 100%;
     gap: var(--space-md);
   }
 
   .landing-proof__cta {
-    border-color: var(--color-accent-100);
-    background: var(--color-accent-50);
-    color: var(--color-accent-700);
-    font-family: var(--font-mono);
-    font-weight: 600;
-  }
-
-  .landing-proof__cta:hover {
-    border-color: var(--color-accent-500);
-    background: var(--color-surface);
-    color: var(--color-accent-700);
+    width: 100%;
+    justify-content: center;
   }
 
   .landing-proof__path {
@@ -2103,6 +2097,47 @@
     content: "→";
     margin-left: var(--space-xs);
     color: var(--color-accent-600);
+  }
+
+  .landing-proof__email {
+    margin: calc(var(--space-xs) * -1) 0 0;
+    color: var(--color-muted);
+    font-size: var(--text-sm);
+  }
+
+  .landing-proof__email span {
+    font-family: var(--font-mono);
+    color: var(--color-ink-secondary);
+  }
+
+  .landing-proof__outcomes {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-xs);
+    margin: var(--space-xs) 0 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .landing-proof__outcomes li {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-2xs);
+    padding: var(--space-2xs) var(--space-xs);
+    border: 1px solid var(--color-accent-100);
+    border-radius: var(--radius-sm);
+    background: color-mix(in srgb, var(--color-surface) 72%, transparent);
+    color: var(--color-ink-secondary);
+    font-size: var(--text-xs);
+  }
+
+  .landing-proof__outcomes .icon {
+    color: var(--color-accent-600);
+  }
+
+  .landing-proof__outcomes .icon svg {
+    width: var(--space-sm);
+    height: var(--space-sm);
   }
 
   /* --- Full-width landing footer (dark) --- */
@@ -2213,7 +2248,7 @@
     }
 
     .landing-proof__action .button {
-      width: auto;
+      width: 100%;
     }
 
 
@@ -2237,6 +2272,11 @@
   }
 
   @media (max-width: 640px) {
+    .landing-proof {
+      gap: var(--space-xl);
+      padding: var(--space-lg);
+    }
+
     .landing-workflow {
       padding: var(--space-md);
     }
