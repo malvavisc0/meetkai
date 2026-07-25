@@ -173,8 +173,8 @@ def should_organically_participate(
         return False
 
     now = time.monotonic()
-    last = last_reply_at.get(chat_id, 0.0)
-    elapsed = now - last
+    last = last_reply_at.get(chat_id)
+    elapsed = now - last if last is not None else float("inf")
 
     streak = consecutive_replies.get(chat_id, 0)
     in_active_exchange = streak >= 1
@@ -210,6 +210,7 @@ def should_send_voice_followup(
     if voice_note_rate <= 0:
         return False
     now = time.monotonic()
-    if now - last_voice_at.get(chat_id, 0.0) < voice_note_cooldown:
+    last = last_voice_at.get(chat_id)
+    if last is not None and now - last < voice_note_cooldown:
         return False
     return random.random() < voice_note_rate
