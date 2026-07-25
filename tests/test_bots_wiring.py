@@ -15,6 +15,7 @@ from kai.bots.waha.actions import (
     WahaNoVoiceAction,
     action_cls_for_turn,
 )
+from kai.bots.waha.config import WahaSettings
 from kai.bots.waha.setup import BotConfig as WahaBotConfig
 from kai.templates import TemplateRegistry
 from kai.templates.resolver import resolve_tools
@@ -65,6 +66,16 @@ def _email_env(monkeypatch):
     """EmailSettings requires KAI_BOT_CONTROL_PORT + KAI_BOT_HMAC_KEY."""
     monkeypatch.setenv("KAI_BOT_CONTROL_PORT", "8721")
     monkeypatch.setenv("KAI_BOT_HMAC_KEY", "test-secret")
+
+
+@pytest.fixture(autouse=True)
+def _waha_env(monkeypatch):
+    """WahaSettings.hmac_key has no default; stub it so bot.configure()
+    doesn't depend on a real KAI_WAHA_HMAC_KEY / .env in the environment."""
+    monkeypatch.setattr(
+        "kai.bots.waha.get_waha_settings",
+        lambda: WahaSettings.for_test(hmac_key="test-secret"),
+    )
 
 
 class TestWahaGeneralWiring:

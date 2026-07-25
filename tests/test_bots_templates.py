@@ -8,6 +8,7 @@ import pytest
 from kai.bots.email import Bot as EmailBot
 from kai.bots.email.setup import BotConfig as EmailBotConfig
 from kai.bots.waha import Bot as WahaBot
+from kai.bots.waha.config import WahaSettings
 from kai.bots.waha.setup import BotConfig as WahaBotConfig
 from kai.templates import TemplateRegistry, escalation_prompt_section
 from kai.templates.resolver import resolve_tools
@@ -116,6 +117,10 @@ class TestEscalationInjection:
         # Required brain env vars so resolve_tools/boot guards pass.
         monkeypatch.setenv("KAI_BRAIN_BASE_URL", "http://test")
         monkeypatch.setenv("KAI_BRAIN_MORPHIK_TOKEN", "secret")
+        monkeypatch.setattr(
+            "kai.bots.waha.get_waha_settings",
+            lambda: WahaSettings.for_test(hmac_key="test-secret"),
+        )
         tmpl = _tmpl("waha", "customer-support")
         bot = WahaBot(_waha_dir(), config=WahaBotConfig(trigger_keyword="kai"))
         agent = _fake_agent()

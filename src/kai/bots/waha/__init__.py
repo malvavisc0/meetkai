@@ -1987,7 +1987,8 @@ class Bot(BaseBot):
         TTL so a fast chat doesn't hammer the API.
         """
         now = time.monotonic()
-        if now - self._roster_refreshed_at.get(chat_id, 0.0) < _ROSTER_REFRESH_TTL:
+        last_refreshed = self._roster_refreshed_at.get(chat_id)
+        if last_refreshed is not None and now - last_refreshed < _ROSTER_REFRESH_TTL:
             return
 
         async with self._waha_client_ctx() as client:
