@@ -9,6 +9,7 @@ volumes:
   morphik-storage:
   morphik-postgres-data:
   kai-data:
+  kai-postgres-data:
   kai-vendor:
   kai-models:
   glitchtip-postgres-data:
@@ -282,6 +283,28 @@ services:
     networks:
       - odyssey
 
+  kai-postgres:
+    image: postgres:18
+    container_name: kai-postgres
+    hostname: kai-postgres
+    restart: unless-stopped
+    environment:
+      TZ: ${TZ}
+      POSTGRES_USER: ${KAI_POSTGRES_USER}
+      POSTGRES_PASSWORD: ${KAI_POSTGRES_PASSWORD}
+      POSTGRES_DB: ${KAI_POSTGRES_DB}
+      PGDATA: /var/lib/postgresql/data/pgdata
+    volumes:
+      - kai-postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${KAI_POSTGRES_USER} -d ${KAI_POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+    networks:
+      - odyssey
+
   cockpit:
     image: ghcr.io/malvavisc0/meetkai-cockpit:${KAI_IMAGE_TAG:-latest}
     pull_policy: always
@@ -297,7 +320,11 @@ services:
       - kai-vendor:/app/vendor
       - kai-models:/app/models
     env_file: .env
+    environment:
+      KAI_COCKPIT_DB: postgresql+psycopg://${KAI_POSTGRES_USER}:${KAI_POSTGRES_PASSWORD}@kai-postgres:5432/${KAI_POSTGRES_DB}
     depends_on:
+      kai-postgres:
+        condition: service_healthy
       waha:
         condition: service_healthy
       crawl4ai:
