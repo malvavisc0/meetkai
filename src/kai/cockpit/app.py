@@ -49,10 +49,6 @@ from kai.cockpit.deployments import topbar_status  # noqa: E402
 
 templates.env.globals["topbar_status"] = topbar_status
 
-# Contact email shown on landing/login pages. Configurable so deployments
-# don't have to edit templates to change the support address.
-templates.env.globals["contact_email"] = get_cockpit_settings().contact_email
-
 
 def format_timestamp(timestamp: str | datetime | None) -> str:
     """Render persisted ISO timestamps (or datetimes) in the server's local

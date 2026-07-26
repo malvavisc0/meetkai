@@ -301,12 +301,33 @@ the cockpit box's `.env` as `KAI_BRAIN_MORPHIK_TOKEN` (the exact `curl` command
 is documented in `.env.example`), then restart the cockpit. Until then the
 brain tool stays disabled — the cockpit logs a warning rather than failing.
 
+## Landing Page (separate static site)
+
+The marketing landing page is **not** part of the cockpit or any compose stack.
+It is a standalone static site in [`landing/`](landing/README.md), deployed to
+GitHub Pages by `.github/workflows/pages.yml` on pushes to `master` that touch
+`landing/**`. Domains split cleanly:
+
+- `meetk.ai` → the GitHub Pages landing site
+- `cockpit.meetk.ai` → the cockpit box (set `KAI_PUBLIC_URL=https://cockpit.meetk.ai`)
+
+The landing's "Login" button links to `https://cockpit.meetk.ai/login`. The
+cockpit no longer serves `/` as a page — it redirects `/` to `/console` (which
+redirects to `/login` when signed out).
+
+Preview the landing locally:
+
+```bash
+python3 -m http.server -d landing 8090   # http://localhost:8090
+```
+
 ## Layout
 
 ```text
 kai/
 ├── pyproject.toml
 ├── README.md
+├── landing/            # standalone static marketing site (GitHub Pages)
 ├── src/kai/
 │   ├── agent/          # LLM runtime, tools, goals, context, scheduling
 │   ├── bots/           # Bot plugins (waha, email)

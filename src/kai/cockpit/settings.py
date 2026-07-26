@@ -21,7 +21,6 @@ class CockpitSettings(BaseSettings):
     cockpit_auto_approve_login: bool = False
     public_url: str = ""
     cookie_secure: bool | None = None
-    contact_email: str = "hello@meetk.ai"
     cockpit_internal_url: str = "http://127.0.0.1:8080"
     cockpit_escalation_secret: str = ""
     escalations_path: Path = Path("data/cockpit.escalations.json")

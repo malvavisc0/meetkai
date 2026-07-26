@@ -1,10 +1,11 @@
-"""Console route: /console (list deployments + bot picker) + / placeholder."""
+"""Console route: /console (list deployments + bot picker). / redirects there."""
 
 from fastapi import APIRouter, Depends, Request
+from fastapi.responses import RedirectResponse
 from sqlalchemy.orm import Session
 
 from kai.cockpit.app import templates
-from kai.cockpit.auth import get_current_user, require_user
+from kai.cockpit.auth import require_user
 from kai.cockpit.bots import BOT_TYPES
 from kai.cockpit.connections.service import ConnectionsService
 from kai.cockpit.db import get_db
@@ -57,8 +58,8 @@ async def console(
 
 
 @router.get("/")
-async def index(
-    request: Request,
-    user: User | None = Depends(get_current_user),
-):
-    return templates.TemplateResponse(request, "index.html", {"user": user})
+async def index() -> RedirectResponse:
+    # The marketing landing page is a separate static site (see landing/).
+    # The cockpit root just sends operators to the console, which redirects
+    # to /login when unauthenticated.
+    return RedirectResponse(url="/console", status_code=307)
