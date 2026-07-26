@@ -16,15 +16,25 @@ from kai.cockpit.models import Connection
 
 @pytest.fixture
 def fake_waha_client(monkeypatch):
-    """Patch ``WahaClient`` used by connections.py with an AsyncMock."""
+    """An ``AsyncMock`` standing in for ``WahaClient``.
+
+    Passed to ``ConnectionsService`` via its ``client_factory`` constructor
+    param (see the ``connections_service`` fixture below) rather than
+    monkeypatching the ``WahaClient`` import at each call site.
+    """
     client = AsyncMock()
     client.close = AsyncMock()
-    monkeypatch.setattr("kai.cockpit.connections.service.WahaClient", lambda settings: client)
     monkeypatch.setattr(
         "kai.cockpit.connections.service.get_waha_settings",
         lambda: SimpleNamespace(webhook_public_host="test-host"),
     )
     return client
+
+
+@pytest.fixture
+def connections_service(db, fake_waha_client):
+    """A ``ConnectionsService`` wired to the fake WAHA client."""
+    return ConnectionsService(db, client_factory=lambda settings: fake_waha_client)
 
 
 class TestLazyConnectionCreation:
@@ -87,11 +97,13 @@ class TestPortAllocation:
 
 class TestConnectWhatsapp:
     @pytest.mark.asyncio
-    async def test_connect_working_returns_connected(self, db, user, fake_waha_client):
+    async def test_connect_working_returns_connected(
+        self, db, user, fake_waha_client, connections_service
+    ):
         fake_waha_client.create_session.return_value = {}
         fake_waha_client.get_session.return_value = {"status": "WORKING"}
 
-        svc = ConnectionsService(db)
+        svc = connections_service
         result = await svc.connect_whatsapp(user)
 
         assert result == {"status": "connected"}
@@ -101,22 +113,24 @@ class TestConnectWhatsapp:
         fake_waha_client.close.assert_awaited()
 
     @pytest.mark.asyncio
-    async def test_connect_scan_qr_returns_qr_bytes(self, db, user, fake_waha_client):
+    async def test_connect_scan_qr_returns_qr_bytes(
+        self, db, user, fake_waha_client, connections_service
+    ):
         fake_waha_client.create_session.return_value = {}
         fake_waha_client.get_session.return_value = {"status": "SCAN_QR_CODE"}
         fake_waha_client.get_qr.return_value = b"png-bytes"
 
-        svc = ConnectionsService(db)
+        svc = connections_service
         result = await svc.connect_whatsapp(user)
 
         assert result == {"status": "scan_qr", "qr_bytes": b"png-bytes"}
 
     @pytest.mark.asyncio
-    async def test_connect_failed_raises(self, db, user, fake_waha_client):
+    async def test_connect_failed_raises(self, db, user, fake_waha_client, connections_service):
         fake_waha_client.create_session.return_value = {}
         fake_waha_client.get_session.return_value = {"status": "FAILED"}
 
-        svc = ConnectionsService(db)
+        svc = connections_service
         with pytest.raises(ConnectionError):
             await svc.connect_whatsapp(user)
 
@@ -127,8 +141,10 @@ class TestConnectWhatsapp:
 
 class TestRefreshStatus:
     @pytest.mark.asyncio
-    async def test_refresh_working_sets_connected(self, db, user, fake_waha_client):
-        svc = ConnectionsService(db)
+    async def test_refresh_working_sets_connected(
+        self, db, user, fake_waha_client, connections_service
+    ):
+        svc = connections_service
         svc.get_or_create_whatsapp(user)
         fake_waha_client.get_session.return_value = {"status": "WORKING"}
 
@@ -136,8 +152,10 @@ class TestRefreshStatus:
         assert conn.status == "connected"
 
     @pytest.mark.asyncio
-    async def test_refresh_missing_session_sets_disconnected(self, db, user, fake_waha_client):
-        svc = ConnectionsService(db)
+    async def test_refresh_missing_session_sets_disconnected(
+        self, db, user, fake_waha_client, connections_service
+    ):
+        svc = connections_service
         svc.get_or_create_whatsapp(user)
         fake_waha_client.get_session.return_value = None
 
@@ -145,8 +163,10 @@ class TestRefreshStatus:
         assert conn.status == "disconnected"
 
     @pytest.mark.asyncio
-    async def test_refresh_creates_connection_if_missing(self, db, user, fake_waha_client):
-        svc = ConnectionsService(db)
+    async def test_refresh_creates_connection_if_missing(
+        self, db, user, fake_waha_client, connections_service
+    ):
+        svc = connections_service
         assert svc.get_whatsapp(user) is None
         conn = await svc.refresh_status(user)
         assert conn is not None
@@ -155,9 +175,9 @@ class TestRefreshStatus:
 class TestDisconnect:
     @pytest.mark.asyncio
     async def test_disconnect_deletes_session_and_marks_disconnected(
-        self, db, user, fake_waha_client
+        self, db, user, fake_waha_client, connections_service
     ):
-        svc = ConnectionsService(db)
+        svc = connections_service
         conn = svc.get_or_create_whatsapp(user)
         conn.status = "connected"
         db.commit()
@@ -168,14 +188,18 @@ class TestDisconnect:
         assert conn.status == "disconnected"
 
     @pytest.mark.asyncio
-    async def test_disconnect_noop_when_no_connection(self, db, user, fake_waha_client):
-        svc = ConnectionsService(db)
+    async def test_disconnect_noop_when_no_connection(
+        self, db, user, fake_waha_client, connections_service
+    ):
+        svc = connections_service
         await svc.disconnect_whatsapp(user)
         fake_waha_client.delete_session.assert_not_awaited()
 
     @pytest.mark.asyncio
-    async def test_disconnect_preserves_connection_row(self, db, user, fake_waha_client):
-        svc = ConnectionsService(db)
+    async def test_disconnect_preserves_connection_row(
+        self, db, user, fake_waha_client, connections_service
+    ):
+        svc = connections_service
         conn = svc.get_or_create_whatsapp(user)
         conn.status = "connected"
         db.commit()

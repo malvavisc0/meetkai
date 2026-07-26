@@ -13,7 +13,7 @@ from pathlib import Path
 
 import httpx
 
-from kai.bots.waha.config import WahaSettings
+from kai.media.config import MediaSettings
 from kai.vendors.manager import VendorManager
 
 logger = logging.getLogger(__name__)
@@ -27,7 +27,7 @@ _HEALTH_POLL_ATTEMPTS = 60
 class MediaServiceManager:
     """Lifecycle for shared whisper-server + kokoro server."""
 
-    def __init__(self, settings: WahaSettings, vendor_manager: VendorManager) -> None:
+    def __init__(self, settings: MediaSettings, vendor_manager: VendorManager) -> None:
         self._settings = settings
         self._vendors = vendor_manager
         self._whisper_proc: subprocess.Popen | None = None

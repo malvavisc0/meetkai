@@ -68,22 +68,24 @@ def _login(client, db, bob):
     return client
 
 
-def _mock_waha(monkeypatch, *, overview=None, raises=None):
+def _mock_waha(client, *, overview=None, raises=None):
+    from kai.cockpit.routes.deployments.chats import get_waha_client_factory
+
     mock = AsyncMock()
     mock.close = AsyncMock()
     if raises is not None:
         mock.get_chats_overview = AsyncMock(side_effect=raises)
     else:
         mock.get_chats_overview = AsyncMock(return_value=overview or [])
-    monkeypatch.setattr("kai.cockpit.routes.deployments.chats.WahaClient", lambda settings: mock)
+    client.app.dependency_overrides[get_waha_client_factory] = lambda: lambda settings: mock
     return mock
 
 
 class TestChatsJson:
-    def test_happy_path(self, client, db, bob, conn, dep, monkeypatch):
+    def test_happy_path(self, client, db, bob, conn, dep):
         _login(client, db, bob)
         _mock_waha(
-            monkeypatch,
+            client,
             overview=[
                 {"id": "120363@g.us", "name": "kAI Group", "picture": None},
                 {"id": "591123@c.us", "name": "Maria", "picture": None},
@@ -100,12 +102,12 @@ class TestChatsJson:
         # No name -> falls back to id's first char.
         assert body["chats"][2]["avatar_initial"] == "5"
 
-    def test_has_more_when_page_full(self, client, db, bob, conn, dep, monkeypatch):
+    def test_has_more_when_page_full(self, client, db, bob, conn, dep):
         _login(client, db, bob)
         # Over-fetch: route asks WAHA for limit+1; returning limit+1 rows
         # signals there's another page, and the response is trimmed to limit.
         _mock_waha(
-            monkeypatch,
+            client,
             overview=[{"id": f"{i}@c.us", "name": f"C{i}"} for i in range(3)],
         )
         r = client.get(f"/deployments/{dep.id}/chats.json", params={"limit": 2, "offset": 0})
@@ -114,20 +116,20 @@ class TestChatsJson:
         assert body["has_more"] is True
         assert len(body["chats"]) == 2
 
-    def test_has_more_false_on_last_page(self, client, db, bob, conn, dep, monkeypatch):
+    def test_has_more_false_on_last_page(self, client, db, bob, conn, dep):
         _login(client, db, bob)
         # Fewer than limit+1 rows -> last page, no more.
         _mock_waha(
-            monkeypatch,
+            client,
             overview=[{"id": f"{i}@c.us", "name": f"C{i}"} for i in range(2)],
         )
         r = client.get(f"/deployments/{dep.id}/chats.json", params={"limit": 2, "offset": 0})
         assert r.status_code == 200
         assert r.json()["has_more"] is False
 
-    def test_waha_failure_surfaces_error(self, client, db, bob, conn, dep, monkeypatch):
+    def test_waha_failure_surfaces_error(self, client, db, bob, conn, dep):
         _login(client, db, bob)
-        _mock_waha(monkeypatch, raises=RuntimeError("waha down"))
+        _mock_waha(client, raises=RuntimeError("waha down"))
         r = client.get(f"/deployments/{dep.id}/chats.json")
         # WAHA failures are surfaced to the user (with a pointer to
         # /dependencies) rather than silently rendering an empty picker or
@@ -141,18 +143,18 @@ class TestChatsJson:
         assert body["error"] == "Could not load chats for this WhatsApp session"
         assert "waha down" not in body["error"]
 
-    def test_client_construction_failure_surfaces_error(
-        self, client, db, bob, conn, dep, monkeypatch
-    ):
+    def test_client_construction_failure_surfaces_error(self, client, db, bob, conn, dep):
         # A failure building the WahaClient itself (e.g. bad/missing WAHA
         # settings) must degrade the same way as a failed chats/overview
         # call, not bubble up as an unhandled 500.
         _login(client, db, bob)
 
+        from kai.cockpit.routes.deployments.chats import get_waha_client_factory
+
         def _boom(settings):
             raise RuntimeError("bad waha settings: hmac_key not configured")
 
-        monkeypatch.setattr("kai.cockpit.routes.deployments.chats.WahaClient", _boom)
+        client.app.dependency_overrides[get_waha_client_factory] = lambda: _boom
         r = client.get(f"/deployments/{dep.id}/chats.json")
         assert r.status_code == 200
         body = r.json()
@@ -161,9 +163,9 @@ class TestChatsJson:
         assert body["error"] == "Could not load chats for this WhatsApp session"
         assert "bad waha settings" not in body["error"]
 
-    def test_no_connection_returns_empty(self, client, db, bob, conn, dep, monkeypatch):
+    def test_no_connection_returns_empty(self, client, db, bob, conn, dep):
         _login(client, db, bob)
-        _mock_waha(monkeypatch, overview=[{"id": "1@c.us", "name": "x"}])
+        _mock_waha(client, overview=[{"id": "1@c.us", "name": "x"}])
         # dep required conn to exist at creation time — remove it now to
         # simulate an operator who disconnected WhatsApp afterward.
         db.delete(conn)
@@ -177,7 +179,7 @@ class TestChatsJson:
         assert r.status_code == 302
         assert r.headers["location"] == "/login"
 
-    def test_not_owner_returns_empty(self, client, db, bob, conn, dep, monkeypatch):
+    def test_not_owner_returns_empty(self, client, db, bob, conn, dep):
         # A second user logs in and tries bob's deployment.
         alice = User(
             email="alice@x.com",
@@ -190,16 +192,16 @@ class TestChatsJson:
         db.add(alice)
         db.commit()
         _login(client, db, alice)
-        _mock_waha(monkeypatch, overview=[{"id": "1@c.us", "name": "x"}])
+        _mock_waha(client, overview=[{"id": "1@c.us", "name": "x"}])
         r = client.get(f"/deployments/{dep.id}/chats.json")
         assert r.status_code == 200
         assert r.json()["chats"] == []
 
 
 class TestSettingsPageRender:
-    def test_settings_page_renders_picker_markup(self, client, db, bob, conn, dep, monkeypatch):
+    def test_settings_page_renders_picker_markup(self, client, db, bob, conn, dep):
         _login(client, db, bob)
-        _mock_waha(monkeypatch, overview=[])
+        _mock_waha(client, overview=[])
         r = client.get(f"/deployments/{dep.id}/settings")
         assert r.status_code == 200
         assert "data-chat-picker" in r.text

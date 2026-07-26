@@ -17,7 +17,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
 
-from kai.bots.waha.webhook import _MAX_BODY_BYTES
+from kai.bots.webhook import _MAX_BODY_BYTES
 from kai.cockpit.bots import BOT_TYPES
 from kai.cockpit.connections.secrets import decrypt_config
 from kai.cockpit.connections.webhooks import (

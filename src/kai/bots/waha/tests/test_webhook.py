@@ -5,7 +5,7 @@ import pytest
 from httpx import ASGITransport, AsyncClient
 
 from kai.bots.base import TellResult
-from kai.bots.waha.webhook import create_webhook_app
+from kai.bots.webhook import create_webhook_app
 
 _KEY = "test-secret"
 

@@ -1,0 +1,233 @@
+name: kai-workers
+
+networks:
+  odyssey:
+
+volumes:
+  redis-data:
+  morphik-storage:
+  morphik-postgres-data:
+
+configs:
+  morphik_config:
+    content: |
+      # Morphik core config — mounted at /app/morphik.toml.
+      # Based on the image's /app/morphik.toml.default, with the completion and
+      # embedding models repointed at OpenRouter (one provider, one key) and the
+      # reranker disabled.
+
+      [api]
+      host = "0.0.0.0"
+      port = 8000
+      reload = false
+
+      [service]
+      environment = "docker"
+      version = "unknown"
+      enable_profiling = false
+
+      [auth]
+      jwt_algorithm = "HS256"
+      bypass_auth_mode = false
+      dev_user_id = "dev_user"
+
+      #### Registered models
+      [registered_models]
+      openrouter_granite_8b = { model_name = "openai/ibm-granite/granite-4.1-8b", api_base = "https://openrouter.ai/api/v1" }
+      openrouter_qwen_vl = { model_name = "openai/qwen/qwen3-vl-8b-instruct", api_base = "https://openrouter.ai/api/v1" }
+      openrouter_embed_3_small = { model_name = "openai/text-embedding-3-small", api_base = "https://openrouter.ai/api/v1" }
+
+      #### Component configurations ####
+
+      [completion]
+      model = "openrouter_granite_8b"
+      default_max_tokens = "262144"
+      default_temperature = 0.3
+
+      [database]
+      provider = "postgres"
+      pool_size = 10
+      max_overflow = 15
+      pool_recycle = 3600
+      pool_timeout = 10
+      pool_pre_ping = true
+      max_retries = 3
+      retry_delay = 1.0
+
+      [embedding]
+      model = "openrouter_embed_3_small"
+      dimensions = 1536
+      similarity_metric = "cosine"
+
+      [parser]
+      chunk_size = 6000
+      chunk_overlap = 300
+      use_contextual_chunking = false
+      contextual_chunking_model = "openrouter_granite_8b"
+
+      [parser.xml]
+      max_tokens = 350
+      preferred_unit_tags = ["SECTION", "Section", "Article", "clause"]
+      ignore_tags = ["TOC", "INDEX"]
+
+      [document_analysis]
+      model = "openrouter_granite_8b"
+
+      [parser.vision]
+      model = "openrouter_qwen_vl"
+      frame_sample_rate = -1
+
+      [reranker]
+      use_reranker = false
+      provider = "flag"
+      model_name = "BAAI/bge-reranker-large"
+      query_max_length = 256
+      passage_max_length = 512
+      use_fp16 = true
+      device = "cpu"
+
+      [storage]
+      provider = "local"
+      storage_path = "/app/storage"
+      s3_upload_concurrency = 16
+
+      [vector_store]
+      provider = "pgvector"
+
+      [multivector_store]
+      provider = "postgres"
+
+      [redis]
+      url = "redis://redis:6379/0"
+      host = "redis"
+      port = 6379
+
+      [worker]
+      arq_max_jobs = 1
+      colpali_store_batch_size = 16
+
+      [pdf]
+      colpali_pdf_dpi = 150
+
+      [morphik]
+      enable_colpali = false
+      mode = "self_hosted"
+      secret_manager = "env"
+      api_domain = "api.morphik.ai"
+      morphik_embedding_api_domain = ["http://localhost:6000"]
+      colpali_mode = "off"
+
+      [pdf_viewer]
+      frontend_url = "http://localhost:3000/api/pdf"
+
+      [telemetry]
+      service_name = "databridge-core"
+      project_name = "oss_docker"
+      upload_interval_hours = 4.0
+      max_local_bytes = 1073741824
+
+services:
+  redis:
+    image: redis/redis-stack-server:7.4.0-v8
+    container_name: redis
+    hostname: redis
+    restart: unless-stopped
+    environment:
+      TZ: ${TZ}
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+    networks:
+      - odyssey
+
+  morphik:
+    image: ghcr.io/morphik-org/morphik-core:2026-07-23
+    container_name: morphik
+    hostname: morphik
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      TZ: ${TZ}
+      JWT_SECRET_KEY: ${KAI_BRAIN_MORPHIK_JWT_SECRET}
+      LOCAL_URI_PASSWORD: ${KAI_BRAIN_MORPHIK_LOCAL_PASSWORD}
+      ADMIN_SERVICE_SECRET: ${KAI_BRAIN_MORPHIK_ADMIN_SECRET}
+      POSTGRES_URI: postgresql+asyncpg://${MORPHIK_POSTGRES_USER}:${MORPHIK_POSTGRES_PASSWORD}@morphik-postgres:5432/${MORPHIK_POSTGRES_DB}
+      PGPASSWORD: ${MORPHIK_POSTGRES_PASSWORD}
+      PGHOST: morphik-postgres
+      PGPORT: "5432"
+      PGUSER: ${MORPHIK_POSTGRES_USER}
+      PGDATABASE: ${MORPHIK_POSTGRES_DB}
+      REDIS_HOST: redis
+      REDIS_PORT: "6379"
+      # OPENAI_API_KEY is read by morphik.toml's openai completion/embedding
+      # providers via the standard litellm env path; OpenRouter accepts the
+      # same Bearer scheme, so one key works for both.
+      OPENAI_API_KEY: ${OPENROUTER_API_KEY}
+    volumes:
+      - morphik-storage:/app/storage
+    configs:
+      - source: morphik_config
+        target: /app/morphik.toml
+    depends_on:
+      morphik-postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    healthcheck:
+      test: ["CMD-SHELL", "/app/.venv/bin/python3 -c \"import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8000/health').status==200 else 1)\""]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    networks:
+      - odyssey
+
+  morphik-postgres:
+    image: pgvector/pgvector:pg18
+    container_name: postgres
+    hostname: postgres
+    restart: unless-stopped
+    environment:
+      TZ: ${TZ}
+      POSTGRES_USER: ${MORPHIK_POSTGRES_USER}
+      POSTGRES_PASSWORD: ${MORPHIK_POSTGRES_PASSWORD}
+      POSTGRES_DB: ${MORPHIK_POSTGRES_DB}
+      PGDATA: /var/lib/postgresql/data/pgdata
+    volumes:
+      - morphik-postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${MORPHIK_POSTGRES_USER} -d ${MORPHIK_POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+    networks:
+      - odyssey
+
+  crawl4ai:
+    image: unclecode/crawl4ai:0
+    container_name: crawl4ai
+    hostname: crawl4ai
+    restart: unless-stopped
+    shm_size: "2g"
+    expose:
+      - 11235
+    command: >-
+      bash -c "python -m playwright install chromium && exec bash entrypoint.sh"
+    environment:
+      TZ: ${TZ}
+      CRAWL4AI_API_TOKEN: ${KAI_BRAIN_CRAWL4AI_TOKEN}
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:11235/health >/dev/null 2>&1 || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 60s
+    networks:
+      - odyssey

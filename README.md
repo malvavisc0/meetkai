@@ -229,43 +229,77 @@ uv run ruff check .
 uv lock --upgrade && uv sync
 ```
 
-## Running Locally (Dev Stack)
+## Running With Docker
 
-The repo ships a single `docker-compose.yml` (base, what Coolify deploys to
-production) plus a `docker-compose.override.yml` (dev-only, auto-loaded by
-`docker compose`). Local dev runs the full stack — redis, waha, morphik,
-morphik-postgres, crawl4ai, mailpit — and builds the cockpit image from the
-working tree instead of pulling it.
+The stack is split into three independent compose files — one per box — each
+with its own `.env` template. On the host that runs a given stack, copy that
+stack's template to `.env` and fill in secrets.
 
-Prerequisites:
-- Docker + Docker Compose v2
-- A `.env` file at the repo root with all variables referenced by the
-  compose files (copy from `.env.example` and fill in secrets)
+| Stack | Compose file | Services | Env template |
+|-------|--------------|----------|--------------|
+| Cockpit (main) | `docker-compose.yml` | `cockpit`, `kai-postgres` | `.env.example` |
+| WhatsApp | `docker-compose.waha.yml` | `waha`, `redis` | `.env.waha.example` |
+| Workers | `docker-compose.workers.yaml` | `morphik`, `morphik-postgres`, `crawl4ai`, `redis` | `.env.workers.example` |
 
-Start the dev stack:
+The cockpit reaches waha/morphik/crawl4ai over the network via the `KAI_*`
+URLs, so those hostnames must resolve from the cockpit host. Two secrets must
+be identical across hosts:
+- `KAI_WAHA_API_KEY` (cockpit) == `WAHA_API_KEY` (waha stack)
+- `KAI_BRAIN_CRAWL4AI_TOKEN` (cockpit stack == workers stack)
+
+Prerequisites: Docker + Docker Compose v2.
+
+> The `waha` and `workers` stacks both define a container named `redis`, so
+> they are designed to run on **separate hosts**. To co-locate them on one
+> machine, rename one stack's `redis` `container_name` first.
+
+### Cockpit box
 
 ```bash
+cp .env.example .env   # fill in secrets
 docker compose up -d --build
 ```
 
-`docker compose` automatically merges `docker-compose.yml` +
-`docker-compose.override.yml`, so dev gets:
-- the cockpit built locally (`build: .`, image `meetkai-dev-cockpit`)
+`docker compose` auto-merges the dev-only `docker-compose.override.yml`, so
+local dev gets:
+- the cockpit built from the working tree (`build: .`, image `meetkai-dev-cockpit`)
+  instead of the published image
 - mailpit (SMTP catch + web UI on host port 8025)
+- the cockpit published on host port 8080
 - a separate `meetkai-dev` compose project (isolated volumes)
 
-Reach the cockpit at `http://localhost:8080`, mailpit UI at
-`http://localhost:8025`, and morphik at `http://localhost:8000` (internal only
-unless you publish it).
+Reach the cockpit at `http://localhost:8080` and mailpit at
+`http://localhost:8025`.
 
-Notes:
-- The morphik config lives inline in `docker-compose.yml` under
-  `configs.morphik_config` (mounted at `/app/morphik.toml`); edit it there,
-  not in a separate file.
-- Production (Coolify) deploys with `docker compose -f docker-compose.yml`,
-  which ignores the override: no mailpit, cockpit pulls the published image
-  and exposes `8080` (no published host port; Coolify's Caddy proxy routes
-  the public domain to it).
+Production (Coolify) deploys with `docker compose -f docker-compose.yml`, which
+ignores the override: no mailpit, cockpit pulls the published image and exposes
+`8080` without publishing a host port (Coolify's proxy routes the public domain
+to it).
+
+### WhatsApp box
+
+```bash
+cp .env.waha.example .env   # WAHA_API_KEY must match the cockpit's KAI_WAHA_API_KEY
+docker compose -f docker-compose.waha.yml up -d
+```
+
+Publishes WAHA on host port 3000.
+
+### Workers box
+
+```bash
+cp .env.workers.example .env
+docker compose -f docker-compose.workers.yaml up -d
+```
+
+Publishes morphik on host port 8000. The morphik config lives inline in
+`docker-compose.workers.yaml` under `configs.morphik_config` (mounted at
+`/app/morphik.toml`); edit it there, not in a separate file.
+
+Once morphik is healthy, mint the brain bearer token **once** and paste it into
+the cockpit box's `.env` as `KAI_BRAIN_MORPHIK_TOKEN` (the exact `curl` command
+is documented in `.env.example`), then restart the cockpit. Until then the
+brain tool stays disabled — the cockpit logs a warning rather than failing.
 
 ## Layout
 

@@ -31,7 +31,7 @@ _LANGUAGE_NAME_TO_KOKORO_LANG: dict[str, str] = {
 # Kokoro v1.0 supported languages and their best default voice (highest-graded
 # female voice per language, from huggingface.co/hexgrad/Kokoro-82M VOICES.md).
 # A reply detected as one of these languages is synthesized with the matching
-# voice unless the operator overrides it via KAI_WAHA_KOKORO_VOICE_MAP.
+# voice unless the operator overrides it via KAI_MEDIA_KOKORO_VOICE_MAP.
 _DEFAULT_VOICE_BY_LANG: dict[str, str] = {
     "en-us": "af_heart",
     "en-gb": "bf_emma",
@@ -46,7 +46,7 @@ _DEFAULT_VOICE_BY_LANG: dict[str, str] = {
 
 # Public, stable list of Kokoro v1.0 supported lang codes — used by callers
 # (e.g. the cockpit settings UI) that need to show operators which lang
-# codes are valid for KAI_WAHA_KOKORO_VOICE_MAP / kokoro_voice_map entries.
+# codes are valid for KAI_MEDIA_KOKORO_VOICE_MAP / kokoro_voice_map entries.
 SUPPORTED_KOKORO_LANGS: tuple[str, ...] = tuple(_DEFAULT_VOICE_BY_LANG.keys())
 
 # One canonical display name per supported lang code, for surfacing to
@@ -344,7 +344,7 @@ def parse_voice_map(raw: str) -> dict[str, str]:
     """Parse a 'lang=voice,lang=voice' override string into a dict.
 
     Malformed entries (missing '=', empty lang, or empty voice) are dropped
-    and logged so a typo in KAI_WAHA_KOKORO_VOICE_MAP is visible at startup
+    and logged so a typo in KAI_MEDIA_KOKORO_VOICE_MAP is visible at startup
     rather than silently ignored.
     """
     out: dict[str, str] = {}

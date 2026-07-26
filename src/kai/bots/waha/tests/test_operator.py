@@ -17,7 +17,7 @@ from kai.bots.waha.actions import (
     WahaNoSilentAction,
     WahaNoVoiceAction,
 )
-from kai.bots.waha.webhook import create_webhook_app
+from kai.bots.webhook import create_webhook_app
 from kai.runs import RunRecord, RunRegistry, generate_run_id, pid_alive, runs_path
 
 _KEY = "test-secret"
@@ -251,7 +251,8 @@ class TestHandleOperator:
         # (including send_voice_note). With TTS offline the schema legitimately
         # drops send_voice_note — covered by the offline test below.
         bot._waha = MagicMock()
-        bot._waha.kokoro_enabled = True
+        bot._media = MagicMock()
+        bot._media.kokoro_enabled = True
         bot._tts_available = True
 
         env = await bot.handle_operator("do something", persist=False)
@@ -284,7 +285,8 @@ class TestHandleOperator:
     async def test_operator_turn_injects_tts_capability_note_when_offline(self):
         bot = _make_bot()
         bot._waha = MagicMock()
-        bot._waha.kokoro_enabled = True
+        bot._media = MagicMock()
+        bot._media.kokoro_enabled = True
         bot._tts_available = False
         agent = MagicMock()
         agent.get_tools.return_value = []
@@ -306,7 +308,8 @@ class TestHandleOperator:
     async def test_operator_turn_omits_tts_capability_note_when_online(self):
         bot = _make_bot()
         bot._waha = MagicMock()
-        bot._waha.kokoro_enabled = True
+        bot._media = MagicMock()
+        bot._media.kokoro_enabled = True
         bot._tts_available = True
         agent = MagicMock()
         agent.get_tools.return_value = []
@@ -327,7 +330,8 @@ class TestHandleOperator:
         attempting (and failing) a voice note in its own language."""
         bot = _make_bot()
         bot._waha = MagicMock()
-        bot._waha.kokoro_enabled = True
+        bot._media = MagicMock()
+        bot._media.kokoro_enabled = True
         bot._tts_available = True
         bot._tts_lang = None
         bot._config.language = "German"

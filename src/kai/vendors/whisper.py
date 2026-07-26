@@ -76,7 +76,7 @@ class WhisperVendor(Vendor):
     def __init__(self, project_root: Path) -> None:
         super().__init__(project_root)
         # The binaries live under vendor/whisper.cpp/ (not vendor/whisper/) to
-        # match WahaSettings.whisper_cpp_path's default and the historical
+        # match MediaSettings.whisper_cpp_path's default and the historical
         # layout from scripts/setup_media.sh. Model files stay under
         # models/whisper/ (self.model_dir, unchanged).
         self.vendor_dir = project_root / "vendor" / "whisper.cpp"
@@ -154,7 +154,7 @@ class WhisperVendor(Vendor):
         size = resolve_model_size(language)
         fname = resolve_model_file(size)
         # Honour an explicit override path if set (matches the shell behavior).
-        override = os.environ.get("KAI_WAHA_WHISPER_MODEL_PATH", "")
+        override = os.environ.get("KAI_MEDIA_WHISPER_MODEL_PATH", "")
         dest = Path(override) if override else self.model_dir / fname
         url = f"https://huggingface.co/ggerganov/whisper.cpp/resolve/main/{fname}"
         if dest.exists():

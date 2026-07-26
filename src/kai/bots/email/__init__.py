@@ -43,7 +43,7 @@ from kai.bots.base import BaseBot, TellResult
 from kai.bots.email.config import EmailSettings, get_email_settings
 from kai.bots.email.setup import BotConfig
 from kai.bots.processing import PostProcessor
-from kai.bots.waha.webhook import create_webhook_app
+from kai.bots.webhook import create_webhook_app
 from kai.config.filters import should_process_chat_message
 from kai.config.prompts import load_system_prompt
 from kai.config.settings import Settings

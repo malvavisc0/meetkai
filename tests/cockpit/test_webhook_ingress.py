@@ -315,7 +315,7 @@ class TestForwardEvent:
 
 class TestIngestRoute:
     def test_ingest_404_when_not_supported(self):
-        from kai.bots.waha.webhook import create_webhook_app
+        from kai.bots.webhook import create_webhook_app
 
         app = create_webhook_app(hmac_key="k")
         client = pytest.importorskip("starlette.testclient").TestClient(app)
@@ -323,7 +323,7 @@ class TestIngestRoute:
         assert r.status_code == 404
 
     def test_ingest_hmac_verified(self):
-        from kai.bots.waha.webhook import create_webhook_app
+        from kai.bots.webhook import create_webhook_app
 
         received: list[dict] = []
 
@@ -342,7 +342,7 @@ class TestIngestRoute:
         assert received == [{"text": "hi"}]
 
     def test_ingest_rejects_bad_signature(self):
-        from kai.bots.waha.webhook import create_webhook_app
+        from kai.bots.webhook import create_webhook_app
 
         async def on_ingest(payload):
             return {"ok": True}

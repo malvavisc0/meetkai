@@ -28,7 +28,7 @@ src/kai/bots/email/
 ```
 
 The transport client, HMAC webhook server, and inbound-event normalization
-are shared with `waha` (`bots/waha/webhook.py`) and the cockpit
+are shared with `waha` (`bots/webhook.py`) and the cockpit
 (`cockpit/webhooks.py`) rather than duplicated here — this bot has no
 `client.py`/`payload.py`/`webhook.py` of its own.
 

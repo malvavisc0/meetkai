@@ -13,6 +13,7 @@ from kai.cockpit.deployments import (
     DeploymentStartupError,
 )
 from kai.cockpit.models import Connection
+from kai.media.config import MediaSettings
 
 
 @pytest.fixture(autouse=True)
@@ -226,7 +227,11 @@ class TestStartMediaReadinessGate:
         MEDIA_READY.clear()
         monkeypatch.setattr(
             "kai.bots.waha.config.get_waha_settings",
-            lambda: WahaSettings.for_test(media_ready_timeout=0.05, hmac_key="test-secret"),
+            lambda: WahaSettings.for_test(hmac_key="test-secret"),
+        )
+        monkeypatch.setattr(
+            "kai.media.config.get_media_settings",
+            lambda: MediaSettings.for_test(ready_timeout=0.05),
         )
 
         svc = DeploymentsService(db)
@@ -266,7 +271,11 @@ class TestStartMediaReadinessGate:
         MEDIA_READY.clear()
         monkeypatch.setattr(
             "kai.bots.waha.config.get_waha_settings",
-            lambda: WahaSettings.for_test(media_ready_timeout=0.05, hmac_key="test-secret"),
+            lambda: WahaSettings.for_test(hmac_key="test-secret"),
+        )
+        monkeypatch.setattr(
+            "kai.media.config.get_media_settings",
+            lambda: MediaSettings.for_test(ready_timeout=0.05),
         )
         now = datetime.now(UTC).isoformat()
         for service, cfg in (

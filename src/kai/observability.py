@@ -1,11 +1,12 @@
-"""Sentry (GlitchTip) observability initialization.
+"""Sentry observability initialization.
 
 Initializes the Sentry SDK for the current execution context (cockpit, CLI,
-or bot). Initialization is a no-op when ``SENTRY_DSN`` is unset.
+or bot). Initialization is a no-op when ``SENTRY_DSN`` is unset, so error
+tracking is optional and requires no service for local dev.
 
 Configuration is read from the environment:
 
-- ``SENTRY_DSN`` — DSN pointing at the GlitchTip instance. Empty disables Sentry.
+- ``SENTRY_DSN`` — DSN of a Sentry-compatible backend. Empty disables Sentry.
 - ``SENTRY_ENVIRONMENT`` — overrides ``default_environment`` when set.
 - ``SENTRY_RELEASE`` — release identifier sent with every event.
 """
@@ -58,6 +59,6 @@ def init_sentry(
         integrations=integrations,
         traces_sample_rate=0.01,
         profiles_sample_rate=profiles_sample_rate,
-        auto_session_tracking=False,  # GlitchTip doesn't support sessions
+        auto_session_tracking=False,  # Not all backends support sessions
         attach_stacktrace=False,  # Only capture stacks for actual exceptions
     )

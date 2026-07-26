@@ -70,9 +70,9 @@ KAI_WAHA_HMAC_KEY=your-secret-key
 KAI_WAHA_HMAC_ALGORITHM=sha512
 
 # Kokoro TTS (voice replies) — install with `kai vendors install kokoro`
-KAI_WAHA_KOKORO_ENABLED=true
-KAI_WAHA_KOKORO_VOICE=af_heart
-# KAI_WAHA_KOKORO_LANG=en-us        # empty = derive from bot language
+KAI_MEDIA_KOKORO_ENABLED=true
+KAI_MEDIA_KOKORO_VOICE=af_heart
+# KAI_MEDIA_KOKORO_LANG=en-us        # empty = derive from bot language
 ```
 
 `KAI_WAHA_HMAC_KEY` is optional but strongly recommended for any non-loopback
@@ -107,14 +107,14 @@ quantized model (~88MB) + voices (~27MB) into `models/kokoro/`.
 
 | Env var | Default | Description |
 |---------|---------|-------------|
-| `KAI_WAHA_KOKORO_ENABLED` | `true` | Enable TTS voice replies. |
-| `KAI_WAHA_KOKORO_VOICE` | `af_heart` | Voice name (must match the language). |
-| `KAI_WAHA_KOKORO_LANG` | *(empty)* | Kokoro language code. Empty = derived from the bot's `language` setting. |
-| `KAI_WAHA_KOKORO_SPEED` | `1.0` | Speech speed multiplier (0.5–2.0). |
-| `KAI_WAHA_KOKORO_MODEL_PATH` | `models/kokoro/kokoro-v1.0.int8.onnx` | Path to the ONNX model (used by the cockpit's shared kokoro server). |
-| `KAI_WAHA_KOKORO_VOICES_PATH` | `models/kokoro/voices-v1.0.bin` | Path to the voices file (used by the cockpit's shared kokoro server). |
-| `KAI_WAHA_KOKORO_SERVER_HOST` | `127.0.0.1` | Shared kokoro server host the bot connects to as a client. |
-| `KAI_WAHA_KOKORO_SERVER_PORT` | `8788` | Shared kokoro server port the bot connects to as a client. |
+| `KAI_MEDIA_KOKORO_ENABLED` | `true` | Enable TTS voice replies. |
+| `KAI_MEDIA_KOKORO_VOICE` | `af_heart` | Voice name (must match the language). |
+| `KAI_MEDIA_KOKORO_LANG` | *(empty)* | Kokoro language code. Empty = derived from the bot's `language` setting. |
+| `KAI_MEDIA_KOKORO_SPEED` | `1.0` | Speech speed multiplier (0.5–2.0). |
+| `KAI_MEDIA_KOKORO_MODEL_PATH` | `models/kokoro/kokoro-v1.0.int8.onnx` | Path to the ONNX model (used by the cockpit's shared kokoro server). |
+| `KAI_MEDIA_KOKORO_VOICES_PATH` | `models/kokoro/voices-v1.0.bin` | Path to the voices file (used by the cockpit's shared kokoro server). |
+| `KAI_MEDIA_KOKORO_SERVER_HOST` | `127.0.0.1` | Shared kokoro server host the bot connects to as a client. |
+| `KAI_MEDIA_KOKORO_SERVER_PORT` | `8788` | Shared kokoro server port the bot connects to as a client. |
 
 The default voice `af_heart` is an American English female voice, matching the
 bot's default `language: English`. When you change the bot language, pick a
@@ -146,7 +146,7 @@ stopword matching — an ack like "OK!" or "Listo."), kAI falls back to the
 same chat's own last confidently-detected voice language rather than the
 deployment's static default: a short ack in an otherwise-Spanish chat stays
 Spanish instead of reverting to English just because that one reply had no
-Spanish stopwords in it. The static `language`/`KAI_WAHA_KOKORO_LANG` is only
+Spanish stopwords in it. The static `language`/`KAI_MEDIA_KOKORO_LANG` is only
 used as the very first fallback for a chat with no voice history yet.
 
 ## Bot Configuration

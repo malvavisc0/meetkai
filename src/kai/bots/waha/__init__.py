@@ -52,12 +52,13 @@ from kai.bots.waha.tts import (
     synthesize,
 )
 from kai.bots.waha.video import compress_video, resolve_ffmpeg
-from kai.bots.waha.webhook import create_webhook_app
 from kai.bots.waha.youtube import extract_youtube_video_id, fetch_youtube_transcript
+from kai.bots.webhook import create_webhook_app
 from kai.cli import BotStartupError
 from kai.config.filters import should_process_chat_message
 from kai.config.prompts import load_system_prompt
 from kai.config.settings import Settings
+from kai.media.config import MediaSettings, get_media_settings
 from kai.templates.resolver import ToolResolution, resolve_config
 from kai.templates.schema import PostProcessingConfig, TemplateDef
 from kai.utils.terminal import render_image_pixelated
@@ -160,6 +161,7 @@ class Bot(BaseBot):
         self._agent: KaiAgent | None = None
         self._settings: Settings | None = None
         self._waha: WahaSettings | None = None
+        self._media: MediaSettings | None = None
         self._config: BotConfig = config or BotConfig()
         self._prompt: str = ""
         self._base_actions: tuple[str, ...] = _FULL_ACTION_NAMES
@@ -198,10 +200,12 @@ class Bot(BaseBot):
         super().configure(agent, settings, voice=voice, template=template, tools=tools)
         self._settings = settings
         waha = get_waha_settings()
-        # --voice CLI flag overrides KAI_WAHA_KOKORO_VOICE for this run.
+        media = get_media_settings()
+        # --voice CLI flag overrides KAI_MEDIA_KOKORO_VOICE for this run.
         if voice:
-            waha = waha.model_copy(update={"kokoro_voice": voice})
+            media = media.model_copy(update={"kokoro_voice": voice})
         self._waha = waha
+        self._media = media
         self._config = self._load_config(template)
         if settings.agent_language_explicit:
             self._config = self._config.model_copy(update={"language": settings.agent_language})
@@ -227,45 +231,45 @@ class Bot(BaseBot):
         if self._config.media.stt_enabled:
             # The whisper language and the chat language are separate settings.
             # When the user passes --language explicitly, use it for STT too,
-            # unless KAI_WAHA_WHISPER_LANGUAGE was set to something other than
+            # unless KAI_MEDIA_WHISPER_LANGUAGE was set to something other than
             # "auto".
-            whisper_lang = self._waha.whisper_language
+            whisper_lang = self._media.whisper_language
             if settings.agent_language_explicit and whisper_lang == "auto":
                 whisper_lang = resolve_whisper_language(settings.agent_language)
             self._stt = create_stt_provider(
-                ffmpeg_path=self._waha.ffmpeg_path,
-                whisper_cpp_path=self._waha.whisper_cpp_path,
-                model_path=self._waha.whisper_model_path,
+                ffmpeg_path=self._media.ffmpeg_path,
+                whisper_cpp_path=self._media.whisper_cpp_path,
+                model_path=self._media.whisper_model_path,
                 language=whisper_lang,
-                server_mode=self._waha.whisper_server_mode,
-                server_host=self._waha.whisper_server_host,
-                server_port=self._waha.whisper_server_port,
+                server_mode=self._media.whisper_server_mode,
+                server_host=self._media.whisper_server_host,
+                server_port=self._media.whisper_server_port,
             )
             self._stt_language = whisper_lang
 
         self._ffmpeg_path = (
-            resolve_ffmpeg(self._waha.ffmpeg_path) if self._config.media.video_enabled else None
+            resolve_ffmpeg(self._media.ffmpeg_path) if self._config.media.video_enabled else None
         )
 
-        if self._waha.kokoro_enabled and self._config.media.tts_enabled:
-            self._tts_voice = self._waha.kokoro_voice
-            # Resolve the Kokoro lang code: an explicit KAI_WAHA_KOKORO_LANG
+        if self._media.kokoro_enabled and self._config.media.tts_enabled:
+            self._tts_voice = self._media.kokoro_voice
+            # Resolve the Kokoro lang code: an explicit KAI_MEDIA_KOKORO_LANG
             # wins; otherwise derive it from the bot's configured language
             # (so an English bot gets lang="en-us" without extra configuration).
             # ``None`` means the configured language has no Kokoro v1.0 voice —
             # don't coerce it to "en-us" to avoid English phonemization in
             # whatever voice was picked.
-            if self._waha.kokoro_lang:
-                self._tts_lang = self._waha.kokoro_lang
+            if self._media.kokoro_lang:
+                self._tts_lang = self._media.kokoro_lang
             else:
                 self._tts_lang = resolve_kokoro_lang(self._config.language)
             self._voice_map: dict[str, str] = (
                 {self._tts_lang: self._tts_voice} if self._tts_lang else {}
             )
-            self._voice_map.update(parse_voice_map(self._waha.kokoro_voice_map))
+            self._voice_map.update(parse_voice_map(self._media.kokoro_voice_map))
             self._tts_available, reason = check_kokoro_available(
-                host=self._waha.kokoro_server_host,
-                port=self._waha.kokoro_server_port,
+                host=self._media.kokoro_server_host,
+                port=self._media.kokoro_server_port,
             )
             if not self._tts_available:
                 logger.warning("Kokoro TTS unavailable: %s", reason)
@@ -482,7 +486,7 @@ class Bot(BaseBot):
         media = self._config.media
         stt = media.stt_enabled and self._stt is not None
         tts = bool(
-            self._waha and self._waha.kokoro_enabled and media.tts_enabled and self._tts_available
+            self._media and self._media.kokoro_enabled and media.tts_enabled and self._tts_available
         )
         return {
             "voice_to_text": stt,
@@ -556,7 +560,7 @@ class Bot(BaseBot):
             console.print(f"  video    libx264  [dim]{self._ffmpeg_path}[/dim]")
         else:
             console.print("  video    [yellow]unavailable (ffmpeg not found)[/yellow]")
-        if self._waha.kokoro_enabled and self._config.media.tts_enabled:
+        if self._media and self._media.kokoro_enabled and self._config.media.tts_enabled:
             if self._tts_available:
                 console.print(f"  tts      kokoro  [dim]{self._tts_voice}  {self._tts_lang}[/dim]")
             else:
@@ -1679,7 +1683,7 @@ class Bot(BaseBot):
         per-turn advisory, and the delivery path all agree on whether
         ``send_voice_note`` is a real option this turn.
         """
-        return bool(self._waha is not None and self._waha.kokoro_enabled and self._tts_available)
+        return bool(self._media is not None and self._media.kokoro_enabled and self._tts_available)
 
     async def _send_voice_reply(self, chat_id: str, text: str) -> bool:
         """Synthesize *text* to a voice note and send it via ``/api/sendVoice``.
@@ -1693,10 +1697,10 @@ class Bot(BaseBot):
         unavailable, the text exceeds the limit, the language is
         unsupported, or synthesis/delivery fails.
         """
-        if not self._tts_available or self._waha is None or not self._waha.kokoro_enabled:
+        if not self._tts_available or self._media is None or not self._media.kokoro_enabled:
             return False
         clean = strip_mention_markup(text).strip()
-        if not clean or len(clean) > self._waha.kokoro_max_chars:
+        if not clean or len(clean) > self._media.kokoro_max_chars:
             return False
         lang = self._detect_voice_lang(chat_id, clean)
         if lang is None:
@@ -1710,11 +1714,11 @@ class Bot(BaseBot):
             audio = await asyncio.to_thread(
                 synthesize,
                 text=clean,
-                host=self._waha.kokoro_server_host,
-                port=self._waha.kokoro_server_port,
+                host=self._media.kokoro_server_host,
+                port=self._media.kokoro_server_port,
                 voice=voice,
                 lang=lang,
-                speed=self._waha.kokoro_speed,
+                speed=self._media.kokoro_speed,
             )
         except Exception as exc:
             logger.warning("Voice synthesis failed, falling back to text: %s", exc)

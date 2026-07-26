@@ -2,13 +2,14 @@
 
 import asyncio
 import logging
+from collections.abc import Callable
 from datetime import UTC, datetime
 
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from kai.bots.waha.client import WahaClient
-from kai.bots.waha.config import get_waha_settings
+from kai.bots.waha.config import WahaSettings, get_waha_settings
 from kai.cockpit.models import Connection, User
 from kai.cockpit.settings import get_cockpit_settings
 from kai.utils.common import now_iso, user_slug
@@ -27,8 +28,21 @@ _STATUS_STALE_SECONDS = 15
 
 
 class ConnectionsService:
-    def __init__(self, db: Session) -> None:
+    def __init__(
+        self,
+        db: Session,
+        client_factory: Callable[[WahaSettings], WahaClient] | None = None,
+    ) -> None:
+        """*client_factory* builds the WAHA client for a given settings object.
+
+        Defaults to the module-level ``WahaClient`` constructor, resolved at
+        call time (not bound at class-definition time) so tests can still
+        monkeypatch ``kai.cockpit.connections.service.WahaClient`` directly;
+        passing an explicit *client_factory* is the preferred way for new
+        tests to inject a fake client without patching an import path.
+        """
         self.db = db
+        self._client_factory = client_factory or WahaClient
 
     def list_for_user(self, user: User) -> list[Connection]:
         """Every connection row for this operator (all services)."""
@@ -99,7 +113,7 @@ class ConnectionsService:
             f"{conn.config['waha_webhook_path']}"
         )
 
-        client = WahaClient(waha)
+        client = self._client_factory(waha)
         try:
             await client.create_session(
                 name=conn.config["waha_session"],
@@ -188,7 +202,7 @@ class ConnectionsService:
         if not conn or conn.status == "disconnected":
             return None
 
-        client = WahaClient(get_waha_settings())
+        client = self._client_factory(get_waha_settings())
         try:
             session_info = await client.get_session(conn.config["waha_session"])
             if session_info and session_info.get("status") == "STOPPED":
@@ -217,7 +231,7 @@ class ConnectionsService:
         if not conn:
             return self.get_or_create_whatsapp(user)
 
-        client = WahaClient(get_waha_settings())
+        client = self._client_factory(get_waha_settings())
         try:
             session_info = await client.get_session(conn.config["waha_session"])
         finally:
@@ -283,7 +297,7 @@ class ConnectionsService:
         if not conn or conn.status == "disconnected":
             return
 
-        client = WahaClient(get_waha_settings())
+        client = self._client_factory(get_waha_settings())
         try:
             await client.delete_session(conn.config["waha_session"])
         finally:

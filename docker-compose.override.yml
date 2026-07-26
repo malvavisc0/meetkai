@@ -8,14 +8,8 @@ services:
     ports:
       - "8080:8080"
     depends_on:
-      waha:
-        condition: service_started
       mailpit:
         condition: service_started
-      crawl4ai:
-        condition: service_started
-      morphik:
-        condition: service_healthy
 
   mailpit:
     image: axllent/mailpit:v1.30
@@ -28,9 +22,3 @@ services:
       - "8025:8025"
     networks:
       - odyssey
-
-  # Port mapping for GlitchTip - DEV ONLY (expose service from docker-compose.yml to localhost)
-  # Host port 8001 avoids conflict with common local services on 8000 (e.g. vLLM, dev servers)
-  glitchtip:
-    ports:
-      - "8001:8000"

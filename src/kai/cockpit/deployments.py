@@ -470,19 +470,21 @@ class DeploymentsService:
         """Start a deployment: check connection, write config, spawn subprocess."""
         from kai.bots.waha.config import get_waha_settings
         from kai.cockpit.media_services import MEDIA_READY
+        from kai.media.config import get_media_settings
 
         bt = BOT_TYPES.get(deployment.bot_type)
         if bt is None:
             raise ValueError(f"unknown bot type: {deployment.bot_type}")
 
         waha = get_waha_settings()
+        media = get_media_settings()
 
         # Media services (whisper/kokoro) exist for STT/TTS. Only gate startup
         # on their readiness when this bot type actually uses them — an email
         # bot (feature_flags=["image"]) must not be blocked by a waha media
         # service that failed to start.
         if {"stt", "tts"} & set(bt.feature_flags):
-            timeout = waha.media_ready_timeout
+            timeout = media.ready_timeout
             if not MEDIA_READY.wait(timeout=timeout):
                 raise DeploymentStartupError(
                     f"media services not ready after waiting {timeout}s — "
@@ -559,13 +561,13 @@ class DeploymentsService:
             env["KAI_WAHA_WEBHOOK_HOST"] = "0.0.0.0"
             env["KAI_WAHA_WEBHOOK_PUBLIC_HOST"] = waha.webhook_public_host
             env["KAI_WAHA_WEBHOOK_PATH"] = conn.config["waha_webhook_path"]
-            env["KAI_WAHA_WHISPER_SERVER_HOST"] = waha.whisper_server_host
-            env["KAI_WAHA_WHISPER_SERVER_PORT"] = str(waha.whisper_server_port)
-            env["KAI_WAHA_KOKORO_SERVER_HOST"] = waha.kokoro_server_host
-            env["KAI_WAHA_KOKORO_SERVER_PORT"] = str(waha.kokoro_server_port)
+            env["KAI_MEDIA_WHISPER_SERVER_HOST"] = media.whisper_server_host
+            env["KAI_MEDIA_WHISPER_SERVER_PORT"] = str(media.whisper_server_port)
+            env["KAI_MEDIA_KOKORO_SERVER_HOST"] = media.kokoro_server_host
+            env["KAI_MEDIA_KOKORO_SERVER_PORT"] = str(media.kokoro_server_port)
             voice_map = deployment.settings.get("kokoro_voice_map", "")
             if voice_map:
-                env["KAI_WAHA_KOKORO_VOICE_MAP"] = voice_map
+                env["KAI_MEDIA_KOKORO_VOICE_MAP"] = voice_map
             env["KAI_CONFIGS_DIR"] = str(config_writer.CONFIGS_DIR)
 
         # Required credential connections (e.g. the email bot's smtp).

@@ -6,13 +6,14 @@ never renders the picker widget.
 """
 
 import logging
+from collections.abc import Callable
 
 from fastapi import APIRouter, Depends, Query
 from fastapi.responses import JSONResponse, RedirectResponse
 from sqlalchemy.orm import Session
 
 from kai.bots.waha.client import WahaClient
-from kai.bots.waha.config import get_waha_settings
+from kai.bots.waha.config import WahaSettings, get_waha_settings
 from kai.cockpit.auth import require_user
 from kai.cockpit.connections.service import ConnectionsService
 from kai.cockpit.db import get_db
@@ -23,6 +24,16 @@ from kai.cockpit.routes.deployments._shared import get_deployment
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
+
+
+def get_waha_client_factory() -> Callable[[WahaSettings], WahaClient]:
+    """FastAPI dependency provider for the WAHA client constructor.
+
+    A separate dependency (rather than calling ``WahaClient`` inline) lets
+    tests override the client via ``app.dependency_overrides`` instead of
+    monkeypatching this module's ``WahaClient`` import.
+    """
+    return WahaClient
 
 
 def _avatar_initial(name: str | None, chat_id: str) -> str:
@@ -40,6 +51,7 @@ async def deployment_chats_json(
     offset: int = Query(0, ge=0),
     user: User = Depends(require_user),
     db: Session = Depends(get_db),
+    client_factory: Callable[[WahaSettings], WahaClient] = Depends(get_waha_client_factory),
 ):
     """Proxy WAHA's chat overview for the chat picker on the Settings page.
 
@@ -59,7 +71,7 @@ async def deployment_chats_json(
 
     try:
         settings = get_waha_settings().model_copy(update={"session": conn.config["waha_session"]})
-        client = WahaClient(settings)
+        client = client_factory(settings)
         try:
             # Over-fetch by one so has_more is reliable even when WAHA's
             # merge=true collapses @lid/@c.us pairs below the limit.

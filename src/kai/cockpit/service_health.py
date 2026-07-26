@@ -30,6 +30,7 @@ import httpx
 from kai.bots.waha.config import get_waha_settings
 from kai.brain.config import get_brain_settings
 from kai.config.settings import get_settings
+from kai.media.config import get_media_settings
 
 _TIMEOUT = 3.0
 
@@ -145,13 +146,14 @@ async def check_service_health() -> list[HealthCheck]:
         try:
             waha = get_waha_settings()
             probes.append(_check_waha(client, waha.url, waha.api_key))
-            if waha.whisper_server_mode:
+            media = get_media_settings()
+            if media.whisper_server_mode:
                 probes.append(
-                    _check_whisper(client, waha.whisper_server_host, waha.whisper_server_port)
+                    _check_whisper(client, media.whisper_server_host, media.whisper_server_port)
                 )
-            if waha.kokoro_enabled:
+            if media.kokoro_enabled:
                 probes.append(
-                    _check_kokoro(client, waha.kokoro_server_host, waha.kokoro_server_port)
+                    _check_kokoro(client, media.kokoro_server_host, media.kokoro_server_port)
                 )
         except Exception as exc:  # noqa: BLE001 - config error shouldn't kill the card
             checks.append(_config_error("WAHA / media services", exc))

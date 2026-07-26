@@ -1304,7 +1304,8 @@ class TestVoiceFollowup:
             )
         )
         bot._waha = MagicMock()
-        bot._waha.kokoro_enabled = True
+        bot._media = MagicMock()
+        bot._media.kokoro_enabled = True
         bot._tts_available = True
         bot._send = AsyncMock()
         return bot
@@ -1693,7 +1694,8 @@ class TestDMNoSilence:
         # the no-silent dimension.
         bot = _make_bot(BotConfig(trigger_keyword="kai"))
         bot._waha = MagicMock()
-        bot._waha.kokoro_enabled = True
+        bot._media = MagicMock()
+        bot._media.kokoro_enabled = True
         bot._tts_available = True
         # Voice delivery is not under test here (only the no-silent schema is);
         # mock it so a probabilistic voice-followup roll can't reach the real
@@ -1726,7 +1728,8 @@ class TestDMNoSilence:
         # capabilities alter the action schema, not just prompt advisory text.
         bot = _make_bot(BotConfig(trigger_keyword="kai"))
         bot._waha = MagicMock()
-        bot._waha.kokoro_enabled = True
+        bot._media = MagicMock()
+        bot._media.kokoro_enabled = True
         bot._tts_available = False
         agent = MagicMock()
         agent.chat = AsyncMock(return_value=_chat_result("hi"))

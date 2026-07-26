@@ -102,9 +102,9 @@ def _reconcile_deployments_in_background() -> None:
     # Start shared media services BEFORE reconcile so reconcile only
     # spawns bots once STT/TTS are up.
     try:
-        from kai.bots.waha.config import get_waha_settings
+        from kai.media.config import get_media_settings
 
-        media = MediaServiceManager(get_waha_settings(), get_vendor_manager())
+        media = MediaServiceManager(get_media_settings(), get_vendor_manager())
         media.start_all()
         _MEDIA_SERVICES.append(media)
     except Exception:
