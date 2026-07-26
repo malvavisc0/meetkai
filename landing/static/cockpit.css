@@ -1,9 +1,3 @@
-/* meetk.ai landing page stylesheet.
- *
- * Standalone marketing styles, trimmed to only what index.html renders.
- * Organized in cascade layers to keep specificity low.
- */
-
 @layer tokens, base, components;
 
 /* ------------------------------------------------------------------ */

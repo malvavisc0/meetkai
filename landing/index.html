@@ -1,224 +1,307 @@
 <!DOCTYPE html>
 <html lang="en">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>meetk.ai — Ready-to-run workflow agents for your business</title>
-  <meta name="description" content="Ready-to-use AI agents for customer support, inbox, and DevOps. Connect your services, databases, and webhooks, feed the shared Brain, set your rules, and put an autonomous agent on the work in minutes.">
-  <link rel="canonical" href="https://meetk.ai/">
-  <meta property="og:type" content="website">
-  <meta property="og:site_name" content="meetk.ai">
-  <meta property="og:title" content="meetk.ai — Ready-to-run workflow agents for your business">
-  <meta property="og:description" content="Ready-to-use AI agents for customer support, inbox, and DevOps. Connect your services, databases, and webhooks, feed the shared Brain, set your rules, and put an autonomous agent on the work in minutes.">
-  <meta property="og:url" content="https://meetk.ai/">
-  <meta property="og:image" content="https://meetk.ai/static/og.png">
-  <meta property="og:image:alt" content="meetk.ai — ready-to-run workflow agents for your business">
-  <meta property="og:image:width" content="1200">
-  <meta property="og:image:height" content="630">
-  <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:title" content="meetk.ai — Ready-to-run workflow agents for your business">
-  <meta name="twitter:description" content="Ready-to-use AI agents for customer support, inbox, and DevOps. Connect your services, databases, and webhooks, feed the shared Brain, set your rules, and put an autonomous agent on the work in minutes.">
-  <meta name="twitter:image" content="https://meetk.ai/static/og.png">
-  <link rel="icon" type="image/x-icon" href="/static/favicon.ico">
-  <link rel="icon" type="image/png" sizes="32x32" href="/static/favicon-32x32.png">
-  <link rel="icon" type="image/png" sizes="16x16" href="/static/favicon-16x16.png">
-  <link rel="apple-touch-icon" sizes="180x180" href="/static/apple-touch-icon.png">
-  <link rel="manifest" href="/static/site.webmanifest">
-  <link rel="stylesheet" href="/static/cockpit.css">
-</head>
-<body>
-<header class="landing-nav">
-  <div class="landing-nav__inner">
-    <a class="landing-brand" href="/" aria-label="meetk.ai home">
-      <span class="landing-brand__wordmark">meet<span>k.ai</span></span>
-    </a>
-    <div class="landing-nav__actions">
-      <a class="button" href="https://cockpit.meetk.ai/login">Login</a>
-    </div>
-  </div>
-</header>
-
-<div class="page landing-page">
-  <section class="landing-hero">
-    <div class="landing-hero__grid">
-      <div class="landing-copy landing-copy--hero">
-        <p class="landing-eyebrow">AI agents for real-world work</p>
-<h1 class="landing-title">Deploy AI agents that run your workflows.</h1>
-<p class="landing-lede">We took the most powerful workflow architectures and packaged them into ready-to-use AI agents. Deploy robust, autonomous processes in minutes — just connect your services, databases, or webhooks, and set your rules.</p>
-        <div class="landing-actions">
-          <a href="mailto:hello@meetk.ai" class="button button--primary">
-            <span class="icon"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.536 21.686a.5.5 0 0 0 .937-.024l6.5-19a.496.496 0 0 0-.635-.635l-19 6.5a.5.5 0 0 0-.024.937l7.93 3.18a2 2 0 0 1 1.112 1.11z" /><path d="m21.854 2.147-10.94 10.939" /></svg></span>
-            Request beta access
-          </a>
-        </div>
-        <p class="landing-invite muted">Private beta. Describe a workflow you want automated, and we'll put an agent on it at <a href="mailto:hello@meetk.ai">hello@meetk.ai</a>.</p>
-      </div>
-
-      <div class="landing-workflow" role="img" aria-label="Example workflow: work arrives through message, email, or webhook; a support agent consults the Brain and database, then uses SMTP or Cal.com to act.">
-        <div class="landing-workflow__topline">
-          <span>Workflow</span>
-          <span class="landing-workflow__agent-status"><span class="status-dot status-dot--running" aria-hidden="true"></span>Status</span>
-        </div>
-        <div class="landing-workflow__diagram">
-          <div class="landing-workflow__stage">
-            <p class="landing-workflow__label">Incoming request</p>
-            <div class="landing-workflow__sources">
-              <span>Message</span>
-              <span>Email</span>
-              <span>Webhook</span>
+   <head>
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1">
+      <title>meetk.ai — Ready-to-run workflow agents for your business</title>
+      <meta name="description" content="Ready-to-use AI agents for customer support, inbox, and DevOps. Connect your services, databases, and webhooks, feed the shared Brain, set your rules, and put an autonomous agent on the work in minutes.">
+      <link rel="canonical" href="https://meetk.ai/">
+      <meta property="og:type" content="website">
+      <meta property="og:site_name" content="meetk.ai">
+      <meta property="og:title" content="meetk.ai — Ready-to-run workflow agents for your business">
+      <meta property="og:description" content="Ready-to-use AI agents for customer support, inbox, and DevOps. Connect your services, databases, and webhooks, feed the shared Brain, set your rules, and put an autonomous agent on the work in minutes.">
+      <meta property="og:url" content="https://meetk.ai/">
+      <meta property="og:image" content="https://meetk.ai/static/og.png">
+      <meta property="og:image:alt" content="meetk.ai — ready-to-run workflow agents for your business">
+      <meta property="og:image:width" content="1200">
+      <meta property="og:image:height" content="630">
+      <meta name="twitter:card" content="summary_large_image">
+      <meta name="twitter:title" content="meetk.ai — Ready-to-run workflow agents for your business">
+      <meta name="twitter:description" content="Ready-to-use AI agents for customer support, inbox, and DevOps. Connect your services, databases, and webhooks, feed the shared Brain, set your rules, and put an autonomous agent on the work in minutes.">
+      <meta name="twitter:image" content="https://meetk.ai/static/og.png">
+      <link rel="icon" type="image/x-icon" href="/static/favicon.ico">
+      <link rel="icon" type="image/png" sizes="32x32" href="/static/favicon-32x32.png">
+      <link rel="icon" type="image/png" sizes="16x16" href="/static/favicon-16x16.png">
+      <link rel="apple-touch-icon" sizes="180x180" href="/static/apple-touch-icon.png">
+      <link rel="manifest" href="/static/site.webmanifest">
+      <link rel="stylesheet" href="/static/cockpit.css">
+   </head>
+   <body>
+      <header class="landing-nav">
+         <div class="landing-nav__inner">
+            <a class="landing-brand" href="/" aria-label="meetk.ai home">
+            <span class="landing-brand__wordmark">meet<span>k.ai</span></span>
+            </a>
+            <div class="landing-nav__actions">
+               <a class="button" href="https://cockpit.meetk.ai/login">Login</a>
             </div>
-          </div>
-          <div class="landing-workflow__connector" aria-hidden="true"></div>
-          <div class="landing-agent">
-            <img class="landing-agent__avatar" src="/static/icon-192.png" alt="">
-            <span>
-              <strong>Support agent</strong>
-              <small>Understands the request, then decides what to do</small>
-            </span>
-          </div>
-          <div class="landing-workflow__stage landing-workflow__stage--context">
-            <p class="landing-workflow__label">Consults context</p>
-            <div class="landing-workflow__resources">
-              <div class="landing-workflow__resource landing-workflow__resource--brain">
-                <span class="landing-workflow__resource-icon" aria-hidden="true"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 18V5" /><path d="M15 13a4.17 4.17 0 0 1-3-4 4.17 4.17 0 0 1-3 4" /><path d="M17.598 6.5A3 3 0 1 0 12 5a3 3 0 1 0-5.598 1.5" /><path d="M17.997 5.125a4 4 0 0 1 2.526 5.77" /><path d="M18 18a4 4 0 0 0 2-7.464" /><path d="M19.967 17.483A4 4 0 1 1 12 18a4 4 0 1 1-7.967-.517" /><path d="M6 18a4 4 0 0 1-2-7.464" /><path d="M6.003 5.125a4 4 0 0 0-2.526 5.77" /></svg></span>
-                <span><strong>Brain</strong><small>Company knowledge</small></span>
-              </div>
-              <div class="landing-workflow__resource">
-                <span><strong>Database</strong><small>Customer records</small></span>
-              </div>
+         </div>
+      </header>
+      <div class="page landing-page">
+         <section class="landing-hero">
+            <div class="landing-hero__grid">
+               <div class="landing-copy landing-copy--hero">
+                  <p class="landing-eyebrow">AI agents for real-world work</p>
+                  <h1 class="landing-title">Deploy AI agents that run your workflows.</h1>
+                  <p class="landing-lede">We took the most powerful workflow architectures and packaged them into ready-to-use AI agents. Deploy robust, autonomous processes in minutes — just connect your services, databases, or webhooks, and set your rules.</p>
+                  <div class="landing-actions">
+                     <a href="mailto:hello@meetk.ai" class="button button--primary">
+                        <span class="icon">
+                           <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                              <path d="M14.536 21.686a.5.5 0 0 0 .937-.024l6.5-19a.496.496 0 0 0-.635-.635l-19 6.5a.5.5 0 0 0-.024.937l7.93 3.18a2 2 0 0 1 1.112 1.11z" />
+                              <path d="m21.854 2.147-10.94 10.939" />
+                           </svg>
+                        </span>
+                        Request beta access
+                     </a>
+                  </div>
+                  <p class="landing-invite muted">Private beta. Describe a workflow you want automated, and we'll put an agent on it at <a href="mailto:hello@meetk.ai">hello@meetk.ai</a>.</p>
+               </div>
+               <div class="landing-workflow" role="img" aria-label="Example workflow: work arrives through message, email, or webhook; a support agent consults the Brain and database, then uses SMTP or Cal.com to act.">
+                  <div class="landing-workflow__topline">
+                     <span>Workflow</span>
+                     <span class="landing-workflow__agent-status"><span class="status-dot status-dot--running" aria-hidden="true"></span>Status</span>
+                  </div>
+                  <div class="landing-workflow__diagram">
+                     <div class="landing-workflow__stage">
+                        <p class="landing-workflow__label">Incoming request</p>
+                        <div class="landing-workflow__sources">
+                           <span>Message</span>
+                           <span>Email</span>
+                           <span>Webhook</span>
+                        </div>
+                     </div>
+                     <div class="landing-workflow__connector" aria-hidden="true"></div>
+                     <div class="landing-agent">
+                        <img class="landing-agent__avatar" src="/static/icon-192.png" alt="">
+                        <span>
+                        <strong>Support agent</strong>
+                        <small>Understands the request, then decides what to do</small>
+                        </span>
+                     </div>
+                     <div class="landing-workflow__stage landing-workflow__stage--context">
+                        <p class="landing-workflow__label">Consults context</p>
+                        <div class="landing-workflow__resources">
+                           <div class="landing-workflow__resource landing-workflow__resource--brain">
+                              <span class="landing-workflow__resource-icon" aria-hidden="true">
+                                 <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <path d="M12 18V5" />
+                                    <path d="M15 13a4.17 4.17 0 0 1-3-4 4.17 4.17 0 0 1-3 4" />
+                                    <path d="M17.598 6.5A3 3 0 1 0 12 5a3 3 0 1 0-5.598 1.5" />
+                                    <path d="M17.997 5.125a4 4 0 0 1 2.526 5.77" />
+                                    <path d="M18 18a4 4 0 0 0 2-7.464" />
+                                    <path d="M19.967 17.483A4 4 0 1 1 12 18a4 4 0 1 1-7.967-.517" />
+                                    <path d="M6 18a4 4 0 0 1-2-7.464" />
+                                    <path d="M6.003 5.125a4 4 0 0 0-2.526 5.77" />
+                                 </svg>
+                              </span>
+                              <span><strong>Brain</strong><small>Company knowledge</small></span>
+                           </div>
+                           <div class="landing-workflow__resource">
+                              <span><strong>Database</strong><small>Customer records</small></span>
+                           </div>
+                        </div>
+                     </div>
+                     <div class="landing-workflow__connector" aria-hidden="true"></div>
+                     <div class="landing-workflow__stage landing-workflow__stage--action">
+                        <p class="landing-workflow__label">Takes action</p>
+                        <div class="landing-workflow__actions-list">
+                           <span><strong>SMTP</strong><small>Send a reply or follow-up</small></span>
+                           <span><strong>Cal.com</strong><small>Book an appointment</small></span>
+                        </div>
+                     </div>
+                     <div class="landing-workflow__decision">
+                        <p class="landing-workflow__label">Or escalates</p>
+                        <p>Hands off to a colleague.</p>
+                     </div>
+                  </div>
+               </div>
             </div>
-          </div>
-          <div class="landing-workflow__connector" aria-hidden="true"></div>
-          <div class="landing-workflow__stage landing-workflow__stage--action">
-            <p class="landing-workflow__label">Takes action</p>
-            <div class="landing-workflow__actions-list">
-              <span><strong>SMTP</strong><small>Send a reply or follow-up</small></span>
-              <span><strong>Cal.com</strong><small>Book an appointment</small></span>
+         </section>
+         <section class="landing-section landing-steps" aria-labelledby="onboard-title">
+            <div class="landing-section__intro">
+               <p class="landing-eyebrow">Onboarding</p>
+               <h2 id="onboard-title" class="landing-section__title">Set up, guide, and supervise your agents.</h2>
+               <p class="landing-section__copy">Delegate full roles instead of wiring together nodes. meetk.ai packages complex automation architecture into agents you can guide, review, and scale.</p>
             </div>
-          </div>
-          <div class="landing-workflow__decision">
-            <p class="landing-workflow__label">Or escalates</p>
-            <p>Hands off to a colleague.</p>
-          </div>
-        </div>
+            <ol class="landing-steps__path">
+               <li>
+                  <span class="landing-step__marker"><span class="landing-step__number" aria-hidden="true">1</span></span>
+                  <h3>Choose a role</h3>
+                  <p>Select the position you need filled: from customer support to DevOps.</p>
+               </li>
+               <li>
+                  <span class="landing-step__marker"><span class="landing-step__number" aria-hidden="true">2</span></span>
+                  <h3>Add knowledge</h3>
+                  <p>Connect your docs, website, and company guidelines. No code required.</p>
+               </li>
+               <li>
+                  <span class="landing-step__marker"><span class="landing-step__number" aria-hidden="true">3</span></span>
+                  <h3>Connect your stack</h3>
+                  <p>Integrate email, databases, and webhooks so agents can execute tasks safely.</p>
+               </li>
+               <li>
+                  <span class="landing-step__marker"><span class="landing-step__number" aria-hidden="true">4</span></span>
+                  <h3>Supervise and scale</h3>
+                  <p>Monitor actions, approve responses, and jump in whenever you need.</p>
+               </li>
+            </ol>
+         </section>
+         <section class="landing-section landing-brain" aria-labelledby="brain-title">
+            <div class="landing-section__intro">
+               <p class="landing-eyebrow">Shared knowledge</p>
+               <h2 id="brain-title" class="landing-section__title">Give agents the context your company already has.</h2>
+               <p class="landing-section__copy">The Brain is your centralized knowledge base. Add your docs, website, or notes once — and every agent gets instant, accurate context before taking action.</p>
+            </div>
+            <div class="landing-brain__diagram" role="img" aria-label="Documents, a website, and notes flow into the Brain, which provides shared knowledge to support and inbox agents.">
+               <div class="landing-brain__sources"><span>Documents</span><span>Website</span><span>Notes / text</span></div>
+               <div class="landing-brain__node">
+                  <span class="landing-brain__icon" aria-hidden="true">
+                     <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M12 18V5" />
+                        <path d="M15 13a4.17 4.17 0 0 1-3-4 4.17 4.17 0 0 1-3 4" />
+                        <path d="M17.598 6.5A3 3 0 1 0 12 5a3 3 0 1 0-5.598 1.5" />
+                        <path d="M17.997 5.125a4 4 0 0 1 2.526 5.77" />
+                        <path d="M18 18a4 4 0 0 0 2-7.464" />
+                        <path d="M19.967 17.483A4 4 0 1 1 12 18a4 4 0 1 1-7.967-.517" />
+                        <path d="M6 18a4 4 0 0 1-2-7.464" />
+                        <path d="M6.003 5.125a4 4 0 0 0-2.526 5.77" />
+                     </svg>
+                  </span>
+                  <strong>Brain</strong>
+               </div>
+               <div class="landing-brain__agents"><span>Support agent</span><span>Inbox agent</span><span>Chat agent</span></div>
+            </div>
+         </section>
+         <section class="landing-section landing-connections" aria-labelledby="connections-title">
+            <div class="landing-section__intro">
+               <p class="landing-eyebrow">Connections</p>
+               <h2 id="connections-title" class="landing-section__title">Connect the services your team uses.</h2>
+               <p class="landing-section__copy">Knowledge tells an agent what to say. Connections define where work arrives and what an agent can do once it does.</p>
+               <div class="landing-connections__summary">
+                  <p>Route customer conversations, inboxes, and HTTP events into an agent workflow, then give agents the tools to access customer records, send follow-ups, and manage appointments.</p>
+               </div>
+            </div>
+            <div class="landing-connections__content">
+               <div class="landing-connections__group">
+                  <ul class="landing-connections__items">
+                     <li>
+                        <span class="landing-connections__body">
+                           <svg class="landing-connection__icon" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                              <path d="M21 11.5a8.4 8.4 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.4 8.4 0 0 1-3.8-.9L3 21l1.9-5.7a8.4 8.4 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.4 8.4 0 0 1 3.8-.9h.5a8.5 8.5 0 0 1 8 8v.5z" />
+                           </svg>
+                           <strong>Message</strong>
+                        </span>
+                     </li>
+                     <li>
+                        <span class="landing-connections__body">
+                           <svg class="landing-connection__icon" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                              <rect width="20" height="16" x="2" y="4" rx="2" />
+                              <path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7" />
+                           </svg>
+                           <strong>Email</strong>
+                        </span>
+                     </li>
+                     <li>
+                        <span class="landing-connections__body">
+                           <svg class="landing-connection__icon" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                              <path d="M10 13a5 5 0 0 0 7.07.07l2-2a5 5 0 0 0-7.07-7.07l-1.15 1.15" />
+                              <path d="M14 11a5 5 0 0 0-7.07-.07l-2 2A5 5 0 0 0 12 20l1.15-1.15" />
+                           </svg>
+                           <strong>Webhook</strong>
+                        </span>
+                     </li>
+                  </ul>
+               </div>
+               <div class="landing-connections__group">
+                  <ul class="landing-connections__items">
+                     <li>
+                        <span class="landing-connections__body">
+                           <svg class="landing-connection__icon" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                              <ellipse cx="12" cy="5" rx="8" ry="3" />
+                              <path d="M4 5v7c0 1.66 3.58 3 8 3s8-1.34 8-3V5" />
+                              <path d="M4 12v7c0 1.66 3.58 3 8 3s8-1.34 8-3v-7" />
+                           </svg>
+                           <strong>Database</strong>
+                        </span>
+                     </li>
+                     <li>
+                        <span class="landing-connections__body">
+                           <svg class="landing-connection__icon" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                              <rect width="20" height="14" x="2" y="5" rx="2" />
+                              <path d="M6 9h.01M10 9h.01M14 9h.01M18 9h.01M6 15h12" />
+                           </svg>
+                           <strong>SMTP</strong>
+                        </span>
+                     </li>
+                     <li>
+                        <span class="landing-connections__body">
+                           <svg class="landing-connection__icon" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                              <circle cx="12" cy="12" r="9" />
+                              <path d="M12 7v5l3 2" />
+                           </svg>
+                           <strong>Services</strong>
+                        </span>
+                     </li>
+                  </ul>
+               </div>
+            </div>
+         </section>
+         <section class="landing-proof" aria-labelledby="proof-title">
+            <div class="landing-section__intro">
+               <p class="landing-eyebrow">See it working</p>
+               <h2 id="proof-title" class="landing-section__title">Test a live agent right now.</h2>
+               <p class="landing-section__copy">We put a meetk.ai agent directly on our team. Send your questions to the address below to see how it responds in real time.</p>
+            </div>
+            <div class="landing-proof__action">
+               <p class="landing-proof__path"><span>Your email</span><span>Deployed agent</span><span>Reply in your inbox</span></p>
+               <a href="mailto:questions@support.meetk.ai" class="button button--primary landing-proof__cta">
+                  <span class="icon" aria-hidden="true">
+                     <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <rect width="20" height="16" x="2" y="4" rx="2" />
+                        <path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7" />
+                     </svg>
+                  </span>
+                  Email the live agent
+               </a>
+               <p class="landing-proof__email">Send to <span>questions@support.meetk.ai</span>. Replies arrive in your inbox.</p>
+               <ul class="landing-proof__outcomes">
+                  <li>
+                     <span class="icon" aria-hidden="true">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                           <path d="M20 6 9 17l-5-5" />
+                        </svg>
+                     </span>
+                     Company knowledge
+                  </li>
+                  <li>
+                     <span class="icon" aria-hidden="true">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                           <path d="M20 6 9 17l-5-5" />
+                        </svg>
+                     </span>
+                     Autonomous agents
+                  </li>
+                  <li>
+                     <span class="icon" aria-hidden="true">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                           <path d="M20 6 9 17l-5-5" />
+                        </svg>
+                     </span>
+                     Human handoff
+                  </li>
+               </ul>
+            </div>
+         </section>
       </div>
-    </div>
-  </section>
-
-  <section class="landing-section landing-steps" aria-labelledby="onboard-title">
-    <div class="landing-section__intro">
-<p class="landing-eyebrow">Onboarding</p>
-<h2 id="onboard-title" class="landing-section__title">Set up, guide, and supervise your agents.</h2>
-<p class="landing-section__copy">Delegate full roles instead of wiring together nodes. meetk.ai packages complex automation architecture into agents you can guide, review, and scale.</p>
-    </div>
-    <ol class="landing-steps__path">
-      <li><span class="landing-step__marker"><span class="landing-step__number" aria-hidden="true">1</span></span><h3>Choose a role</h3><p>Select the position you need filled: from customer support to DevOps.</p></li>
-      <li><span class="landing-step__marker"><span class="landing-step__number" aria-hidden="true">2</span></span><h3>Add knowledge</h3><p>Connect your docs, website, and company guidelines. No code required.</p></li>
-      <li><span class="landing-step__marker"><span class="landing-step__number" aria-hidden="true">3</span></span><h3>Connect your stack</h3><p>Integrate email, databases, and webhooks so agents can execute tasks safely.</p></li>
-      <li><span class="landing-step__marker"><span class="landing-step__number" aria-hidden="true">4</span></span><h3>Supervise and scale</h3><p>Monitor actions, approve responses, and jump in whenever you need.</p></li>
-    </ol>
-  </section>
-
-  <section class="landing-section landing-brain" aria-labelledby="brain-title">
-    <div class="landing-section__intro">
-      <p class="landing-eyebrow">Shared knowledge</p>
-<h2 id="brain-title" class="landing-section__title">Give agents the context your company already has.</h2>
-<p class="landing-section__copy">The Brain is your centralized knowledge base. Add your docs, website, or notes once — and every agent gets instant, accurate context before taking action.</p>
-    </div>
-    <div class="landing-brain__diagram" role="img" aria-label="Documents, a website, and notes flow into the Brain, which provides shared knowledge to support and inbox agents.">
-      <div class="landing-brain__sources"><span>Documents</span><span>Website</span><span>Notes / text</span></div>
-      <div class="landing-brain__node"><span class="landing-brain__icon" aria-hidden="true"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 18V5" /><path d="M15 13a4.17 4.17 0 0 1-3-4 4.17 4.17 0 0 1-3 4" /><path d="M17.598 6.5A3 3 0 1 0 12 5a3 3 0 1 0-5.598 1.5" /><path d="M17.997 5.125a4 4 0 0 1 2.526 5.77" /><path d="M18 18a4 4 0 0 0 2-7.464" /><path d="M19.967 17.483A4 4 0 1 1 12 18a4 4 0 1 1-7.967-.517" /><path d="M6 18a4 4 0 0 1-2-7.464" /><path d="M6.003 5.125a4 4 0 0 0-2.526 5.77" /></svg></span><strong>Brain</strong></div>
-      <div class="landing-brain__agents"><span>Support agent</span><span>Inbox agent</span><span>Chat agent</span></div>
-    </div>
-  </section>
-
-  <section class="landing-section landing-connections" aria-labelledby="connections-title">
-    <div class="landing-section__intro">
-      <p class="landing-eyebrow">Connections</p>
-<h2 id="connections-title" class="landing-section__title">Connect the services your team uses.</h2>
-<p class="landing-section__copy">Knowledge tells an agent what to say. Connections define where work arrives and what an agent can do once it does.</p>
-        <div class="landing-connections__summary">
-          <p>Route customer conversations, inboxes, and HTTP events into an agent workflow, then give agents the tools to access customer records, send follow-ups, and manage appointments.</p>
-        </div>
-    </div>
-    <div class="landing-connections__content">
-      <div class="landing-connections__group">
-        <ul class="landing-connections__items">
-          <li>
-            <span class="landing-connections__body">
-              <svg class="landing-connection__icon" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.4 8.4 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.4 8.4 0 0 1-3.8-.9L3 21l1.9-5.7a8.4 8.4 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.4 8.4 0 0 1 3.8-.9h.5a8.5 8.5 0 0 1 8 8v.5z" /></svg>
-              <strong>Message</strong>
-            </span>
-          </li>
-          <li>
-            <span class="landing-connections__body">
-              <svg class="landing-connection__icon" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect width="20" height="16" x="2" y="4" rx="2" /><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7" /></svg>
-              <strong>Email</strong>
-            </span>
-          </li>
-          <li>
-            <span class="landing-connections__body">
-              <svg class="landing-connection__icon" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.07.07l2-2a5 5 0 0 0-7.07-7.07l-1.15 1.15" /><path d="M14 11a5 5 0 0 0-7.07-.07l-2 2A5 5 0 0 0 12 20l1.15-1.15" /></svg>
-              <strong>Webhook</strong>
-            </span>
-          </li>
-        </ul>
-      </div>
-      <div class="landing-connections__group">
-        <ul class="landing-connections__items">
-          <li>
-            <span class="landing-connections__body">
-              <svg class="landing-connection__icon" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="5" rx="8" ry="3" /><path d="M4 5v7c0 1.66 3.58 3 8 3s8-1.34 8-3V5" /><path d="M4 12v7c0 1.66 3.58 3 8 3s8-1.34 8-3v-7" /></svg>
-              <strong>Database</strong>
-            </span>
-          </li>
-          <li>
-            <span class="landing-connections__body">
-              <svg class="landing-connection__icon" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect width="20" height="14" x="2" y="5" rx="2" /><path d="M6 9h.01M10 9h.01M14 9h.01M18 9h.01M6 15h12" /></svg>
-              <strong>SMTP</strong>
-            </span>
-          </li>
-          <li>
-            <span class="landing-connections__body">
-              <svg class="landing-connection__icon" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9" /><path d="M12 7v5l3 2" /></svg>
-              <strong>Services</strong>
-            </span>
-          </li>
-        </ul>
-      </div>
-    </div>
-  </section>
-
-  <section class="landing-proof" aria-labelledby="proof-title">
-    <div class="landing-section__intro">
-<p class="landing-eyebrow">See it working</p>
-<h2 id="proof-title" class="landing-section__title">Test a live agent right now.</h2>
-<p class="landing-section__copy">We put a meetk.ai agent directly on our team. Send your questions to the address below to see how it responds in real time.</p>
-    </div>
-      <div class="landing-proof__action">
-        <p class="landing-proof__path"><span>Your email</span><span>Deployed agent</span><span>Reply in your inbox</span></p>
-        <a href="mailto:questions@support.meetk.ai" class="button button--primary landing-proof__cta">
-          <span class="icon" aria-hidden="true"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="20" height="16" x="2" y="4" rx="2" /><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7" /></svg></span>
-          Email the live agent
-        </a>
-        <p class="landing-proof__email">Send to <span>questions@support.meetk.ai</span>. Replies arrive in your inbox.</p>
-        <ul class="landing-proof__outcomes">
-          <li><span class="icon" aria-hidden="true"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5" /></svg></span>Company knowledge</li>
-          <li><span class="icon" aria-hidden="true"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5" /></svg></span>Autonomous agents</li>
-          <li><span class="icon" aria-hidden="true"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5" /></svg></span>Human handoff</li>
-        </ul>
-      </div>
-  </section>
-</div>
-
-<footer class="landing-footer">
-  <div class="landing-footer__inner">
-    <p>&copy; 2026 meetk.ai. Engineered for performance.</p>
-    <div class="landing-footer__links">
-      <a href="mailto:hello@meetk.ai">Contact</a>
-      <a href="https://cockpit.meetk.ai/login">Login</a>
-    </div>
-  </div>
-</footer>
-</body>
+      <footer class="landing-footer">
+         <div class="landing-footer__inner">
+            <p>&copy; 2026 meetk.ai. Engineered for performance.</p>
+            <div class="landing-footer__links">
+               <a href="mailto:hello@meetk.ai">Contact</a>
+               <a href="https://cockpit.meetk.ai/login">Login</a>
+            </div>
+         </div>
+      </footer>
+   </body>
 </html>
