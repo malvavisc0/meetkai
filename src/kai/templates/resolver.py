@@ -28,16 +28,6 @@ _TOOL_ENV_MAP: dict[str, list[str]] = {
     "calcom": ["KAI_CALCOM_API_KEY"],
 }
 
-_WAHA_VALID_ACTIONS = {
-    "reply",
-    "send_voice_note",
-    "silent",
-    "sleep",
-    "send_dm",
-    "send_to_group",
-    "console",
-}
-
 _EMAIL_VALID_ACTIONS = {
     "reply",
     "silent",
@@ -68,14 +58,12 @@ KNOWN_TOOL_NAMES: frozenset[str] = frozenset(
         "book_appointment",
         "reschedule_booking",
         "cancel_booking",
-        "get_whatsapp_history",
         "escalate",
         "blacklist",
     ]
 )
 
 _VALID_ACTIONS_BY_TRANSPORT = {
-    "waha": _WAHA_VALID_ACTIONS,
     "email": _EMAIL_VALID_ACTIONS,
 }
 
@@ -107,29 +95,47 @@ def resolve_tools(
     operator_enable: list[str],
     operator_disable: list[str],
 ) -> ToolResolution:
-    default_tools = frozenset(_DEFAULT_TOOL_NAMES)
     template_required = frozenset(template.tools.required)
-    template_bot_tools = frozenset(template.tools.bot_tools)
-
     cannot_disable = _NON_DISABLEABLE_DEFAULTS | template_required
 
-    rejected_disable = []
-    for tool in operator_disable:
-        if tool in cannot_disable:
-            if tool in template_required:
-                reason = "required by template"
-            else:
-                reason = "safety tool — cannot be disabled"
-            rejected_disable.append(f"{tool} ({reason} — cannot be disabled)")
-
-    # ``--enable-tools`` names must exist in the real tool registry, otherwise
-    # a typo (``barin_query``) is silently accepted and the operator believes
-    # a tool is loaded when it isn't.
+    rejected_disable = _build_rejected_disable(operator_disable, cannot_disable, template_required)
     rejected_unknown = [t for t in operator_enable if t not in KNOWN_TOOL_NAMES]
+    tools = _build_tool_set(template, operator_enable, operator_disable, cannot_disable)
+    missing = _build_missing_required(template_required)
 
-    tools: set[str] = set(default_tools)
-    tools |= template_required
-    tools |= template_bot_tools
+    return ToolResolution(
+        final_tools=frozenset(tools),
+        missing_required=missing,
+        rejected_disable=rejected_disable,
+        rejected_unknown=rejected_unknown,
+    )
+
+
+def _build_rejected_disable(
+    operator_disable: list[str], cannot_disable: frozenset[str], template_required: frozenset[str]
+) -> list[str]:
+    rejected = []
+    for tool in operator_disable:
+        if tool not in cannot_disable:
+            continue
+        reason = (
+            "required by template"
+            if tool in template_required
+            else "safety tool — cannot be disabled"
+        )
+        rejected.append(f"{tool} ({reason} — cannot be disabled)")
+    return rejected
+
+
+def _build_tool_set(
+    template: TemplateDef,
+    operator_enable: list[str],
+    operator_disable: list[str],
+    cannot_disable: frozenset[str],
+) -> set[str]:
+    tools: set[str] = set(frozenset(_DEFAULT_TOOL_NAMES))
+    tools |= frozenset(template.tools.required)
+    tools |= frozenset(template.tools.bot_tools)
     for tool in template.tools.optional:
         if _is_tool_configured(tool):
             tools.add(tool)
@@ -139,19 +145,16 @@ def resolve_tools(
     for tool in operator_disable:
         if tool not in cannot_disable and tool in tools:
             tools.discard(tool)
+    return tools
 
+
+def _build_missing_required(template_required: frozenset[str]) -> list[str]:
     missing = []
     for tool in template_required:
         if not _is_tool_configured(tool):
             env = _TOOL_ENV_MAP.get(tool, ["unknown"])
             missing.append(f"{tool} (requires {', '.join(env)})")
-
-    return ToolResolution(
-        final_tools=frozenset(tools),
-        missing_required=missing,
-        rejected_disable=rejected_disable,
-        rejected_unknown=rejected_unknown,
-    )
+    return missing
 
 
 def validate_tools(template: TemplateDef) -> list[str]:

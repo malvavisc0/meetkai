@@ -2,15 +2,12 @@
 
 The `email` bot connects the kAI agent runtime to an inbox through
 [Resend](https://resend.com) inbound webhooks and an SMTP reply path. It is
-the minimal version of [`waha`](../waha/README.md) — same runtime, same
-structured-decision pattern, same operator console — stripped of every
-WAHA-specific concern: no groups, no media beyond image attachments, no
-voice, no sleep/wake, no organic participation. If you're adding a third bot
-type, read this file next to `waha`'s to see what's genuinely
-transport-specific versus what `BaseBot`/`KaiAgent` already gives you for
-free.
+the reference bot: same runtime, structured-decision pattern, and operator
+console every bot type shares. If you're adding a second bot type, read this
+file to see what's genuinely transport-specific versus what `BaseBot`/
+`KaiAgent` already gives you for free.
 
-Unlike `waha`, this bot never receives a provider webhook directly. Resend's
+This bot never receives a provider webhook directly. Resend's
 signature is verified and the payload normalized by the **cockpit**
 (`cockpit/webhooks.py`), which then forwards a plain `NormalizedMessage` to
 this bot's own `/ingest` route. The bot's own HTTP server only serves
@@ -28,9 +25,8 @@ src/kai/bots/email/
 ```
 
 The transport client, HMAC webhook server, and inbound-event normalization
-are shared with `waha` (`bots/webhook.py`) and the cockpit
-(`cockpit/webhooks.py`) rather than duplicated here — this bot has no
-`client.py`/`payload.py`/`webhook.py` of its own.
+are shared with the cockpit (`cockpit/webhooks.py`) rather than duplicated
+here — this bot has no `client.py`/`payload.py`/`webhook.py` of its own.
 
 ## Resend + SMTP Setup
 
@@ -77,9 +73,9 @@ KAI_SMTP_TOOL_FROM_ADDRESS=bot@example.com
 ## Bot Configuration
 
 Config is loaded from `configs/email.json` (relative to the working
-directory, configurable via `KAI_CONFIGS_DIR`), same as `waha`. There is no
-packaged fallback — if it's missing, the bot runs on `BotConfig()`'s own
-field defaults (see `src/kai/bots/email/setup.py`).
+directory, configurable via `KAI_CONFIGS_DIR`). There is no packaged
+fallback — if it's missing, the bot runs on `BotConfig()`'s own field
+defaults (see `src/kai/bots/email/setup.py`).
 
 `configs/email.json`:
 
@@ -97,13 +93,14 @@ field defaults (see `src/kai/bots/email/setup.py`).
 |-------|--------------|
 | `language` | Default reply language; overridable per-deployment. |
 | `timezone` | IANA timezone the bot tells the model for "current time". |
-| `temperature` | LLM sampling temperature. Defaults lower than `waha`'s 0.4 (`0.2`) — a support bot answering from the Brain must ground reliably rather than sound conversational. |
-| `blacklist` | Sender addresses to silently ignore, checked fresh from this list on every inbound email — no allowlist concept (unlike `waha`'s whitelist/blacklist pair). |
+| `temperature` | LLM sampling temperature. Defaults to `0.2` — a support bot answering from the Brain must ground reliably rather than sound conversational. |
+| `blacklist` | Sender addresses to silently ignore, checked fresh from this list on every inbound email. |
 | `display_name` | Identity shown in the outbound `From` header. |
 
 There is no `whitelist`, `trigger_keyword`, `media`, or `participation`
-section — email has no group concept and no "should I speak up" ambient
-decision; every inbound email is one-to-one and, by default, answered.
+section — email is one-to-one correspondence with no group concept and no
+"should I speak up" ambient decision; every inbound email is, by default,
+answered.
 
 ### Prompt
 
@@ -130,7 +127,6 @@ empty/unreadable content.
 There is no sleep/wake, no organic participation, and no group-summon logic
 — every inbound email either gets a `reply` or is judged not worth one at
 all.
-
 ## Attachments
 
 Image attachments are downloaded and passed to the model's vision channel
@@ -160,8 +156,7 @@ no separate send tool and no `to` field on the request:
   silently dropped or guessed.
 
 `persist` is accepted for the shared `/tell` contract but has no effect here
-— email has no `set_goal` tool wiring (unlike `waha`'s persist-gated
-`set_goal`).
+— email has no `set_goal` tool wiring.
 
 ## Reliability
 
@@ -169,8 +164,7 @@ no separate send tool and no `to` field on the request:
   history, so unblocking a sender takes effect immediately on the next
   message.
 - **HMAC verification:** every route (`/ingest`, `/tell`, `/status`,
-  `/clear`) is verified with `KAI_BOT_HMAC_KEY`, same mechanism as `waha`'s
-  webhook.
+  `/clear`) is verified with `KAI_BOT_HMAC_KEY`.
 - **SMTP failures are reported, not swallowed:** a failed send on the
   inbound path is logged and the turn is dropped (`ingest_event` catches and
   logs, returning `{"ok": False}`); on an operator turn the failure reason is
@@ -185,5 +179,5 @@ uv run kai status email
 
 `start` loads config + prompt, binds the control server, and serves until
 interrupted. In practice this bot is started by the cockpit (which allocates
-the control port and injects `KAI_BOT_*`/`KAI_EMAIL_*`/`KAI_SMTP_TOOL_*`), not
-run standalone the way `waha` can be.
+the control port and injects `KAI_BOT_*`/`KAI_EMAIL_*`/`KAI_SMTP_TOOL_*`),
+not run standalone.

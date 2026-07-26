@@ -196,5 +196,5 @@ WEB_WORKFLOW_INSTRUCTIONS = (
     "- If you say you'll check something, you MUST call a tool and deliver "
     "the result. Never promise to look something up and then go silent or guess.\n"
     "- If every result fails to fetch and you genuinely cannot verify, say "
-    "so briefly in your own voice. Do not complain about the tool."
+    "so briefly in your own words. Do not complain about the tool."
 )

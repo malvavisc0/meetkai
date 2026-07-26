@@ -4,23 +4,15 @@ import subprocess
 from collections.abc import Callable
 
 import pytest
-from tests.cockpit.helpers import _connect_whatsapp
+from tests.cockpit.helpers import _connect_email, _connect_smtp
 
 from kai.cockpit.deployments import DeploymentsService
 
 
 @pytest.fixture(autouse=True)
-def _whatsapp_connected(user, db):
-    _connect_whatsapp(db, user)
-
-
-@pytest.fixture(autouse=True)
-def _media_ready():
-    from kai.cockpit.media_services import MEDIA_READY
-
-    MEDIA_READY.set()
-    yield
-    MEDIA_READY.clear()
+def _email_connected(user, db):
+    _connect_email(db, user)
+    _connect_smtp(db, user)
 
 
 @pytest.fixture(autouse=True)
@@ -59,7 +51,7 @@ def _setup_popen(monkeypatch, tmp_path, dep_db, dep_user) -> tuple[list[str], Ca
     fake_settings = Settings.for_test(agent_history_folder=str(tmp_path))
     monkeypatch.setattr("kai.config.settings.get_settings", lambda: fake_settings)
 
-    instance_id = f"waha-{dep_user.email}"
+    instance_id = f"email-{dep_user.email}"
     registry = RunRegistry(runs_path(fake_settings.agent_history_folder, instance_id))
     registry.replace(
         "deadbeef",
@@ -74,7 +66,7 @@ def _setup_popen(monkeypatch, tmp_path, dep_db, dep_user) -> tuple[list[str], Ca
 
     def deploy_and_start(template: str = "general", tool_overrides: dict | None = None):
         svc = DeploymentsService(dep_db)
-        dep = svc.create(dep_user, "waha", "be helpful", "English", template=template)
+        dep = svc.create(dep_user, "email", "be helpful", "English", template=template)
         if tool_overrides is not None:
             svc.edit(dep, tool_overrides=tool_overrides)
         svc.start(dep)
@@ -137,24 +129,24 @@ class TestSpawnTemplate:
 class TestEditToolOverrides:
     def test_edit_template(self, db, user):
         svc = DeploymentsService(db)
-        dep = svc.create(user, "waha", "goal", "English")
+        dep = svc.create(user, "email", "goal", "English")
         svc.edit(dep, template="customer-support")
         assert dep.template == "customer-support"
 
     def test_edit_tool_overrides(self, db, user):
         svc = DeploymentsService(db)
-        dep = svc.create(user, "waha", "goal", "English")
+        dep = svc.create(user, "email", "goal", "English")
         svc.edit(dep, tool_overrides={"enable": ["web_search"], "disable": []})
         assert dep.tool_overrides == {"enable": ["web_search"], "disable": []}
 
     def test_edit_tool_overrides_rejects_unknown_keys(self, db, user):
         svc = DeploymentsService(db)
-        dep = svc.create(user, "waha", "goal", "English")
+        dep = svc.create(user, "email", "goal", "English")
         with pytest.raises(ValueError, match="only have 'enable' and 'disable' keys"):
             svc.edit(dep, tool_overrides={"foo": "bar"})
 
     def test_edit_tool_overrides_rejects_non_dict(self, db, user):
         svc = DeploymentsService(db)
-        dep = svc.create(user, "waha", "goal", "English")
+        dep = svc.create(user, "email", "goal", "English")
         with pytest.raises(ValueError, match="must be a dict"):
             svc.edit(dep, tool_overrides="not-a-dict")

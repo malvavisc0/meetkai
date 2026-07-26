@@ -6,8 +6,6 @@ networks:
 volumes:
   storage:
   postgres:
-  vendors:
-  models:
   logs:
 
 services:
@@ -45,8 +43,6 @@ services:
       - "8080"
     volumes:
       - storage:/app/data
-      - vendors:/app/vendor
-      - models:/app/models
       - logs:/app/logs
     # Every env var the cockpit process (and the bot subprocesses it spawns,
     # which inherit os.environ) reads from the environment. Values come from
@@ -63,7 +59,6 @@ services:
       KAI_PUBLIC_URL: ${KAI_PUBLIC_URL}
       KAI_CONFIGS_DIR: ${KAI_CONFIGS_DIR}
       KAI_LOG_DIR: ${KAI_LOG_DIR}
-      KAI_WAHA_WEBHOOK_PORT_RANGE: ${KAI_WAHA_WEBHOOK_PORT_RANGE}
       # KAI_COOKIE_SECURE: ${KAI_COOKIE_SECURE}
       # KAI_COCKPIT_INTERNAL_URL: ${KAI_COCKPIT_INTERNAL_URL}
       # KAI_COCKPIT_AUTO_APPROVE_LOGIN: ${KAI_COCKPIT_AUTO_APPROVE_LOGIN}
@@ -94,13 +89,6 @@ services:
       # KAI_AGENT_LANGUAGE_EXPLICIT: ${KAI_AGENT_LANGUAGE_EXPLICIT}
       # KAI_TASKS_ENABLED: ${KAI_TASKS_ENABLED}
       # KAI_TASKS_POLL_INTERVAL_SECONDS: ${KAI_TASKS_POLL_INTERVAL_SECONDS}
-      # WAHA transport, deployment-wide (KAI_WAHA_* — WahaSettings).
-      # Per-deployment WAHA values are injected at runtime by the cockpit.
-      KAI_WAHA_URL: ${KAI_WAHA_URL}
-      KAI_WAHA_API_KEY: ${KAI_WAHA_API_KEY}
-      KAI_WAHA_HMAC_KEY: ${KAI_WAHA_HMAC_KEY}
-      KAI_WAHA_WEBHOOK_PUBLIC_HOST: ${KAI_WAHA_WEBHOOK_PUBLIC_HOST}
-      # KAI_WAHA_HMAC_ALGORITHM: ${KAI_WAHA_HMAC_ALGORITHM}
       # Brain: Morphik + crawl4ai (KAI_BRAIN_* — BrainSettings)
       KAI_BRAIN_BASE_URL: ${KAI_BRAIN_BASE_URL}
       KAI_BRAIN_MORPHIK_TOKEN: ${KAI_BRAIN_MORPHIK_TOKEN}
@@ -112,24 +100,6 @@ services:
       # KAI_BRAIN_MANDATORY_TEMPERATURE: ${KAI_BRAIN_MANDATORY_TEMPERATURE}
       # KAI_BRAIN_CRAWL_MAX_DEPTH: ${KAI_BRAIN_CRAWL_MAX_DEPTH}
       # KAI_BRAIN_CRAWL_MAX_PAGES: ${KAI_BRAIN_CRAWL_MAX_PAGES}
-      # Media STT/TTS — whisper/kokoro servers the cockpit spawns (KAI_MEDIA_* — MediaSettings)
-      # KAI_MEDIA_WHISPER_LANGUAGE: ${KAI_MEDIA_WHISPER_LANGUAGE}
-      # KAI_MEDIA_WHISPER_SERVER_HOST: ${KAI_MEDIA_WHISPER_SERVER_HOST}
-      # KAI_MEDIA_WHISPER_SERVER_PORT: ${KAI_MEDIA_WHISPER_SERVER_PORT}
-      # KAI_MEDIA_WHISPER_SERVER_THREADS: ${KAI_MEDIA_WHISPER_SERVER_THREADS}
-      # KAI_MEDIA_WHISPER_MODEL_PATH: ${KAI_MEDIA_WHISPER_MODEL_PATH}
-      # KAI_MEDIA_KOKORO_ENABLED: ${KAI_MEDIA_KOKORO_ENABLED}
-      # KAI_MEDIA_KOKORO_SERVER_HOST: ${KAI_MEDIA_KOKORO_SERVER_HOST}
-      # KAI_MEDIA_KOKORO_SERVER_PORT: ${KAI_MEDIA_KOKORO_SERVER_PORT}
-      # KAI_MEDIA_KOKORO_MODEL_PATH: ${KAI_MEDIA_KOKORO_MODEL_PATH}
-      # KAI_MEDIA_KOKORO_VOICES_PATH: ${KAI_MEDIA_KOKORO_VOICES_PATH}
-      # KAI_MEDIA_KOKORO_VOICE: ${KAI_MEDIA_KOKORO_VOICE}
-      # KAI_MEDIA_KOKORO_LANG: ${KAI_MEDIA_KOKORO_LANG}
-      # KAI_MEDIA_KOKORO_SPEED: ${KAI_MEDIA_KOKORO_SPEED}
-      # KAI_MEDIA_KOKORO_MAX_CHARS: ${KAI_MEDIA_KOKORO_MAX_CHARS}
-      # KAI_MEDIA_READY_TIMEOUT: ${KAI_MEDIA_READY_TIMEOUT}
-      # Vendored binaries/models installer (os.environ — vendors/whisper.py)
-      KAI_WHISPER_VERSION: ${KAI_WHISPER_VERSION}
       # Error tracking (os.getenv — observability.py). Empty SENTRY_DSN = disabled.
       SENTRY_DSN: ${SENTRY_DSN}
       SENTRY_ENVIRONMENT: ${SENTRY_ENVIRONMENT}

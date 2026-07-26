@@ -43,7 +43,7 @@
   :root {
     /* Color — crisp, cobalt-tinted cool neutrals with a single cobalt brand */
     /* accent. The accent is the operator identity (primary actions, focus, the */
-    /* agent's own reply/voice); live/ready/healthy *status* is green, */
+    /* agent's own reply); live/ready/healthy *status* is green, */
     /* decoupled from the brand so a running agent no longer reads as a generic */
     /* AI-green UI. The page tint borrows the accent hue for a fresh, on-brand */
     /* surface that stays distinct from generic neutral-gray AI sites. */
@@ -65,7 +65,7 @@
     --color-panel-border: #1e2a44;           /* dark panel divider (cool) */
 
     /* Accent — cobalt is the brand identity for actions, focus, links, and the
-       agent's own reply/voice. It is deliberately not the status color. See
+       agent's own reply. It is deliberately not the status color. See
        STYLEGUIDE.md for the brand/status split. */
     --color-accent-50: #eef3fd;
     --color-accent-100: #dbe5fb;
@@ -1554,8 +1554,7 @@
   }
 
   /* A .field__help directly after a .field-grid is a group-level note about
-     the whole set of fields (e.g. the voice-note fields under
-     Participation), not a per-field caption. Give it the standard
+     the whole set of fields, not a per-field caption. Give it the standard
      field-to-field gap instead of the tighter field-to-caption gap so it
      doesn't look glued to the row above. */
   .field-grid + .field__help {

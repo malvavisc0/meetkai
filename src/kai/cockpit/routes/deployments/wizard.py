@@ -8,11 +8,7 @@ from kai.cockpit.app import templates
 from kai.cockpit.auth import require_user
 from kai.cockpit.bots import (
     ALL_LANGUAGES,
-    ALL_VOICES,
     BOT_TYPES,
-    VOICE_LABELS,
-    VOICE_LANGUAGE_BY_CODE,
-    auto_pick_voice,
 )
 from kai.cockpit.db import get_db
 from kai.cockpit.deployments import ConnectionRequiredError, DeploymentsService
@@ -40,7 +36,6 @@ def _wizard_context(
     bot_type: str,
     goal: str,
     language: str,
-    voice: str,
     template: str,
     db: Session,
     user: User,
@@ -59,10 +54,6 @@ def _wizard_context(
             "bt": bt,
             "goal": goal,
             "language": language,
-            "voice": voice,
-            "voices": ALL_VOICES,
-            "voice_labels": VOICE_LABELS,
-            "voice_language_by_code": VOICE_LANGUAGE_BY_CODE,
             "languages": ALL_LANGUAGES,
             "templates": _templates_for(bot_type),
             "template": template,
@@ -75,7 +66,7 @@ def _wizard_context(
 @router.get("/deployments/new")
 async def deploy_new_get(
     request: Request,
-    bot_type: str = "waha",
+    bot_type: str = "email",
     user: User = Depends(require_user),
     db: Session = Depends(get_db),
 ):
@@ -88,13 +79,11 @@ async def deploy_new_get(
     if existing:
         return RedirectResponse(f"/deployments/{existing.id}", status_code=302)
 
-    voice = auto_pick_voice(user.language)
     return _wizard_context(
         request,
         bot_type=bot_type,
         goal=bt.default_goal,
         language=user.language,
-        voice=voice,
         template="general",
         db=db,
         user=user,
@@ -104,10 +93,9 @@ async def deploy_new_get(
 @router.post("/deployments/new")
 async def deploy_new_post(
     request: Request,
-    bot_type: str = Form("waha"),
+    bot_type: str = Form("email"),
     goal: str = Form(...),
     language: str = Form(...),
-    voice: str = Form(""),
     template: str = Form("general"),
     user: User = Depends(require_user),
     db: Session = Depends(get_db),
@@ -125,7 +113,6 @@ async def deploy_new_post(
             bot_type=bot_type,
             goal=goal,
             language=language,
-            voice=voice,
             template=template,
             db=db,
             user=user,
@@ -133,22 +120,19 @@ async def deploy_new_post(
         )
 
     try:
-        dep = svc.create(user, bot_type, goal, language, voice or None, template=template)
+        dep = svc.create(user, bot_type, goal, language, template=template)
     except (ValueError, ConnectionRequiredError) as exc:
         return _wizard_context(
             request,
             bot_type=bot_type,
             goal=goal,
             language=language,
-            voice=voice,
             template=template,
             db=db,
             user=user,
             error=str(exc),
         )
 
-    # The detail page already gates the start button on WhatsApp connected,
-    # so the intermediate "ready" step is redundant.
     flash(request, "success", "Deployment created.")
     return RedirectResponse(f"/deployments/{dep.id}", status_code=302)
 

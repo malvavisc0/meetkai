@@ -59,65 +59,37 @@ class TestCsrfEnforcement:
     def test_post_without_token_returns_403(self, client, db, user):
         """A session-authenticated POST without any CSRF token is rejected."""
         _login(client, db, user)
-        resp = client.post("/connections/whatsapp/connect", follow_redirects=False)
+        resp = client.post("/connections/resend", follow_redirects=False)
         assert resp.status_code == 403
 
-    def test_post_with_token_succeeds(self, client, db, user, monkeypatch):
+    def test_post_with_token_succeeds(self, client, db, user):
         """The same POST with a valid _csrf token succeeds (302 redirect)."""
-        from unittest.mock import AsyncMock
-
-        from kai.cockpit.connections.service import WahaClient
-
-        fake_waha = AsyncMock()
-        fake_waha.close = AsyncMock()
-        fake_waha.create_session.return_value = {}
-        fake_waha.get_session.return_value = {"status": "WORKING"}
-        monkeypatch.setattr(WahaClient, "__init__", lambda self, settings: None)
-        monkeypatch.setattr(
-            "kai.cockpit.connections.service.WahaClient",
-            lambda settings: fake_waha,
-        )
-
         _login(client, db, user)
-        resp = csrf_post(client, "/connections/whatsapp/connect", follow_redirects=False)
+        resp = csrf_post(client, "/connections/resend", follow_redirects=False)
         assert resp.status_code == 302
 
     def test_post_with_wrong_token_returns_403(self, client, db, user):
         """A token that does not match the session's csrf_token is rejected."""
         _login(client, db, user)
         # Prime the cache so the helper is happy, then corrupt the form payload.
-        resp = csrf_post(client, "/connections/whatsapp/connect", follow_redirects=False)
+        resp = csrf_post(client, "/connections/resend", follow_redirects=False)
         assert resp.status_code in (302, 303, 307)
         # Now send a raw POST with an explicitly wrong token.
         resp = client.post(
-            "/connections/whatsapp/connect",
+            "/connections/resend",
             data={"_csrf": "totally-wrong-token"},
             follow_redirects=False,
         )
         assert resp.status_code == 403
 
-    def test_post_with_token_via_header_succeeds(self, client, db, user, monkeypatch):
+    def test_post_with_token_via_header_succeeds(self, client, db, user):
         """The middleware accepts the token via ``X-CSRF-Token`` header too,
         which is how JSON-bodied POSTs (e.g. resolve) carry it."""
-        from unittest.mock import AsyncMock
-
-        from kai.cockpit.connections.service import WahaClient
-
-        fake_waha = AsyncMock()
-        fake_waha.close = AsyncMock()
-        fake_waha.create_session.return_value = {}
-        fake_waha.get_session.return_value = {"status": "WORKING"}
-        monkeypatch.setattr(WahaClient, "__init__", lambda self, settings: None)
-        monkeypatch.setattr(
-            "kai.cockpit.connections.service.WahaClient",
-            lambda settings: fake_waha,
-        )
-
         _login(client, db, user)
         token_resp = client.get("/_csrf")
         token = token_resp.json()["token"]
         resp = client.post(
-            "/connections/whatsapp/connect",
+            "/connections/resend",
             headers={"X-CSRF-Token": token},
             follow_redirects=False,
         )

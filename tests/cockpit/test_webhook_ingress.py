@@ -36,21 +36,6 @@ def alice(db):
     return u
 
 
-def _whatsapp_conn(user_id: int) -> Connection:
-    return Connection(
-        user_id=user_id,
-        service="whatsapp",
-        status="connected",
-        config={
-            "waha_session": "kai-alice",
-            "waha_webhook_port": 8101,
-            "waha_webhook_path": "/webhook/whatsapp-1",
-        },
-        created_at="now",
-        updated_at="now",
-    )
-
-
 _FAKE_TYPE = WebhookType(
     name="test",
     verify_signature=lambda request, body, secret: True,
@@ -176,7 +161,6 @@ class TestRouteStatusCodes:
             run_id="fake-run",
             status="running",
             desired_state="running",
-            voice="af_heart",
             goal="answer email",
             language="English",
             feature_flags={},
@@ -225,7 +209,6 @@ class TestRouteStatusCodes:
             run_id="fake-run",
             status="running",
             desired_state="running",
-            voice="af_heart",
             goal="answer email",
             language="English",
             feature_flags={},
@@ -250,11 +233,10 @@ class TestForwardEvent:
         svc = DeploymentsService(db)
         dep = Deployment(
             user_id=alice.id,
-            bot_type="waha",
+            bot_type="email",
             run_id=None,
             status="stopped",
             desired_state="stopped",
-            voice="af_heart",
             goal="x",
             language="English",
             feature_flags={},
@@ -270,11 +252,10 @@ class TestForwardEvent:
         svc = DeploymentsService(db)
         dep = Deployment(
             user_id=alice.id,
-            bot_type="waha",
+            bot_type="email",
             run_id="fake-run",
             status="running",
             desired_state="running",
-            voice="af_heart",
             goal="x",
             language="English",
             feature_flags={},
@@ -293,11 +274,10 @@ class TestForwardEvent:
         svc = DeploymentsService(db)
         dep = Deployment(
             user_id=alice.id,
-            bot_type="waha",
+            bot_type="email",
             run_id="fake-run",
             status="running",
             desired_state="running",
-            voice="af_heart",
             goal="x",
             language="English",
             feature_flags={},

@@ -1,4 +1,4 @@
-"""Deployment routes: wizard, detail, lifecycle, settings, chats, history.
+"""Deployment routes: wizard, detail, lifecycle, settings, history.
 
 Split into one module per concern (see each sub-module's docstring) because
 the original single ``deployments.py`` file had grown to ~780 lines mixing
@@ -8,13 +8,12 @@ callers (``kai.cockpit.app``) don't need to know about the split.
 
 from fastapi import APIRouter
 
-from kai.cockpit.routes.deployments import chats, detail, history, lifecycle, settings, wizard
+from kai.cockpit.routes.deployments import detail, history, lifecycle, settings, wizard
 
 router = APIRouter()
 router.include_router(wizard.router)
 router.include_router(detail.router)
 router.include_router(settings.router)
-router.include_router(chats.router)
 router.include_router(history.router)
 router.include_router(lifecycle.router)
 

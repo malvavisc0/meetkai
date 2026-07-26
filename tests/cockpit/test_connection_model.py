@@ -78,14 +78,6 @@ def _setup_run_registry(monkeypatch, tmp_path, instance_id: str):
 class _StartBase:
     """Shared helpers for start() tests."""
 
-    @pytest.fixture(autouse=True)
-    def _media_ready(self):
-        from kai.cockpit.media_services import MEDIA_READY
-
-        MEDIA_READY.set()
-        yield
-        MEDIA_READY.clear()
-
 
 class TestWebhookConnectionCatalog:
     def test_resend_registered(self):
@@ -124,10 +116,9 @@ class TestWebhookConnectionCatalog:
         assert wt.testable is True
 
     def test_connection_labels_spreads_both_registries(self):
-        # whatsapp is its own entry; credential + webhook services spread from
-        # their registries — a second ingress-only provider would appear here
-        # by adding a WEBHOOK_CONNECTION_TYPES entry, no extra plumbing.
-        assert CONNECTION_LABELS["whatsapp"] == "WhatsApp"
+        # credential + webhook services spread from their registries — a
+        # second ingress-only provider would appear here by adding a
+        # WEBHOOK_CONNECTION_TYPES entry, no extra plumbing.
         for service, ct in CREDENTIAL_TYPES.items():
             assert CONNECTION_LABELS[service] == ct.label
         for service, wt in WEBHOOK_CONNECTION_TYPES.items():
@@ -153,11 +144,6 @@ class TestIsConnected:
 
     def test_none_is_not_connected(self):
         assert is_connected("resend", None) is False
-
-    def test_bespoke_uses_status_only(self):
-        # whatsapp is not in WEBHOOK_CONNECTION_TYPES → existing semantics
-        assert is_connected("whatsapp", self._conn("whatsapp", "connected")) is True
-        assert is_connected("whatsapp", self._conn("whatsapp", "disconnected")) is False
 
     def test_credential_uses_status_only(self):
         assert is_connected("database", self._conn("database", "connected")) is True
@@ -228,7 +214,7 @@ class TestInjectConnectionEnvIngressNoOp:
 class TestStartIngestsRequiredSmtp(_StartBase):
     """The email bot declares ``smtp`` in ``required_connections``. The
     supported-connections loop skips required connections and the bespoke
-    block is whatsapp-only, so without the required-credential env-injection
+    block is gone, so without the required-credential env-injection
     loop the bot would start with no ``KAI_SMTP_TOOL_*`` → no ``send_email``
     tool and no reply path."""
 
@@ -281,7 +267,6 @@ class TestStartIngestsRequiredSmtp(_StartBase):
             run_id=None,
             status="stopped",
             desired_state="stopped",
-            voice="af_heart",
             goal="goal",
             language="English",
             feature_flags={},
@@ -360,7 +345,6 @@ class TestStartIngestsRequiredResend(_StartBase):
             run_id=None,
             status="stopped",
             desired_state="stopped",
-            voice="af_heart",
             goal="goal",
             language="English",
             feature_flags={},

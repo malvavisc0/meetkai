@@ -10,8 +10,8 @@ cannot override it (spoofing guard). The password lives only in the closure
 and never appears in any tool argument, result, or log record.
 
 The workflow instruction composes — appended alongside any other workflow
-blocks (the waha bot's web-search, the Brain's, the SQL tool's) rather
-than replacing them (``agent/core.py:add_tool_workflow``).
+blocks (the Brain's, the SQL tool's) rather than replacing them
+(``agent/core.py:add_tool_workflow``).
 """
 
 import logging
@@ -33,7 +33,7 @@ _EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 # BotConfig.display_name field default, each bot's own _load_config
 # fallback, and the cockpit settings form's fallback all derive from this
 # one constant instead of repeating the literal (see bots/email/setup.py,
-# bots/waha/setup.py, bots/base.py::BaseBot.display_name(), and
+# bots/base.py::BaseBot.display_name(), and
 # cockpit/routes/deployments/settings.py).
 DEFAULT_DISPLAY_NAME = "Knowledgeable AI"
 

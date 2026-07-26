@@ -20,10 +20,9 @@ deployment_app = typer.Typer(
 @deployment_app.command("create")
 def deployment_create(
     user: str = typer.Option(..., "--user", help="User email"),
-    bot_type: str = typer.Option(..., "--bot", help="Bot type (e.g. waha)"),
+    bot_type: str = typer.Option(..., "--bot", help="Bot type (e.g. email)"),
     goal: str = typer.Option(..., "--goal", help="Bot goal (required)"),
     language: str = typer.Option(..., "--language", help="Bot language (required)"),
-    voice: str = typer.Option("", "--voice", help="Kokoro voice (auto-picked if empty)"),
 ):
     """Create a new deployment for a user."""
     from kai.cockpit.db import SessionLocal
@@ -41,7 +40,7 @@ def deployment_create(
             raise typer.Exit(1)
         svc = DeploymentsService(db)
         try:
-            dep = svc.create(db_user, bot_type, goal, language, voice or None)
+            dep = svc.create(db_user, bot_type, goal, language)
         except ConnectionRequiredError as exc:
             err_line(str(exc))
             raise typer.Exit(1) from exc
@@ -50,7 +49,7 @@ def deployment_create(
             raise typer.Exit(1) from exc
         console.print(
             f"{GL_OK} [{OK}]created deployment[/{OK}]  id={dep.id} bot_type={dep.bot_type} "
-            f"language={dep.language} voice={dep.voice}"
+            f"language={dep.language}"
         )
     finally:
         db.close()
@@ -83,7 +82,6 @@ def deployment_list(
             ("run_id", DIM),
             ("goal", ""),
             ("language", ""),
-            ("voice", ""),
         )
         for d in deps:
             goal_display = d.goal[:40] + "..." if len(d.goal) > 40 else d.goal
@@ -94,7 +92,6 @@ def deployment_list(
                 d.run_id or "-",
                 goal_display,
                 d.language,
-                d.voice,
             )
         console.print(table)
     finally:
@@ -159,7 +156,6 @@ def deployment_edit(
     deployment_id: int = typer.Argument(...),
     goal: str = typer.Option(None, "--goal"),
     language: str = typer.Option(None, "--language"),
-    voice: str = typer.Option(None, "--voice"),
 ):
     """Edit deployment fields (partial update)."""
     from kai.cockpit.db import SessionLocal
@@ -177,8 +173,6 @@ def deployment_edit(
             fields["goal"] = goal
         if language is not None:
             fields["language"] = language
-        if voice is not None:
-            fields["voice"] = voice
         if not fields:
             console.print(f"[{WARN}]\u25cf no fields to update[/{WARN}]")
             return
@@ -193,7 +187,7 @@ def deployment_delete(
     deployment_id: int = typer.Argument(...),
     yes: bool = typer.Option(False, "--yes", "-y", help="Skip confirmation prompt"),
 ):
-    """Delete a deployment (stops it first if running; WhatsApp is left connected)."""
+    """Delete a deployment (stops it first if running)."""
     from kai.cockpit.db import SessionLocal
     from kai.cockpit.deployments import DeploymentsService
 
@@ -207,7 +201,7 @@ def deployment_delete(
         if not yes:
             confirm = typer.confirm(
                 f"Delete deployment {deployment_id} ({dep.bot_type})?"
-                " The bot is stopped if running; WhatsApp stays connected."
+                " The bot is stopped if running."
             )
             if not confirm:
                 console.print(f"[{WARN}]\u25cf aborted[/{WARN}]")

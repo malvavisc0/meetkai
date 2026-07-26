@@ -47,7 +47,7 @@ async def chat_send(
     # the explicit Goal field on the Settings page, never as a side effect
     # of a casual instruction here. The delivery target is decided by the
     # agent itself through its structured action (action.target), not a
-    # form field — same as the waha bot's operator console.
+    # form field.
     result_dict = svc.send_message(dep, message, persist=False)
     reply = result_dict.get("reply", "(no reply)")
     request.session["chat_reply"] = reply

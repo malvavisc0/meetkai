@@ -1,6 +1,6 @@
-"""Deployment lifecycle actions: start, stop, sleep, wake, restart, delete."""
+"""Deployment lifecycle actions: start, stop, restart, delete."""
 
-from fastapi import APIRouter, Depends, Form, Request
+from fastapi import APIRouter, Depends, Request
 from fastapi.responses import RedirectResponse
 from sqlalchemy.orm import Session
 
@@ -61,38 +61,6 @@ async def deployment_stop(
     return RedirectResponse(f"/deployments/{dep_id}", status_code=302)
 
 
-@router.post("/deployments/{dep_id}/sleep")
-async def deployment_sleep(
-    dep_id: int,
-    chat_id: str = Form(...),
-    user: User = Depends(require_user),
-    db: Session = Depends(get_db),
-):
-    svc = DeploymentsService(db)
-    result = get_deployment(svc, dep_id, user)
-    if isinstance(result, RedirectResponse):
-        return result
-    svc, dep = result
-    svc.sleep_chat(dep, chat_id)
-    return RedirectResponse(f"/deployments/{dep_id}", status_code=302)
-
-
-@router.post("/deployments/{dep_id}/wake")
-async def deployment_wake(
-    dep_id: int,
-    chat_id: str = Form(...),
-    user: User = Depends(require_user),
-    db: Session = Depends(get_db),
-):
-    svc = DeploymentsService(db)
-    result = get_deployment(svc, dep_id, user)
-    if isinstance(result, RedirectResponse):
-        return result
-    svc, dep = result
-    svc.wake_chat(dep, chat_id)
-    return RedirectResponse(f"/deployments/{dep_id}", status_code=302)
-
-
 @router.post("/deployments/{dep_id}/restart")
 async def deployment_restart(
     request: Request,
@@ -124,7 +92,6 @@ async def deployment_delete(
     user: User = Depends(require_user),
     db: Session = Depends(get_db),
 ):
-    """Delete a deployment. WhatsApp connection is left intact."""
     svc = DeploymentsService(db)
     result = get_deployment(svc, dep_id, user)
     if isinstance(result, RedirectResponse):

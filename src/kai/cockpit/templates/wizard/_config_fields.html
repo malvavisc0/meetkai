@@ -1,6 +1,6 @@
 {# Shared wizard Configuration form fields (goal + language) — included by
    per-bot-type wizard templates. Each template can append bot-specific
-   fields (e.g. waha's voice picker) after this partial. #}
+   fields after this partial. #}
 <div class="field">
   <label class="field__label" for="goal">What should this agent do?</label>
   <textarea id="goal" name="goal" rows="4" required data-autosize {% if missing_connections %}disabled{% endif %}>{{ goal or "" }}</textarea>

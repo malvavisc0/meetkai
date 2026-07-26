@@ -27,20 +27,6 @@ class _TestAction(ActionResult):
     text: str | None = None
 
 
-# Mirrors waha's WahaNoVoiceAction: a vocabulary that deliberately excludes
-# ``send_voice_note`` (the TTS-offline case). Used to exercise the parser's
-# base-class recovery when the model emits a disallowed-but-deliverable action.
-_NO_VOICE_ACTIONS = Literal["reply", "silent", "sleep", "send_dm", "send_to_group"]
-
-
-class _TestNoVoiceAction(ActionResult):
-    """Action vocabulary excluding send_voice_note (TTS-offline analogue)."""
-
-    action: _NO_VOICE_ACTIONS  # type: ignore[assignment]
-    text: str | None = None
-    target: str | None = None
-
-
 def _mock_llm(reply_content: str | None = "ok", *, action: _TEST_ACTIONS = "reply"):
     """Create a mock LLM that returns a simple text reply (no tool calls).
 
@@ -432,12 +418,12 @@ class TestKaiAgentChat:
 
     @pytest.mark.asyncio
     async def test_chat_delegated_action_stores_user_message_only(self, settings):
-        # Regression: an operator turn whose action is delegated (e.g.
-        # send_to_group / send_voice_note) must still persist the operator's
-        # inbound instruction in the operator history bucket — the assistant
-        # reply text is recorded in the *target* chat by the bot's dispatch,
-        # not here. Previously the entire history block was skipped when the
-        # action was delegated, losing the operator's message.
+        # Regression: an operator turn whose action is delegated must still
+        # persist the operator's inbound instruction in the operator history
+        # bucket — the assistant reply text is recorded in the *target* chat
+        # by the bot's dispatch, not here. Previously the entire history
+        # block was skipped when the action was delegated, losing the
+        # operator's message.
         agent = KaiAgent(settings=settings, goal_manager=GoalManager())
         agent._llm = _mock_llm("hola mundo")
 
@@ -1133,8 +1119,8 @@ class TestBotHistoryFolderIsolation:
             llm_api_key="test-key",
             agent_history_folder=tmp_path,
         )
-        agent = KaiAgent(settings=settings, goal_manager=GoalManager(), namespace="waha")
-        assert agent._history_file == tmp_path / "waha.json"
+        agent = KaiAgent(settings=settings, goal_manager=GoalManager(), namespace="email")
+        assert agent._history_file == tmp_path / "email.json"
 
     def test_history_file_default_namespace(self, tmp_path):
         settings = Settings.for_test(
@@ -1151,12 +1137,12 @@ class TestBotHistoryFolderIsolation:
             llm_api_key="test-key",
             agent_history_folder=None,
         )
-        agent = KaiAgent(settings=settings, goal_manager=GoalManager(), namespace="waha")
+        agent = KaiAgent(settings=settings, goal_manager=GoalManager(), namespace="email")
         assert agent._history_file is None
 
     def test_per_bot_history_isolation(self, tmp_path):
         folder = tmp_path / "data"
-        settings_waha = Settings.for_test(
+        settings_primary = Settings.for_test(
             llm_api_base="http://localhost:8080/v1",
             llm_api_key="test-key",
             agent_history_folder=folder,
@@ -1167,17 +1153,19 @@ class TestBotHistoryFolderIsolation:
             agent_history_folder=folder,
         )
 
-        agent_waha = KaiAgent(settings=settings_waha, goal_manager=GoalManager(), namespace="waha")
+        agent_primary = KaiAgent(
+            settings=settings_primary, goal_manager=GoalManager(), namespace="primary"
+        )
         agent_email = KaiAgent(
             settings=settings_email, goal_manager=GoalManager(), namespace="email"
         )
 
-        agent_waha._history["chat"] = [ChatMessage(role=MessageRole.USER, content="waha msg")]
+        agent_primary._history["chat"] = [ChatMessage(role=MessageRole.USER, content="primary msg")]
         agent_email._history["chat"] = [ChatMessage(role=MessageRole.USER, content="email msg")]
 
-        assert agent_waha._history_file == folder / "waha.json"
+        assert agent_primary._history_file == folder / "primary.json"
         assert agent_email._history_file == folder / "email.json"
-        assert agent_waha._history["chat"][0].content == "waha msg"
+        assert agent_primary._history["chat"][0].content == "primary msg"
         assert agent_email._history["chat"][0].content == "email msg"
 
 
@@ -1192,9 +1180,9 @@ class TestHistoryEdits:
         )
 
     def test_history_key_namespaced_by_bot(self):
-        agent = KaiAgent(settings=None, goal_manager=GoalManager(), namespace="waha")
-        assert agent._history_key("123@c.us") == "waha:123@c.us"
-        assert agent._history_key(None) == "waha:default"
+        agent = KaiAgent(settings=None, goal_manager=GoalManager(), namespace="email")
+        assert agent._history_key("123@c.us") == "email:123@c.us"
+        assert agent._history_key(None) == "email:default"
 
     def test_history_key_unnamespaced_without_namespace(self):
         agent = KaiAgent(settings=None, goal_manager=GoalManager())
@@ -1202,11 +1190,11 @@ class TestHistoryEdits:
         assert agent._history_key(None) == "default"
 
     def test_namespaced_agents_keep_separate_history(self):
-        a = KaiAgent(settings=None, goal_manager=GoalManager(), namespace="waha")
+        a = KaiAgent(settings=None, goal_manager=GoalManager(), namespace="primary")
         b = KaiAgent(settings=None, goal_manager=GoalManager(), namespace="email")
-        a._get_history("shared-id").append(ChatMessage(role=MessageRole.USER, content="waha"))
+        a._get_history("shared-id").append(ChatMessage(role=MessageRole.USER, content="primary"))
         b._get_history("shared-id").append(ChatMessage(role=MessageRole.USER, content="email"))
-        assert a._get_history("shared-id")[0].content == "waha"
+        assert a._get_history("shared-id")[0].content == "primary"
         assert b._get_history("shared-id")[0].content == "email"
 
     def test_history_conversations_evicted_beyond_cap(self):
@@ -1321,80 +1309,6 @@ class TestStructuredPredictionContract:
         assert result.action.action == "reply"
         assert result.action.text == "hi"
 
-    @respx.mock
-    @pytest.mark.asyncio
-    async def test_disallowed_action_recovers_via_fallback(self, settings):
-        # Regression for the waha TTS-offline crash: the operator asked for a
-        # voice note, but ``send_voice_note`` is not in this turn's schema
-        # (TTS offline). The model obeyed the user and emitted it anyway. The
-        # parser must not crash with a generic "Agent chat error" — it should
-        # recover via the base ActionResult so the bot's dispatch can degrade
-        # (waha's send_voice_note path falls back to text delivery).
-        agent = KaiAgent(settings=settings, goal_manager=GoalManager())
-        agent._llm = self._real_llm()
-
-        fenced = (
-            "```json\n"
-            '{"action": "send_voice_note", "text": "wow esto es muy '
-            'interesante", "target": "120360000000000000@g.us"}\n```'
-        )
-        respx.post(url__regex=r".*").mock(
-            side_effect=[
-                Response(200, json=self._chat_completion(None)),
-                Response(200, json=self._chat_completion(fenced)),
-                # Retry after the correction prompt also emits send_voice_note
-                # (clean JSON this time) — the user insisted, so the model
-                # keeps the disallowed action. Recovery must still kick in.
-                Response(
-                    200,
-                    json=self._chat_completion(
-                        json.dumps(
-                            {
-                                "action": "send_voice_note",
-                                "text": "wow esto es muy interesante",
-                                "target": "120360000000000000@g.us",
-                            }
-                        )
-                    ),
-                ),
-            ]
-        )
-
-        result = await agent.chat(
-            "send a voice note to 120360000000000000@g.us saying wow this is "
-            "very interesting but in spanish",
-            output_cls=_TestNoVoiceAction,
-            tools=[],
-        )
-
-        # No crash: the turn resolves to the recovered action, preserving the
-        # text and target the model produced so dispatch can deliver them.
-        assert result.error is None
-        assert result.action.action == "send_voice_note"
-        assert result.action.text == "wow esto es muy interesante"
-        assert result.action.target == "120360000000000000@g.us"
-
-    def test_parse_structured_text_recovers_disallowed_action(self):
-        # Direct unit test of the parser recovery path: a clean JSON payload
-        # whose ``action`` is outside the constrained vocabulary validates
-        # against the base ActionResult and is returned unchanged.
-        from llama_index.core.output_parsers.pydantic import PydanticOutputParser
-
-        parser = PydanticOutputParser(output_cls=_TestNoVoiceAction)
-        payload = json.dumps(
-            {
-                "action": "send_voice_note",
-                "text": "hola",
-                "target": "g@g.us",
-            }
-        )
-
-        action = KaiAgent._parse_structured_text(payload, _TestNoVoiceAction, parser)
-
-        assert action.action == "send_voice_note"
-        assert action.text == "hola"
-        assert action.target == "g@g.us"
-
     def test_parse_structured_text_still_raises_on_malformed(self):
         # Recovery is scoped to a well-formed payload with a disallowed
         # ``action`` value. Genuinely malformed output (no action field, or
@@ -1402,13 +1316,13 @@ class TestStructuredPredictionContract:
         # raise so silent corruption never reaches dispatch.
         from llama_index.core.output_parsers.pydantic import PydanticOutputParser
 
-        parser = PydanticOutputParser(output_cls=_TestNoVoiceAction)
+        parser = PydanticOutputParser(output_cls=_TestAction)
         # No JSON object at all.
         with pytest.raises(ValueError):
-            KaiAgent._parse_structured_text("just some prose", _TestNoVoiceAction, parser)
+            KaiAgent._parse_structured_text("just some prose", _TestAction, parser)
         # JSON object missing the action key.
         with pytest.raises(ValueError):
-            KaiAgent._parse_structured_text(json.dumps({"text": "hi"}), _TestNoVoiceAction, parser)
+            KaiAgent._parse_structured_text(json.dumps({"text": "hi"}), _TestAction, parser)
 
     def test_parse_structured_text_does_not_recover_control_action(self):
         # A no-silent turn excludes ``silent`` from its vocabulary. If the
@@ -1421,7 +1335,7 @@ class TestStructuredPredictionContract:
         from llama_index.core.output_parsers.pydantic import PydanticOutputParser
 
         class _TestNoSilentAction(ActionResult):
-            action: _Literal["reply", "sleep", "send_dm", "send_to_group"]  # type: ignore[assignment]
+            action: _Literal["reply", "console"]  # type: ignore[assignment]
             text: str | None = None
 
         parser = PydanticOutputParser(output_cls=_TestNoSilentAction)

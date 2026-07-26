@@ -7,7 +7,6 @@ from sqlalchemy.orm import Session
 from kai.cockpit.app import templates
 from kai.cockpit.auth import require_user
 from kai.cockpit.bots import BOT_TYPES
-from kai.cockpit.connections.service import ConnectionsService
 from kai.cockpit.db import get_db
 from kai.cockpit.deployments import DeploymentsService, attention_reason
 from kai.cockpit.models import User
@@ -25,9 +24,6 @@ async def console(
     deployments = svc.list_for_user(user.id)
     deployed_types = {d.bot_type for d in deployments}
     available_types = [BOT_TYPES[bt] for bt in BOT_TYPES if bt not in deployed_types]
-    conn_svc = ConnectionsService(db)
-    whatsapp = await conn_svc.refresh_status_if_stale(user)
-    whatsapp_connected = bool(whatsapp and whatsapp.status == "connected")
 
     # Fetch status once per running deployment — reuse for both attention check and card task count.
     status_map = {d.id: svc.fetch_status(d) for d in deployments if d.status == "running"}
@@ -37,7 +33,7 @@ async def console(
     attention_reasons = {
         d.id: reason
         for d in deployments
-        if (reason := attention_reason(d, status_map.get(d.id), whatsapp_connected)) is not None
+        if (reason := attention_reason(d, status_map.get(d.id))) is not None
     }
 
     flash = request.session.pop("flash", None)

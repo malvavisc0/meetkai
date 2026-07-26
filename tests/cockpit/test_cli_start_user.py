@@ -1,4 +1,4 @@
-"""CLI tests for `kai start --user/--voice` (docs/cockpit/01, 04)."""
+"""CLI tests for `kai start --user` (docs/cockpit/01, 04)."""
 
 import pytest
 from typer.testing import CliRunner
@@ -18,14 +18,23 @@ def _isolated_run_registry(tmp_path, monkeypatch):
     monkeypatch.setattr(cli_mod, "get_settings", lambda: fake_settings)
 
 
+@pytest.fixture(autouse=True)
+def _brain_env(monkeypatch):
+    """The email ``general`` template declares ``brain_query`` as a required
+    tool, so the boot gate checks for Brain env vars. Provide stubs so the
+    gate passes without a real Morphik server (registration is best-effort
+    and wrapped in a try/except in ``_start``)."""
+    monkeypatch.setenv("KAI_BRAIN_BASE_URL", "http://brain.example.com")
+    monkeypatch.setenv("KAI_BRAIN_MORPHIK_TOKEN", "stub-token")
+
+
 def _patch_minimal_bot_lifecycle(monkeypatch):
     """Make ``Bot.configure``/``run`` no-ops and ``tell_endpoint`` opt in.
 
-    Mirrors the existing ``TestStartCommand`` pattern in tests/test_cli.py:
-    patch the class methods so ``kai start`` completes a full cycle without
-    touching a real WAHA instance.
+    Patches the email ``Bot`` class methods so ``kai start`` completes a full
+    cycle without touching a real provider.
     """
-    from kai.bots.waha import Bot
+    from kai.bots.email import Bot
 
     monkeypatch.setattr(Bot, "configure", lambda self, agent, settings, **kw: None)
     monkeypatch.setattr(Bot, "tell_endpoint", lambda self: "http://127.0.0.1:9999")
@@ -39,17 +48,17 @@ def _patch_minimal_bot_lifecycle(monkeypatch):
 
 class TestStartUserFlag:
     def test_user_flag_sets_instance_namespace(self, monkeypatch):
-        from kai.bots import waha as waha_mod
+        from kai.bots import email as email_mod
 
         _patch_minimal_bot_lifecycle(monkeypatch)
 
         seen_instances = []
-        original_init = waha_mod.Bot.__init__
+        original_init = email_mod.Bot.__init__
 
         def _capture_instance(self, *a, **k):
             original_init(self, *a, **k)
 
-        monkeypatch.setattr(waha_mod.Bot, "__init__", _capture_instance)
+        monkeypatch.setattr(email_mod.Bot, "__init__", _capture_instance)
 
         # Capture the instance id actually used for the run registry by
         # spying on _runs_registry in cli.py.
@@ -63,10 +72,10 @@ class TestStartUserFlag:
 
         monkeypatch.setattr(cli_mod, "_runs_registry", _spy_registry)
 
-        result = runner.invoke(app, ["start", "waha", "--user", "bob@example.com"])
+        result = runner.invoke(app, ["start", "email", "--user", "bob@example.com"])
 
         assert result.exit_code == 0
-        assert "waha-bob@example.com" in seen_instances
+        assert "email-bob@example.com" in seen_instances
 
     def test_no_user_flag_preserves_existing_behavior(self, monkeypatch):
         _patch_minimal_bot_lifecycle(monkeypatch)
@@ -82,37 +91,16 @@ class TestStartUserFlag:
 
         monkeypatch.setattr(cli_mod, "_runs_registry", _spy_registry)
 
-        result = runner.invoke(app, ["start", "waha"])
+        result = runner.invoke(app, ["start", "email"])
 
         assert result.exit_code == 0
         assert seen_instances
-        assert set(seen_instances) == {"waha"}
+        assert set(seen_instances) == {"email"}
 
     def test_kai_run_id_printed_to_stdout(self, monkeypatch):
         _patch_minimal_bot_lifecycle(monkeypatch)
 
-        result = runner.invoke(app, ["start", "waha", "--user", "bob@example.com"])
+        result = runner.invoke(app, ["start", "email", "--user", "bob@example.com"])
 
         assert result.exit_code == 0
         assert "KAI_RUN_ID=" in result.stdout
-
-    def test_voice_flag_passed_to_configure(self, monkeypatch):
-        from kai.bots.waha import Bot
-
-        seen_voice = {}
-
-        def _capture_configure(self, agent, settings, *, voice=None, template=None, tools=None):
-            seen_voice["value"] = voice
-
-        monkeypatch.setattr(Bot, "configure", _capture_configure)
-        monkeypatch.setattr(Bot, "tell_endpoint", lambda self: None)
-
-        async def _run(self):
-            return None
-
-        monkeypatch.setattr(Bot, "run", _run)
-
-        result = runner.invoke(app, ["start", "waha", "--voice", "custom_voice"])
-
-        assert result.exit_code == 0
-        assert seen_voice["value"] == "custom_voice"

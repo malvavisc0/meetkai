@@ -148,10 +148,9 @@ class QueryResult(BaseModel):
 class MorphikClient:
     """Async HTTP client for Morphik core.
 
-    Mirrors the WahaClient pattern. Callers pass ``end_user_id`` per-method
-    because it's user-scoped, not client-scoped. Auth is a single Bearer
-    token set at construction. Lifecycle: build once, ``await client.close()``
-    on shutdown.
+    Callers pass ``end_user_id`` per-method because it's user-scoped, not
+    client-scoped. Auth is a single Bearer token set at construction.
+    Lifecycle: build once, ``await client.close()`` on shutdown.
     """
 
     def __init__(self, settings: BrainSettings | None = None) -> None:

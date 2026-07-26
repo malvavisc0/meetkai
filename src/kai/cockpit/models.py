@@ -8,7 +8,6 @@ from sqlalchemy import (
     JSON,
     Boolean,
     ForeignKey,
-    Integer,
     String,
     UniqueConstraint,
 )
@@ -27,17 +26,16 @@ class User(Base):
     language: Mapped[str] = mapped_column(String, nullable=False)
     timezone: Mapped[str] = mapped_column(String, nullable=False)
     hmac_key: Mapped[str] = mapped_column(String, nullable=False)
-    # Admin-granted entitlement flags (image, video, stt, tts, sso, ...).
+    # Admin-granted entitlement flags (image, sso, ...).
     # Defaults to empty (all off). Server-side clamped in the settings route so
     # a crafted POST cannot self-enable an unentitled flag.
     feature_flags: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
     created_at: Mapped[str] = mapped_column(String, nullable=False)
     # Stable external-service identifier generated once at user creation
-    # (kai.cockpit.naming.kai_slug_for) and reused as both WAHA session
-    # name and Morphik end_user_id. NOT NULL UNIQUE — pre-MVP there is no
-    # legacy data, so this is enforced at the schema level rather than
-    # backfilled. Used as a lookup key in webhooks.py, so uniqueness is
-    # required there.
+    # (kai.cockpit.naming.kai_slug_for) and reused as the Morphik
+    # end_user_id. NOT NULL UNIQUE — pre-MVP there is no legacy data, so
+    # this is enforced at the schema level rather than backfilled. Used as
+    # a lookup key in webhooks.py, so uniqueness is required there.
     kai_slug: Mapped[str] = mapped_column(String, unique=True, nullable=False)
 
 
@@ -54,7 +52,6 @@ class Deployment(Base):
     run_id: Mapped[str | None] = mapped_column(String, nullable=True)
     status: Mapped[str] = mapped_column(String, nullable=False, default="needs_connect")
     desired_state: Mapped[str] = mapped_column(String, nullable=False, default="stopped")
-    voice: Mapped[str] = mapped_column(String, nullable=False)
     goal: Mapped[str] = mapped_column(String, nullable=False)
     language: Mapped[str] = mapped_column(String, nullable=False)
     # "general" is the always-safe default (resolves without --template on the CLI).
@@ -83,8 +80,6 @@ class Connection(Base):
     __tablename__ = "connections"
     __table_args__ = (
         UniqueConstraint("user_id", "service"),
-        UniqueConstraint("webhook_port"),  # SQLite allows multiple NULLs in unique constraints,
-        # so non-whatsapp connections leave it NULL.
         {"sqlite_autoincrement": True},
     )
 
@@ -93,11 +88,6 @@ class Connection(Base):
     service: Mapped[str] = mapped_column(String, nullable=False)
     status: Mapped[str] = mapped_column(String, nullable=False, default="disconnected")
     config: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
-    # Mirrors config["waha_webhook_port"] for exclusive DB-level allocation.
-    # NULL for non-whatsapp connections. DO NOT populate for ingress-only or
-    # other connection types — the unique constraint above is table-wide, not
-    # per-service, so any non-NULL value reserves the port globally.
-    webhook_port: Mapped[int | None] = mapped_column(Integer, nullable=True)
     created_at: Mapped[str] = mapped_column(String, nullable=False)
     updated_at: Mapped[str] = mapped_column(String, nullable=False)
 

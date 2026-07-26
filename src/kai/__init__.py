@@ -1,1 +1,1 @@
-"""kai — CLI wrapper for WAHA WhatsApp HTTP API."""
+"""kai — CLI for kAI support bots."""

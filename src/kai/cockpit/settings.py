@@ -24,7 +24,6 @@ class CockpitSettings(BaseSettings):
     cockpit_internal_url: str = "http://127.0.0.1:8080"
     cockpit_escalation_secret: str = ""
     escalations_path: Path = Path("data/cockpit.escalations.json")
-    waha_webhook_port_range: str = "8100-8199"
     smtp_host: str = "mailpit"
     smtp_port: int = 1025
     smtp_from: str = "kai@dev"

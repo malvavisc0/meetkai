@@ -14,11 +14,11 @@ def _create_user(email: str = "bob@x.com") -> None:
     )
 
 
-def _connect_whatsapp(email: str = "bob@x.com") -> None:
-    """Insert a connected WhatsApp ``Connection`` row directly — bypasses
-    ``connection connect``, which talks to a real WAHA instance and isn't
+def _connect_email(email: str = "bob@x.com") -> None:
+    """Insert the email bot's required ``Connection`` rows directly —
+    bypasses ``connection connect``, which talks to real providers and isn't
     mockable at the CLI-invocation boundary these tests use.
-    ``DeploymentsService.create()`` requires this connection to exist.
+    ``DeploymentsService.create()`` requires both resend and smtp to exist.
     """
     from kai.cockpit.db import SessionLocal
     from kai.cockpit.models import Connection, User
@@ -30,12 +30,25 @@ def _connect_whatsapp(email: str = "bob@x.com") -> None:
         db.add(
             Connection(
                 user_id=db_user.id,
-                service="whatsapp",
+                service="resend",
+                status="connected",
+                config={"signing_secret": "test-signing", "api_key": "test-api-key"},
+                created_at="now",
+                updated_at="now",
+            )
+        )
+        db.add(
+            Connection(
+                user_id=db_user.id,
+                service="smtp",
                 status="connected",
                 config={
-                    "waha_session": "kai-bob",
-                    "waha_webhook_port": 8101,
-                    "waha_webhook_path": "/webhook/whatsapp-1",
+                    "host": "smtp.example.com",
+                    "port": 587,
+                    "username": "user",
+                    "password": "secret123",
+                    "from_address": "user@example.com",
+                    "use_tls": True,
                 },
                 created_at="now",
                 updated_at="now",
@@ -47,7 +60,7 @@ def _connect_whatsapp(email: str = "bob@x.com") -> None:
 
 
 def _create_deployment(email: str = "bob@x.com") -> int:
-    _connect_whatsapp(email)
+    _connect_email(email)
     res = runner.invoke(
         app,
         [
@@ -56,7 +69,7 @@ def _create_deployment(email: str = "bob@x.com") -> int:
             "--user",
             email,
             "--bot",
-            "waha",
+            "email",
             "--goal",
             "be helpful",
             "--language",

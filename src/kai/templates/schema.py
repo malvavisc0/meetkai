@@ -10,7 +10,7 @@ class TemplateTools(BaseModel):
 
 
 class PostProcessingConfig(BaseModel):
-    profile: Literal["waha_default", "none", "custom"] = "none"
+    profile: Literal["default_cleanup", "none", "custom"] = "none"
     strip_emojis: bool = False
     strip_markdown: bool = False
     collapse_to_single_line: bool = False
@@ -48,7 +48,7 @@ class EscalationRule(BaseModel):
 
 class TemplateDef(BaseModel):
     name: str
-    transport: Literal["waha", "email"]
+    transport: Literal["email"]
     display_name: str
     description: str
     actions: list[str]

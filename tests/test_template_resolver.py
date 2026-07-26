@@ -2,11 +2,8 @@ from typing import get_args
 
 from kai.bots.email import EmailAction
 from kai.bots.email.setup import BotConfig as EmailBotConfig
-from kai.bots.waha.actions import _FULL_ACTION_NAMES
-from kai.bots.waha.setup import BotConfig as WahaBotConfig
 from kai.templates.resolver import (
     _EMAIL_VALID_ACTIONS,
-    _WAHA_VALID_ACTIONS,
     resolve_config,
     resolve_tools,
     validate_actions,
@@ -22,7 +19,7 @@ class TestResolveTools:
     def test_defaults_only(self):
         tmpl = TemplateDef(
             name="test",
-            transport="waha",
+            transport="email",
             display_name="T",
             description="T",
             actions=["reply"],
@@ -36,7 +33,7 @@ class TestResolveTools:
     def test_required_tools_added(self):
         tmpl = TemplateDef(
             name="test",
-            transport="waha",
+            transport="email",
             display_name="T",
             description="T",
             actions=["reply"],
@@ -48,7 +45,7 @@ class TestResolveTools:
     def test_optional_respects_env(self, monkeypatch):
         tmpl = TemplateDef(
             name="test",
-            transport="waha",
+            transport="email",
             display_name="T",
             description="T",
             actions=["reply"],
@@ -62,7 +59,7 @@ class TestResolveTools:
     def test_optional_added_when_env_present(self, monkeypatch):
         tmpl = TemplateDef(
             name="test",
-            transport="waha",
+            transport="email",
             display_name="T",
             description="T",
             actions=["reply"],
@@ -77,7 +74,7 @@ class TestResolveTools:
     def test_operator_enable_adds_tool(self):
         tmpl = TemplateDef(
             name="test",
-            transport="waha",
+            transport="email",
             display_name="T",
             description="T",
             actions=["reply"],
@@ -89,7 +86,7 @@ class TestResolveTools:
     def test_operator_disable_removes_optional(self, monkeypatch):
         tmpl = TemplateDef(
             name="test",
-            transport="waha",
+            transport="email",
             display_name="T",
             description="T",
             actions=["reply"],
@@ -108,7 +105,7 @@ class TestResolveTools:
         # web_search / get_weather etc.
         tmpl = TemplateDef(
             name="test",
-            transport="waha",
+            transport="email",
             display_name="T",
             description="T",
             actions=["reply"],
@@ -122,7 +119,7 @@ class TestResolveTools:
         # escalate / blacklist / calculate are non-disableable safety defaults.
         tmpl = TemplateDef(
             name="test",
-            transport="waha",
+            transport="email",
             display_name="T",
             description="T",
             actions=["reply"],
@@ -136,7 +133,7 @@ class TestResolveTools:
     def test_cannot_disable_required_tool(self):
         tmpl = TemplateDef(
             name="test",
-            transport="waha",
+            transport="email",
             display_name="T",
             description="T",
             actions=["reply"],
@@ -149,7 +146,7 @@ class TestResolveTools:
     def test_missing_required_reported(self):
         tmpl = TemplateDef(
             name="test",
-            transport="waha",
+            transport="email",
             display_name="T",
             description="T",
             actions=["reply"],
@@ -161,7 +158,7 @@ class TestResolveTools:
     def test_missing_required_reported_with_env(self):
         tmpl = TemplateDef(
             name="test",
-            transport="waha",
+            transport="email",
             display_name="T",
             description="T",
             actions=["reply"],
@@ -172,16 +169,6 @@ class TestResolveTools:
 
 
 class TestValidateActions:
-    def test_valid_waha_actions(self):
-        tmpl = TemplateDef(
-            name="test",
-            transport="waha",
-            display_name="T",
-            description="T",
-            actions=["reply", "send_voice_note", "silent"],
-        )
-        assert validate_actions(tmpl) == []
-
     def test_valid_email_actions(self):
         tmpl = TemplateDef(
             name="test",
@@ -192,7 +179,7 @@ class TestValidateActions:
         )
         assert validate_actions(tmpl) == []
 
-    def test_invalid_waha_action_in_email(self):
+    def test_invalid_action_in_email(self):
         tmpl = TemplateDef(
             name="test",
             transport="email",
@@ -207,7 +194,7 @@ class TestValidateActions:
     def test_invalid_action(self):
         tmpl = TemplateDef(
             name="test",
-            transport="waha",
+            transport="email",
             display_name="T",
             description="T",
             actions=["reply", "misty"],
@@ -218,34 +205,34 @@ class TestValidateActions:
 
 
 class TestResolveConfig:
-    def test_waha_template_defaults(self):
+    def test_email_template_defaults(self):
         tmpl = TemplateDef(
             name="test",
-            transport="waha",
+            transport="email",
             display_name="T",
             description="T",
             actions=["reply"],
             config={"temperature": 0.5},
         )
-        result = resolve_config(tmpl, None, {}, WahaBotConfig)
+        result = resolve_config(tmpl, None, {}, EmailBotConfig)
         assert result.temperature == 0.5
 
     def test_cli_overrides_template(self):
         tmpl = TemplateDef(
             name="test",
-            transport="waha",
+            transport="email",
             display_name="T",
             description="T",
             actions=["reply"],
             config={"temperature": 0.5},
         )
-        result = resolve_config(tmpl, None, {"temperature": 0.8}, WahaBotConfig)
+        result = resolve_config(tmpl, None, {"temperature": 0.8}, EmailBotConfig)
         assert result.temperature == 0.8
 
     def test_config_file_overrides_template(self):
         tmpl = TemplateDef(
             name="test",
-            transport="waha",
+            transport="email",
             display_name="T",
             description="T",
             actions=["reply"],
@@ -255,14 +242,14 @@ class TestResolveConfig:
             tmpl,
             {"temperature": 0.6},
             {},
-            WahaBotConfig,
+            EmailBotConfig,
         )
         assert result.temperature == 0.6
 
     def test_cli_overrides_config_file(self):
         tmpl = TemplateDef(
             name="test",
-            transport="waha",
+            transport="email",
             display_name="T",
             description="T",
             actions=["reply"],
@@ -272,7 +259,7 @@ class TestResolveConfig:
             tmpl,
             {"temperature": 0.6},
             {"temperature": 0.8},
-            WahaBotConfig,
+            EmailBotConfig,
         )
         assert result.temperature == 0.8
 
@@ -288,47 +275,12 @@ class TestResolveConfig:
         result = resolve_config(tmpl, None, {}, EmailBotConfig)
         assert result.language == "Spanish"
 
-    def test_nested_merge(self):
-        tmpl = TemplateDef(
-            name="test",
-            transport="waha",
-            display_name="T",
-            description="T",
-            actions=["reply"],
-            config={
-                "participation": {
-                    "rate": 0.5,
-                    "cooldown_seconds": 60,
-                }
-            },
-        )
-        result = resolve_config(tmpl, None, {}, WahaBotConfig)
-        assert result.participation.rate == 0.5
-        assert result.participation.cooldown_seconds == 60
-
-    def test_nested_partial_override(self):
-        tmpl = TemplateDef(
-            name="test",
-            transport="waha",
-            display_name="T",
-            description="T",
-            actions=["reply"],
-            config={
-                "participation": {
-                    "rate": 0.5,
-                }
-            },
-        )
-        result = resolve_config(tmpl, None, {}, WahaBotConfig)
-        assert result.participation.rate == 0.5
-        assert result.participation.enabled is True
-
 
 class TestValidateTools:
     def test_no_missing_when_required_empty(self):
         tmpl = TemplateDef(
             name="test",
-            transport="waha",
+            transport="email",
             display_name="T",
             description="T",
             actions=["reply"],
@@ -339,7 +291,7 @@ class TestValidateTools:
     def test_missing_required_tool(self):
         tmpl = TemplateDef(
             name="test",
-            transport="waha",
+            transport="email",
             display_name="T",
             description="T",
             actions=["reply"],
@@ -352,7 +304,7 @@ class TestValidateTools:
         monkeypatch.setenv("KAI_SQL_DSN", "sqlite:///:memory:")
         tmpl = TemplateDef(
             name="test",
-            transport="waha",
+            transport="email",
             display_name="T",
             description="T",
             actions=["reply"],
@@ -364,7 +316,7 @@ class TestValidateTools:
         # brain_enabled = base_url AND morphik_api_key — only one is not enough.
         tmpl = TemplateDef(
             name="test",
-            transport="waha",
+            transport="email",
             display_name="T",
             description="T",
             actions=["reply"],
@@ -381,7 +333,7 @@ class TestValidateTools:
         # smtp_enabled needs host AND username AND password AND from_address.
         tmpl = TemplateDef(
             name="test",
-            transport="waha",
+            transport="email",
             display_name="T",
             description="T",
             actions=["reply"],
@@ -408,9 +360,6 @@ class TestActionVocabularyDrift:
     updating resolver.py, validate_actions() would wrongly reject valid
     templates — these tests make that drift fail loudly instead.
     """
-
-    def test_waha_actions_match_bot_definition(self):
-        assert set(_FULL_ACTION_NAMES) == _WAHA_VALID_ACTIONS
 
     def test_email_actions_match_bot_definition(self):
         email_literal_args = set(get_args(EmailAction.model_fields["action"].annotation))

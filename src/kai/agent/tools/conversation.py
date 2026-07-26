@@ -81,8 +81,8 @@ def register_conversation_tools(
         of — the exact address/JID.
 
         Args:
-            conversation_id: The conversation to read (email address, WhatsApp
-                JID, etc.). Leave empty to read the current conversation, or
+            conversation_id: The conversation to read (email address,
+                etc.). Leave empty to read the current conversation, or
                 every conversation if there is no current one (e.g. an
                 operator turn).
         """
@@ -122,7 +122,7 @@ def register_conversation_tools(
                 "Read the stored messages for a conversation (the bot's own "
                 "memory, not the transport's message log). Returns messages "
                 "formatted as '[Role] body', oldest first. Pass "
-                "conversation_id (an email address or WhatsApp JID) to read a "
+                "conversation_id (an email address) to read a "
                 "specific conversation; leave empty for the current one, or "
                 "to list every known conversation if there is no current one "
                 "(e.g. an operator turn with no specific address/JID yet). "

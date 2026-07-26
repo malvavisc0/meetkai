@@ -3,8 +3,8 @@
 > A hackable Python framework for building and running small LLM agents over anything that emits a webhook.
 
 kAI gives agents a runtime, memory, tools, scheduling, and a simple plugin shape.
-Bring any transport that can deliver events over HTTP: WhatsApp, email,
-Telegram, a Docker alert stream, or an internal system webhook.
+Bring any transport that can deliver events over HTTP: email, Telegram, a
+Docker alert stream, or an internal system webhook.
 
 Think of each agent as an employee: it receives an input, decides the best
 action for it (reply, stay silent, escalate the recipient, schedule a
@@ -16,7 +16,7 @@ the agent's.
 
 ## What kAI Builds
 
-- **Support agents** that answer WhatsApp or email questions with shared memory
+- **Support agents** that answer email questions with shared memory
   and a shared knowledge base.
 - **DevOps agents** that receive alerts, inspect systems, and run approved
   actions.
@@ -54,21 +54,9 @@ Onboarding an agent mirrors hiring an employee:
 
 ## Current Bots
 
-- [`waha`](src/kai/bots/waha/README.md) — a WhatsApp employee via
-  [WAHA](https://github.com/devlikeapro/waha). Replies in chats and groups,
-  handles mentions, voice notes, images, and video, and can participate
-  proactively. Supports per-chat sleep/wake.
 - [`email`](src/kai/bots/email/README.md) — an email support employee via
   [Resend](https://resend.com) inbound webhooks and an SMTP reply path.
-  Answers grounded in the Brain, one address at a time, with no group/media/
-  participation concerns.
-
-Both bots share the same runtime, the same operator console pattern (steer
-via `/tell`, the agent picks the delivery target through its structured
-action, never a form field), and the same Brain integration. `email` is
-intentionally the minimal version of `waha` — read its README alongside
-`waha`'s to see what a new bot has to add versus what it gets for free from
-`BaseBot`/`KaiAgent`.
+  Answers grounded in the Brain, one address at a time.
 
 ## Requirements
 
@@ -88,7 +76,7 @@ uv sync
 ## Configure
 
 kAI reads `.env` from the working directory. Core settings use the `KAI_`
-prefix. Bot-specific settings use their own prefixes, such as `KAI_WAHA_` or
+prefix. Bot-specific settings use their own prefixes, such as
 `KAI_BOT_`/`KAI_EMAIL_` for the email bot.
 
 ```bash
@@ -118,10 +106,10 @@ KAI_LOG_DIR=/tmp/kai/logs
 
 ```bash
 uv run kai list
-uv run kai start waha \
-  --goal "Be warm, useful, and concise. Only reply when you add value." \
+uv run kai start email \
+  --goal "Answer support questions grounded in the Brain. Be helpful and concise." \
   --language English
-uv run kai status waha
+uv run kai status email
 ```
 
 `start` runs until SIGINT or SIGTERM. A second signal forces exit. `status`
@@ -133,9 +121,9 @@ delegates to the selected bot.
 uv run kai cockpit serve
 ```
 
-Operators use the cockpit to connect services (WhatsApp, SMTP, Resend,
-database), create deployments, adjust agent settings, chat with deployed
-agents through the operator console, and add knowledge to the Brain.
+Operators use the cockpit to connect services (SMTP, Resend, database), create
+deployments, adjust agent settings, chat with deployed agents through the
+operator console, and add knowledge to the Brain.
 
 ## Operating A Running Bot
 
@@ -184,8 +172,10 @@ class MyBotAction(ActionResult):
 class Bot(BaseBot):
     name = "mybot"
 
-    def configure(self, agent: KaiAgent, settings: Settings, *, voice: str | None = None) -> None:
-        super().configure(agent, settings)
+    def configure(
+        self, agent: KaiAgent, settings: Settings, *, template: TemplateDef, tools: ToolResolution
+    ) -> None:
+        super().configure(agent, settings, template=template, tools=tools)
         prompt = load_system_prompt(
             str(self.bot_dir / "prompt.md"),
             variables={"language": "English"},
@@ -205,13 +195,11 @@ class Bot(BaseBot):
 `configure()` loads the prompt, registers tools, and prepares the bot. `run()`
 starts the transport and passes incoming events into the agent. The bot
 itself owns turning the returned `ActionResult` into a side effect (send an
-email, post a WhatsApp message, do nothing) — the framework only guarantees
-the model answered with one of the values your `Literal` allows.
+email, do nothing) — the framework only guarantees the model answered with
+one of the values your `Literal` allows.
 
 ## Bot Ideas
 
-- **WhatsApp support agent**: answer questions in chats using the Brain and
-  conversation history (this is `waha`).
 - **Docker watchdog**: receive container alerts, inspect state, and run
   approved remediation commands.
 - **Email triage agent**: route inbound mail into a webhook, draft replies, and
@@ -231,27 +219,25 @@ uv lock --upgrade && uv sync
 
 ## Running With Docker
 
-The stack is split into three independent compose files — one per box — each
+The stack is split into two independent compose files — one per box — each
 with its own `.env` template. On the host that runs a given stack, copy that
 stack's template to `.env` and fill in secrets.
 
 | Stack | Compose file | Services | Env template |
 |-------|--------------|----------|--------------|
 | Cockpit (main) | `docker-compose.yml` | `cockpit`, `kai-postgres` | `.env.example` |
-| WhatsApp | `docker-compose.waha.yml` | `waha`, `redis` | `.env.waha.example` |
 | Workers | `docker-compose.workers.yaml` | `morphik`, `morphik-postgres`, `crawl4ai`, `redis` | `.env.workers.example` |
 
-The cockpit reaches waha/morphik/crawl4ai over the network via the `KAI_*`
-URLs, so those hostnames must resolve from the cockpit host. Two secrets must
+The cockpit reaches morphik/crawl4ai over the network via the `KAI_*`
+URLs, so those hostnames must resolve from the cockpit host. One secret must
 be identical across hosts:
-- `KAI_WAHA_API_KEY` (cockpit) == `WAHA_API_KEY` (waha stack)
 - `KAI_BRAIN_CRAWL4AI_TOKEN` (cockpit stack == workers stack)
 
 Prerequisites: Docker + Docker Compose v2.
 
-> The `waha` and `workers` stacks both define a container named `redis`, so
-> they are designed to run on **separate hosts**. To co-locate them on one
-> machine, rename one stack's `redis` `container_name` first.
+> The `workers` stack defines a container named `redis`, so if you co-locate
+> it with another stack that also uses `redis`, rename one stack's `redis`
+> `container_name` first.
 
 ### Cockpit box
 
@@ -275,15 +261,6 @@ Production (Coolify) deploys with `docker compose -f docker-compose.yml`, which
 ignores the override: no mailpit, cockpit pulls the published image and exposes
 `8080` without publishing a host port (Coolify's proxy routes the public domain
 to it).
-
-### WhatsApp box
-
-```bash
-cp .env.waha.example .env   # WAHA_API_KEY must match the cockpit's KAI_WAHA_API_KEY
-docker compose -f docker-compose.waha.yml up -d
-```
-
-Publishes WAHA on host port 3000.
 
 ### Workers box
 
@@ -330,14 +307,13 @@ kai/
 ├── landing/            # standalone static marketing site (GitHub Pages)
 ├── src/kai/
 │   ├── agent/          # LLM runtime, tools, goals, context, scheduling
-│   ├── bots/           # Bot plugins (waha, email)
+│   ├── bots/           # Bot plugins (email)
 │   ├── brain/          # Brain client and ingestion helpers
 │   ├── cli/            # Command-line interface
 │   ├── cockpit/        # Operator web cockpit
 │   ├── config/         # Settings and prompts
 │   ├── logging/
-│   ├── runs.py
-│   └── vendors/
+│   └── runs.py
 └── tests/
 ```
 

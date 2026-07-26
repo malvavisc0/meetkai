@@ -27,26 +27,30 @@ class TemplateRegistry:
         for dir_path in self._dirs:
             if not dir_path.is_dir():
                 continue
-            transport_names = []
-            if transport:
-                transport_names = [(transport, dir_path / transport)]
-            else:
-                for entry in sorted(dir_path.iterdir()):
-                    if entry.is_dir():
-                        transport_names.append((entry.name, entry))
-            for t_name, transport_dir in transport_names:
-                if not transport_dir.is_dir():
-                    continue
-                for entry in sorted(transport_dir.iterdir()):
-                    if not entry.is_dir():
-                        continue
-                    template_path = entry / _TEMPLATE_FILE
-                    if not template_path.is_file():
-                        continue
-                    tmpl = self._load_template_file(template_path, t_name)
+            for t_name, transport_dir in self._iter_transport_dirs(dir_path, transport):
+                for tmpl in self._iter_templates_in_transport(transport_dir, t_name):
                     if tmpl not in templates:
                         templates.append(tmpl)
         return templates
+
+    @staticmethod
+    def _iter_transport_dirs(dir_path, transport: str | None):
+        if transport:
+            yield (transport, dir_path / transport)
+            return
+        for entry in sorted(dir_path.iterdir()):
+            if entry.is_dir():
+                yield (entry.name, entry)
+
+    def _iter_templates_in_transport(self, transport_dir, t_name: str):
+        if not transport_dir.is_dir():
+            return
+        for entry in sorted(transport_dir.iterdir()):
+            if not entry.is_dir():
+                continue
+            template_path = entry / _TEMPLATE_FILE
+            if template_path.is_file():
+                yield self._load_template_file(template_path, t_name)
 
     def get(self, transport: str, name: str) -> TemplateDef:
         for dir_path in self._dirs:

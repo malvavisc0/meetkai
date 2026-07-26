@@ -6,12 +6,10 @@ marking unentitled ones disabled + unchecked; a direct POST can spoof
 checkbox names — the server must clamp them server-side.
 """
 
-import re
 from datetime import UTC, datetime
-from unittest.mock import AsyncMock
 
 import pytest
-from tests.cockpit.helpers import csrf_post
+from tests.cockpit.helpers import _connect_email, csrf_post
 
 from kai.cockpit import tokens
 from kai.cockpit.auth_backends import MagicLinkProvider
@@ -26,7 +24,7 @@ def bob(db):
         language="English",
         timezone="UTC",
         hmac_key="bob-hmac-key",
-        feature_flags={"image": True, "video": False, "stt": False, "tts": False, "sso": False},
+        feature_flags={"image": True, "sso": False},
         created_at=datetime.now(UTC).isoformat(),
         kai_slug=kai_slug_for("bob@x.com"),
     )
@@ -37,37 +35,33 @@ def bob(db):
 
 
 @pytest.fixture
-def fake_waha_client(monkeypatch):
-    client = AsyncMock()
-    client.close = AsyncMock()
-    monkeypatch.setattr("kai.cockpit.connections.service.WahaClient", lambda settings: client)
-    monkeypatch.setattr("kai.cockpit.connections.service.get_waha_settings", lambda: object())
-    return client
-
-
-@pytest.fixture
 def dep(db, bob):
     from kai.cockpit.deployments import DeploymentsService
     from kai.cockpit.models import Connection
 
+    _connect_email(db, bob)
+    now = datetime.now(UTC).isoformat()
     db.add(
         Connection(
             user_id=bob.id,
-            service="whatsapp",
+            service="smtp",
             status="connected",
             config={
-                "waha_session": "kai-bob",
-                "waha_webhook_port": 8101,
-                "waha_webhook_path": "/webhook/whatsapp-1",
+                "host": "smtp.example.com",
+                "port": 587,
+                "username": "u",
+                "password": "p",
+                "from_address": "a@b.c",
+                "use_tls": True,
             },
-            created_at="now",
-            updated_at="now",
+            created_at=now,
+            updated_at=now,
         )
     )
     db.commit()
 
     svc = DeploymentsService(db)
-    d = svc.create(bob, "waha", "be helpful", "English")
+    d = svc.create(bob, "email", "be helpful", "English")
     return d
 
 
@@ -81,30 +75,7 @@ def _login(client, db, bob):
 
 
 class TestEntitlementGate:
-    def test_unentitled_flag_silently_dropped(self, client, db, bob, dep, fake_waha_client):
-        """A direct POST with feature_video=on when the user lacks the video
-        entitlement must NOT enable video on the deployment."""
-        _login(client, db, bob)
-        # video is NOT in bob's entitlements (False). Spoof it on.
-        csrf_post(
-            client,
-            f"/deployments/{dep.id}/settings",
-            data={
-                "goal": "be helpful",
-                "language": "English",
-                "voice": "af_heart",
-                "feature_image": "true",
-                "feature_video": "true",  # spoofed — should be clamped to False
-                "feature_stt": "true",  # spoofed — should be clamped to False
-            },
-            follow_redirects=False,
-        )
-        db.refresh(dep)
-        assert dep.feature_flags["image"] is True  # entitled -> kept
-        assert dep.feature_flags["video"] is False  # not entitled -> dropped
-        assert dep.feature_flags["stt"] is False  # not entitled -> dropped
-
-    def test_entitled_flag_can_be_disabled(self, client, db, bob, dep, fake_waha_client):
+    def test_entitled_flag_can_be_disabled(self, client, db, bob, dep):
         """An entitled flag can be turned off via the form."""
         _login(client, db, bob)
         csrf_post(
@@ -113,32 +84,12 @@ class TestEntitlementGate:
             data={
                 "goal": "be helpful",
                 "language": "English",
-                "voice": "af_heart",
                 # feature_image intentionally omitted -> False
             },
             follow_redirects=False,
         )
         db.refresh(dep)
         assert dep.feature_flags["image"] is False
-
-    def test_settings_page_renders_all_flags_disabled_when_unentitled(
-        self, client, db, bob, dep, fake_waha_client
-    ):
-        """Every bot-type flag renders; unentitled ones are disabled so the
-        operator sees what's possible, not an empty card."""
-        _login(client, db, bob)
-        r = client.get(f"/deployments/{dep.id}/settings")
-        assert r.status_code == 200
-        body = r.text
-        # bob is entitled to image only (among the waha flags).
-        assert "feature_image" in body
-        assert "feature_video" in body
-        assert "feature_stt" in body
-        assert "feature_tts" in body
-        # unentitled flags must be disabled so they can't be toggled on
-        assert re.search(r'name="feature_video"[^>]*disabled', body)
-        assert re.search(r'name="feature_stt"[^>]*disabled', body)
-        assert re.search(r'name="feature_tts"[^>]*disabled', body)
 
 
 class TestUserFlagsCli:
@@ -161,11 +112,10 @@ class TestUserFlagsCli:
         bob.feature_flags = {}
         db.commit()
 
-        result = CliRunner().invoke(cockpit_user_app, ["flags", bob.email, "--video", "--tts"])
+        result = CliRunner().invoke(cockpit_user_app, ["flags", bob.email, "--sso"])
         assert result.exit_code == 0
         db.refresh(bob)
-        assert bob.feature_flags["video"] is True
-        assert bob.feature_flags["tts"] is True
+        assert bob.feature_flags["sso"] is True
         assert bob.feature_flags.get("image") is not True
 
     def test_flags_revoke(self, db, bob):

@@ -1,5 +1,4 @@
 import asyncio
-import base64
 import json
 import logging
 import os
@@ -38,7 +37,6 @@ from kai.config.settings import Settings, get_settings
 from kai.logging.logger import setup_logging
 from kai.runs import RunRecord, RunRegistry, generate_run_id, runs_path
 from kai.utils.common import compute_hmac, now_iso
-from kai.utils.terminal import render_image_pixelated
 
 logger = logging.getLogger(__name__)
 
@@ -59,6 +57,30 @@ def _parse_tool_list(raw: str) -> list[str]:
     if not raw:
         return []
     return [t.strip() for t in raw.split(",") if t.strip()]
+
+
+def _fail_on_errors(errors: list[str]) -> bool:
+    """Print errors and return True if any were found."""
+    if not errors:
+        return False
+    for err in errors:
+        err_line(err)
+    return True
+
+
+def _fail_on_tool_resolution(tool_resolution) -> bool:
+    """Print tool-resolution errors and return True if any were found."""
+    had_errors = False
+    for err in tool_resolution.missing_required:
+        err_line(f"required tool missing: {err}")
+        had_errors = True
+    for err in tool_resolution.rejected_disable:
+        err_line(f"cannot disable: {err}")
+        had_errors = True
+    for name in tool_resolution.rejected_unknown:
+        err_line(f"unknown tool in --enable-tools: {name}")
+        had_errors = True
+    return had_errors
 
 
 def _resolve_run(bot_name: str, run_id: str, user: str = "") -> RunRecord:
@@ -108,125 +130,66 @@ def _post_clear(record: RunRecord) -> tuple[int, dict]:
     return resp.status_code, data
 
 
-def _post_sleep_toggle(record: RunRecord, chat_id: str, *, action: str) -> tuple[int, dict]:
-    """POST an HMAC-signed ``{"chat_id": ...}`` to the run's /sleep or /wake route."""
-    body = json.dumps({"chat_id": chat_id}).encode("utf-8")
-    signature = compute_hmac(record.hmac_key, body, record.hmac_algorithm)
-    resp = httpx.post(
-        f"{record.endpoint}/{action}",
-        content=body,
-        headers={"Content-Type": "application/json", "X-Webhook-Hmac": signature},
-        timeout=30.0,
-    )
-    try:
-        data = resp.json()
-    except Exception:
-        data = {"ok": False, "reply": resp.text}
-    return resp.status_code, data
-
-
 def _render_status(data: dict, *, uptime: int | None = None) -> None:
     """Render a status snapshot dict (from the ``/status`` route) as bullets."""
-    session = data.get("session")
     lines: list = []
 
     if uptime is not None:
-        days, rem = divmod(uptime, 86400)
-        hours, rem = divmod(rem, 3600)
-        minutes, seconds = divmod(rem, 60)
-        if days:
-            dur = f"{days}d {hours}h {minutes}m"
-        elif hours:
-            dur = f"{hours}h {minutes}m"
-        elif minutes:
-            dur = f"{minutes}m {seconds}s"
-        else:
-            dur = f"{seconds}s"
-        lines.append(f"[blue]\u25cf[/blue] [bold]uptime[/bold]  [{DIM}]{dur}  ({uptime}s)[/{DIM}]")
+        lines.append(_format_uptime_line(uptime))
 
-    if session:
-        sname = session.get("name", "unknown")
-        sstatus = session.get("status", "unknown")
-        color = OK if sstatus == "WORKING" else WARN
-        lines.append(
-            f"[{color}]\u25cf[/{color}] [bold]session[/bold]  {sname}  [{color}]{sstatus}[/{color}]"
-        )
-    else:
-        lines.append(f"[{WARN}]\u25cf[/{WARN}] [bold]session[/bold]  [{DIM}]not found[/{DIM}]")
-
-    account = data.get("account")
-    if account:
-        picture_b64 = account.get("picture")
-        if picture_b64:
-            try:
-                render_image_pixelated(base64.b64decode(picture_b64), console, width=16)
-            except Exception:
-                logger.debug("failed to render status profile picture")
-        if account.get("name"):
-            lines.append(f"   [cyan]{account['name']}[/cyan]")
-        if account.get("id"):
-            lines.append(f"   [{DIM}]{account['id']}[/{DIM}]")
-
-    sleep = data.get("sleep")
-    if sleep:
-        sleeping = sleep.get("sleeping", [])
-        count = sleep.get("count", len(sleeping))
-        if count:
-            color = "magenta"
-            lines.append(
-                f"[{color}]\u25cf[/{color}] [bold]sleep[/bold]  "
-                f"[{DIM}]{count} chat(s) asleep[/{DIM}]"
-            )
-            for chat_id in sleeping[:5]:
-                lines.append(f"   [{DIM}]{chat_id}[/{DIM}]")
-            if count > 5:
-                lines.append(f"   [{DIM}]\u2026 +{count - 5} more[/{DIM}]")
-        else:
-            lines.append(f"[{OK}]\u25cf[/{OK}] [bold]sleep[/bold]  [{DIM}]awake[/{DIM}]")
-
-    tasks = data.get("tasks")
-    if tasks:
-        pending = tasks.get("pending", 0)
-        recurring = tasks.get("recurring", 0)
-        total = pending + recurring
-        if total:
-            parts = []
-            if pending:
-                parts.append(f"{pending} pending")
-            if recurring:
-                parts.append(f"{recurring} recurring")
-            lines.append(
-                f"[cyan]\u25cf[/cyan] [bold]tasks[/bold]  [{DIM}]{', '.join(parts)}[/{DIM}]"
-            )
-            for item in tasks.get("items", [])[:5]:
-                repeat = item.get("repeat", "none")
-                tag = f" ({repeat})" if repeat != "none" else ""
-                lines.append(f"   [{DIM}]{item.get('goal', '?')[:60]}{tag}[/{DIM}]")
-            if total > 5:
-                lines.append(f"   [{DIM}]\u2026 +{total - 5} more[/{DIM}]")
-        else:
-            lines.append(f"[{OK}]\u25cf[/{OK}] [bold]tasks[/bold]  [{DIM}]none[/{DIM}]")
-
-    caps = data.get("capabilities")
-    if caps:
-        flags = []
-        flag_map = [
-            ("voice_to_text", "voice to text"),
-            ("text_to_voice", "text to voice"),
-            ("vision", "vision"),
-            ("instagram", "instagram"),
-        ]
-        for key, label in flag_map:
-            on = caps.get(key)
-            if on:
-                flags.append(f"[{OK}]{label}[/{OK}]")
-            else:
-                flags.append(f"[{DIM}]{label}[/{DIM}]")
-        lines.append("[bold]capabilities[/bold]  " + "  ".join(flags))
+    lines.extend(_format_tasks_lines(data.get("tasks")))
+    lines.extend(_format_caps_lines(data.get("capabilities")))
 
     from rich.console import Group
 
     console.print(Group(*(Align.left(line) for line in lines)))
+
+
+def _format_uptime_line(uptime: int) -> str:
+    days, rem = divmod(uptime, 86400)
+    hours, rem = divmod(rem, 3600)
+    minutes, seconds = divmod(rem, 60)
+    if days:
+        dur = f"{days}d {hours}h {minutes}m"
+    elif hours:
+        dur = f"{hours}h {minutes}m"
+    elif minutes:
+        dur = f"{minutes}m {seconds}s"
+    else:
+        dur = f"{seconds}s"
+    return f"[blue]\u25cf[/blue] [bold]uptime[/bold]  [{DIM}]{dur}  ({uptime}s)[/{DIM}]"
+
+
+def _format_tasks_lines(tasks: dict | None) -> list[str]:
+    if not tasks:
+        return []
+    pending = tasks.get("pending", 0)
+    recurring = tasks.get("recurring", 0)
+    total = pending + recurring
+    if not total:
+        return [f"[{OK}]\u25cf[/{OK}] [bold]tasks[/bold]  [{DIM}]none[/{DIM}]"]
+    parts = []
+    if pending:
+        parts.append(f"{pending} pending")
+    if recurring:
+        parts.append(f"{recurring} recurring")
+    lines = [f"[cyan]\u25cf[/cyan] [bold]tasks[/bold]  [{DIM}]{', '.join(parts)}[/{DIM}]"]
+    for item in tasks.get("items", [])[:5]:
+        repeat = item.get("repeat", "none")
+        tag = f" ({repeat})" if repeat != "none" else ""
+        lines.append(f"   [{DIM}]{item.get('goal', '?')[:60]}{tag}[/{DIM}]")
+    if total > 5:
+        lines.append(f"   [{DIM}]\u2026 +{total - 5} more[/{DIM}]")
+    return lines
+
+
+def _format_caps_lines(caps: dict | None) -> list[str]:
+    if not caps:
+        return []
+    flags = []
+    for key, label in [("vision", "vision")]:
+        flags.append(f"[{OK}]{label}[/{OK}]" if caps.get(key) else f"[{DIM}]{label}[/{DIM}]")
+    return ["[bold]capabilities[/bold]  " + "  ".join(flags)]
 
 
 def _render_tell(data: dict) -> None:
@@ -240,54 +203,52 @@ def _render_tell(data: dict) -> None:
     console.print(f"  {reply}")
 
     actions = data.get("actions") or []
-    if actions:
-        table = soft_table(
-            ("", ""),
-            ("tool", ACCENT),
-            ("target", DIM),
-            ("text", ""),
-            ("status", ""),
-        )
-        for a in actions:
-            name = a.get("tool", "?")
-            a_ok = a.get("ok", False)
-            mark = GL_OK if a_ok else GL_ERR
+    if not actions:
+        return
+    table = soft_table(
+        ("", ""),
+        ("tool", ACCENT),
+        ("target", DIM),
+        ("text", ""),
+        ("status", ""),
+    )
+    for a in actions:
+        table.add_row(*_render_tell_row(a))
+    console.print(table)
 
-            # target: chat_id / target (where it was delivered)
-            target = ""
-            for key in ("chat_id", "target"):
-                val = a.get(key)
-                if val:
-                    target = str(val)
-                    break
-            if not target:
-                target = f"[{DIM}]\u2014[/{DIM}]"
-            elif len(target) > 40:
-                target = target[:37] + "..."
 
-            # text: the message content / goal / any other arg value
-            text = ""
-            for key in ("text", "goal"):
-                val = a.get(key)
-                if val:
-                    text = str(val)
-                    break
-            if not text:
-                for key, val in a.items():
-                    if key in ("tool", "ok", "target", "chat_id"):
-                        continue
-                    if val is None or val == "" or val is False:
-                        continue
-                    text = str(val)
-                    break
-            if not text:
-                text = f"[{DIM}]\u2014[/{DIM}]"
-            elif len(text) > 80:
-                text = text[:77] + "..."
+def _render_tell_row(a: dict) -> tuple:
+    name = a.get("tool", "?")
+    a_ok = a.get("ok", False)
+    mark = GL_OK if a_ok else GL_ERR
+    target = _first_nonempty(a, ("chat_id", "target"))
+    target = _truncate(target, 40) if target else f"[{DIM}]\u2014[/{DIM}]"
+    text = _first_nonempty(a, ("text", "goal")) or _first_other_arg(a)
+    text = _truncate(text, 80) if text else f"[{DIM}]\u2014[/{DIM}]"
+    status = f"[{OK}]ok[/{OK}]" if a_ok else f"[{ERR}]failed[/{ERR}]"
+    return mark, name, target, text, status
 
-            status = f"[{OK}]ok[/{OK}]" if a_ok else f"[{ERR}]failed[/{ERR}]"
-            table.add_row(mark, name, target, text, status)
-        console.print(table)
+
+def _first_nonempty(a: dict, keys: tuple[str, ...]) -> str:
+    for key in keys:
+        val = a.get(key)
+        if val:
+            return str(val)
+    return ""
+
+
+def _first_other_arg(a: dict) -> str:
+    for key, val in a.items():
+        if key in ("tool", "ok", "target", "chat_id"):
+            continue
+        if val is None or val == "" or val is False:
+            continue
+        return str(val)
+    return ""
+
+
+def _truncate(text: str, limit: int) -> str:
+    return text[: limit - 3] + "..." if len(text) > limit else text
 
 
 def _render_help() -> None:
@@ -305,7 +266,6 @@ def _start(
     goal_text: str,
     language: str,
     user: str,
-    voice: str,
     template_name: str,
     enable_tools: str,
     disable_tools: str,
@@ -341,27 +301,14 @@ def _start(
         err_line(f"template not found: {transport}/{tmpl_name}")
         raise typer.Exit(1)
 
-    action_errors = validate_actions(tmpl)
-    if action_errors:
-        for err in action_errors:
-            err_line(err)
+    if _fail_on_errors(validate_actions(tmpl)):
         raise typer.Exit(1)
 
     operator_enable = _parse_tool_list(enable_tools)
     operator_disable = _parse_tool_list(disable_tools)
 
     tool_resolution = resolve_tools(tmpl, operator_enable, operator_disable)
-    if tool_resolution.missing_required:
-        for err in tool_resolution.missing_required:
-            err_line(f"required tool missing: {err}")
-        raise typer.Exit(1)
-    if tool_resolution.rejected_disable:
-        for err in tool_resolution.rejected_disable:
-            err_line(f"cannot disable: {err}")
-        raise typer.Exit(1)
-    if tool_resolution.rejected_unknown:
-        for name in tool_resolution.rejected_unknown:
-            err_line(f"unknown tool in --enable-tools: {name}")
+    if _fail_on_tool_resolution(tool_resolution):
         raise typer.Exit(1)
 
     # Instance namespace: when --user is provided, isolate files per user.
@@ -387,9 +334,7 @@ def _start(
         sql_engine = None
 
         try:
-            bot.configure(
-                agent, settings, voice=voice or None, template=tmpl, tools=tool_resolution
-            )
+            bot.configure(agent, settings, template=tmpl, tools=tool_resolution)
         except (FileNotFoundError, ValueError, OSError) as exc:
             err_line(f"configuration error  {exc}")
             return 1
@@ -684,10 +629,7 @@ def _chat(
     local_persist = persist
 
     while True:
-        if local_persist:
-            tag = "[bold green]\u25cfpersist[/bold green]"
-        else:
-            tag = f"[{DIM}]\u25cb[/{DIM}]"
+        tag = _persist_tag(local_persist)
         try:
             message = console.input(f"{tag} [bold cyan]\u203a[/bold cyan] ")
         except (EOFError, KeyboardInterrupt):
@@ -701,96 +643,69 @@ def _chat(
         if message in ("/quit", "/exit"):
             console.print(f"{GL_IDLE} [{DIM}]bye[/{DIM}]")
             return
-        if message == "/help":
-            _render_help()
-            continue
-        if message == "/persist":
-            local_persist = not local_persist
-            state = "on" if local_persist else "off"
-            console.print(f"[{DIM}]persist[/{DIM}] [bold]{state}[/bold]")
-            continue
-        if message == "/clear":
-            try:
-                status_code, data = _post_clear(record)
-            except httpx.HTTPError as exc:
-                err_line(f"failed to reach {record.endpoint}  {exc}")
-                continue
-            ok = status_code == 200 and isinstance(data, dict) and data.get("ok")
-            if ok:
-                console.print(f"{GL_OK} [{OK}]clear[/{OK}]  [{DIM}]history cleared[/{DIM}]")
-            elif isinstance(data, dict):
-                err_line(data.get("error", "clear failed"))
-            else:
-                err_line("clear failed")
+
+        if message.startswith("/"):
+            local_persist = _handle_slash(message, local_persist, record)
             continue
 
-        try:
-            with console.status(f"[{DIM}]thinking...[/{DIM}]", spinner="dots"):
-                status_code, data = _post_tell(record, message, persist=local_persist)
-        except httpx.HTTPError as exc:
-            err_line(f"failed to reach {record.endpoint}  {exc}")
-            continue
-
-        if isinstance(data, dict):
-            data = {
-                k: v
-                for k, v in data.items()
-                if not (v is None or (isinstance(v, (list, str)) and not v))
-            }
-            data.setdefault("ok", False)
-
-        _render_tell(data)
+        data = _post_and_clean_tell(record, message, local_persist)
+        if data is not None:
+            _render_tell(data)
 
 
-def _sleep(
-    bot_name: str,
-    run_id: str,
-    chat_id: str,
-    user: str,
-) -> None:
-    """Put a chat to sleep on a running bot via its /sleep route.
-
-    A sleeping bot stops speaking in that chat but keeps observing messages.
-    """
-    record = _resolve_run(bot_name, run_id, user=user)
+def _post_and_clean_tell(record, message: str, persist: bool) -> dict | None:
+    """POST a /tell and return cleaned data, or None on failure."""
     try:
-        status_code, data = _post_sleep_toggle(record, chat_id, action="sleep")
+        with console.status(f"[{DIM}]thinking...[/{DIM}]", spinner="dots"):
+            _status_code, data = _post_tell(record, message, persist=persist)
     except httpx.HTTPError as exc:
         err_line(f"failed to reach {record.endpoint}  {exc}")
-        raise typer.Exit(1) from exc
+        return None
+    if isinstance(data, dict):
+        data = {
+            k: v
+            for k, v in data.items()
+            if not (v is None or (isinstance(v, (list, str)) and not v))
+        }
+        data.setdefault("ok", False)
+    return data
 
-    if status_code == 200 and data.get("ok"):
-        console.print(
-            f"{GL_OK} [{OK}]asleep[/{OK}]  [bold]{chat_id}[/bold]  [{DIM}]now asleep[/{DIM}]"
-        )
-    else:
-        err_line(data.get("error", data.get("reply", "failed")))
-    if status_code != 200 or not data.get("ok"):
-        raise typer.Exit(1)
+
+def _persist_tag(local_persist: bool) -> str:
+    if local_persist:
+        return "[bold green]\u25cfpersist[/bold green]"
+    return f"[{DIM}]\u25cb[/{DIM}]"
 
 
-def _wake(
-    bot_name: str,
-    run_id: str,
-    chat_id: str,
-    user: str,
-) -> None:
-    """Wake a chat up on a running bot via its /wake route."""
-    record = _resolve_run(bot_name, run_id, user=user)
+def _handle_slash(message: str, local_persist: bool, record) -> bool:
+    """Handle a slash command (except /quit, handled by the caller).
+    Returns the (possibly toggled) ``local_persist`` value."""
+    if message == "/help":
+        _render_help()
+        return local_persist
+    if message == "/persist":
+        local_persist = not local_persist
+        state = "on" if local_persist else "off"
+        console.print(f"[{DIM}]persist[/{DIM}] [bold]{state}[/bold]")
+        return local_persist
+    if message == "/clear":
+        _do_clear(record)
+    return local_persist
+
+
+def _do_clear(record) -> None:
     try:
-        status_code, data = _post_sleep_toggle(record, chat_id, action="wake")
+        status_code, data = _post_clear(record)
     except httpx.HTTPError as exc:
         err_line(f"failed to reach {record.endpoint}  {exc}")
-        raise typer.Exit(1) from exc
-
-    if status_code == 200 and data.get("ok"):
-        console.print(
-            f"{GL_OK} [{OK}]awake[/{OK}]  [bold]{chat_id}[/bold]  [{DIM}]now awake[/{DIM}]"
-        )
+        return
+    ok = status_code == 200 and isinstance(data, dict) and data.get("ok")
+    if ok:
+        console.print(f"{GL_OK} [{OK}]clear[/{OK}]  [{DIM}]history cleared[/{DIM}]")
+    elif isinstance(data, dict):
+        err_line(data.get("error", "clear failed"))
     else:
-        err_line(data.get("error", data.get("reply", "failed")))
-    if status_code != 200 or not data.get("ok"):
-        raise typer.Exit(1)
+        err_line("clear failed")
 
 
 def _stop(
@@ -860,11 +775,10 @@ def register(app: typer.Typer) -> None:
 
     @app.command()
     def start(
-        bot_name: str = typer.Argument(..., help="Bot to start (e.g. 'waha')"),
+        bot_name: str = typer.Argument(..., help="Bot to start (e.g. 'email')"),
         goal_text: str = typer.Option("", "--goal", "-g", help="Runtime goal"),
         language: str = typer.Option("", "--language", "-l", help="Override bot language"),
         user: str = typer.Option("", "--user", "-u", help="User email (per-instance namespace)"),
-        voice: str = typer.Option("", "--voice", "-v", help="Override kokoro voice"),
         template: str = typer.Option(
             "general",
             "--template",
@@ -887,7 +801,6 @@ def register(app: typer.Typer) -> None:
             goal_text,
             language,
             user,
-            voice,
             template,
             enable_tools,
             disable_tools,
@@ -899,7 +812,7 @@ def register(app: typer.Typer) -> None:
 
     @app.command()
     def status(
-        bot_name: str = typer.Argument(..., help="Bot to query (e.g. 'waha')"),
+        bot_name: str = typer.Argument(..., help="Bot to query (e.g. 'email')"),
         run_id: str = typer.Option(..., "--run", help="run_id of the target `kai start` instance"),
         user: str = typer.Option(
             "",
@@ -912,7 +825,7 @@ def register(app: typer.Typer) -> None:
 
     @app.command()
     def tell(
-        bot_name: str = typer.Argument(..., help="Bot to instruct (e.g. 'waha')"),
+        bot_name: str = typer.Argument(..., help="Bot to instruct (e.g. 'email')"),
         run_id: str = typer.Option(..., "--run", help="run_id of the target `kai start` instance"),
         message: str = typer.Option(..., "--message", "-m", help="Instruction text for the bot"),
         persist: bool = typer.Option(
@@ -929,7 +842,7 @@ def register(app: typer.Typer) -> None:
 
     @app.command()
     def chat(
-        bot_name: str = typer.Argument(..., help="Bot to chat with (e.g. 'waha')"),
+        bot_name: str = typer.Argument(..., help="Bot to chat with (e.g. 'email')"),
         run_id: str = typer.Option(..., "--run", help="run_id of the target `kai start` instance"),
         persist: bool = typer.Option(False, "--persist", help="Allow permanent changes"),
         user: str = typer.Option(
@@ -942,36 +855,8 @@ def register(app: typer.Typer) -> None:
         _chat(bot_name, run_id, persist, user)
 
     @app.command()
-    def sleep(
-        bot_name: str = typer.Argument(..., help="Bot to target (e.g. 'waha')"),
-        run_id: str = typer.Option(..., "--run", help="run_id of the target `kai start` instance"),
-        chat_id: str = typer.Option(..., "--chat", help="Chat ID to put to sleep (e.g. a JID)"),
-        user: str = typer.Option(
-            "",
-            "--user",
-            "-u",
-            help="User email the instance was started with (--user on `kai start`)",
-        ),
-    ):
-        _sleep(bot_name, run_id, chat_id, user)
-
-    @app.command()
-    def wake(
-        bot_name: str = typer.Argument(..., help="Bot to target (e.g. 'waha')"),
-        run_id: str = typer.Option(..., "--run", help="run_id of the target `kai start` instance"),
-        chat_id: str = typer.Option(..., "--chat", help="Chat ID to wake up (e.g. a JID)"),
-        user: str = typer.Option(
-            "",
-            "--user",
-            "-u",
-            help="User email the instance was started with (--user on `kai start`)",
-        ),
-    ):
-        _wake(bot_name, run_id, chat_id, user)
-
-    @app.command()
     def stop(
-        bot_name: str = typer.Argument(..., help="Bot to stop (e.g. 'waha')"),
+        bot_name: str = typer.Argument(..., help="Bot to stop (e.g. 'email')"),
         run_id: str = typer.Option(..., "--run", help="run_id of the target `kai start` instance"),
         force: bool = typer.Option(
             False, "--force", help="Send SIGKILL instead of SIGTERM (no graceful shutdown)"
@@ -987,7 +872,7 @@ def register(app: typer.Typer) -> None:
 
     @app.command(name="runs")
     def runs_cmd(
-        bot_name: str = typer.Argument(..., help="Bot whose runs to list (e.g. 'waha')"),
+        bot_name: str = typer.Argument(..., help="Bot whose runs to list (e.g. 'email')"),
         user: str = typer.Option(
             "",
             "--user",

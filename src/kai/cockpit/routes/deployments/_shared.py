@@ -1,7 +1,7 @@
 """Shared constants and helpers for the ``deployments`` route package.
 
 Split out of the former monolithic ``routes/deployments.py`` so each
-sub-module (wizard, detail, settings, chats, history, lifecycle) can import
+sub-module (wizard, detail, settings, history, lifecycle) can import
 just what it needs without everything living in one file.
 """
 
@@ -21,16 +21,14 @@ from kai.cockpit.models import Deployment, User
 # Per-bot-type settings templates — each bot type renders
 # its own; the "default" fallback covers unregistered types.
 SETTINGS_TEMPLATES: dict[str, str] = {
-    "waha": "settings_waha.html",
     "email": "settings_email.html",
-    "default": "settings_waha.html",
+    "default": "settings_email.html",
 }
 
 # Per-bot-type deploy-wizard templates — same rationale as above.
 WIZARD_TEMPLATES: dict[str, str] = {
-    "waha": "deploy_wizard_waha.html",
     "email": "deploy_wizard_email.html",
-    "default": "deploy_wizard_waha.html",
+    "default": "deploy_wizard_email.html",
 }
 
 # Services that carry an instruction textarea alongside the toggle.

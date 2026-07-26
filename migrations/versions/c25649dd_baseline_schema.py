@@ -42,7 +42,6 @@ def upgrade() -> None:
         sa.Column("run_id", sa.String(), nullable=True),
         sa.Column("status", sa.String(), nullable=False),
         sa.Column("desired_state", sa.String(), nullable=False),
-        sa.Column("voice", sa.String(), nullable=False),
         sa.Column("goal", sa.String(), nullable=False),
         sa.Column("language", sa.String(), nullable=False),
         sa.Column("template", sa.String(), nullable=False),
@@ -66,13 +65,11 @@ def upgrade() -> None:
         sa.Column("service", sa.String(), nullable=False),
         sa.Column("status", sa.String(), nullable=False),
         sa.Column("config", sa.JSON(), nullable=False),
-        sa.Column("webhook_port", sa.Integer(), nullable=True),
         sa.Column("created_at", sa.String(), nullable=False),
         sa.Column("updated_at", sa.String(), nullable=False),
         sa.ForeignKeyConstraint(["user_id"], ["users.id"], name="fk_connections_user_id_users"),
         sa.PrimaryKeyConstraint("id", name="pk_connections"),
         sa.UniqueConstraint("user_id", "service", name="uq_connections_user_id_service"),
-        sa.UniqueConstraint("webhook_port", name="uq_connections_webhook_port"),
         sqlite_autoincrement=True,
     )
     op.create_table(

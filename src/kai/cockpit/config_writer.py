@@ -19,42 +19,11 @@ def write_config(deployment: Deployment, instance_id: str) -> Path:
 
     ``instance_id`` is the per-bot namespace that the spawned bot process uses
     to locate its external config. Returns the path written.
-
-    May mutate ``deployment.settings`` to drop stale keys that don't belong on
-    this bot type's schema (e.g. a ``media`` block left on an email deployment
-    by an older ``create()``). Callers must commit afterward to persist it.
     """
-    if deployment.bot_type == "email" and "media" in deployment.settings:
-        # Email's BotConfig has no ``media`` field; a stale block here is a
-        # leftover from when ``create()`` seeded every deployment from the
-        # waha BotConfig. Strip it at the source so the DB row matches the
-        # schema, not just the written file.
-        deployment.settings = {k: v for k, v in deployment.settings.items() if k != "media"}
-
     config = dict(deployment.settings)
     flags = deployment.feature_flags
 
-    if deployment.bot_type == "waha":
-        media = dict(config.get("media", {}))
-        media["image_enabled"] = flags.get("image", False)
-        media["stt_enabled"] = flags.get("stt", False)
-        media["tts_enabled"] = flags.get("tts", False)
-        media["video_enabled"] = flags.get("video", False)
-        existing_path = CONFIGS_DIR / f"{instance_id}.json"
-        if existing_path.exists():
-            try:
-                existing = json.loads(existing_path.read_text(encoding="utf-8"))
-                existing_media = existing.get("media", {})
-                if "instagram_enabled" in existing_media:
-                    media.setdefault("instagram_enabled", existing_media["instagram_enabled"])
-                if "max_size_mb" in existing_media:
-                    media.setdefault("max_size_mb", existing_media["max_size_mb"])
-            except (OSError, json.JSONDecodeError):
-                pass
-        media.setdefault("instagram_enabled", True)
-        media.setdefault("max_size_mb", 10)
-        config["media"] = media
-    elif deployment.bot_type == "email":
+    if deployment.bot_type == "email":
         # Email: ``image`` feature flag maps to BotConfig.vision.
         config["vision"] = flags.get("image", False)
 

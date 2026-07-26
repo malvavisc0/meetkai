@@ -65,8 +65,7 @@ class TestUserCreate:
 
         user = db.query(User).filter(User.email == "carol@example.net").first()
         assert user is not None
-        # Same slug reused verbatim for both the WAHA session name
-        # (ConnectionsService) and the Morphik end_user_id (BrainsService).
+        # Same slug reused verbatim as the Morphik end_user_id (BrainsService).
         assert user.kai_slug == "kai-v001-carol_at_example_net"
 
 

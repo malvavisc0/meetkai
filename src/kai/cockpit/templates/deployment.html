@@ -112,14 +112,8 @@
     </div>
   {% endif %}
 
-  {# --- Control: chat + sleep mode, one card divided like Brain's Sources --- #}
+  {# --- Control: operator console --- #}
   {% if dep.status == "running" and status %}
-    {# Sleep/pause is waha-only (BotType.supports_sleep in cockpit/bots.py):
-       the email bot has no chat concept and its webhook opts out of /sleep
-       and /wake (404), so status has no "sleep" key at all. sleep_supported
-       comes from the route so the bot-type capability lives in one place
-       (bots.py) instead of being re-checked here. #}
-    {% set sleeping_chats = status.get("sleep", {}).get("sleeping", []) if sleep_supported else [] %}
     <div class="card source-card">
       <div class="source-card__header">
         <p class="card__eyebrow">Control</p>
@@ -147,11 +141,7 @@
               <div class="field">
                 <label class="sr-only" for="message">Message</label>
                 <textarea id="message" name="message" rows="3" required data-autosize
-                  {% if dep.bot_type == "email" %}
-                  placeholder="Send a command to the bot, e.g. &quot;send an email to alice@example.com saying hello&quot;…"
-                  {% else %}
-                  placeholder="Send a command to the bot, e.g. &quot;send hello to 1234567890@lid&quot;…"
-                  {% endif %}></textarea>
+                  placeholder="Send a command to the bot, e.g. &quot;send an email to alice@example.com saying hello&quot;…"></textarea>
               </div>
               <div class="cluster chat-form__actions">
                 <button type="submit" class="button button--primary"><span class="icon">{% include "icons/send.svg" %}</span> Send</button>
@@ -159,54 +149,6 @@
             </form>
           </div>
         </div>
-
-        {% if sleep_supported %}
-        <div class="source-item source-item--stack">
-          <div class="source-item__copy">
-            <strong>Pause conversations</strong>
-            <span>
-              {% if sleeping_chats %}
-                {{ sleeping_chats|length }} chat{{ '' if sleeping_chats|length == 1 else 's' }} currently asleep.
-              {% else %}
-                No chats asleep right now.
-              {% endif %}
-              Pause an individual chat to stop replies there, or resume one below.
-            </span>
-          </div>
-          <div class="source-item__controls">
-            <div class="sleep-panel">
-              <div class="sleep-panel__section">
-                <p class="sleep-panel__title"><span class="icon">{% include "icons/moon.svg" %}</span> Put a chat to sleep</p>
-                <form method="post" action="/deployments/{{ dep.id }}/sleep">
-                  {{ csrf_field() }}
-                  <label class="sr-only" for="sleep_chat_id">Chat ID</label>
-                  <input id="sleep_chat_id" type="text" name="chat_id" placeholder="chat ID">
-                  <button type="submit" class="button">Sleep</button>
-                </form>
-              </div>
-              <div class="sleep-panel__section">
-                <p class="sleep-panel__title"><span class="icon">{% include "icons/sun.svg" %}</span> Sleeping chats</p>
-                {% if sleeping_chats %}
-                  <ul class="sleep-list">
-                    {% for chat_id in sleeping_chats %}
-                      <li class="sleep-list__item">
-                        <span class="mono sleep-list__id">{{ chat_id }}</span>
-                        <form method="post" action="/deployments/{{ dep.id }}/wake">
-                          {{ csrf_field() }}
-                          <input type="hidden" name="chat_id" value="{{ chat_id }}">
-                          <button type="submit" class="button button--sm">Wake</button>
-                        </form>
-                      </li>
-                    {% endfor %}
-                  </ul>
-                {% else %}
-                  <p class="muted text-sm mb-0">No chats are asleep.</p>
-                {% endif %}
-              </div>
-            </div>
-          </div>
-        </div>
-        {% endif %}
       </div>
     </div>
   {% endif %}

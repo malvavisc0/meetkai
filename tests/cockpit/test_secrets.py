@@ -92,14 +92,6 @@ class TestConfigHelpers:
         twice = encrypt_config("database", once)
         assert once["url"] == twice["url"]
 
-    def test_encrypt_config_rejects_non_credential_type(self):
-        with pytest.raises(ValueError, match="is not a known connection type"):
-            encrypt_config("whatsapp", {"waha_session": "x"})
-
-    def test_decrypt_config_rejects_non_credential_type(self):
-        with pytest.raises(ValueError, match="is not a known connection type"):
-            decrypt_config("whatsapp", {"waha_session": "x"})
-
     def test_encrypt_config_round_trip_resend_signing_secret(self):
         config = {"signing_secret": "whsec_live_abc123"}
         encrypted = encrypt_config("resend", config)

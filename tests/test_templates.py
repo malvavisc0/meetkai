@@ -12,9 +12,9 @@ class TestPostProcessingConfig:
         cfg = PostProcessingConfig()
         assert cfg.profile == "none"
 
-    def test_waha_default(self):
-        cfg = PostProcessingConfig(profile="waha_default")
-        assert cfg.profile == "waha_default"
+    def test_default_cleanup(self):
+        cfg = PostProcessingConfig(profile="default_cleanup")
+        assert cfg.profile == "default_cleanup"
 
     def test_custom_allows_step_fields(self):
         cfg = PostProcessingConfig(
@@ -26,10 +26,10 @@ class TestPostProcessingConfig:
         )
         assert cfg.profile == "custom"
 
-    def test_dead_config_raises_for_waha_default(self):
-        with pytest.raises(ValueError, match="waha_default"):
+    def test_dead_config_raises_for_default_cleanup(self):
+        with pytest.raises(ValueError, match="default_cleanup"):
             PostProcessingConfig(
-                profile="waha_default",
+                profile="default_cleanup",
                 strip_emojis=True,
             )
 
@@ -41,8 +41,8 @@ class TestPostProcessingConfig:
             )
 
     def test_dead_config_no_raise_when_defaults(self):
-        cfg = PostProcessingConfig(profile="waha_default")
-        assert cfg.profile == "waha_default"
+        cfg = PostProcessingConfig(profile="default_cleanup")
+        assert cfg.profile == "default_cleanup"
 
     def test_none_profile_allows_none_defaults(self):
         cfg = PostProcessingConfig(profile="none", max_sentences=None)
@@ -54,19 +54,12 @@ class TestTemplateRegistry:
         reg = TemplateRegistry.bundled()
         templates = reg.list()
         names = [f"{t.transport}/{t.name}" for t in templates]
-        assert "waha/general" in names
         assert "email/general" in names
 
     def test_get_missing_raises(self):
         reg = TemplateRegistry.bundled()
         with pytest.raises(FileNotFoundError):
-            reg.get("waha", "nonexistent")
-
-    def test_prompt_path_waha(self):
-        reg = TemplateRegistry.bundled()
-        path = reg.prompt_path("waha", "general")
-        assert path is not None
-        assert path.is_file()
+            reg.get("email", "nonexistent")
 
     def test_prompt_path_email(self):
         reg = TemplateRegistry.bundled()
@@ -76,17 +69,17 @@ class TestTemplateRegistry:
 
     def test_prompt_path_missing(self):
         reg = TemplateRegistry.bundled()
-        path = reg.prompt_path("waha", "nonexistent")
+        path = reg.prompt_path("email", "nonexistent")
         assert path is None
 
     def test_custom_dir(self, tmp_path):
-        waha = tmp_path / "waha" / "mybot"
-        waha.mkdir(parents=True)
-        (waha / "template.yaml").write_text(
+        tmpl_dir = tmp_path / "email" / "mybot"
+        tmpl_dir.mkdir(parents=True)
+        (tmpl_dir / "template.yaml").write_text(
             yaml.dump(
                 {
                     "name": "mybot",
-                    "transport": "waha",
+                    "transport": "email",
                     "display_name": "My Bot",
                     "description": "Test",
                     "actions": ["reply"],
@@ -94,13 +87,15 @@ class TestTemplateRegistry:
             )
         )
         reg = TemplateRegistry(tmp_path)
-        tmpl = reg.get("waha", "mybot")
+        tmpl = reg.get("email", "mybot")
         assert tmpl.name == "mybot"
 
     def test_transport_mismatch_raises(self, tmp_path):
-        waha = tmp_path / "waha" / "mybot"
-        waha.mkdir(parents=True)
-        (waha / "template.yaml").write_text(
+        # A directory named for one transport holding a template that declares
+        # another transport must raise a mismatch error.
+        tmpl_dir = tmp_path / "sms" / "mybot"
+        tmpl_dir.mkdir(parents=True)
+        (tmpl_dir / "template.yaml").write_text(
             yaml.dump(
                 {
                     "name": "mybot",
@@ -112,18 +107,18 @@ class TestTemplateRegistry:
             )
         )
         with pytest.raises(ValueError, match="mismatch"):
-            TemplateRegistry(tmp_path).get("waha", "mybot")
+            TemplateRegistry(tmp_path).get("sms", "mybot")
 
     def test_multiple_dirs_first_wins(self, tmp_path):
-        d1 = tmp_path / "d1" / "waha" / "mybot"
-        d2 = tmp_path / "d2" / "waha" / "mybot"
+        d1 = tmp_path / "d1" / "email" / "mybot"
+        d2 = tmp_path / "d2" / "email" / "mybot"
         d1.mkdir(parents=True)
         d2.mkdir(parents=True)
         (d1 / "template.yaml").write_text(
             yaml.dump(
                 {
                     "name": "mybot",
-                    "transport": "waha",
+                    "transport": "email",
                     "display_name": "First",
                     "description": "First",
                     "actions": ["reply"],
@@ -134,7 +129,7 @@ class TestTemplateRegistry:
             yaml.dump(
                 {
                     "name": "mybot",
-                    "transport": "waha",
+                    "transport": "email",
                     "display_name": "Second",
                     "description": "Second",
                     "actions": ["reply"],
@@ -142,30 +137,11 @@ class TestTemplateRegistry:
             )
         )
         reg = TemplateRegistry(tmp_path / "d1", tmp_path / "d2")
-        tmpl = reg.get("waha", "mybot")
+        tmpl = reg.get("email", "mybot")
         assert tmpl.display_name == "First"
 
 
 class TestBundledTemplateContent:
-    def test_waha_general_actions(self):
-        reg = TemplateRegistry.bundled()
-        tmpl = reg.get("waha", "general")
-        expected = [
-            "reply",
-            "send_voice_note",
-            "silent",
-            "sleep",
-            "send_dm",
-            "send_to_group",
-            "console",
-        ]
-        assert tmpl.actions == expected
-
-    def test_waha_general_post_processing(self):
-        reg = TemplateRegistry.bundled()
-        tmpl = reg.get("waha", "general")
-        assert tmpl.post_processing.profile == "waha_default"
-
     def test_email_general_actions(self):
         reg = TemplateRegistry.bundled()
         tmpl = reg.get("email", "general")
@@ -182,7 +158,7 @@ class TestToolConfiguredMap:
         from kai.templates.resolver import tool_configured_map
 
         reg = TemplateRegistry.bundled()
-        tmpl = reg.get("waha", "general")
+        tmpl = reg.get("email", "general")
         result = tool_configured_map(tmpl)
         assert "brain_query" in result
 

@@ -7,7 +7,6 @@ from kai.cli.deployment import deployment_app
 from kai.cli.style import BotStartupError
 from kai.cli.templates import app as templates_app
 from kai.observability import init_sentry
-from kai.vendors.cli import app as vendors_app
 
 init_sentry("cli")
 
@@ -18,6 +17,5 @@ app.add_typer(cockpit_app, name="cockpit")
 app.add_typer(deployment_app, name="deployment")
 app.add_typer(connection_app, name="connection")
 app.add_typer(templates_app, name="templates")
-app.add_typer(vendors_app, name="vendors")
 
 __all__ = ["app", "BotStartupError", "cockpit_user_app"]

@@ -1,10 +1,9 @@
 """Tests for generic non-bespoke control-port + HMAC env injection (04-email-bot).
 
-Covers: a non-bespoke bot (email) gets ``KAI_BOT_CONTROL_PORT`` /
+Covers: the email bot gets ``KAI_BOT_CONTROL_PORT`` /
 ``KAI_BOT_HMAC_KEY`` / ``KAI_BOT_CONTROL_HOST`` injected into the spawned
 env, ``Deployment.settings["control_port"]`` is set on start and cleared on
-stop. Also confirms the whatsapp (bespoke) path does NOT get the generic
-``KAI_BOT_*`` env.
+stop.
 """
 
 import subprocess
@@ -50,15 +49,6 @@ def _setup_run_registry(monkeypatch, tmp_path, instance_id: str):
         ),
     )
     return fake_settings
-
-
-@pytest.fixture(autouse=True)
-def _media_ready():
-    from kai.cockpit.media_services import MEDIA_READY
-
-    MEDIA_READY.set()
-    yield
-    MEDIA_READY.clear()
 
 
 @pytest.fixture(autouse=True)
@@ -134,7 +124,6 @@ def _bare_deployment(db, user, bot_type="email") -> Deployment:
         run_id=None,
         status="stopped",
         desired_state="stopped",
-        voice="af_heart",
         goal="goal",
         language="English",
         feature_flags={},
@@ -231,25 +220,6 @@ class TestControlPortInjection:
 
         svc.start(dep)
         assert "KAI_EMAIL_VISION" not in injected_env
-
-
-class TestBespokeDoesNotGetGenericEnv:
-    def test_whatsapp_bot_does_not_get_kai_bot_env(self, db, monkeypatch, tmp_path):
-        from tests.cockpit.helpers import _connect_whatsapp
-
-        user = _make_user(db)
-        _connect_whatsapp(db, user)
-
-        svc = DeploymentsService(db)
-        dep = _bare_deployment(db, user, bot_type="waha")
-
-        injected_env: dict = {}
-        monkeypatch.setattr(subprocess, "Popen", _capture_popen_factory(injected_env))
-        _setup_run_registry(monkeypatch, tmp_path, f"{dep.bot_type}-{user.email}")
-
-        svc.start(dep)
-        assert "KAI_BOT_CONTROL_PORT" not in injected_env
-        assert "KAI_BOT_HMAC_KEY" not in injected_env
 
 
 def _capture_popen_factory(env_sink: dict):

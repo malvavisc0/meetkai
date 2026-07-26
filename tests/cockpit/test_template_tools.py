@@ -32,27 +32,31 @@ def _create_user(db):
     db.add(u)
     db.commit()
     db.refresh(u)
-    conn = Connection(
+    resend = Connection(
         user_id=u.id,
-        service="whatsapp",
+        service="resend",
         status="connected",
-        config={
-            "waha_session": "settings-test-session",
-            "waha_webhook_port": 8101,
-            "waha_webhook_path": "/webhook/whatsapp-1",
-        },
+        config={"signing_secret": "test-signing", "api_key": "re_test"},
         created_at=datetime.now(UTC).isoformat(),
         updated_at=datetime.now(UTC).isoformat(),
     )
-    db.add(conn)
+    smtp = Connection(
+        user_id=u.id,
+        service="smtp",
+        status="connected",
+        config={},
+        created_at=datetime.now(UTC).isoformat(),
+        updated_at=datetime.now(UTC).isoformat(),
+    )
+    db.add(resend)
+    db.add(smtp)
     db.commit()
-    db.refresh(conn)
     return u
 
 
 def _create_and_get_dep(db, user):
     svc = DeploymentsService(db)
-    dep = svc.create(user, "waha", "test goal", "English", template="general")
+    dep = svc.create(user, "email", "test goal", "English", template="general")
     return dep
 
 
@@ -83,7 +87,6 @@ class TestSettingsToolOverridePersistence:
                 "timezone": "",
                 "brain_mandatory": "",
                 "brain_instruction": "",
-                "voice": "",
                 "tool_override_web_search": "true",
             },
             follow_redirects=False,
@@ -110,7 +113,6 @@ class TestSettingsToolOverridePersistence:
                 "timezone": "",
                 "brain_mandatory": "",
                 "brain_instruction": "",
-                "voice": "",
                 "tool_override_web_search": "true",
             },
             follow_redirects=False,
@@ -137,7 +139,6 @@ class TestSettingsToolOverridePersistence:
                 "timezone": "",
                 "brain_mandatory": "",
                 "brain_instruction": "",
-                "voice": "",
                 "tool_override_web_search": "true",
             },
             follow_redirects=False,
@@ -152,7 +153,7 @@ class TestSettingsToolOverridePersistence:
         _login(client, db, user)
         dep = _create_and_get_dep(db, user)
 
-        # General has brain_query as an optional tool; unchecking it should
+        # General has web_search as an optional tool; unchecking it should
         # add it to the disable list.
         resp = csrf_post(
             client,
@@ -163,7 +164,6 @@ class TestSettingsToolOverridePersistence:
                 "timezone": "",
                 "brain_mandatory": "",
                 "brain_instruction": "",
-                "voice": "",
             },
             follow_redirects=False,
         )
@@ -173,7 +173,7 @@ class TestSettingsToolOverridePersistence:
         # The tool was NOT checked, so it should be in the disable list
         # (since it's an optional tool in the general template)
         disable_list = dep.tool_overrides.get("disable", [])
-        assert "brain_query" in disable_list
+        assert "web_search" in disable_list
 
     def test_disabled_optional_tool_reflected_on_get(self, client, db):
         """A persisted disable must render as unchecked on the next GET."""
@@ -181,17 +181,17 @@ class TestSettingsToolOverridePersistence:
         _login(client, db, user)
         dep = _create_and_get_dep(db, user)
 
-        # Persist a disabled brain_query directly.
+        # Persist a disabled web_search directly.
         svc = DeploymentsService(db)
-        svc.edit(dep, tool_overrides={"enable": [], "disable": ["brain_query"]})
+        svc.edit(dep, tool_overrides={"enable": [], "disable": ["web_search"]})
 
         resp = client.get(f"/deployments/{dep.id}/settings")
         assert resp.status_code == 200
-        # The brain_query checkbox must NOT be checked.
+        # The web_search checkbox must NOT be checked.
         import re
 
-        match = re.search(rb'name="tool_override_brain_query"[^>]*>', resp.content)
-        assert match is not None, "brain_query checkbox missing from settings page"
+        match = re.search(rb'name="tool_override_web_search"[^>]*>', resp.content)
+        assert match is not None, "web_search checkbox missing from settings page"
         assert b"checked" not in match.group(0), "disabled tool rendered as checked"
 
     def test_reject_disable_required_tool(self, client, db):
@@ -210,7 +210,6 @@ class TestSettingsToolOverridePersistence:
                 "timezone": "",
                 "brain_mandatory": "",
                 "brain_instruction": "",
-                "voice": "",
                 "tool_override_escalate": "false",
             },
             follow_redirects=False,

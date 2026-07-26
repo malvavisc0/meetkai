@@ -42,7 +42,6 @@ def email_dep(db, bob):
         bot_type="email",
         status="running",
         desired_state="running",
-        voice="",
         goal="support customers",
         language="English",
         created_at="now",

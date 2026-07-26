@@ -9,7 +9,6 @@ from sqlalchemy.orm import Session
 from kai.cockpit.app import templates
 from kai.cockpit.auth import require_user
 from kai.cockpit.bots import BOT_TYPES, CAPABILITY_LABELS
-from kai.cockpit.connections.service import ConnectionsService
 from kai.cockpit.db import get_db
 from kai.cockpit.deployments import DeploymentsService, attention_reason
 from kai.cockpit.models import User
@@ -37,10 +36,6 @@ async def deployment_detail(
 
     # Hide start button when the bot's required connections aren't all ready
     # — the operator should never see a start that deploy.start() would refuse.
-    conn_svc = ConnectionsService(db)
-    whatsapp = await conn_svc.refresh_status_if_stale(user)
-    whatsapp_connected = bool(whatsapp and whatsapp.status == "connected")
-
     bt = BOT_TYPES.get(dep.bot_type)
     missing_connections = missing_required_connections(db, user, bt) if bt else []
 
@@ -61,10 +56,7 @@ async def deployment_detail(
             except (ValueError, TypeError):
                 pass
 
-    # Same signal as console — a running bot whose WhatsApp disconnected looks
-    # identical to a healthy one otherwise, so a direct page visit wouldn't
-    # show messages silently failing.
-    reason = attention_reason(dep, status_data, whatsapp_connected)
+    reason = attention_reason(dep, status_data)
 
     flash = request.session.pop("flash", None)
     # needs_restart is persisted (survives reloads/new tabs).
@@ -73,7 +65,6 @@ async def deployment_detail(
     conversation_count, message_count = svc.interaction_summary(dep)
     reply = request.session.pop("chat_reply", None)
     sent_to = request.session.pop("chat_sent_to", None)
-    sleep_supported = bool(BOT_TYPES.get(dep.bot_type) and BOT_TYPES[dep.bot_type].supports_sleep)
 
     return templates.TemplateResponse(
         request,
@@ -91,7 +82,6 @@ async def deployment_detail(
             "conversation_count": conversation_count,
             "message_count": message_count,
             "capability_labels": CAPABILITY_LABELS,
-            "sleep_supported": sleep_supported,
             "reply": reply,
             "sent_to": sent_to,
             "flash": flash,

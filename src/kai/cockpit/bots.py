@@ -19,34 +19,9 @@ class BotType:
     # appear as toggles in the settings form.
     supported_connections: list[str] = field(default_factory=list)
     icon: str = "bot"
-    # Whether this bot type implements per-chat sleep/wake
-    # (waha only). When False, /sleep and /wake 404.
-    supports_sleep: bool = False
 
 
 BOT_TYPES: dict[str, BotType] = {
-    "waha": BotType(
-        name="waha",
-        feature_flags=["image", "stt", "tts", "video"],
-        required_settings=["language"],
-        description=(
-            "Integrate an AI assistant directly into your WhatsApp. "
-            "It keeps track of context for smarter replies and responds "
-            "instantly when is need it. Support for images, voice notes, "
-            "and video means the bot can interact naturally."
-        ),
-        default_goal=(
-            "Be warm, useful, and concise. Answer what you can from what you "
-            "know, ask before guessing, and only reply when you add value."
-        ),
-        required_connections=["whatsapp"],
-        # database/smtp/calcom: shipped but optional,
-        # declared as single source of truth so the
-        # settings form can toggle them.
-        supported_connections=["database", "smtp", "calcom"],
-        icon="message-circle",
-        supports_sleep=True,
-    ),
     "email": BotType(
         name="email",
         feature_flags=["image"],
@@ -67,43 +42,10 @@ BOT_TYPES: dict[str, BotType] = {
     ),
 }
 
-LANGUAGE_VOICES: dict[str, list[str]] = {
-    # Index 0 is the default voice (used by auto_pick_voice).
-    # French has no male voice in Kokoro v1.0.
-    "Spanish": ["ef_dora", "em_alex"],
-    "English": ["af_heart", "am_michael"],
-    "French": ["ff_siwis"],
-    "Italian": ["if_sara", "im_nicola"],
-    "Portuguese": ["pf_dora", "pm_alex"],
-}
-
-VOICE_LABELS: dict[str, str] = {
-    "af_heart": "Heart",
-    "am_michael": "Michael",
-    "ef_dora": "Dora",
-    "em_alex": "Alex",
-    "ff_siwis": "Siwis",
-    "if_sara": "Sara",
-    "im_nicola": "Nicola",
-    "pf_dora": "Dora",
-    "pm_alex": "Alex",
-}
-
 # Every language a deployment's `language` field may take
 # (server-validated in DeploymentsService.create/edit —
 # the form <select> alone is never trusted).
-ALL_LANGUAGES: tuple[str, ...] = tuple(sorted(LANGUAGE_VOICES.keys()))
-
-ALL_VOICES: tuple[str, ...] = tuple(
-    sorted({voice for voices in LANGUAGE_VOICES.values() for voice in voices})
-)
-
-# Voice code -> language. Filters the voice <select>
-# to matching languages (client-side in cockpit.js,
-# server-side in DeploymentsService).
-VOICE_LANGUAGE_BY_CODE: dict[str, str] = {
-    voice: lang for lang, voices in LANGUAGE_VOICES.items() for voice in voices
-}
+ALL_LANGUAGES: tuple[str, ...] = ("English", "French", "Italian", "Portuguese", "Spanish")
 
 
 @dataclass(frozen=True)
@@ -216,26 +158,12 @@ WEBHOOK_CONNECTION_TYPES: dict[str, WebhookConnectionType] = {
     ),
 }
 
-# Display label per connection service. WhatsApp has its own
-# entry (provisioned via WAHA, not a credential form);
-# ingress-only connections (resend) come from
-# WEBHOOK_CONNECTION_TYPES.
+# Display label per connection service.
+# Ingress-only connections (resend) come from WEBHOOK_CONNECTION_TYPES.
 CONNECTION_LABELS: dict[str, str] = {
-    "whatsapp": "WhatsApp",
     **{service: ct.label for service, ct in CREDENTIAL_TYPES.items()},
     **{service: wt.label for service, wt in WEBHOOK_CONNECTION_TYPES.items()},
 }
-
-
-def auto_pick_voice(language: str) -> str:
-    """Return the default (first-listed) Kokoro voice for *language*.
-
-    Raises ValueError for an unsupported language; callers must validate
-    the language first.
-    """
-    if language not in LANGUAGE_VOICES:
-        raise ValueError(f"unsupported language: {language!r}. Supported: {ALL_LANGUAGES}")
-    return LANGUAGE_VOICES[language][0]
 
 
 # Capability display names, shared by the Runtime overview
@@ -245,9 +173,4 @@ def auto_pick_voice(language: str) -> str:
 CAPABILITY_LABELS: dict[str, str] = {
     "vision": "Vision",
     "image": "Vision",
-    "video": "Video",
-    "voice_to_text": "Speech to text",
-    "stt": "Speech to text",
-    "text_to_voice": "Text to speech",
-    "tts": "Text to speech",
 }

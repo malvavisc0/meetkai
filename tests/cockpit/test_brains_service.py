@@ -18,7 +18,7 @@ class TestCreateBrain:
         brain = svc.create_brain(user)
         assert brain.service == "morphik"
         assert brain.status == "ready"
-        # bob@test.com -> kai-v001-bob_at_test_com (same scheme as WAHA)
+        # bob@test.com -> kai-v001-bob_at_test_com
         assert brain.config["workspace"] == "kai-v001-bob_at_test_com"
         assert brain.config["instruction"] == ""
         assert "mandatory" not in brain.config

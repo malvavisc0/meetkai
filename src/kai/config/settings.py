@@ -12,7 +12,7 @@ class Settings(BaseSettings):
     """Core framework settings. Loaded from KAI_* env vars / .env.
 
     Contains only settings shared across all bots: LLM, agent, logging.
-    Transport-specific settings (WAHA, Telegram, …) live in their bot packages.
+    Transport-specific settings live in their bot packages.
     """
 
     model_config = SettingsConfigDict(env_prefix="KAI_", env_file=".env", extra="ignore")

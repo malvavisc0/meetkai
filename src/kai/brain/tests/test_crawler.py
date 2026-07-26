@@ -87,6 +87,14 @@ class TestCrawl:
             )
         )
         page = await client.crawl(url="https://transmissionbt.com/")
+        self._assert_crawl_page(page)
+        body = json.loads(respx.calls[0].request.content)
+        cfg = body["crawler_config"]
+        assert cfg["cache_mode"] == "bypass"
+        assert cfg["exclude_external_links"] is True
+
+    @staticmethod
+    def _assert_crawl_page(page):
         assert isinstance(page, CrawlPage)
         assert page.success is True
         assert page.url == "https://transmissionbt.com/"
@@ -99,11 +107,6 @@ class TestCrawl:
             "https://transmissionbt.com/addons",
         ]
         assert page.links.external == []
-
-        body = json.loads(respx.calls[0].request.content)
-        cfg = body["crawler_config"]
-        assert cfg["cache_mode"] == "bypass"
-        assert cfg["exclude_external_links"] is True
 
     @respx.mock
     @pytest.mark.asyncio

@@ -156,31 +156,44 @@ def compute_next_due(task: Task) -> datetime | None:
     """
     if task.repeat == "none":
         return None
-    next_dt = task.due_at
-    interval = max(1, task.interval)
-    if task.repeat == "daily":
-        next_dt = next_dt + timedelta(days=interval)
-    elif task.repeat == "weekly":
-        if task.weekdays:
-            for _ in range(7 * interval + 1):
-                next_dt = next_dt + timedelta(days=1)
-                if next_dt.weekday() in task.weekdays:
-                    break
-        else:
-            next_dt = next_dt + timedelta(weeks=interval)
-    elif task.repeat == "monthly":
-        year = next_dt.year
-        month = next_dt.month + interval
-        while month > 12:
-            month -= 12
-            year += 1
-        day = min(next_dt.day, monthrange(year, month)[1])
-        next_dt = next_dt.replace(year=year, month=month, day=day)
+    next_dt = _advance_recurrence(task)
     if task.until and next_dt > task.until:
         return None
     if task.count is not None and task.occurrences + 1 >= task.count:
         return None
     return next_dt
+
+
+def _advance_recurrence(task: Task) -> datetime:
+    interval = max(1, task.interval)
+    next_dt = task.due_at
+    if task.repeat == "daily":
+        return next_dt + timedelta(days=interval)
+    if task.repeat == "weekly":
+        return _advance_weekly(next_dt, interval, task.weekdays)
+    if task.repeat == "monthly":
+        return _advance_monthly(next_dt, interval)
+    return next_dt
+
+
+def _advance_weekly(next_dt: datetime, interval: int, weekdays: tuple[int, ...] | None) -> datetime:
+    if not weekdays:
+        return next_dt + timedelta(weeks=interval)
+    for _ in range(7 * interval + 1):
+        next_dt = next_dt + timedelta(days=1)
+        if next_dt.weekday() in weekdays:
+            break
+    return next_dt
+
+
+def _advance_monthly(next_dt: datetime, interval: int) -> datetime:
+    year = next_dt.year
+    month = next_dt.month + interval
+    while month > 12:
+        month -= 12
+        year += 1
+    day = min(next_dt.day, monthrange(year, month)[1])
+    return next_dt.replace(year=year, month=month, day=day)
 
 
 class TaskStore:

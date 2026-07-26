@@ -137,7 +137,7 @@ def cockpit_user_create(
         console.print(f"{GL_OK} [{OK}]created user[/{OK}]  id={user.id} email={user.email}")
         console.print(
             f"[{DIM}]All feature flags are off by default. Grant capabilities with:[/{DIM}]\n"
-            f"[{DIM}]  kai cockpit user flags {email} --image --stt --tts --video[/{DIM}]"
+            f"[{DIM}]  kai cockpit user flags {email} --image[/{DIM}]"
         )
     finally:
         db.close()
@@ -166,7 +166,7 @@ def cockpit_user_list():
         )
         for u in users:
             flags = u.feature_flags or {}
-            on_flags = [k for k in ("image", "stt", "tts", "video", "sso") if flags.get(k)]
+            on_flags = [k for k in ("image", "sso") if flags.get(k)]
             table.add_row(
                 str(u.id),
                 u.email,
@@ -202,16 +202,13 @@ def cockpit_user_disable(
         db.close()
 
 
-_USER_FLAGS: tuple[str, ...] = ("image", "stt", "tts", "video", "sso")
+_USER_FLAGS: tuple[str, ...] = ("image", "sso")
 
 
 @cockpit_user_app.command("flags")
 def cockpit_user_flags(
     email: str = typer.Argument(..., help="User email"),
     image: bool = typer.Option(None, "--image/--no-image", help="Toggle image interpretation"),
-    video: bool = typer.Option(None, "--video/--no-video", help="Toggle video support"),
-    stt: bool = typer.Option(None, "--stt/--no-stt", help="Toggle speech-to-text"),
-    tts: bool = typer.Option(None, "--tts/--no-tts", help="Toggle text-to-speech"),
     sso: bool = typer.Option(None, "--sso/--no-sso", help="Toggle SSO login"),
     show: bool = typer.Option(False, "--show", help="Only print current flags, change nothing"),
 ):
@@ -233,7 +230,7 @@ def cockpit_user_flags(
 
         flags = dict(user.feature_flags or {})
         if not show:
-            toggles = {"image": image, "video": video, "stt": stt, "tts": tts, "sso": sso}
+            toggles = {"image": image, "sso": sso}
             for name, val in toggles.items():
                 if val is not None:
                     flags[name] = val

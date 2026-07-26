@@ -184,40 +184,51 @@ class EmailConnectionsService:
         except Exception as exc:
             return False, f"secret is not valid base64: {exc}"
 
-        webhook_url = f"{base_url.rstrip('/')}/webhook/{user.kai_slug}/resend"
-        try:
-            resp = httpx.post(
-                webhook_url,
-                content=body,
-                headers={
-                    "Content-Type": "application/json",
-                    "svix-id": svix_id,
-                    "svix-timestamp": str(ts),
-                    "svix-signature": signature,
-                },
-                timeout=10,
-            )
-        except Exception as exc:  # noqa: BLE001 - surfaced to the operator
-            return False, f"could not reach ingress: {exc}"
+        resp = _post_loopback(base_url, user.kai_slug, body, svix_id, ts, signature)
+        if isinstance(resp, tuple):
+            return resp
+        return _interpret_loopback_status(resp)
 
-        if resp.status_code == 202:
-            return True, "ok — webhook verified and forwarded"
-        if resp.status_code == 401:
-            return False, "signature verification failed (wrong secret?)"
-        if resp.status_code == 404:
-            return False, "no running email bot to receive the event (404)"
-        if resp.status_code == 502:
-            detail = ""
-            try:
-                detail = resp.json().get("detail", "")
-            except Exception:
-                pass
-            if "upstream provider API error" in detail:
-                return True, (
-                    "ok — signature verified and event routed to the bot. "
-                    "The synthetic test email can't be fetched from Resend "
-                    "(expected — it isn't a real email); send a real email "
-                    "to test the full body-fetch path."
-                )
-            return False, "bot received the event but rejected it (502)"
-        return False, f"unexpected status {resp.status_code}"
+
+def _post_loopback(
+    base_url: str, slug: str, body: bytes, svix_id: str, ts: int, signature: str
+) -> httpx.Response | tuple[bool, str]:
+    webhook_url = f"{base_url.rstrip('/')}/webhook/{slug}/resend"
+    try:
+        return httpx.post(
+            webhook_url,
+            content=body,
+            headers={
+                "Content-Type": "application/json",
+                "svix-id": svix_id,
+                "svix-timestamp": str(ts),
+                "svix-signature": signature,
+            },
+            timeout=10,
+        )
+    except Exception as exc:  # noqa: BLE001 - surfaced to the operator
+        return False, f"could not reach ingress: {exc}"
+
+
+def _interpret_loopback_status(resp: httpx.Response) -> tuple[bool, str]:
+    if resp.status_code == 202:
+        return True, "ok — webhook verified and forwarded"
+    if resp.status_code == 401:
+        return False, "signature verification failed (wrong secret?)"
+    if resp.status_code == 404:
+        return False, "no running email bot to receive the event (404)"
+    if resp.status_code == 502:
+        detail = ""
+        try:
+            detail = resp.json().get("detail", "")
+        except Exception:
+            pass
+        if "upstream provider API error" in detail:
+            return True, (
+                "ok — signature verified and event routed to the bot. "
+                "The synthetic test email can't be fetched from Resend "
+                "(expected — it isn't a real email); send a real email "
+                "to test the full body-fetch path."
+            )
+        return False, "bot received the event but rejected it (502)"
+    return False, f"unexpected status {resp.status_code}"

@@ -3,18 +3,38 @@
 import subprocess
 
 import pytest
-from tests.cockpit.helpers import _connect_whatsapp
+from tests.cockpit.helpers import _connect_email
 
 from kai.cockpit.deployments import DeploymentsService
 from kai.cockpit.models import Connection
 
 
 @pytest.fixture(autouse=True)
-def _whatsapp_connected(user, db):
+def _email_connected(user, db):
     """DeploymentsService.create() enforces required_connections — every
-    test in this module needs a connected WhatsApp before it can create its
-    ``waha`` deployment."""
-    _connect_whatsapp(db, user)
+    test in this module needs the email bot's resend + smtp connections
+    connected before it can create its ``email`` deployment."""
+    _connect_email(db, user)
+    db.add(_smtp_conn(user.id))
+    db.commit()
+
+
+def _smtp_conn(user_id: int) -> Connection:
+    return Connection(
+        user_id=user_id,
+        service="smtp",
+        status="connected",
+        config={
+            "host": "smtp.example.com",
+            "port": 587,
+            "username": "user",
+            "password": "secret123",
+            "from_address": "user@example.com",
+            "use_tls": True,
+        },
+        created_at="now",
+        updated_at="now",
+    )
 
 
 def _brain_conn(user_id: int, *, instruction: str = "default rules") -> Connection:
@@ -34,53 +54,45 @@ def _brain_conn(user_id: int, *, instruction: str = "default rules") -> Connecti
 class TestEditBrainPolicy:
     def test_edit_brain_mandatory_persists(self, db, user):
         svc = DeploymentsService(db)
-        dep = svc.create(user, "waha", "goal", "English")
+        dep = svc.create(user, "email", "goal", "English")
         svc.edit(dep, brain_mandatory=True)
         assert dep.brain_mandatory is True
 
     def test_edit_brain_mandatory_none_inherits(self, db, user):
         svc = DeploymentsService(db)
-        dep = svc.create(user, "waha", "goal", "English")
+        dep = svc.create(user, "email", "goal", "English")
         svc.edit(dep, brain_mandatory=True)
         svc.edit(dep, brain_mandatory=None)
         assert dep.brain_mandatory is None
 
     def test_edit_brain_instruction_persists(self, db, user):
         svc = DeploymentsService(db)
-        dep = svc.create(user, "waha", "goal", "English")
+        dep = svc.create(user, "email", "goal", "English")
         svc.edit(dep, brain_instruction="custom rules")
         assert dep.brain_instruction == "custom rules"
 
     def test_edit_brain_instruction_none_clears(self, db, user):
         svc = DeploymentsService(db)
-        dep = svc.create(user, "waha", "goal", "English")
+        dep = svc.create(user, "email", "goal", "English")
         svc.edit(dep, brain_instruction="custom rules")
         svc.edit(dep, brain_instruction=None)
         assert dep.brain_instruction is None
 
     def test_edit_brain_mandatory_rejects_non_bool(self, db, user):
         svc = DeploymentsService(db)
-        dep = svc.create(user, "waha", "goal", "English")
+        dep = svc.create(user, "email", "goal", "English")
         with pytest.raises(ValueError, match="brain_mandatory must be a bool"):
             svc.edit(dep, brain_mandatory="yes")
 
     def test_edit_brain_instruction_rejects_non_string(self, db, user):
         svc = DeploymentsService(db)
-        dep = svc.create(user, "waha", "goal", "English")
+        dep = svc.create(user, "email", "goal", "English")
         with pytest.raises(ValueError, match="brain_instruction must be a string"):
             svc.edit(dep, brain_instruction=42)
 
 
 class _StartBrainPolicyBase:
     """Shared helpers for start() brain env tests."""
-
-    @pytest.fixture(autouse=True)
-    def _media_ready(self):
-        from kai.cockpit.media_services import MEDIA_READY
-
-        MEDIA_READY.set()
-        yield
-        MEDIA_READY.clear()
 
     def _start_and_capture_env(self, svc, dep, monkeypatch, tmp_path, user):
         monkeypatch.setattr("kai.cockpit.config_writer.write_config", lambda d, i: None)
@@ -131,7 +143,7 @@ class _StartBrainPolicyBase:
 class TestStartBrainMandatory(_StartBrainPolicyBase):
     def test_mandatory_true_when_deployment_says_so(self, db, user, monkeypatch, tmp_path):
         svc = DeploymentsService(db)
-        dep = svc.create(user, "waha", "goal", "English")
+        dep = svc.create(user, "email", "goal", "English")
         svc.edit(dep, brain_mandatory=True)
 
         db.add(_brain_conn(user.id))
@@ -142,7 +154,7 @@ class TestStartBrainMandatory(_StartBrainPolicyBase):
 
     def test_mandatory_false_when_deployment_none(self, db, user, monkeypatch, tmp_path):
         svc = DeploymentsService(db)
-        dep = svc.create(user, "waha", "goal", "English")
+        dep = svc.create(user, "email", "goal", "English")
         # brain_mandatory is None by default
 
         db.add(_brain_conn(user.id))
@@ -153,7 +165,7 @@ class TestStartBrainMandatory(_StartBrainPolicyBase):
 
     def test_mandatory_false_when_deployment_false(self, db, user, monkeypatch, tmp_path):
         svc = DeploymentsService(db)
-        dep = svc.create(user, "waha", "goal", "English")
+        dep = svc.create(user, "email", "goal", "English")
         svc.edit(dep, brain_mandatory=False)
 
         db.add(_brain_conn(user.id))
@@ -166,7 +178,7 @@ class TestStartBrainMandatory(_StartBrainPolicyBase):
 class TestStartBrainInstruction(_StartBrainPolicyBase):
     def test_deployment_override_wins(self, db, user, monkeypatch, tmp_path):
         svc = DeploymentsService(db)
-        dep = svc.create(user, "waha", "goal", "English")
+        dep = svc.create(user, "email", "goal", "English")
         svc.edit(dep, brain_instruction="custom rules")
 
         db.add(_brain_conn(user.id, instruction="default rules"))
@@ -177,7 +189,7 @@ class TestStartBrainInstruction(_StartBrainPolicyBase):
 
     def test_falls_back_to_brain_default(self, db, user, monkeypatch, tmp_path):
         svc = DeploymentsService(db)
-        dep = svc.create(user, "waha", "goal", "English")
+        dep = svc.create(user, "email", "goal", "English")
         # brain_instruction is None → inherit from brain connection
 
         db.add(_brain_conn(user.id, instruction="default rules"))
@@ -188,7 +200,7 @@ class TestStartBrainInstruction(_StartBrainPolicyBase):
 
     def test_empty_override_falls_back(self, db, user, monkeypatch, tmp_path):
         svc = DeploymentsService(db)
-        dep = svc.create(user, "waha", "goal", "English")
+        dep = svc.create(user, "email", "goal", "English")
         svc.edit(dep, brain_instruction="   ")  # whitespace-only → falls back
 
         db.add(_brain_conn(user.id, instruction="default rules"))
@@ -201,7 +213,7 @@ class TestStartBrainInstruction(_StartBrainPolicyBase):
 class TestStartBrainWorkspace(_StartBrainPolicyBase):
     def test_workspace_is_user_slug(self, db, user, monkeypatch, tmp_path):
         svc = DeploymentsService(db)
-        dep = svc.create(user, "waha", "goal", "English")
+        dep = svc.create(user, "email", "goal", "English")
 
         db.add(_brain_conn(user.id))
         db.commit()
@@ -213,7 +225,7 @@ class TestStartBrainWorkspace(_StartBrainPolicyBase):
 class TestStartNoBrain(_StartBrainPolicyBase):
     def test_no_brain_env_vars_when_no_connection(self, db, user, monkeypatch, tmp_path):
         svc = DeploymentsService(db)
-        dep = svc.create(user, "waha", "goal", "English")
+        dep = svc.create(user, "email", "goal", "English")
 
         env = self._start_and_capture_env(svc, dep, monkeypatch, tmp_path, user)
         assert "KAI_BRAIN_WORKSPACE" not in env

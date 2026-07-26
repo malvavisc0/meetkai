@@ -14,7 +14,7 @@ from fastapi import Request
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
-from tests.cockpit.helpers import _connect_whatsapp  # noqa: F401 (re-exported)
+from tests.cockpit.helpers import _connect_email  # noqa: F401 (re-exported)
 
 from kai.cockpit.db import Base
 from kai.cockpit.models import User
@@ -26,7 +26,6 @@ def _cockpit_env(monkeypatch):
     monkeypatch.setenv("KAI_COCKPIT_SECRET", "test-secret")
     monkeypatch.setenv("KAI_COCKPIT_ESCALATION_SECRET", "test-esc-secret")
     monkeypatch.setenv("KAI_COCKPIT_COOKIE_SECURE", "0")
-    monkeypatch.setenv("KAI_WAHA_HMAC_KEY", "test-waha-hmac-key")
     # Tells kai.cockpit.app to skip the startup deployment-reconciliation
     # background thread — it would race the isolated in-memory SQLite
     # StaticPool connection set up by _isolated_db_engine below and corrupt
@@ -120,11 +119,11 @@ def user(db):
 
 @pytest.fixture
 def connected_user(user, db):
-    """The ``user`` fixture with a connected WhatsApp ``Connection`` already
+    """The ``user`` fixture with a connected Resend ``Connection`` already
     attached — for the majority of tests that just want a "ready to go"
-    user able to create a ``waha`` deployment.
+    user able to create an ``email`` deployment.
     """
-    _connect_whatsapp(db, user)
+    _connect_email(db, user)
     return user
 
 

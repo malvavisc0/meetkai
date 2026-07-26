@@ -23,20 +23,12 @@ class TestTemplatesList:
     def test_list_shows_bundled(self):
         result = runner.invoke(app, ["templates", "list"])
         assert result.exit_code == 0
-        assert "waha/general" in result.stdout
         assert "email/general" in result.stdout
-
-    def test_list_filter_waha(self):
-        result = runner.invoke(app, ["templates", "list", "--transport", "waha"])
-        assert result.exit_code == 0
-        assert "waha/general" in result.stdout
-        assert "email/" not in result.stdout
 
     def test_list_filter_email(self):
         result = runner.invoke(app, ["templates", "list", "--transport", "email"])
         assert result.exit_code == 0
         assert "email/general" in result.stdout
-        assert "waha/" not in result.stdout
 
     def test_list_empty_transport(self):
         result = runner.invoke(app, ["templates", "list", "--transport", "sms"])
@@ -45,19 +37,14 @@ class TestTemplatesList:
 
 
 class TestTemplatesShow:
-    def test_show_waha_general(self):
-        result = runner.invoke(app, ["templates", "show", "waha/general"])
-        assert result.exit_code == 0
-        assert "kAI" in result.stdout
-        assert "actions" in result.stdout
-
     def test_show_email_general(self):
         result = runner.invoke(app, ["templates", "show", "email/general"])
         assert result.exit_code == 0
         assert "kAI" in result.stdout
+        assert "actions" in result.stdout
 
     def test_show_missing_exits_nonzero(self):
-        result = runner.invoke(app, ["templates", "show", "waha/nonexistent"])
+        result = runner.invoke(app, ["templates", "show", "email/nonexistent"])
         assert result.exit_code != 0
         assert "not found" in result.stdout.lower()
 
@@ -71,17 +58,17 @@ class TestTemplatesShow:
 
 
 class TestTemplatesRender:
-    def test_render_waha_general_default_language(self):
-        result = runner.invoke(app, ["templates", "render", "waha/general"])
+    def test_render_email_general_default_language(self):
+        result = runner.invoke(app, ["templates", "render", "email/general"])
         assert result.exit_code == 0
         # {{language}} substitutes to the default ("English") — a literal
         # "{{language}}" must NOT survive into the rendered output.
         assert "{{language}}" not in result.stdout
         assert "English" in result.stdout
 
-    def test_render_waha_general_language_override(self):
+    def test_render_email_general_language_override(self):
         result = runner.invoke(
-            app, ["templates", "render", "waha/general", "--language", "Spanish"]
+            app, ["templates", "render", "email/general", "--language", "Spanish"]
         )
         assert result.exit_code == 0
         assert "Spanish" in result.stdout
@@ -89,13 +76,13 @@ class TestTemplatesRender:
 
     def test_render_missing_prompt_exits_nonzero(self, tmp_path, monkeypatch):
         # Template exists but has no prompt.md.
-        d = tmp_path / "waha" / "noprompt"
+        d = tmp_path / "email" / "noprompt"
         d.mkdir(parents=True)
         (d / "template.yaml").write_text(
             yaml.dump(
                 {
                     "name": "noprompt",
-                    "transport": "waha",
+                    "transport": "email",
                     "display_name": "NoPrompt",
                     "description": "T",
                     "actions": ["reply"],
@@ -104,7 +91,7 @@ class TestTemplatesRender:
             encoding="utf-8",
         )
         monkeypatch.setattr(cli_templates, "_REGISTRY", TemplateRegistry(tmp_path))
-        result = runner.invoke(app, ["templates", "render", "waha/noprompt"])
+        result = runner.invoke(app, ["templates", "render", "email/noprompt"])
         assert result.exit_code != 0
         assert "prompt" in result.stdout.lower()
 
@@ -113,7 +100,7 @@ class TestTemplatesRender:
         # the bundled general templates have no escalation_rules.
         data = {
             "name": "esc",
-            "transport": "waha",
+            "transport": "email",
             "display_name": "Esc",
             "description": "T",
             "actions": ["reply"],
@@ -125,10 +112,10 @@ class TestTemplatesRender:
                 }
             ],
         }
-        _write_template(tmp_path, "waha", "esc", data, prompt="BASE {{language}}\n")
+        _write_template(tmp_path, "email", "esc", data, prompt="BASE {{language}}\n")
         monkeypatch.setattr(cli_templates, "_REGISTRY", TemplateRegistry(tmp_path))
 
-        result = runner.invoke(app, ["templates", "render", "waha/esc"])
+        result = runner.invoke(app, ["templates", "render", "email/esc"])
         assert result.exit_code == 0
         assert "ESCALATION RULES" in result.stdout
         assert "Customer asks for a human" in result.stdout
@@ -137,6 +124,6 @@ class TestTemplatesRender:
         assert "BASE English" in result.stdout
 
     def test_render_missing_template_exits_nonzero(self):
-        result = runner.invoke(app, ["templates", "render", "waha/nonexistent"])
+        result = runner.invoke(app, ["templates", "render", "email/nonexistent"])
         assert result.exit_code != 0
         assert "not found" in result.stdout.lower()

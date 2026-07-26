@@ -6,10 +6,10 @@ runner = CliRunner()
 
 
 class TestListCommand:
-    def test_list_shows_waha(self):
+    def test_list_shows_email(self):
         result = runner.invoke(app, ["list"])
         assert result.exit_code == 0
-        assert "waha" in result.stdout
+        assert "email" in result.stdout
 
 
 class TestStartCommand:
@@ -25,25 +25,30 @@ class TestStartCommand:
         assert result.exit_code != 0 or "Usage:" in result.stdout
 
     def test_start_startup_error_exits_nonzero(self, monkeypatch):
-        from kai.bots.waha import Bot
+        from kai.bots.email import Bot
         from kai.cli import BotStartupError
 
         async def boom(self):
-            raise BotStartupError("could not reach WAHA")
+            raise BotStartupError("could not reach email backend")
 
+        # email/general requires brain_query; set the env so resolve_tools
+        # passes and the run reaches bot.run() (which raises BotStartupError
+        # -> "startup failed" panel).
+        monkeypatch.setenv("KAI_BRAIN_BASE_URL", "http://test")
+        monkeypatch.setenv("KAI_BRAIN_MORPHIK_TOKEN", "secret")
         # configure() reads a bot config file that isn't present in the test
         # env; stub it so the test exercises the intended path (run() raising
         # BotStartupError -> "startup failed" panel).
         monkeypatch.setattr(Bot, "configure", lambda self, agent, settings, **kw: None)
         monkeypatch.setattr(Bot, "run", boom)
-        result = runner.invoke(app, ["start", "waha"])
+        result = runner.invoke(app, ["start", "email"])
         assert result.exit_code != 0
         assert "startup failed" in result.stdout
 
 
 class TestStopCommand:
     def test_stop_unknown_run_fails(self):
-        result = runner.invoke(app, ["stop", "waha", "--run", "does-not-exist"])
+        result = runner.invoke(app, ["stop", "email", "--run", "does-not-exist"])
         assert result.exit_code != 0
         assert "unknown or stale run" in result.stdout
 
@@ -59,7 +64,7 @@ class TestStopCommand:
         sent = []
         monkeypatch.setattr(cli_mod.os, "kill", lambda pid, sig: sent.append((pid, sig)))
 
-        result = runner.invoke(app, ["stop", "waha", "--run", "deadbeef"])
+        result = runner.invoke(app, ["stop", "email", "--run", "deadbeef"])
         assert result.exit_code == 0
         assert sent == [(12345, __import__("signal").SIGTERM)]
         assert "stopping" in result.stdout
@@ -76,7 +81,7 @@ class TestStopCommand:
         sent = []
         monkeypatch.setattr(cli_mod.os, "kill", lambda pid, sig: sent.append((pid, sig)))
 
-        result = runner.invoke(app, ["stop", "waha", "--run", "deadbeef", "--force"])
+        result = runner.invoke(app, ["stop", "email", "--run", "deadbeef", "--force"])
         assert result.exit_code == 0
         assert sent == [(12345, __import__("signal").SIGKILL)]
         assert "killed" in result.stdout
@@ -95,7 +100,7 @@ class TestStopCommand:
             cli_mod.RunRegistry, "remove", lambda self, run_id: removed.append(run_id)
         )
 
-        result = runner.invoke(app, ["stop", "waha", "--run", "deadbeef"])
+        result = runner.invoke(app, ["stop", "email", "--run", "deadbeef"])
         assert result.exit_code == 0
         assert removed == ["deadbeef"]
         assert "already gone" in result.stdout
@@ -107,19 +112,19 @@ class TestStopCommand:
 
 class TestStatusCommand:
     def test_status_requires_run_id(self):
-        result = runner.invoke(app, ["status", "waha"])
+        result = runner.invoke(app, ["status", "email"])
         # Missing required --run option
         assert result.exit_code != 0
 
     def test_status_unknown_run_fails(self):
-        result = runner.invoke(app, ["status", "waha", "--run", "does-not-exist"])
+        result = runner.invoke(app, ["status", "email", "--run", "does-not-exist"])
         assert result.exit_code != 0
         assert "unknown or stale run" in result.stdout
 
 
 class TestChatCommand:
     def test_chat_unknown_run_fails(self):
-        result = runner.invoke(app, ["chat", "waha", "--run", "does-not-exist"])
+        result = runner.invoke(app, ["chat", "email", "--run", "does-not-exist"])
         assert result.exit_code != 0
         assert "unknown or stale run" in result.stdout
 
@@ -142,7 +147,7 @@ class TestChatCommand:
 
         monkeypatch.setattr(cli_mod, "_post_tell", fake_post)
 
-        result = runner.invoke(app, ["chat", "waha", "--run", "deadbeef"])
+        result = runner.invoke(app, ["chat", "email", "--run", "deadbeef"])
         assert result.exit_code == 0
         assert calls == []
 
@@ -159,7 +164,7 @@ class TestChatCommand:
             raise EOFError
 
         monkeypatch.setattr(cli_mod.console, "input", raise_eof)
-        result = runner.invoke(app, ["chat", "waha", "--run", "deadbeef"])
+        result = runner.invoke(app, ["chat", "email", "--run", "deadbeef"])
         assert result.exit_code == 0
         assert "bye" in result.stdout
 
@@ -182,7 +187,7 @@ class TestChatCommand:
 
         monkeypatch.setattr(cli_mod, "_post_tell", fake_post)
 
-        result = runner.invoke(app, ["chat", "waha", "--run", "deadbeef"])
+        result = runner.invoke(app, ["chat", "email", "--run", "deadbeef"])
         assert result.exit_code == 0
         assert calls == []
         assert "on" in result.stdout
@@ -210,7 +215,7 @@ class TestChatCommand:
 
         monkeypatch.setattr(cli_mod, "_post_tell", fake_post)
 
-        result = runner.invoke(app, ["chat", "waha", "--run", "deadbeef"])
+        result = runner.invoke(app, ["chat", "email", "--run", "deadbeef"])
         assert result.exit_code == 0
         assert calls == [("send a joke", False)]
         assert "here is a joke" in result.stdout

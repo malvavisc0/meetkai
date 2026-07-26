@@ -31,14 +31,14 @@ RUN uv sync --frozen --no-dev && chmod +x /entrypoint.sh
 # Pre-create the writable runtime dirs and hand them to appuser. Named
 # volumes mounted on these paths in prod inherit the image's ownership on
 # first use, so appuser can write without a runtime chown.
-RUN mkdir -p /app/data/configs/cockpit /app/data/logs /app/vendor /app/models /tmp/kai/media \
-    && chown -R appuser:appuser /app/data /app/vendor /app/models /tmp/kai /home/appuser
+RUN mkdir -p /app/data/configs/cockpit /app/data/logs /tmp/kai \
+    && chown -R appuser:appuser /app/data /tmp/kai /home/appuser
 
 USER appuser
 
 ENV PATH="/app/.venv/bin:$PATH" \
     HOME=/home/appuser \
-    UV_CACHE_DIR=/app/vendor/.uv-cache
+    UV_CACHE_DIR=/app/.uv-cache
 
 EXPOSE 8080
 

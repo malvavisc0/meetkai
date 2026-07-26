@@ -17,7 +17,7 @@ def now_iso() -> str:
 
 
 def user_slug(kai_slug: str) -> str:
-    """Return the user's ``kai_slug`` for WAHA/Brain naming.
+    """Return the user's ``kai_slug`` for Brain naming.
 
     Accepts the raw slug value rather than a ``User`` object so this module
     stays free of SQLAlchemy imports; callers pass ``user.kai_slug``.

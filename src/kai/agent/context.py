@@ -9,9 +9,9 @@ class MessageContext(BaseModel, frozen=True):
     The agent runtime never knows what a "mention", a "group", or a "JID"
     is. A bot parses its transport-specific event into these generic fields
     and hands the result to :meth:`KaiAgent.chat`. Transport-specific
-    metadata (reply-to bodies, voice transcripts, container exit codes,
-    email subjects) stays in the bot's parsed object and is injected into
-    the message text as tags the bot already produces.
+    metadata (reply-to bodies, container exit codes, email subjects) stays
+    in the bot's parsed object and is injected into the message text as tags
+    the bot already produces.
     """
 
     sender_name: str

@@ -81,8 +81,6 @@ from kai.agent.tools.escalate import active_escalation_count  # noqa: E402
 
 templates.env.globals["active_escalation_count"] = active_escalation_count
 
-_MEDIA_SERVICES: list = []  # module-level so the shutdown handler can reach it
-
 
 def _reconcile_deployments_in_background() -> None:
     # Bot subprocesses are children of this process, so a container restart
@@ -91,20 +89,7 @@ def _reconcile_deployments_in_background() -> None:
     # slow/failing bot start doesn't delay uvicorn from binding.
     from kai.cockpit.db import SessionLocal
     from kai.cockpit.deployments import reconcile_deployments
-    from kai.cockpit.media_services import MediaServiceManager
     from kai.cockpit.tokens import cleanup_expired_tokens
-    from kai.vendors.manager import get_vendor_manager
-
-    # Start shared media services BEFORE reconcile so reconcile only
-    # spawns bots once STT/TTS are up.
-    try:
-        from kai.media.config import get_media_settings
-
-        media = MediaServiceManager(get_media_settings(), get_vendor_manager())
-        media.start_all()
-        _MEDIA_SERVICES.append(media)
-    except Exception:
-        logger.exception("media services failed to start; MEDIA_READY stays unset")
 
     db = SessionLocal()
     try:
@@ -133,8 +118,6 @@ async def _lifespan(app: FastAPI):
             daemon=True,
         ).start()
     yield
-    for media in _MEDIA_SERVICES:
-        media.stop_all()
 
 
 def create_app() -> FastAPI:

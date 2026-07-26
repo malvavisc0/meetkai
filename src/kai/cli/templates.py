@@ -12,7 +12,7 @@ _REGISTRY = TemplateRegistry.bundled()
 
 @app.command()
 def list(
-    transport: str | None = typer.Option(None, help="Filter by transport (waha/email)"),
+    transport: str | None = typer.Option(None, help="Filter by transport (email)"),
 ):
     templates = _REGISTRY.list(transport)
     if not templates:
@@ -34,7 +34,7 @@ def list(
 
 @app.command(name="show")
 def show(
-    template_id: str = typer.Argument(..., help="Template identifier (e.g. waha/general)"),
+    template_id: str = typer.Argument(..., help="Template identifier (e.g. email/general)"),
 ):
     parts = _parse_id(template_id)
     try:
@@ -48,7 +48,7 @@ def show(
 
 @app.command()
 def render(
-    template_id: str = typer.Argument(..., help="Template identifier (e.g. waha/general)"),
+    template_id: str = typer.Argument(..., help="Template identifier (e.g. email/general)"),
     goal: str = typer.Option("", "--goal", "-g", help="Goal to inject for preview"),
     language: str = typer.Option("", "--language", "-l", help="Language to inject"),
 ):
@@ -95,12 +95,12 @@ def _parse_id(template_id: str) -> TemplateParts:
     if len(parts) != 2:
         typer.echo(
             f"Invalid template id: {template_id!r}. "
-            f"Expected format: transport/name (e.g. waha/general)"
+            f"Expected format: transport/name (e.g. email/general)"
         )
         raise typer.Exit(1)
     transport, name = parts
-    if transport not in ("waha", "email"):
-        typer.echo(f"Unknown transport: {transport!r}. Valid: waha, email")
+    if transport not in ("email",):
+        typer.echo(f"Unknown transport: {transport!r}. Valid: email")
         raise typer.Exit(1)
     return TemplateParts(transport=transport, name=name)
 
@@ -116,36 +116,45 @@ def _render_template(tmpl: TemplateDef) -> None:
     first_line = tmpl.description.strip().split("\n")[0]
     c.print(f"  [{DIM}]{first_line}[/{DIM}]")
 
+    _render_template_tools(c, tmpl)
+    _render_template_config(c, tmpl)
+    _render_template_sections(c, tmpl)
+
+
+def _render_template_tools(c, tmpl: TemplateDef) -> None:
     if tmpl.actions:
         c.print("\n  [bold]actions[/bold]  " + ", ".join(tmpl.actions))
-
     if tmpl.tools.required:
         c.print("  [bold]required tools[/bold]  " + ", ".join(tmpl.tools.required))
     if tmpl.tools.optional:
         c.print("  [bold]optional tools[/bold]  " + ", ".join(tmpl.tools.optional))
 
-    if tmpl.config:
-        c.print("\n  [bold]config[/bold]")
-        temp = tmpl.config.get("temperature")
-        if temp is not None:
-            c.print(f"    temperature: {temp}")
-        la = tmpl.config.get("language")
-        if la:
-            c.print(f"    language: {la}")
 
+def _render_template_config(c, tmpl: TemplateDef) -> None:
+    if not tmpl.config:
+        return
+    c.print("\n  [bold]config[/bold]")
+    temp = tmpl.config.get("temperature")
+    if temp is not None:
+        c.print(f"    temperature: {temp}")
+    la = tmpl.config.get("language")
+    if la:
+        c.print(f"    language: {la}")
+
+
+def _render_template_sections(c, tmpl: TemplateDef) -> None:
     if tmpl.reply_style:
         c.print("\n  [bold]reply_style[/bold]")
         for line in tmpl.reply_style.strip().split("\n")[:4]:
             c.print(f"    [{DIM}]{line.strip()}[/{DIM}]")
-
     if tmpl.escalation_rules:
         c.print("\n  [bold]escalation_rules[/bold]")
         for rule in tmpl.escalation_rules:
             c.print(f'    [{WARN}]●[/{WARN}] [{rule.severity}] "{rule.condition}"')
-
     if tmpl.goal_suggestion:
         c.print("\n  [bold]goal_suggestion[/bold]")
-        for line in tmpl.goal_suggestion.strip().split("\n")[:2]:
+        lines = tmpl.goal_suggestion.strip().split("\n")
+        for line in lines[:2]:
             c.print(f"    [{DIM}]{line.strip()}[/{DIM}]")
-        if len(tmpl.goal_suggestion.strip().split("\n")) > 2:
+        if len(lines) > 2:
             c.print(f"    [{DIM}]...[/{DIM}]")

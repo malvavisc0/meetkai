@@ -1,17 +1,15 @@
 """Email support bot — receives inbound emails via the cockpit's /ingest
 forward, runs an agent turn, and replies via SMTP.
 
-Modeled on ``bots/waha/__init__.py`` but stripped of every WAHA/STT/TTS/
-media/group/sleep/participation concern. The provider (Resend) never POSTs
-directly to this bot — the cockpit verifies the webhook, normalizes it to a
-``NormalizedMessage``, and forwards to this bot's ``/ingest``. The bot's own
-uvicorn server serves only the operator surfaces (``/ingest``, ``/tell``,
-``/status``, ``/clear``) and verifies each with the HMAC key injected as
-``KAI_BOT_HMAC_KEY``.
+The provider (Resend) never POSTs directly to this bot — the cockpit
+verifies the webhook, normalizes it to a ``NormalizedMessage``, and forwards
+to this bot's ``/ingest``. The bot's own uvicorn server serves only the
+operator surfaces (``/ingest``, ``/tell``, ``/status``, ``/clear``) and
+verifies each with the HMAC key injected as ``KAI_BOT_HMAC_KEY``.
 
 Conversation history is the framework's built-in JSON history keyed by
 ``conversation_id`` (the sender's email) — there is no transport-specific
-history tool here (unlike the waha bot's WAHA-fetching ``get_chat_history``).
+history tool here.
 """
 
 import asyncio
@@ -118,11 +116,10 @@ class Bot(BaseBot):
         agent: KaiAgent,
         settings: Settings,
         *,
-        voice: str | None = None,
         template: TemplateDef,
         tools: ToolResolution,
     ) -> None:
-        super().configure(agent, settings, voice=voice, template=template, tools=tools)
+        super().configure(agent, settings, template=template, tools=tools)
         self._settings = settings
         self._email = get_email_settings()
         self._config = self._load_config(template)
@@ -234,57 +231,61 @@ class Bot(BaseBot):
             return {"ok": False}
 
         source = event.get("source", "")
-        # Drop blacklisted senders before any attachment download or agent
-        # turn — the list is re-checked from config on every email (no
-        # persisted block history). Both args are the normalized sender;
-        # case-insensitive comparison catches variations like "Alice@Ex.com".
-        if not should_process_chat_message(
-            source.strip().lower(),
-            source.strip().lower(),
-            set(),
-            {e.lower() for e in self._config.blacklist},
-        ):
+        if self._is_blacklisted(source):
             logger.info("Ignoring blacklisted sender: %s", source)
             return {"ok": True}
 
         try:
-            assert self._agent is not None
-            text = event["text"]
-            metadata = event.get("metadata", {})
-            subject = metadata.get("subject", "")
-            message_id = metadata.get("message_id", "")
-            attachments = metadata.get("attachments", [])
-
-            images, enriched_text = await self._process_attachments(text, attachments)
-
-            context = MessageContext(
-                sender_name=source,
-                sender_id=source,
-                conversation_id=source,
-                multi_party=False,
-                addressed_to_bot=True,
-            )
-
-            self.set_task_context(chat_id=source, owner_id=source, tz_hint=self._config.timezone)
-
-            result = await self._agent.chat(
-                enriched_text,
-                output_cls=EmailAction,
-                conversation_id=source,
-                context=context,
-                images=images or None,
-                reply_style=self._reply_style or None,
-            )
-
-            action = result.action
-            if action.action == "reply" and action.text and not self._sent_via_tool(result, source):
-                await self._send_reply(
-                    source, subject, action.text, message_id=message_id, original_body=text
-                )
+            await self._process_inbound_email(event, source)
             return {"ok": True}
         except Exception:
             logger.exception("ingest_event failed for %s", event.get("source", "<unknown>"))
             return {"ok": False}
+
+    def _is_blacklisted(self, source: str) -> bool:
+        # Drop blacklisted senders before any attachment download or agent
+        # turn — the list is re-checked from config on every email (no
+        # persisted block history). Both args are the normalized sender;
+        # case-insensitive comparison catches variations like "Alice@Ex.com".
+        sender = source.strip().lower()
+        return not should_process_chat_message(
+            sender, sender, set(), {e.lower() for e in self._config.blacklist}
+        )
+
+    async def _process_inbound_email(self, event: dict, source: str) -> None:
+        assert self._agent is not None
+        text = event["text"]
+        metadata = event.get("metadata", {})
+        subject = metadata.get("subject", "")
+        message_id = metadata.get("message_id", "")
+        attachments = metadata.get("attachments", [])
+
+        images, enriched_text = await self._process_attachments(text, attachments)
+
+        context = MessageContext(
+            sender_name=source,
+            sender_id=source,
+            conversation_id=source,
+            multi_party=False,
+            addressed_to_bot=True,
+        )
+
+        self.set_task_context(chat_id=source, owner_id=source, tz_hint=self._config.timezone)
+
+        result = await self._agent.chat(
+            enriched_text,
+            output_cls=EmailAction,
+            conversation_id=source,
+            context=context,
+            images=images or None,
+            reply_style=self._reply_style or None,
+        )
+
+        action = result.action
+        if action.action == "reply" and action.text and not self._sent_via_tool(result, source):
+            await self._send_reply(
+                source, subject, action.text, message_id=message_id, original_body=text
+            )
 
     @staticmethod
     def _sent_via_tool(result: ChatResult, target: str) -> bool:
@@ -346,8 +347,8 @@ class Bot(BaseBot):
     async def handle_operator(self, message: str, *, persist: bool = False) -> TellResult:
         """Run an operator turn under the isolated ``operator`` history bucket.
 
-        Mirrors the waha bot's operator console: the agent decides what to do
-        (send an email, answer the operator, stay silent) through its
+        The agent decides what to do (send an email, answer the operator,
+        stay silent) through its
         structured ``EmailAction``. The bot dispatches it — see
         :meth:`_sent_via_tool` for why a tool call and a ``reply`` action in
         the same turn don't cause a double send. ``reply`` delivers the
@@ -395,47 +396,52 @@ class Bot(BaseBot):
         kind = action.action
 
         if kind == "reply":
-            reply = ""
-            target = (action.target or "").strip()
-            out_text = action.text or ""
-            sent_ok = True
-            if target and out_text:
-                already_sent = self._sent_via_tool(result, target)
-                if already_sent:
-                    console.print(
-                        f"[green]>[/green]  {out_text[:60]}  "
-                        f"[dim](sent via send_email tool to {target})[/dim]"
-                    )
-                else:
-                    console.print(
-                        f"[green]>[/green]  {out_text[:60]}  [dim](email to {target})[/dim]"
-                    )
-                    try:
-                        await self._send_email(target, "", out_text)
-                    except Exception as exc:
-                        logger.error("Failed to send email to %s: %s", target, exc)
-                        console.print(f"[red]send failed: {target}: {exc}[/red]")
-                        sent_ok = False
-                if sent_ok and self._agent is not None:
-                    await self._agent.record_assistant_message(target, out_text)
-                snippet = out_text if len(out_text) <= 60 else out_text[:57] + "..."
-                reply = f"sent to {target}: {snippet}" if sent_ok else f"failed to send to {target}"
-            else:
-                if not target:
-                    sent_ok = False
-                    reply = "reply action missing target"
-                elif not out_text:
-                    sent_ok = False
-                    reply = "reply action missing text"
-            return TellResult(
-                ok=sent_ok and result.error is None,
-                actions=[{"tool": "send_reply", "target": target, "text": out_text, "ok": sent_ok}],
-                reply=reply,
-            )
-
+            return await self._dispatch_reply(result, action)
         if kind == "silent":
             return TellResult(ok=True, reply="", actions=[{"tool": kind, "ok": True}])
+        return self._dispatch_console(result, action)
 
+    async def _dispatch_reply(self, result: ChatResult, action) -> TellResult:
+        target = (action.target or "").strip()
+        out_text = action.text or ""
+        sent_ok, reply = await self._send_operator_reply(result, target, out_text)
+        return TellResult(
+            ok=sent_ok and result.error is None,
+            actions=[{"tool": "send_reply", "target": target, "text": out_text, "ok": sent_ok}],
+            reply=reply,
+        )
+
+    async def _send_operator_reply(
+        self, result: ChatResult, target: str, out_text: str
+    ) -> tuple[bool, str]:
+        if not target:
+            return False, "reply action missing target"
+        if not out_text:
+            return False, "reply action missing text"
+
+        sent_ok = True
+        already_sent = self._sent_via_tool(result, target)
+        if already_sent:
+            console.print(
+                f"[green]>[/green]  {out_text[:60]}  "
+                f"[dim](sent via send_email tool to {target})[/dim]"
+            )
+        else:
+            console.print(f"[green]>[/green]  {out_text[:60]}  [dim](email to {target})[/dim]")
+            try:
+                await self._send_email(target, "", out_text)
+            except Exception as exc:
+                logger.error("Failed to send email to %s: %s", target, exc)
+                console.print(f"[red]send failed: {target}: {exc}[/red]")
+                sent_ok = False
+        if sent_ok and self._agent is not None:
+            await self._agent.record_assistant_message(target, out_text)
+        snippet = out_text if len(out_text) <= 60 else out_text[:57] + "..."
+        reply = f"sent to {target}: {snippet}" if sent_ok else f"failed to send to {target}"
+        return sent_ok, reply
+
+    @staticmethod
+    def _dispatch_console(result: ChatResult, action) -> TellResult:
         actions: list[dict] = []
         for tc in result.tool_calls:
             entry: dict = {"tool": tc.name, "ok": tc.ok}
@@ -542,8 +548,8 @@ class Bot(BaseBot):
 
         Returns ``(image_bytes_list, enriched_text)``. Image bytes are only
         downloaded when vision is enabled; otherwise (or for non-images) a
-        ``[attachment: ...]`` text tag is injected — the same graceful
-        degradation the waha bot uses when ``image_enabled=False``.
+        ``[attachment: ...]`` text tag is injected — graceful
+        degradation when ``image_enabled=False``.
         """
         images: list[bytes] = []
         enriched = text
@@ -593,8 +599,7 @@ class Bot(BaseBot):
         """True when the deployment's image feature flag is on.
 
         Sourced from ``BotConfig.vision`` (config.json, written by the cockpit
-        from ``Deployment.feature_flags["image"]``) — same channel waha uses
-        for ``media.image_enabled``.
+        from ``Deployment.feature_flags["image"]``).
         """
         return self._config.vision
 

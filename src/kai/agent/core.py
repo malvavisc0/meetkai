@@ -49,40 +49,51 @@ def _to_openai_message_dict(message, drop_none=False, model=None, store=False):
     content: list = []
     content_txt = ""
     for block in message.blocks:
-        if isinstance(block, TextBlock):
-            content.append({"type": "text", "text": block.text})
-            content_txt += block.text
-        elif isinstance(block, VideoBlock):
-            if block.url:
-                url = str(block.url)
-            else:
-                vid = block.resolve_video(as_base64=True).read()
-                mt = block.video_mimetype or "video/mp4"
-                url = f"data:{mt};base64,{vid.decode() if isinstance(vid, bytes) else vid}"
-            content.append({"type": "video_url", "video_url": {"url": url}})
-        else:
-            single = _orig_to_openai_message_dict(
-                type(message)(
-                    role=message.role,
-                    blocks=[block],
-                    additional_kwargs=message.additional_kwargs,
-                ),
-                drop_none=drop_none,
-                model=model,
-                store=store,
-            )
-            item = single.get("content", "") if isinstance(single, dict) else single
-            if isinstance(item, list):
-                content.extend(item)
-            elif isinstance(item, str):
-                content.append({"type": "text", "text": item})
-                content_txt += item
+        txt = _append_block_to_content(block, message, content, drop_none, model, store)
+        if txt:
+            content_txt += txt
     return {
         "role": message.role.value,
         "content": (
             content_txt if all(isinstance(b, TextBlock) for b in message.blocks) else content
         ),
     }
+
+
+def _append_block_to_content(block, message, content, drop_none, model, store) -> str:
+    """Append one block's OpenAI representation to ``content``; return text added."""
+    if isinstance(block, TextBlock):
+        content.append({"type": "text", "text": block.text})
+        return block.text
+    if isinstance(block, VideoBlock):
+        content.append({"type": "video_url", "video_url": {"url": _video_url(block)}})
+        return ""
+    single = _orig_to_openai_message_dict(
+        type(message)(
+            role=message.role,
+            blocks=[block],
+            additional_kwargs=message.additional_kwargs,
+        ),
+        drop_none=drop_none,
+        model=model,
+        store=store,
+    )
+    item = single.get("content", "") if isinstance(single, dict) else single
+    if isinstance(item, list):
+        content.extend(item)
+        return ""
+    if isinstance(item, str):
+        content.append({"type": "text", "text": item})
+        return item
+    return ""
+
+
+def _video_url(block: VideoBlock) -> str:
+    if block.url:
+        return str(block.url)
+    vid = block.resolve_video(as_base64=True).read()
+    mt = block.video_mimetype or "video/mp4"
+    return f"data:{mt};base64,{vid.decode() if isinstance(vid, bytes) else vid}"
 
 
 _openai_utils.to_openai_message_dict = _to_openai_message_dict
@@ -475,23 +486,26 @@ class KaiAgent:
             for key, messages in history_data.items():
                 if not isinstance(key, str) or not isinstance(messages, list):
                     continue
-                msgs: list[ChatMessage] = []
-                ts_list: list[str | None] = []
-                for item in messages:
-                    if not isinstance(item, dict):
-                        continue
-                    role = item.get("role")
-                    content = item.get("content")
-                    if role in _VALID_ROLES and isinstance(content, str):
-                        msgs.append(ChatMessage(role=MessageRole(role), content=content))
-                        ts = item.get("ts")
-                        ts_list.append(ts if isinstance(ts, str) else None)
-                self._history[key] = msgs
-                self._timestamps[key] = ts_list
+                self._history[key], self._timestamps[key] = self._parse_history_messages(messages)
         except (OSError, json.JSONDecodeError, TypeError, ValueError) as exc:
             logger.warning("Failed to load agent history from %s: %s", self._history_file, exc)
             self._history.clear()
             self._timestamps.clear()
+
+    @staticmethod
+    def _parse_history_messages(messages: list) -> tuple[list[ChatMessage], list[str | None]]:
+        msgs: list[ChatMessage] = []
+        ts_list: list[str | None] = []
+        for item in messages:
+            if not isinstance(item, dict):
+                continue
+            role = item.get("role")
+            content = item.get("content")
+            if role in _VALID_ROLES and isinstance(content, str):
+                msgs.append(ChatMessage(role=MessageRole(role), content=content))
+                ts = item.get("ts")
+                ts_list.append(ts if isinstance(ts, str) else None)
+        return msgs, ts_list
 
     def _load_goal(self) -> None:
         if self._goal_file is None or not self._goal_file.exists():
@@ -537,28 +551,36 @@ class KaiAgent:
         reply_style: str | None = None,
     ) -> str:
         prompt = overrides or self._system_prompt or _DEFAULT_SYSTEM_PROMPT
-        if self.goal_manager.has_goal():
-            goal = self.goal_manager.get_goal()
-            if goal and goal.description:
-                prompt += f"\n\nCurrent goal: {goal.description}"
+        prompt += self._goal_prompt_section()
         if extra_context:
             prompt += f"\n\n{extra_context}"
         if self._tool_instructions:
             prompt += self._tool_instructions
+        prompt += self._time_prompt_section()
+        if reply_style:
+            prompt += f"\n{reply_style}"
+        return prompt
+
+    def _goal_prompt_section(self) -> str:
+        if not self.goal_manager.has_goal():
+            return ""
+        goal = self.goal_manager.get_goal()
+        if goal and goal.description:
+            return f"\n\nCurrent goal: {goal.description}"
+        return ""
+
+    def _time_prompt_section(self) -> str:
         now = datetime.now(UTC)
         try:
             local = now.astimezone(ZoneInfo(self._timezone)) if self._timezone else now.astimezone()
         except (KeyError, ValueError) as exc:
             logger.warning("Unknown timezone %r, falling back to local: %s", self._timezone, exc)
             local = now.astimezone()
-        prompt += (
+        return (
             f"\n\nCurrent date and time: "
             f"{local.strftime('%A, %Y-%m-%d %H:%M:%S %Z')}"
             f" (UTC: {now.strftime('%Y-%m-%d %H:%M:%S')})"
         )
-        if reply_style:
-            prompt += f"\n{reply_style}"
-        return prompt
 
     def _get_history(self, conversation_id: str | None = None) -> list[ChatMessage]:
         key = self._history_key(conversation_id)
@@ -767,62 +789,80 @@ class KaiAgent:
             action, tool_calls = await self._run_with_tools(
                 messages, output_cls=output_cls, tools=tools
             )
-
-            reply_text = action.text or ""
-
-            # ``is_delegated_action`` marks actions whose text targets a
-            # different conversation (e.g. ``send_to_group``). Those must not
-            # be recorded as an assistant reply in this conversation.
-            delegated = is_delegated_action is not None and is_delegated_action(action)
-
-            # Save assistant reply only when it targets this conversation.
-            # Save user message on any turn that produced output or was
-            # delegated — bare ``silent`` turns store nothing here.
-            save_assistant = bool(reply_text) and not delegated
-            save_user = store_user_message and (bool(reply_text) or delegated)
-            if save_user or save_assistant:
-                async with self._save_lock:
-                    history = self._get_history(conversation_id)
-                    key = self._history_key(conversation_id)
-                    ts_list = self._timestamps.setdefault(key, [])
-                    if save_user:
-                        history.append(
-                            ChatMessage(
-                                role=MessageRole.USER,
-                                content=self._history_placeholder(formatted, images, videos),
-                            )
-                        )
-                        ts_list.append(self._now_ts())
-                    if save_assistant:
-                        history.append(ChatMessage(role=MessageRole.ASSISTANT, content=reply_text))
-                        ts_list.append(self._now_ts())
-                    self._trim_history(conversation_id)
-                self._mark_dirty()
-            await asyncio.to_thread(self._save_goal)
-
-            return ChatResult(reply=reply_text, tool_calls=tool_calls, action=action)
+            await self._persist_turn(
+                formatted,
+                conversation_id,
+                action,
+                store_user_message,
+                is_delegated_action,
+                images=images,
+                videos=videos,
+            )
+            return ChatResult(reply=action.text or "", tool_calls=tool_calls, action=action)
         except TimeoutError as exc:
-            logger.warning("Agent chat timeout: %s", exc)
-            return ChatResult(
-                reply="",
-                tool_calls=[],
-                action=ActionResult(
-                    action="error",
-                    text="Sorry, the language model took too long to respond.",
-                ),
-                error=f"timeout: {exc}",
+            return self._chat_error(
+                exc, "timeout", "Sorry, the language model took too long to respond."
             )
         except Exception as exc:
             logger.exception("Agent chat error")
-            return ChatResult(
-                reply="",
-                tool_calls=[],
-                action=ActionResult(
-                    action="error",
-                    text="Sorry, I encountered an error processing your message.",
-                ),
-                error=str(exc),
+            return self._chat_error(
+                exc, "", "Sorry, I encountered an error processing your message."
             )
+
+    async def _persist_turn(
+        self,
+        formatted: str,
+        conversation_id: str | None,
+        action: ActionResult,
+        store_user_message: bool,
+        is_delegated_action: Callable[[ActionResult], bool] | None,
+        images: list[bytes] | None = None,
+        videos: list[bytes] | None = None,
+    ) -> None:
+        reply_text = action.text or ""
+
+        # ``is_delegated_action`` marks actions whose text targets a
+        # different conversation (e.g. ``send_to_group``). Those must not
+        # be recorded as an assistant reply in this conversation.
+        delegated = is_delegated_action is not None and is_delegated_action(action)
+
+        # Save assistant reply only when it targets this conversation.
+        # Save user message on any turn that produced output or was
+        # delegated — bare ``silent`` turns store nothing here.
+        save_assistant = bool(reply_text) and not delegated
+        save_user = store_user_message and (bool(reply_text) or delegated)
+        if not (save_user or save_assistant):
+            await asyncio.to_thread(self._save_goal)
+            return
+        async with self._save_lock:
+            history = self._get_history(conversation_id)
+            key = self._history_key(conversation_id)
+            ts_list = self._timestamps.setdefault(key, [])
+            if save_user:
+                history.append(
+                    ChatMessage(
+                        role=MessageRole.USER,
+                        content=self._history_placeholder(formatted, images, videos),
+                    )
+                )
+                ts_list.append(self._now_ts())
+            if save_assistant:
+                history.append(ChatMessage(role=MessageRole.ASSISTANT, content=reply_text))
+                ts_list.append(self._now_ts())
+            self._trim_history(conversation_id)
+        self._mark_dirty()
+        await asyncio.to_thread(self._save_goal)
+
+    @staticmethod
+    def _chat_error(exc: Exception, error_tag: str, message: str) -> ChatResult:
+        if error_tag == "timeout":
+            logger.warning("Agent chat timeout: %s", exc)
+        return ChatResult(
+            reply="",
+            tool_calls=[],
+            action=ActionResult(action="error", text=message),
+            error=f"{error_tag}: {exc}" if error_tag else str(exc),
+        )
 
     async def complete(self, prompt: str) -> str:
         """One-shot non-tool LLM completion, for lightweight checks.
@@ -885,67 +925,94 @@ class KaiAgent:
                 break
 
             for tc in tool_calls:
-                logger.info("Tool call: %s(%s)", tc.tool_name, tc.tool_kwargs)
-                if tc.tool_name in action_values and tc.tool_name not in self._tools_by_name:
-                    # The model expressed its decision as a tool call on a
-                    # name that is actually an action value. Capture it as
-                    # the typed action and end the turn here — no spurious
-                    # "unknown tool" failure, no extra LLM round.
-                    action = self._action_from_tool_call(output_cls, tc.tool_name, tc.tool_kwargs)
-                    if action is not None:
-                        logger.info("Resolved action-as-tool: %s(%s)", tc.tool_name, tc.tool_kwargs)
-                        return action, tool_call_records
-                    # If the kwargs didn't validate, fall through to dispatch
-                    # (which will record the unknown-tool failure) and let the
-                    # terminal structured step retry.
-                if active_by_name is not None:
-                    tool = active_by_name.get(tc.tool_name)
-                    if tool is None:
-                        # Allowlist miss: fall back to globally registered tools
-                        # rather than silently no-oping.
-                        tool = self._tools_by_name.get(tc.tool_name)
-                else:
-                    tool = self._tools_by_name.get(tc.tool_name)
-                if tool is None:
-                    result = f"Error: unknown tool '{tc.tool_name}'"
-                    ok = False
-                else:
-                    try:
-                        output = await tool.acall(**tc.tool_kwargs)
-                        result = str(output.content)
-                        ok = True
-                    except Exception as exc:
-                        logger.warning("Tool %s failed: %s", tc.tool_name, exc)
-                        result = f"Error calling {tc.tool_name}: {exc}"
-                        ok = False
-
-                tool_call_records.append(
-                    ToolCallRecord(
-                        name=tc.tool_name, args=dict(tc.tool_kwargs), ok=ok, result=result
-                    )
+                action = self._maybe_resolve_action_tool_call(
+                    tc, output_cls, action_values, tool_call_records
                 )
-                logger.info(
-                    "Tool result: %s -> %s (%d chars)",
-                    tc.tool_name,
-                    "ok" if ok else "error",
-                    len(result),
-                )
+                if action is not None:
+                    return action, tool_call_records
+                result, ok = await self._execute_tool_call(tc, active_by_name)
+                self._record_tool_call(tc, result, ok, tool_call_records, scratchpad)
 
-                if self._tool_call_callback is not None:
-                    try:
-                        self._tool_call_callback(tc.tool_name, dict(tc.tool_kwargs), result)
-                    except Exception:
-                        logger.debug("tool_call_callback raised", exc_info=True)
+        action = await self._resolve_terminal_action(messages, scratchpad, output_cls, llm_kwargs)
+        return _normalize_action_text(action), tool_call_records
 
-                scratchpad.append(
-                    ChatMessage(
-                        role=MessageRole.TOOL,
-                        content=result,
-                        additional_kwargs={"tool_call_id": tc.tool_id},
-                    )
-                )
+    def _maybe_resolve_action_tool_call(
+        self,
+        tc: Any,
+        output_cls: type[ActionResult],
+        action_values: frozenset[str],
+        tool_call_records: list[ToolCallRecord],
+    ) -> ActionResult | None:
+        """If the model called an action-value name as a tool, resolve it."""
+        if tc.tool_name not in action_values or tc.tool_name in self._tools_by_name:
+            return None
+        action = self._action_from_tool_call(output_cls, tc.tool_name, tc.tool_kwargs)
+        if action is not None:
+            logger.info("Resolved action-as-tool: %s(%s)", tc.tool_name, tc.tool_kwargs)
+            return action
+        return None
 
-        # Terminal step: resolve the turn's action as a typed ``output_cls``.
+    async def _execute_tool_call(
+        self, tc: Any, active_by_name: dict[str | None, FunctionTool] | None
+    ) -> tuple[str, bool]:
+        tool = self._resolve_tool(tc.tool_name, active_by_name)
+        if tool is None:
+            return f"Error: unknown tool '{tc.tool_name}'", False
+        try:
+            output = await tool.acall(**tc.tool_kwargs)
+            return str(output.content), True
+        except Exception as exc:
+            logger.warning("Tool %s failed: %s", tc.tool_name, exc)
+            return f"Error calling {tc.tool_name}: {exc}", False
+
+    def _resolve_tool(
+        self, name: str, active_by_name: dict[str | None, FunctionTool] | None
+    ) -> FunctionTool | None:
+        if active_by_name is not None:
+            found = active_by_name.get(name)
+            if found is not None:
+                return found
+            return self._tools_by_name.get(name)
+        return self._tools_by_name.get(name)
+
+    def _record_tool_call(
+        self,
+        tc: Any,
+        result: str,
+        ok: bool,
+        tool_call_records: list[ToolCallRecord],
+        scratchpad: list[ChatMessage],
+    ) -> None:
+        logger.info("Tool call: %s(%s)", tc.tool_name, tc.tool_kwargs)
+        logger.info(
+            "Tool result: %s -> %s (%d chars)",
+            tc.tool_name,
+            "ok" if ok else "error",
+            len(result),
+        )
+        tool_call_records.append(
+            ToolCallRecord(name=tc.tool_name, args=dict(tc.tool_kwargs), ok=ok, result=result)
+        )
+        if self._tool_call_callback is not None:
+            try:
+                self._tool_call_callback(tc.tool_name, dict(tc.tool_kwargs), result)
+            except Exception:
+                logger.debug("tool_call_callback raised", exc_info=True)
+        scratchpad.append(
+            ChatMessage(
+                role=MessageRole.TOOL,
+                content=result,
+                additional_kwargs={"tool_call_id": tc.tool_id},
+            )
+        )
+
+    async def _resolve_terminal_action(
+        self,
+        messages: list[ChatMessage],
+        scratchpad: list[ChatMessage],
+        output_cls: type[ActionResult],
+        llm_kwargs: dict,
+    ) -> ActionResult:
         from llama_index.core.output_parsers.pydantic import PydanticOutputParser
 
         parser = PydanticOutputParser(output_cls=output_cls)
@@ -958,20 +1025,8 @@ class KaiAgent:
             "be that one JSON object.\n\n"
             f"Schema: {schema}"
         )
-        sys_msg = messages[0]
-        if sys_msg.role == MessageRole.SYSTEM:
-            augmented = ChatMessage(
-                role=MessageRole.SYSTEM, content=(sys_msg.content or "") + json_instruction
-            )
-            predict_messages = [augmented, *messages[1:], *scratchpad]
-        else:
-            predict_messages = [
-                ChatMessage(role=MessageRole.SYSTEM, content=json_instruction),
-                *messages,
-                *scratchpad,
-            ]
+        predict_messages = self._build_predict_messages(messages, scratchpad, json_instruction)
 
-        action: ActionResult | None = None
         for attempt in range(2):
             try:
                 response = await self._llm.achat(messages=predict_messages, **llm_kwargs)
@@ -981,38 +1036,41 @@ class KaiAgent:
 
             raw_text = strip_reasoning_channels(response.message.content or "")
             try:
-                action = self._parse_structured_text(raw_text, output_cls, parser)
-                break
+                return self._parse_structured_text(raw_text, output_cls, parser)
             except Exception as exc:
-                if attempt == 0:
-                    logger.warning(
-                        "Structured output parse failed, retrying with correction: %s",
-                        exc,
-                    )
-                    predict_messages = [
-                        *predict_messages,
-                        ChatMessage(role=MessageRole.ASSISTANT, content=raw_text),
-                        ChatMessage(
-                            role=MessageRole.SYSTEM,
-                            content=(
-                                "The previous response was not valid JSON. "
-                                "Return ONLY a JSON object matching the schema — "
-                                "no prose, no code fences, no field labels."
-                            ),
-                        ),
-                    ]
-                else:
+                if attempt == 1:
                     logger.warning("Structured output parse failed after retry: %s", exc)
                     raise
+                logger.warning("Structured output parse failed, retrying with correction: %s", exc)
+                predict_messages = [
+                    *predict_messages,
+                    ChatMessage(role=MessageRole.ASSISTANT, content=raw_text),
+                    ChatMessage(
+                        role=MessageRole.SYSTEM,
+                        content=(
+                            "The previous response was not valid JSON. "
+                            "Return ONLY a JSON object matching the schema — "
+                            "no prose, no code fences, no field labels."
+                        ),
+                    ),
+                ]
+        raise RuntimeError("structured output parsing returned None unexpectedly")
 
-        if action is None:
-            # Unreachable in practice: the loop above either sets ``action``
-            # via a successful parse or raises. Guard against -O (which strips
-            # asserts) so a logic drift surfaces as a clear error, not a None
-            # returned where an ActionResult is required.
-            raise RuntimeError("structured output parsing returned None unexpectedly")
-        action = _normalize_action_text(action)
-        return action, tool_call_records
+    @staticmethod
+    def _build_predict_messages(
+        messages: list[ChatMessage], scratchpad: list[ChatMessage], json_instruction: str
+    ) -> list[ChatMessage]:
+        sys_msg = messages[0]
+        if sys_msg.role == MessageRole.SYSTEM:
+            augmented = ChatMessage(
+                role=MessageRole.SYSTEM, content=(sys_msg.content or "") + json_instruction
+            )
+            return [augmented, *messages[1:], *scratchpad]
+        return [
+            ChatMessage(role=MessageRole.SYSTEM, content=json_instruction),
+            *messages,
+            *scratchpad,
+        ]
 
     @staticmethod
     def _parse_structured_text(
@@ -1049,42 +1107,57 @@ class KaiAgent:
             except Exception:
                 pass
 
-        # 4. Base-class recovery for out-of-scope actions. Control actions
-        #    (silent / sleep / console) are excluded — recovering them would
-        #    ghost the user. A payload failing for any other reason continues
-        #    to raise so malformed output isn't silently accepted.
+        # 4. Base-class recovery for out-of-scope actions.
+        action = KaiAgent._recover_base_action(text, output_cls, repaired, kv)
+        if action is not None:
+            return _normalize_action_text(action)
+
+        raise ValueError(f"Could not parse structured output from: {text[:200]!r}")
+
+    @staticmethod
+    def _recover_base_action(
+        text: str,
+        output_cls: type[ActionResult],
+        repaired: str | None,
+        kv: dict[str, Any] | None,
+    ) -> ActionResult | None:
+        # Control actions (silent / sleep / console) are excluded — recovering
+        # them would ghost the user. A payload failing for any other reason
+        # continues to raise so malformed output isn't silently accepted.
         control_actions = frozenset({"silent", "sleep", "console"})
         allowed = _action_values(output_cls)
-        payload: dict[str, Any] | None = None
-        if repaired:
-            try:
-                payload = json.loads(repaired)
-            except Exception:
-                payload = None
-        if payload is None and kv:
-            payload = kv
-        if (
+        payload = KaiAgent._extract_payload(repaired, kv)
+        if not (
             isinstance(payload, dict)
             and "action" in payload
             and allowed
             and str(payload["action"]) not in allowed
         ):
-            try:
-                base = ActionResult.model_validate(payload)
-            except Exception:
-                base = None
-            if base is not None and base.action not in control_actions and bool(base.text):
-                logger.warning(
-                    "Structured output: action %r is not in the %s "
-                    "vocabulary for this turn; recovering via base "
-                    "ActionResult so dispatch can degrade gracefully "
-                    "(e.g. voice->text fallback).",
-                    base.action,
-                    output_cls.__name__,
-                )
-                return _normalize_action_text(base)
+            return None
+        try:
+            base = ActionResult.model_validate(payload)
+        except Exception:
+            return None
+        if base is None or base.action in control_actions or not bool(base.text):
+            return None
+        logger.warning(
+            "Structured output: action %r is not in the %s "
+            "vocabulary for this turn; recovering via base "
+            "ActionResult so dispatch can degrade gracefully "
+            "(e.g. falling back to a plain text reply).",
+            base.action,
+            output_cls.__name__,
+        )
+        return base
 
-        raise ValueError(f"Could not parse structured output from: {text[:200]!r}")
+    @staticmethod
+    def _extract_payload(repaired: str | None, kv: dict[str, Any] | None) -> dict[str, Any] | None:
+        if repaired:
+            try:
+                return json.loads(repaired)
+            except Exception:
+                pass
+        return kv
 
     @staticmethod
     def _action_from_tool_call(
@@ -1110,7 +1183,7 @@ class KaiAgent:
         suffix = " (addressing you)" if context.multi_party and context.addressed_to_bot else ""
         header = f"[{context.sender_name}{suffix}]"
         # When the message is a multi-line enrichment block (reply-to / links /
-        # voice / image tags stacked above the body), keep the speaker header on
+        # image tags stacked above the body), keep the speaker header on
         # its own line so it doesn't fuse with the first metadata tag.
         if "\n" in message:
             return f"{header}\n{message}"

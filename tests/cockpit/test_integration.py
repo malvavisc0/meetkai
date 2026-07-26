@@ -1,11 +1,9 @@
 """End-to-end integration test"""
 
 import subprocess
-from types import SimpleNamespace
-from unittest.mock import AsyncMock
 
 import pytest
-from tests.cockpit.helpers import csrf_post
+from tests.cockpit.helpers import _connect_email, _connect_smtp, csrf_post
 
 from kai.cockpit import tokens
 from kai.cockpit.auth_backends import MagicLinkProvider
@@ -30,20 +28,6 @@ def bob(db):
     return u
 
 
-@pytest.fixture
-def fake_waha_client(monkeypatch):
-    client = AsyncMock()
-    client.close = AsyncMock()
-    client.create_session.return_value = {}
-    client.get_session.return_value = {"status": "WORKING"}
-    monkeypatch.setattr("kai.cockpit.connections.service.WahaClient", lambda settings: client)
-    monkeypatch.setattr(
-        "kai.cockpit.connections.service.get_waha_settings",
-        lambda: SimpleNamespace(webhook_public_host="test-host"),
-    )
-    return client
-
-
 def _login(client, db, bob):
     """Drive the request→approve→magic-link flow and return an authenticated client."""
     tokens.create_login_request(db, bob.id)
@@ -55,47 +39,26 @@ def _login(client, db, bob):
 
 
 class TestFullDeploymentFlow:
-    @pytest.fixture(autouse=True)
-    def _media_ready(self):
-        """Pretend the shared STT/TTS services are up so the readiness
-        gate in DeploymentsService.start() doesn't block this end-to-end test.
-        """
-        from kai.cockpit.media_services import MEDIA_READY
-
-        MEDIA_READY.set()
-        yield
-        MEDIA_READY.clear()
-
-    def test_end_to_end(self, client, db, bob, fake_waha_client, monkeypatch, tmp_path):
+    def test_end_to_end(self, client, db, bob, monkeypatch, tmp_path):
         # 5. GET /console -> console (no deployments)
         _login(client, db, bob)
         r = client.get("/console")
         assert r.status_code == 200
-        assert "waha" in r.text.lower() or "deployment" in r.text.lower()
+        assert "deployment" in r.text.lower()
 
-        # 6. GET /connections -> WhatsApp disconnected
-        r = client.get("/connections")
-        assert r.status_code == 200
+        # Connect the email bot's required connections (resend + smtp).
+        _connect_email(db, bob)
+        _connect_smtp(db, bob)
 
-        # 7. POST /connections/whatsapp/connect -> (mock WAHA) -> connected
-        r = csrf_post(client, "/connections/whatsapp/connect", follow_redirects=False)
-        assert r.status_code == 302
-
-        from kai.cockpit.connections.service import ConnectionsService
-
-        conn = ConnectionsService(db).get_whatsapp(bob)
-        assert conn is not None
-        assert conn.status == "connected"
-
-        # 8. GET /deployments/new?bot_type=waha -> wizard
-        r = client.get("/deployments/new", params={"bot_type": "waha"})
+        # 8. GET /deployments/new?bot_type=email -> wizard
+        r = client.get("/deployments/new", params={"bot_type": "email"})
         assert r.status_code == 200
 
         # 9. POST /deployments/new -> deployment created, redirect to detail
         r = csrf_post(
             client,
             "/deployments/new",
-            data={"bot_type": "waha", "goal": "be helpful", "language": "English"},
+            data={"bot_type": "email", "goal": "be helpful", "language": "English"},
             follow_redirects=False,
         )
         assert r.status_code == 302
@@ -159,10 +122,7 @@ class TestFullDeploymentFlow:
         monkeypatch.setattr(
             dep_mod.DeploymentsService,
             "fetch_status",
-            lambda self, d: {
-                "session": {"status": "WORKING"},
-                "sleep": {"enabled": True, "sleeping": []},
-            },
+            lambda self, d: {"ok": True},
         )
         r = client.get(f"/deployments/{dep.id}")
         assert r.status_code == 200
@@ -171,7 +131,7 @@ class TestFullDeploymentFlow:
         monkeypatch.setattr(
             dep_mod.DeploymentsService,
             "send_message",
-            lambda self, d, message, persist=False, to="": {"ok": True, "reply": "sure thing"},
+            lambda self, d, message, persist=False: {"ok": True, "reply": "sure thing"},
         )
         r = csrf_post(
             client, f"/deployments/{dep.id}/chat", data={"message": "hello"}, follow_redirects=False
@@ -204,7 +164,7 @@ class TestFullDeploymentFlow:
         db.refresh(dep)
         assert dep.status == "stopped"
 
-        # 15. POST /deployments/{id}/delete -> row gone, redirect to /
+        # 15. POST /deployments/{id}/delete -> row gone, redirect to /console
         r = csrf_post(
             client,
             f"/deployments/{dep.id}/delete",
@@ -214,39 +174,3 @@ class TestFullDeploymentFlow:
         assert r.status_code == 302
         assert r.headers["location"] == "/console"
         assert dep_svc.get(dep.id) is None
-
-
-class TestStartGatedOnWhatsApp:
-    """The detail page must hide 'Start' and show 'Connect WhatsApp' when
-    the Operator has no connected WhatsApp Connection."""
-
-    def test_start_hidden_when_whatsapp_not_connected(self, client, db, bob, fake_waha_client):
-        _login(client, db, bob)
-        # Connect, create the deployment, then disconnect: create() now
-        # requires WhatsApp connected, but an operator can disconnect any
-        # time afterward — Start must still be hidden once that happens.
-        csrf_post(client, "/connections/whatsapp/connect", follow_redirects=False)
-
-        from kai.cockpit.deployments import DeploymentsService
-
-        dep = DeploymentsService(db).create(bob, "waha", "be helpful", "English")
-
-        csrf_post(client, "/connections/whatsapp/disconnect", follow_redirects=False)
-
-        r = client.get(f"/deployments/{dep.id}")
-        assert r.status_code == 200
-        assert "Connect WhatsApp" in r.text
-        assert f'/deployments/{dep.id}/start"' not in r.text
-
-    def test_start_shown_once_whatsapp_connected(self, client, db, bob, fake_waha_client):
-        _login(client, db, bob)
-        # Connect WhatsApp (mocked WAHA returns WORKING immediately).
-        csrf_post(client, "/connections/whatsapp/connect", follow_redirects=False)
-
-        from kai.cockpit.deployments import DeploymentsService
-
-        dep = DeploymentsService(db).create(bob, "waha", "be helpful", "English")
-        r = client.get(f"/deployments/{dep.id}")
-        assert r.status_code == 200
-        assert f'/deployments/{dep.id}/start"' in r.text
-        assert "Connect WhatsApp" not in r.text

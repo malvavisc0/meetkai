@@ -5,19 +5,14 @@ from kai.cockpit.bots import BOT_TYPES
 
 
 class TestListBots:
-    def test_finds_waha_bot(self):
-        assert "waha" in list_bots()
-
     def test_finds_email_bot(self):
         assert "email" in list_bots()
 
+    def test_does_not_find_waha_bot(self):
+        assert "waha" not in list_bots()
+
 
 class TestLoadBot:
-    def test_loads_waha_bot(self):
-        bot = load_bot("waha")
-        assert bot.name == "waha"
-        assert bot.bot_dir.exists()
-
     def test_loads_email_bot(self):
         bot = load_bot("email")
         assert bot.name == "email"
@@ -27,6 +22,10 @@ class TestLoadBot:
     def test_raises_on_unknown_bot(self):
         with pytest.raises(ValueError, match="not found"):
             load_bot("nonexistent")
+
+    def test_load_waha_raises(self):
+        with pytest.raises(ValueError, match="not found"):
+            load_bot("waha")
 
 
 class TestEmailBotType:

@@ -11,7 +11,7 @@ templates/<transport>/<name>/
   README.md        # Human-readable description (shown in the cockpit)
 ```
 
-Transport is `waha` (WhatsApp) or `email`. `name` is a kebab-case slug.
+Transport is `email`. `name` is a kebab-case slug.
 
 ## template.yaml schema
 
@@ -20,7 +20,7 @@ All fields map to `kai.templates.schema.TemplateDef`:
 | Field | Required | Type | Description |
 |---|---|---|---|
 | `name` | yes | `str` | Template slug, matches directory name |
-| `transport` | yes | `"waha" \| "email"` | Transport this template targets |
+| `transport` | yes | `"email"` | Transport this template targets |
 | `display_name` | yes | `str` | Operator-facing name shown in the cockpit |
 | `description` | yes | `str` | One-line purpose |
 | `actions` | yes | `list[str]` | Action vocabulary (see below) |
@@ -48,15 +48,13 @@ Severity values: `low`, `medium`, `high`, `critical`.
 
 ### Dead-config rule for post_processing
 
-If `post_processing.profile` is `waha_default` or `none`, the step fields
+If `post_processing.profile` is `default_cleanup` or `none`, the step fields
 (`strip_emojis`, `strip_markdown`, `collapse_to_single_line`,
 `strip_trailing_period`, `max_sentences`, `max_words`) are **ignored**.
 Set `profile: custom` to use them. Attempting to set step fields with a
 non-custom profile raises a validation error at load time.
 
 ## Action vocabulary per transport
-
-**WAHA:** `reply`, `send_voice_note`, `silent`, `sleep`, `send_dm`, `send_to_group`, `console`
 
 **Email:** `reply`, `silent`, `console`
 
@@ -98,13 +96,13 @@ Use these variables for dynamic substitution:
 
 ```bash
 # Preview the filled prompt without starting a bot
-kai templates render waha/customer-support
+kai templates render email/customer-support
 
 # Start a bot with the template
-kai start waha --template customer-support --goal "test"
+kai start email --template customer-support --goal "test"
 ```
 
-The cockpit also provides a preview endpoint at `/deployments/new/preview?bot_type=waha&template=customer-support`.
+The cockpit also provides a preview endpoint at `/deployments/new/preview?bot_type=email&template=customer-support`.
 
 ## Config merge precedence
 

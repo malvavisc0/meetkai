@@ -415,7 +415,7 @@ class TestAttachments:
 
 
 # ---------------------------------------------------------------------------
-# handle_operator — agent decides via structured action (like the waha bot)
+# handle_operator — agent decides via structured action
 # ---------------------------------------------------------------------------
 
 

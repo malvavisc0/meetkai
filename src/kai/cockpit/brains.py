@@ -71,9 +71,8 @@ class BrainsService:
         """Provision the user's Brain: allocate an end-user scope, write the row.
 
         Idempotent — calling this again for a user who already has a Brain
-        just returns the existing row unchanged (mirrors
-        ``ConnectionsService.get_or_create_whatsapp``'s idempotency, but
-        this one is reached only via an explicit "Create my Brain" click,
+        just returns the existing row unchanged (this one is reached only via
+        an explicit "Create my Brain" click,
         never lazily from an unrelated flow).
 
         No external HTTP call is made: Morphik end-user scopes aren't created
@@ -233,41 +232,58 @@ class BrainsService:
         settings = get_brain_settings()
         seed_host = urlparse(url).netloc
         crawler = self._crawler_client()
-        pages: list[tuple[str, str]] = []  # (url, markdown) of successful fetches
+        pages: list[tuple[str, str]] = []
         try:
-            fetched = 0
-            visited: set[str] = {url}
-            queue: deque[tuple[str, int]] = deque([(url, 0)])
-            while queue and fetched < settings.crawl_max_pages:
-                page_url, depth = queue.popleft()
-                try:
-                    await validate_ingest_url(page_url)
-                except ValueError:
-                    # A discovered link resolves somewhere unsafe (or its DNS
-                    # changed since the seed check) — skip it, don't abort
-                    # the whole crawl.
-                    continue
-                page = await crawler.crawl(url=page_url)
-                fetched += 1
-                # Only ingest and follow links from pages that actually
-                # fetched successfully — a failed page can return stale or
-                # garbage links that would send the BFS off-site.
-                if not (page.success and page.markdown.raw_markdown.strip()):
-                    continue
-                pages.append((page_url, page.markdown.raw_markdown))
-                if depth >= settings.crawl_max_depth:
-                    continue
-                for href in page.links.internal:
-                    next_url = _normalize_internal_link(href, page_url, seed_host)
-                    if next_url is not None and next_url not in visited:
-                        visited.add(next_url)
-                        queue.append((next_url, depth + 1))
+            pages = await self._bfs_crawl(crawler, url, seed_host, settings)
         finally:
             await crawler.close()
 
         if not pages:
             raise ValueError(f"could not extract any content from {url}")
 
+        return await self._ingest_crawled_pages(brain, pages)
+
+    async def _bfs_crawl(
+        self, crawler, url: str, seed_host: str, settings
+    ) -> list[tuple[str, str]]:
+        """BFS crawl: fetch the seed page and same-host linked pages."""
+        pages: list[tuple[str, str]] = []
+        fetched = 0
+        visited: set[str] = {url}
+        queue: deque[tuple[str, int]] = deque([(url, 0)])
+        while queue and fetched < settings.crawl_max_pages:
+            page_url, depth = queue.popleft()
+            try:
+                await validate_ingest_url(page_url)
+            except ValueError:
+                continue
+            page = await crawler.crawl(url=page_url)
+            fetched += 1
+            if not (page.success and page.markdown.raw_markdown.strip()):
+                continue
+            pages.append((page_url, page.markdown.raw_markdown))
+            self._enqueue_links(page, page_url, depth, seed_host, settings, visited, queue)
+        return pages
+
+    @staticmethod
+    def _enqueue_links(
+        page,
+        page_url: str,
+        depth: int,
+        seed_host: str,
+        settings,
+        visited: set[str],
+        queue: deque,
+    ) -> None:
+        if depth >= settings.crawl_max_depth:
+            return
+        for href in page.links.internal:
+            next_url = _normalize_internal_link(href, page_url, seed_host)
+            if next_url is not None and next_url not in visited:
+                visited.add(next_url)
+                queue.append((next_url, depth + 1))
+
+    async def _ingest_crawled_pages(self, brain, pages: list[tuple[str, str]]) -> IngestResult:
         file_sources = [_slug_for_url(u) for u, _ in pages]
         texts = [md for _, md in pages]
         client = self._morphik_client()

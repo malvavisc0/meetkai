@@ -108,7 +108,7 @@ class BaseBot(ABC):
         """Resolve the operator's config override for this bot instance.
 
         Looks only at ``<configs_dir>/<name>.json`` — the deployment-specific
-        override (e.g. ``configs/waha.json``). There is no packaged fallback:
+        override (e.g. ``configs/email.json``). There is no packaged fallback:
         a bot with no override configured should fail loudly on missing
         settings (whitelist, language, SMTP, …) rather than silently run with
         made-up defaults.
@@ -127,7 +127,6 @@ class BaseBot(ABC):
         agent: KaiAgent,
         settings: Settings,
         *,
-        voice: str | None = None,
         template: TemplateDef,
         tools: ToolResolution,
     ) -> None:
@@ -143,9 +142,6 @@ class BaseBot(ABC):
         check ``tools.final_tools`` membership before registering, so a
         template that omits a bot-owned tool actually omits it. There is no
         ``None`` branch — every deployment resolves a template.
-
-        ``voice`` is an optional per-run override passed from the ``--voice``
-        CLI flag; bots without voice support (the default) ignore it.
         """
         self._agent = agent
         self._template = template
@@ -234,7 +230,7 @@ class BaseBot(ABC):
 
         Centralizes the ``setup_escalation_store`` + ``set_escalation_handler``
         + ``set_blacklist`` + ``set_tool_context`` sequence both bots need, so
-        a wiring change lands in one place rather than drifting between waha
+        a wiring change lands in one place rather than drifting between bots
         and email.
         """
         self.setup_escalation_store(settings)
@@ -297,7 +293,7 @@ class BaseBot(ABC):
         """Deliver a text message to ``chat_id``.
 
         Default implementation logs a warning — subclasses with a transport
-        (e.g. waha) override this to actually send the message.
+        override this to actually send the message.
         """
         logger.warning(
             "Bot %s has no send_text implementation; dropping message to %s",
@@ -347,7 +343,7 @@ class BaseBot(ABC):
         """The identity this bot presents as in outbound email ``From`` headers.
 
         Overridden by bots whose ``BotConfig`` carries a ``display_name``
-        (waha, email) to return their own configured value; the default
+        override to return their own configured value; the default
         covers bots with no such concept.
         """
         return DEFAULT_DISPLAY_NAME
@@ -423,8 +419,8 @@ class BaseBot(ABC):
         the escalation is already persisted locally, so a cockpit that's down
         just means the dashboard won't show it until the bot is restarted.
 
-        Override to add transport-specific reactions (e.g. a WhatsApp DM to
-        the operator for ``critical`` severity). Call ``await
+        Override to add transport-specific reactions (e.g. a direct message
+        to the operator for ``critical`` severity). Call ``await
         super().on_escalation(escalation)`` first so the cockpit forwarding
         still fires.
 

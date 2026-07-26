@@ -21,7 +21,7 @@ def _login(client, db, bob):
 
 
 def _create_user(db):
-    """Create a user with a connected WhatsApp for wizard tests."""
+    """Create a user with connected email (resend + smtp) for wizard tests."""
     u = User(
         email="wizard@test.com",
         language="English",
@@ -33,25 +33,31 @@ def _create_user(db):
     db.add(u)
     db.commit()
     db.refresh(u)
-    conn = Connection(
+    resend = Connection(
         user_id=u.id,
-        service="whatsapp",
+        service="resend",
         status="connected",
-        config={
-            "waha_session": "wizard-session",
-            "waha_webhook_port": 8101,
-            "waha_webhook_path": "/webhook/whatsapp-1",
-        },
+        config={"signing_secret": "wizard-signing", "api_key": "re_wizard"},
         created_at=datetime.now(UTC).isoformat(),
         updated_at=datetime.now(UTC).isoformat(),
     )
-    db.add(conn)
+    smtp = Connection(
+        user_id=u.id,
+        service="smtp",
+        status="connected",
+        config={},
+        created_at=datetime.now(UTC).isoformat(),
+        updated_at=datetime.now(UTC).isoformat(),
+    )
+    db.add(resend)
+    db.add(smtp)
     db.commit()
-    db.refresh(conn)
     return u
 
 
-def _post_deploy(client, bot_type="waha", template="general", goal="test goal", language="English"):
+def _post_deploy(
+    client, bot_type="email", template="general", goal="test goal", language="English"
+):
     return csrf_post(
         client,
         "/deployments/new",
@@ -59,7 +65,6 @@ def _post_deploy(client, bot_type="waha", template="general", goal="test goal", 
             "bot_type": bot_type,
             "goal": goal,
             "language": language,
-            "voice": "",
             "template": template,
         },
         follow_redirects=False,
@@ -70,7 +75,7 @@ class TestWizardGET:
     def test_get_shows_templates(self, client, db):
         user = _create_user(db)
         _login(client, db, user)
-        resp = client.get("/deployments/new?bot_type=waha")
+        resp = client.get("/deployments/new?bot_type=email")
         assert resp.status_code == 200
         # General should be one of the templates shown
         assert b"general" in resp.content
@@ -86,7 +91,7 @@ class TestWizardPOST:
         from kai.cockpit.deployments import DeploymentsService
 
         svc = DeploymentsService(db)
-        dep = svc.get_for_user_and_type(user.id, "waha")
+        dep = svc.get_for_user_and_type(user.id, "email")
         assert dep is not None
         assert dep.template == "general"
 
@@ -98,17 +103,9 @@ class TestWizardPOST:
         from kai.cockpit.deployments import DeploymentsService
 
         svc = DeploymentsService(db)
-        dep = svc.get_for_user_and_type(user.id, "waha")
+        dep = svc.get_for_user_and_type(user.id, "email")
         assert dep is not None
         assert dep.template == "customer-support"
-
-    def test_post_rejects_wrong_transport_template(self, client, db):
-        user = _create_user(db)
-        _login(client, db, user)
-        # An email template on a waha bot should be rejected (defense-in-depth)
-        resp = _post_deploy(client, bot_type="waha", template="lead-nurture")
-        assert resp.status_code == 200  # re-renders wizard with error
-        assert b"Could not create agent" in resp.content or b"Invalid template" in resp.content
 
     def test_post_rejects_nonexistent_template(self, client, db):
         user = _create_user(db)
@@ -122,7 +119,7 @@ class TestTemplatePreview:
     def test_preview_returns_200(self, client, db):
         user = _create_user(db)
         _login(client, db, user)
-        resp = client.get("/deployments/new/preview?bot_type=waha&template=general")
+        resp = client.get("/deployments/new/preview?bot_type=email&template=general")
         assert resp.status_code == 200
         # Should contain the template's display_name
         assert b"kAI" in resp.content
@@ -130,12 +127,12 @@ class TestTemplatePreview:
     def test_preview_shows_display_name(self, client, db):
         user = _create_user(db)
         _login(client, db, user)
-        resp = client.get("/deployments/new/preview?bot_type=waha&template=customer-support")
+        resp = client.get("/deployments/new/preview?bot_type=email&template=customer-support")
         assert resp.status_code == 200
         assert b"kAI Support" in resp.content
 
     def test_preview_unknown_template_404(self, client, db):
         user = _create_user(db)
         _login(client, db, user)
-        resp = client.get("/deployments/new/preview?bot_type=waha&template=nonexistent_xyz")
+        resp = client.get("/deployments/new/preview?bot_type=email&template=nonexistent_xyz")
         assert resp.status_code == 404

@@ -7,9 +7,6 @@ import pytest
 
 from kai.bots.email import Bot as EmailBot
 from kai.bots.email.setup import BotConfig as EmailBotConfig
-from kai.bots.waha import Bot as WahaBot
-from kai.bots.waha.config import WahaSettings
-from kai.bots.waha.setup import BotConfig as WahaBotConfig
 from kai.templates import TemplateRegistry, escalation_prompt_section
 from kai.templates.resolver import resolve_tools
 from tests.conftest import make_test_settings as _settings
@@ -17,12 +14,6 @@ from tests.conftest import make_test_settings as _settings
 
 def _tmpl(transport: str, name: str):
     return TemplateRegistry.bundled().get(transport, name)
-
-
-def _waha_dir() -> Path:
-    import kai.bots.waha as m
-
-    return Path(m.__file__).resolve().parent
 
 
 def _email_dir() -> Path:
@@ -49,41 +40,24 @@ def _email_env(monkeypatch):
 
 
 class TestTemplatesCatalog:
-    def test_all_seven_templates_exist(self):
+    def test_all_email_templates_exist(self):
         reg = TemplateRegistry.bundled()
         names = {f"{t.transport}/{t.name}" for t in reg.list()}
         for expected in [
-            "waha/customer-support",
-            "waha/lead-qualification",
-            "waha/group-chatter",
             "email/customer-support",
             "email/order-status",
             "email/appointment-manager",
             "email/questions",
+            "email/lead-nurture",
+            "email/general",
         ]:
             assert expected in names, f"missing {expected}"
 
-    def test_templates_have_distinct_actions(self):
-        # No two waha templates share an identical action set (general
-        # excluded — it's the baseline). Distinct actions = distinct behavior.
-        waha_actions = {
-            t.name: tuple(t.actions)
-            for t in TemplateRegistry.bundled().list("waha")
-            if t.name != "general"
-        }
-        # customer-support is the minimal [reply, silent, console]; lead-qual
-        # adds sleep+send_dm; group-chatter adds send_to_group.
-        assert set(waha_actions["customer-support"]) == {"reply", "silent", "console"}
-        assert "sleep" in waha_actions["lead-qualification"]
-        assert "send_to_group" in waha_actions["group-chatter"]
-        assert "send_voice_note" not in waha_actions["group-chatter"]
-
     def test_customer_support_requires_brain_and_bot_tools(self):
-        for transport in ("waha", "email"):
-            tmpl = _tmpl(transport, "customer-support")
-            assert "brain_query" in tmpl.tools.required
-            assert "record_note" in tmpl.tools.bot_tools
-            assert "get_conversation_messages" in tmpl.tools.bot_tools
+        tmpl = _tmpl("email", "customer-support")
+        assert "brain_query" in tmpl.tools.required
+        assert "record_note" in tmpl.tools.bot_tools
+        assert "get_conversation_messages" in tmpl.tools.bot_tools
 
     def test_order_status_requires_sql(self):
         tmpl = _tmpl("email", "order-status")
@@ -95,8 +69,8 @@ class TestTemplatesCatalog:
         assert "calcom" in tmpl.tools.required
         assert "schedule_task" in tmpl.tools.required
 
-    def test_lead_qualification_has_escalation_rules(self):
-        tmpl = _tmpl("waha", "lead-qualification")
+    def test_customer_support_has_escalation_rules(self):
+        tmpl = _tmpl("email", "customer-support")
         assert len(tmpl.escalation_rules) >= 1
         severities = {r.severity for r in tmpl.escalation_rules}
         assert "critical" in severities
@@ -104,25 +78,21 @@ class TestTemplatesCatalog:
 
 class TestEscalationInjection:
     def test_escalation_prompt_section_built(self):
-        tmpl = _tmpl("waha", "customer-support")
+        tmpl = _tmpl("email", "customer-support")
         section = escalation_prompt_section(tmpl)
         assert "ESCALATION RULES" in section
         assert "escalate(severity=" in section
 
     def test_no_section_when_no_rules(self):
-        tmpl = _tmpl("waha", "group-chatter")
+        tmpl = _tmpl("email", "order-status")
         assert escalation_prompt_section(tmpl) == ""
 
-    def test_bot_prompt_includes_escalation_block(self, monkeypatch):
+    def test_bot_prompt_includes_escalation_block(self, monkeypatch, _email_env):
         # Required brain env vars so resolve_tools/boot guards pass.
         monkeypatch.setenv("KAI_BRAIN_BASE_URL", "http://test")
         monkeypatch.setenv("KAI_BRAIN_MORPHIK_TOKEN", "secret")
-        monkeypatch.setattr(
-            "kai.bots.waha.get_waha_settings",
-            lambda: WahaSettings.for_test(hmac_key="test-secret"),
-        )
-        tmpl = _tmpl("waha", "customer-support")
-        bot = WahaBot(_waha_dir(), config=WahaBotConfig(trigger_keyword="kai"))
+        tmpl = _tmpl("email", "customer-support")
+        bot = EmailBot(_email_dir(), config=EmailBotConfig())
         agent = _fake_agent()
         tools = resolve_tools(tmpl, [], [])
         bot.configure(agent, _settings(), template=tmpl, tools=tools)

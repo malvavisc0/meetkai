@@ -12,7 +12,7 @@ def _clean_kai_env(monkeypatch):
     pydantic-settings reads os.environ, and ``_env_file=""`` only disables
     .env *file* loading — it does NOT stop real exported env vars from
     overriding Field defaults. A shell that sourced the project .env (or a
-    prior ``kai start``) leaks KAI_LLM_API_BASE / KAI_WAHA_URL into the test
+    prior ``kai start``) leaks KAI_LLM_API_BASE into the test
     process, making ``test_valid_defaults`` assert against leaked values
     instead of the intended defaults.
 

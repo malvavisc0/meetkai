@@ -385,7 +385,6 @@ def _running_email_dep(db, alice) -> Deployment:
         run_id="fake-run",
         status="running",
         desired_state="running",
-        voice="af_heart",
         goal="answer email",
         language="English",
         feature_flags={},

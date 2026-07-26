@@ -21,7 +21,6 @@ class TellHandler(Protocol):
 
 StatusHandler = Callable[[], Awaitable[dict]]
 ClearHandler = Callable[[], Awaitable[dict]]
-SleepHandler = Callable[[str], Awaitable[dict]]
 
 _HMAC_ALGORITHMS: dict[str, str] = {
     "sha256": "sha256",
@@ -39,29 +38,25 @@ def _verify_signature(hmac_key: str, hmac_algorithm: str, body: bytes, signature
 def create_webhook_app(
     hmac_key: str,
     hmac_algorithm: str = "sha512",
-    webhook_path: str = "/webhook/waha",
+    webhook_path: str = "/webhook",
     on_message: WebhookHandler | None = None,
     on_tell: TellHandler | None = None,
     on_ingest: IngestHandler | None = None,
     on_status: StatusHandler | None = None,
     on_clear: ClearHandler | None = None,
-    on_sleep: SleepHandler | None = None,
-    on_wake: SleepHandler | None = None,
 ) -> FastAPI:
     """Create the shared webhook FastAPI app.
 
-    ``hmac_key`` is **mandatory**: the inbound WAHA webhook and the operator
+    ``hmac_key`` is **mandatory**: the inbound webhook and the operator
     ``/tell``, ``/status`` and ``/clear`` routes share this single secret and
     are all HMAC-verified. ``on_tell`` wires a bot's ``handle_operator``;
     when ``None`` the ``/tell`` route answers 404 (the bot opts out of
     operator control). ``on_ingest`` wires a bot's ``ingest_event`` (forwarded
     by the cockpit's centralized ``/webhook/{slug}/{type}`` ingress); when
     ``None`` the ``/ingest`` route answers 404 (the bot opts out of centralized
-    webhook ingest — e.g. WAHA). ``on_status`` wires a bot's
-    ``status_snapshot``; when ``None`` the ``/status`` route answers 404.
-    ``on_clear`` wires a bot's history-reset hook; when ``None`` the ``/clear``
-    route answers 404. ``on_sleep``/``on_wake`` toggle a chat's sleep state;
-    when ``None`` the matching route answers 404.
+    webhook ingest). ``on_status`` wires a bot's ``status_snapshot``; when
+    ``None`` the ``/status`` route answers 404. ``on_clear`` wires a bot's
+    history-reset hook; when ``None`` the ``/clear`` route answers 404.
     """
     app = FastAPI(title="kai webhook")
 
@@ -158,7 +153,7 @@ def create_webhook_app(
         HMAC-verified with the same key as the inbound webhook. The body is a
         ``NormalizedMessage`` dict forwarded by the cockpit's
         ``/webhook/{slug}/{type}`` route. When ``on_ingest`` is ``None`` the
-        bot opts out (404) — e.g. WAHA, which keeps its own bespoke webhook.
+        bot opts out (404) — it keeps its own bespoke webhook.
         """
         if on_ingest is None:
             raise HTTPException(status_code=404, detail="ingest not supported by this bot")
@@ -228,34 +223,5 @@ def create_webhook_app(
         except Exception:
             logger.exception("on_clear handler error")
             raise HTTPException(status_code=500, detail="clear failed")
-
-    def _make_sleep_toggle_route(action: str, handler: SleepHandler | None):
-        @app.post(f"/{action}")
-        async def route(request: Request):
-            if handler is None:
-                raise HTTPException(status_code=404, detail=f"{action} not supported by this bot")
-
-            body = await request.body()
-            if len(body) > _MAX_BODY_BYTES:
-                raise HTTPException(status_code=413, detail="payload too large")
-            signature = request.headers.get("X-Webhook-Hmac", "")
-            if not _verify_signature(hmac_key, hmac_algorithm, body, signature):
-                logger.warning("Invalid /%s signature", action)
-                raise HTTPException(status_code=401, detail="Invalid signature")
-            try:
-                payload = await request.json()
-            except Exception:
-                raise HTTPException(status_code=400, detail="malformed body")
-            chat_id = str(payload.get("chat_id", "")).strip()
-            if not chat_id:
-                raise HTTPException(status_code=400, detail="chat_id is required")
-            try:
-                return await handler(chat_id)
-            except Exception:
-                logger.exception("on_%s handler error", action)
-                raise HTTPException(status_code=500, detail=f"{action} failed")
-
-    _make_sleep_toggle_route("sleep", on_sleep)
-    _make_sleep_toggle_route("wake", on_wake)
 
     return app

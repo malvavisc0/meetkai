@@ -98,8 +98,7 @@ class CrawlPage(BaseModel):
 class Crawl4aiClient:
     """Async HTTP client for crawl4ai v0.9.0.
 
-    Mirrors the MorphikClient / WahaClient pattern. The bearer token
-    (``KAI_BRAIN_CRAWL4AI_TOKEN``) is set on construction.
+    The bearer token (``KAI_BRAIN_CRAWL4AI_TOKEN``) is set on construction.
     """
 
     def __init__(self, settings: BrainSettings | None = None) -> None:

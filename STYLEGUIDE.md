@@ -130,7 +130,7 @@ Primary-count rules:
 
 Icon-on-primary convention: every `.button--primary` commit action carries a
 leading icon (`Save changes`, `Save usage rules`, Create deployment, Create
-Brain, Start, Connect WhatsApp, Refresh, Send). `Back` does not get an icon.
+Brain, Start, Refresh, Send). `Back` does not get an icon.
 No other button receives an icon outside this convention.
 
 `.button--sm` is reserved for compact in-row actions only (chat picker
@@ -162,18 +162,17 @@ time. See `deployment.html:91` (`Start`) and `deployment.html:152` (`Send`).
 - `.checkbox-grid` groups a set of equal-weight toggles (e.g. Capabilities)
   into a scannable two-column layout instead of a long single-file list;
   collapses to one column below tablet width.
-- `.field--narrow` caps `input` **and** `select` width to 320px, so `Voice`
-  matches `Language` and `Timezone`.
+- `.field--narrow` caps `input` **and** `select` width to 320px, so
+  `Language` matches `Timezone`.
 - `.search-field` is a wrapper that overlays a leading icon and adds left
   padding to the inner `input[type="search"]`. It does not introduce a second
   border, background, or focus ring.
-- `.field-grid` groups related compact fields (e.g. `Language`/`Voice`/
+- `.field-grid` groups related compact fields (e.g. `Language`/
   `Timezone`) in a responsive grid that collapses to one column below tablet
   width. `Goal` stays full-width above the grid as the dominant field.
 - A group of related compact fields is always one flat `.field-grid`, even
-  when some fields are conceptually a sub-group (e.g. the voice-note fields
-  under Participation). Splitting a field group into nested/sibling
-  `.field-grid`s makes their column widths drift apart because each grid
+  when some fields are conceptually a sub-group. Splitting a field group into
+  nested/sibling `.field-grid`s makes their column widths drift apart because each grid
   computes its own column count independently; a shared help line for the
   sub-group goes below the fields it describes, not nested around its own
   grid. That trailing note uses the standard field-to-field gap
@@ -202,7 +201,7 @@ time. See `deployment.html:91` (`Start`) and `deployment.html:152` (`Send`).
   Stopped/zero counts. Green is the **status** color only — it is decoupled
   from the cobalt brand accent, so live/ready states never read as a generic
   emerald-on-gray AI surface. Brand accent (cobalt) is reserved for actions,
-  focus, links, and the agent's own reply/voice.
+  focus, links, and the agent's own reply.
 - Status dots represent entity state; badges represent textual state. Both are
   used together where relevant, never as substitutes for each other.
 - Decorative green borders on cards are not used outside genuine state
