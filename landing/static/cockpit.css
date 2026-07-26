@@ -326,10 +326,12 @@
   }
 
   /* --- Landing page shell --- */
+  /* Overrides the generic `.page` margin so the hero sits close to the nav. */
   .landing-page {
     display: grid;
     gap: 0;
     max-width: 1200px;
+    margin-block: 0;
     margin-inline: auto;
     padding-inline: var(--space-xl);
   }
@@ -337,7 +339,7 @@
   /* --- Hero --- */
   .landing-hero {
     display: grid;
-    padding-block: clamp(2.5rem, 5vw, 4.5rem);
+    padding-block: clamp(1.5rem, 3vw, 2.75rem) clamp(2.5rem, 5vw, 4.5rem);
   }
 
   .landing-hero__grid {
@@ -827,10 +829,15 @@
   }
 
   /* --- Proof (live agent) --- */
+  /* Proof is a self-contained card (not a `.landing-section`): it owns its
+     grid, its compact internal `padding`, and a `margin-block` that keeps the
+     vertical rhythm consistent with the sections above. */
   .landing-proof {
+    display: grid;
     grid-template-columns: minmax(0, 0.8fr) minmax(280px, 1.2fr);
     align-items: center;
-    margin-block: var(--space-3xl);
+    gap: clamp(2rem, 7vw, 6rem);
+    margin-block: clamp(4.5rem, 8vw, 7rem);
     padding: clamp(1.5rem, 4vw, 3rem);
     border: 1px solid var(--color-border-strong);
     border-radius: var(--radius-md);
@@ -945,6 +952,19 @@
   }
 
   /* --- Responsive --- */
+  /* Tablets: two-column layouts get cramped before the phone breakpoint (the
+     workflow/diagram columns have large min-widths), so stack them here. */
+  @media (max-width: 900px) {
+    .landing-hero__grid,
+    .landing-section,
+    .landing-brain,
+    .landing-connections,
+    .landing-proof {
+      grid-template-columns: 1fr;
+      gap: clamp(1.5rem, 4vw, 2.5rem);
+    }
+  }
+
   @media (max-width: 760px) {
     .landing-page {
       padding-inline: var(--space-md);
@@ -955,15 +975,7 @@
     }
 
     .landing-hero {
-      padding-block: var(--space-3xl);
-    }
-
-    .landing-hero__grid,
-    .landing-section,
-    .landing-brain,
-    .landing-connections,
-    .landing-proof {
-      grid-template-columns: 1fr;
+      padding-block: var(--space-lg) var(--space-2xl);
     }
 
     .landing-title {
