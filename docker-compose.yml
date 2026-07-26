@@ -1,24 +1,20 @@
-name: meetkai
-
-# Main / cockpit box. WAHA lives in docker-compose.waha.yml; morphik,
-# morphik-postgres, crawl4ai (and their redis) live in docker-compose.workers.yaml.
-# The cockpit reaches those services over the network via the KAI_* URLs, so
-# they are not defined here.
+name: kai-cockpit
 
 networks:
   odyssey:
 
 volumes:
-  kai-data:
-  kai-postgres-data:
-  kai-vendor:
-  kai-models:
+  storage:
+  postgres:
+  vendors:
+  models:
+  logs:
 
 services:
-  kai-postgres:
-    image: postgres:18
-    container_name: kai-postgres
-    hostname: kai-postgres
+  database:
+    image: postgres:18-alpine
+    container_name: database
+    hostname: database
     restart: unless-stopped
     environment:
       TZ: ${TZ}
@@ -27,7 +23,7 @@ services:
       POSTGRES_DB: ${KAI_POSTGRES_DB}
       PGDATA: /var/lib/postgresql/data/pgdata
     volumes:
-      - kai-postgres-data:/var/lib/postgresql/data
+      - postgres:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${KAI_POSTGRES_USER} -d ${KAI_POSTGRES_DB}"]
       interval: 10s
@@ -48,14 +44,101 @@ services:
     expose:
       - "8080"
     volumes:
-      - kai-data:/app/data
-      - kai-vendor:/app/vendor
-      - kai-models:/app/models
-    env_file: .env
+      - storage:/app/data
+      - vendors:/app/vendor
+      - models:/app/models
+      - logs:/app/logs
+    # Every env var the cockpit process (and the bot subprocesses it spawns,
+    # which inherit os.environ) reads from the environment. Values come from
+    # the host .env via ${VAR} substitution. Commented entries are optional:
+    # they fall back to the app's built-in defaults, so leave them commented
+    # unless overriding (an empty value would override the default).
     environment:
-      KAI_COCKPIT_DB: postgresql+psycopg://${KAI_POSTGRES_USER}:${KAI_POSTGRES_PASSWORD}@kai-postgres:5432/${KAI_POSTGRES_DB}
+      TZ: ${TZ}
+      # Cockpit DB — overrides the app default, built from the database creds.
+      KAI_COCKPIT_DB: postgresql+psycopg://${KAI_POSTGRES_USER}:${KAI_POSTGRES_PASSWORD}@database:5432/${KAI_POSTGRES_DB}
+      # Cockpit process (KAI_* — CockpitSettings)
+      KAI_COCKPIT_SECRET: ${KAI_COCKPIT_SECRET}
+      KAI_COCKPIT_ESCALATION_SECRET: ${KAI_COCKPIT_ESCALATION_SECRET}
+      KAI_PUBLIC_URL: ${KAI_PUBLIC_URL}
+      KAI_CONFIGS_DIR: ${KAI_CONFIGS_DIR}
+      KAI_LOG_DIR: ${KAI_LOG_DIR}
+      KAI_WAHA_WEBHOOK_PORT_RANGE: ${KAI_WAHA_WEBHOOK_PORT_RANGE}
+      # KAI_COOKIE_SECURE: ${KAI_COOKIE_SECURE}
+      # KAI_COCKPIT_INTERNAL_URL: ${KAI_COCKPIT_INTERNAL_URL}
+      # KAI_COCKPIT_AUTO_APPROVE_LOGIN: ${KAI_COCKPIT_AUTO_APPROVE_LOGIN}
+      # KAI_COCKPIT_TESTING: ${KAI_COCKPIT_TESTING}
+      # Credential encryption (KAI_* — EncryptionSettings)
+      KAI_CREDENTIAL_ENCRYPTION_KEY: ${KAI_CREDENTIAL_ENCRYPTION_KEY}
+      KAI_CREDENTIAL_KEY_VERSION: ${KAI_CREDENTIAL_KEY_VERSION}
+      # Cockpit login-link SMTP relay (KAI_SMTP_* — CockpitSettings)
+      KAI_SMTP_HOST: ${KAI_SMTP_HOST}
+      KAI_SMTP_PORT: ${KAI_SMTP_PORT}
+      KAI_SMTP_FROM: ${KAI_SMTP_FROM}
+      KAI_SMTP_USER: ${KAI_SMTP_USER}
+      KAI_SMTP_PASSWORD: ${KAI_SMTP_PASSWORD}
+      # LLM runtime (KAI_LLM_* — Settings)
+      KAI_LLM_API_BASE: ${KAI_LLM_API_BASE}
+      KAI_LLM_API_KEY: ${KAI_LLM_API_KEY}
+      KAI_LLM_MODEL: ${KAI_LLM_MODEL}
+      # KAI_LLM_ENABLE_THINKING: ${KAI_LLM_ENABLE_THINKING}
+      # KAI_LLM_MAX_TOKENS: ${KAI_LLM_MAX_TOKENS}
+      # Agent + scheduler (KAI_AGENT_*/KAI_TASKS_*/KAI_ESCALATIONS_* — Settings)
+      KAI_AGENT_HISTORY_FOLDER: ${KAI_AGENT_HISTORY_FOLDER}
+      KAI_TASKS_FOLDER: ${KAI_TASKS_FOLDER}
+      KAI_ESCALATIONS_FOLDER: ${KAI_ESCALATIONS_FOLDER}
+      # KAI_AGENT_MAX_HISTORY_MESSAGES: ${KAI_AGENT_MAX_HISTORY_MESSAGES}
+      # KAI_AGENT_MAX_HISTORY_CHARS: ${KAI_AGENT_MAX_HISTORY_CHARS}
+      # KAI_AGENT_MAX_CONVERSATIONS: ${KAI_AGENT_MAX_CONVERSATIONS}
+      # KAI_AGENT_LANGUAGE: ${KAI_AGENT_LANGUAGE}
+      # KAI_AGENT_LANGUAGE_EXPLICIT: ${KAI_AGENT_LANGUAGE_EXPLICIT}
+      # KAI_TASKS_ENABLED: ${KAI_TASKS_ENABLED}
+      # KAI_TASKS_POLL_INTERVAL_SECONDS: ${KAI_TASKS_POLL_INTERVAL_SECONDS}
+      # WAHA transport, deployment-wide (KAI_WAHA_* — WahaSettings).
+      # Per-deployment WAHA values are injected at runtime by the cockpit.
+      KAI_WAHA_URL: ${KAI_WAHA_URL}
+      KAI_WAHA_API_KEY: ${KAI_WAHA_API_KEY}
+      KAI_WAHA_HMAC_KEY: ${KAI_WAHA_HMAC_KEY}
+      KAI_WAHA_WEBHOOK_PUBLIC_HOST: ${KAI_WAHA_WEBHOOK_PUBLIC_HOST}
+      # KAI_WAHA_HMAC_ALGORITHM: ${KAI_WAHA_HMAC_ALGORITHM}
+      # Brain: Morphik + crawl4ai (KAI_BRAIN_* — BrainSettings)
+      KAI_BRAIN_BASE_URL: ${KAI_BRAIN_BASE_URL}
+      KAI_BRAIN_MORPHIK_TOKEN: ${KAI_BRAIN_MORPHIK_TOKEN}
+      KAI_BRAIN_CRAWLER_URL: ${KAI_BRAIN_CRAWLER_URL}
+      KAI_BRAIN_CRAWL4AI_TOKEN: ${KAI_BRAIN_CRAWL4AI_TOKEN}
+      # KAI_BRAIN_WORKSPACE: ${KAI_BRAIN_WORKSPACE}
+      # KAI_BRAIN_INSTRUCTION: ${KAI_BRAIN_INSTRUCTION}
+      # KAI_BRAIN_MANDATORY: ${KAI_BRAIN_MANDATORY}
+      # KAI_BRAIN_MANDATORY_TEMPERATURE: ${KAI_BRAIN_MANDATORY_TEMPERATURE}
+      # KAI_BRAIN_CRAWL_MAX_DEPTH: ${KAI_BRAIN_CRAWL_MAX_DEPTH}
+      # KAI_BRAIN_CRAWL_MAX_PAGES: ${KAI_BRAIN_CRAWL_MAX_PAGES}
+      # Media STT/TTS — whisper/kokoro servers the cockpit spawns (KAI_MEDIA_* — MediaSettings)
+      # KAI_MEDIA_WHISPER_LANGUAGE: ${KAI_MEDIA_WHISPER_LANGUAGE}
+      # KAI_MEDIA_WHISPER_SERVER_HOST: ${KAI_MEDIA_WHISPER_SERVER_HOST}
+      # KAI_MEDIA_WHISPER_SERVER_PORT: ${KAI_MEDIA_WHISPER_SERVER_PORT}
+      # KAI_MEDIA_WHISPER_SERVER_THREADS: ${KAI_MEDIA_WHISPER_SERVER_THREADS}
+      # KAI_MEDIA_WHISPER_MODEL_PATH: ${KAI_MEDIA_WHISPER_MODEL_PATH}
+      # KAI_MEDIA_KOKORO_ENABLED: ${KAI_MEDIA_KOKORO_ENABLED}
+      # KAI_MEDIA_KOKORO_SERVER_HOST: ${KAI_MEDIA_KOKORO_SERVER_HOST}
+      # KAI_MEDIA_KOKORO_SERVER_PORT: ${KAI_MEDIA_KOKORO_SERVER_PORT}
+      # KAI_MEDIA_KOKORO_MODEL_PATH: ${KAI_MEDIA_KOKORO_MODEL_PATH}
+      # KAI_MEDIA_KOKORO_VOICES_PATH: ${KAI_MEDIA_KOKORO_VOICES_PATH}
+      # KAI_MEDIA_KOKORO_VOICE: ${KAI_MEDIA_KOKORO_VOICE}
+      # KAI_MEDIA_KOKORO_LANG: ${KAI_MEDIA_KOKORO_LANG}
+      # KAI_MEDIA_KOKORO_SPEED: ${KAI_MEDIA_KOKORO_SPEED}
+      # KAI_MEDIA_KOKORO_MAX_CHARS: ${KAI_MEDIA_KOKORO_MAX_CHARS}
+      # KAI_MEDIA_READY_TIMEOUT: ${KAI_MEDIA_READY_TIMEOUT}
+      # Vendored binaries/models installer (os.environ — vendors/whisper.py)
+      KAI_WHISPER_VERSION: ${KAI_WHISPER_VERSION}
+      # Error tracking (os.getenv — observability.py). Empty SENTRY_DSN = disabled.
+      SENTRY_DSN: ${SENTRY_DSN}
+      SENTRY_ENVIRONMENT: ${SENTRY_ENVIRONMENT}
+      SENTRY_RELEASE: ${SENTRY_RELEASE}
+      # Agent tools (KAI_SQL_*, KAI_SMTP_TOOL_*, KAI_CALCOM_*) and the email bot
+      # (KAI_BOT_*/KAI_EMAIL_*) are injected per-deployment by the cockpit from
+      # the operator's Connection config at bot-start — not set at the container level.
     depends_on:
-      kai-postgres:
+      database:
         condition: service_healthy
     healthcheck:
       test: ["CMD-SHELL", "/app/.venv/bin/python3 -c \"import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8080/health').status==200 else 1)\""]
