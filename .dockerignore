@@ -12,3 +12,4 @@ tests/
 docs/
 .kilo/
 .env.example
+.env.workers

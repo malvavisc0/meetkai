@@ -8,6 +8,7 @@ build/
 *.egg
 .venv/
 .env
+.env.workers
 data/
 *.log
 .ruff_cache/
