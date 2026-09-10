@@ -233,24 +233,104 @@ The Brain (knowledge ingestion) runs as a **separate compose stack**
 for cockpit development — without it, the brain tool stays disabled and the
 cockpit logs a warning instead of failing.
 
-If you need it locally:
+If you need it locally, note that the Brain is a **second Compose project**
+and the two stacks are network-isolated by default: each file is its own
+project, and the `odyssey` network each one declares becomes
+`<project>_odyssey` — distinct bridges even on one box. That
+is why the stock `KAI_BRAIN_BASE_URL=http://morphik:8000` /
+`KAI_BRAIN_CRAWLER_URL=http://crawl4ai:11235` values in `.env.example` only
+work once the containers share a network (pick option (a) or (b) below).
+
+**1. Prepare the env file.** On its own host copy the template to `.env` (each
+host serves exactly one stack's `.env`); on a box that hosts *both* stacks use
+distinct names, because each `docker compose` invocation interpolates `${VAR}`
+from a single file:
 
 ```bash
-cp .env.workers.example .env.workers   # fill in secrets
-docker compose -f docker-compose.workers.yaml --env-file .env.workers up -d
+cp .env.workers.example .env.workers   # fill in every secret, incl. ROUTER_API_KEY
+                                       # (one key for morphik's completion, embedding and
+                                       # vision calls — the cockpit's own KAI_LLM_* values
+                                       # from step 2 are unrelated)
 ```
+
+**2. Start and verify:**
+
+```bash
+docker compose -f docker-compose.workers.yaml --env-file .env.workers up -d
+curl -s http://localhost:8000/health | head -c 200    # morphik publishes 8000
+docker exec crawl4ai sh -c 'wget -qO- http://localhost:11235/health'   # crawl4ai publishes
+                                                           # no host port — healthcheck runs in-container
+docker compose -f docker-compose.workers.yaml --env-file .env.workers ps   # all four: healthy
+```
+
+**3. Make the two stacks see each other.**
+
+- **(a) Co-located, separate `up` commands** (each stack keeps its own env
+  file) — the only cross-referenced container is the cockpit (its bots read
+  `KAI_BRAIN_BASE_URL`/`KAI_BRAIN_CRAWLER_URL`; morphik and crawl4ai each use
+  their own Postgres), so one attach is enough:
+
+  ```bash
+  docker network connect kai-workers_odyssey cockpit   # cockpit reaches morphik/crawl4ai/redis
+  ```
+
+  `docker compose up` disconnects containers it does not own from networks
+  added this way (their settings are not in the file), so re-run the
+  `connect` line after each `up`. This works for cockpit containers bound to
+  the dev/base project networks with their default hostnames; if you bind the
+  cockpit to a custom `--host`, use (b) or publish ports instead.
+
+- **(b) Co-located, one invocation** — pass both files to a single
+  `docker compose`; Compose merges them into one project and one bridge, so
+  every hostname resolves without manual attaches. Costs: one combined env
+  file (both templates merged — `KAI_BRAIN_CRAWL4AI_TOKEN` trivially equal),
+  and the project name comes from the **last** file listed (`kai-workers`
+  here).
+
+  ```bash
+  docker compose -f docker-compose.yml -f docker-compose.workers.yaml \
+    --env-file .env.combined up -d
+  ```
+
+- **(c) Separate hosts** — set `KAI_BRAIN_BASE_URL=http://<worker-host>:8000`
+  (morphik *does* publish `8000`) and `KAI_BRAIN_CRAWLER_URL=http://<worker-host>:<port>`
+  — crawl4ai publishes nothing, so add a `ports:` mapping in your own override
+  file or keep them on one host via (a)/(b).
+
+**4. Mint the brain token (once per environment).** With morphik healthy:
+
+```bash
+source .env.workers
+curl -s -X POST http://localhost:8000/cloud/generate_uri \
+  -H 'Content-Type: application/json' \
+  -H "X-Morphik-Admin-Secret: $KAI_BRAIN_MORPHIK_ADMIN_SECRET" \
+  -d '{"name":"kai-cockpit","user_id":"kai","expiry_days":5475}'
+# -> {"uri":"morphik://kai-cockpit:<jwt>@host"} — paste the <jwt> into the
+# cockpit's .env as KAI_BRAIN_MORPHIK_TOKEN, then restart the cockpit.
+```
+
+Tokens are validated against morphik's own DB: don't keep a JWT from another
+environment or from before a `KAI_BRAIN_MORPHIK_JWT_SECRET` rotation — the
+cockpit's brain calls will be rejected. The cockpit's brain tool registers
+itself only when `KAI_BRAIN_BASE_URL` **and** `KAI_BRAIN_MORPHIK_TOKEN` are
+both set (`src/kai/brain/config.py:118`), and website ingest needs
+`KAI_BRAIN_CRAWLER_URL` **and** `KAI_BRAIN_CRAWL4AI_TOKEN` — a missing URL
+disables ingestion with a startup warning only, never an error at `up`.
 
 Notes:
 
-- Morphik's completion/embedding models call OpenRouter — set
-  `OPENROUTER_API_KEY` in `.env.workers`.
-- `KAI_BRAIN_CRAWL4AI_TOKEN` must be **identical** in both env files.
-- Once morphik is healthy, mint the brain bearer token **once** (the exact
-  `curl` command is in `.env.example` under `KAI_BRAIN_MORPHIK_TOKEN`), paste
-  the JWT into the cockpit's `.env`, and restart the cockpit.
+- Morphik's completion/embedding models call the OpenAI-compatible model
+  router at `https://router.requesty.ai/v1` — set `ROUTER_API_KEY` in
+  `.env.workers`. This is morphik's key only; the cockpit and its bots keep
+  using the `KAI_LLM_*` values from step 2.
 - The workers stack defines a container named `redis` — if another local
   stack already uses that name, rename one before starting both on the same
   Docker host.
+- Teardown: `docker compose -f docker-compose.workers.yaml --env-file
+  .env.workers down` stops the stack but **keeps** `kai-workers_*` volumes —
+  indexed brain documents survive. Add `-v` only to wipe the Brain for real;
+  after wiping (or after rotating `KAI_BRAIN_MORPHIK_JWT_SECRET`), re-mint the
+  token in step 4.
 
 ## 5. Production deployment
 
@@ -330,9 +410,11 @@ docker compose --env-file .env.production -f docker-compose.yml \
   exec cockpit kai cockpit user flags you@your-domain --image
 ```
 
-The Brain (step 4) is a second stack on its own host/file; in production the
-`KAI_BRAIN_*` URLs must resolve across hosts, `KAI_BRAIN_CRAWL4AI_TOKEN` must
-be identical in both env files, and the morphik JWT is minted once and pasted
+The Brain (step 5) is a second stack, usually on its own host: there the
+`KAI_BRAIN_BASE_URL`/`KAI_BRAIN_CRAWLER_URL` values must be host-published
+URLs (morphik publishes `8000`; crawl4ai publishes nothing until you add a
+`ports:` mapping — see step 5 option (c)), `KAI_BRAIN_CRAWL4AI_TOKEN` must be
+identical in both env files, and the morphik JWT is minted once and pasted
 into the cockpit env — same workflow as locally, just against the real hosts.
 
 ## 6. Optional: landing page

@@ -13,7 +13,8 @@ configs:
     content: |
       # Morphik core config — mounted at /app/morphik.toml.
       # Based on the image's /app/morphik.toml.default, with the completion and
-      # embedding models repointed at OpenRouter (one provider, one key) and the
+      # embedding models repointed at the OpenAI-compatible router (one
+      # provider, one key — see ROUTER_API_KEY in .env.workers.example) and the
       # reranker disabled.
 
       [api]
@@ -33,14 +34,14 @@ configs:
 
       #### Registered models
       [registered_models]
-      openrouter_granite_8b = { model_name = "openai/ibm-granite/granite-4.1-8b", api_base = "https://openrouter.ai/api/v1" }
-      openrouter_qwen_vl = { model_name = "openai/qwen/qwen3-vl-8b-instruct", api_base = "https://openrouter.ai/api/v1" }
-      openrouter_embed_3_small = { model_name = "openai/text-embedding-3-small", api_base = "https://openrouter.ai/api/v1" }
+      router_granite_8b = { model_name = "nemotron-lightning-3.5-30b-a3b", api_base = "https://router.requesty.ai/v1" }
+      router_qwen_vl = { model_name = "nemotron-3-nano-omni-30b-a3b-reasoning", api_base = "https://router.requesty.ai/v1" }
+      router_embed_3_small = { model_name = "azure/openai/text-embedding-3-small@francecentral", api_base = "https://router.requesty.ai/v1" }
 
       #### Component configurations ####
 
       [completion]
-      model = "openrouter_granite_8b"
+      model = "router_granite_8b"
       default_max_tokens = "262144"
       default_temperature = 0.3
 
@@ -55,7 +56,7 @@ configs:
       retry_delay = 1.0
 
       [embedding]
-      model = "openrouter_embed_3_small"
+      model = "router_embed_3_small"
       dimensions = 1536
       similarity_metric = "cosine"
 
@@ -63,7 +64,7 @@ configs:
       chunk_size = 6000
       chunk_overlap = 300
       use_contextual_chunking = false
-      contextual_chunking_model = "openrouter_granite_8b"
+      contextual_chunking_model = "router_granite_8b"
 
       [parser.xml]
       max_tokens = 350
@@ -71,10 +72,10 @@ configs:
       ignore_tags = ["TOC", "INDEX"]
 
       [document_analysis]
-      model = "openrouter_granite_8b"
+      model = "router_granite_8b"
 
       [parser.vision]
-      model = "openrouter_qwen_vl"
+      model = "router_qwen_vl"
       frame_sample_rate = -1
 
       [reranker]
@@ -166,9 +167,9 @@ services:
       REDIS_HOST: redis
       REDIS_PORT: "6379"
       # OPENAI_API_KEY is read by morphik.toml's openai completion/embedding
-      # providers via the standard litellm env path; OpenRouter accepts the
-      # same Bearer scheme, so one key works for both.
-      OPENAI_API_KEY: ${OPENROUTER_API_KEY}
+      # providers via the standard litellm env path; the router speaks the same
+      # Bearer scheme, so one key works for both.
+      OPENAI_API_KEY: ${ROUTER_API_KEY}
     volumes:
       - morphik-storage:/app/storage
     configs:
