@@ -401,6 +401,15 @@ scheme (`src/kai/cockpit/settings.py:34-36`). Force it with
 - `KAI_POSTGRES_*` credentials are fixed at the volume's first boot — changing
   them requires recreating the `postgres` volume, so set them before the first
   `up`.
+- Login flow: with the public-facing form, keep `KAI_COCKPIT_AUTO_APPROVE_LOGIN`
+  commented (the app ships `false`) so magic-link mail only goes out after an
+  admin `request approve`; the form always renders "requested" regardless of the
+  account state, so the approval step is what turns enumeration/mail-bombing into
+  a no-op for unknown addresses. Flip it to `true` only for a cockpit whose login
+  page is not reachable from untrusted networks (behind a login-proteced proxy or
+  on a tailnet) — then operator submits mail directly, and note a still-`pending`
+  request for that user suppresses further auto-mailing until approved/consumed
+  (de-dup, `src/kai/cockpit/tokens.py:25`).
 - Optional error tracking: any Sentry-compatible backend via `SENTRY_DSN`,
   `SENTRY_ENVIRONMENT`, `SENTRY_RELEASE` (empty DSN = disabled).
 
