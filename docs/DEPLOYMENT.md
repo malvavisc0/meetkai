@@ -274,11 +274,24 @@ docker compose -f docker-compose.workers.yaml --env-file .env.workers ps   # all
   docker network connect kai-workers_odyssey cockpit   # cockpit reaches morphik/crawl4ai/redis
   ```
 
-  `docker compose up` disconnects containers it does not own from networks
-  added this way (their settings are not in the file), so re-run the
-  `connect` line after each `up`. This works for cockpit containers bound to
-  the dev/base project networks with their default hostnames; if you bind the
-  cockpit to a custom `--host`, use (b) or publish ports instead.
+  Compose **recreates** containers from their file settings (observed: an
+  attach created via `connect`, then `down` + `up`, vanished with the old
+  container) — so re-run these `connect` lines after every recreate of either
+  stack, not just `up`. A fast `docker compose restart cockpit` keeps the
+  attach, but it also cannot refresh the baked `environment:` values, so
+  env-file edits need `up -d` (+ `connect` after) anyway.
+
+  The same bridge in one idempotent line — run it after **every** stack
+  (re)creation instead of remembering the attaches at each of the three `up`
+  places in this doc (swap the two `_odyssey` names for the production project
+  names if you run the base file too):
+
+  ```bash
+  for pair in "kai-workers_odyssey cockpit" \
+              "meetkai-dev_odyssey morphik" "meetkai-dev_odyssey crawl4ai"; do
+    set -- $pair; docker network connect "$1" "$2" 2>/dev/null && echo "attached $2" || true
+  done
+  ```
 
 - **(b) Co-located, one invocation** — pass both files to a single
   `docker compose`; Compose merges them into one project and one bridge, so
@@ -300,11 +313,11 @@ docker compose -f docker-compose.workers.yaml --env-file .env.workers ps   # all
 **4. Mint the brain token (once per environment).** With morphik healthy:
 
 ```bash
-source .env.workers
-curl -s -X POST http://localhost:8000/cloud/generate_uri \
-  -H 'Content-Type: application/json' \
-  -H "X-Morphik-Admin-Secret: $KAI_BRAIN_MORPHIK_ADMIN_SECRET" \
-  -d '{"name":"kai-cockpit","user_id":"kai","expiry_days":5475}'
+# No `source .env.workers` — dotenv files are not shell scripts (fish rejects
+# them outright). This routes through bash on purpose, so it runs identically
+# from fish, bash, or zsh; the secret is read out of the live container, which
+# is its canonical holder:
+env bash -c 'admin=$(docker compose -f docker-compose.workers.yaml --env-file .env.workers exec morphik env | grep "^ADMIN_SERVICE_SECRET=" | cut -d= -f2-); curl -s -X POST http://localhost:8000/cloud/generate_uri -H "Content-Type: application/json" -H "X-Morphik-Admin-Secret: $admin" -d "{\"name\":\"kai-cockpit\",\"user_id\":\"kai\",\"expiry_days\":5475}"'
 # -> {"uri":"morphik://kai-cockpit:<jwt>@host"} — paste the <jwt> into the
 # cockpit's .env as KAI_BRAIN_MORPHIK_TOKEN, then restart the cockpit.
 ```
