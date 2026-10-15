@@ -709,6 +709,7 @@
   .landing-brain__agents {
     display: grid;
     gap: var(--space-xs);
+    border-bottom: 1px solid var(--color-border-strong);
   }
 
   .landing-brain__sources span,
@@ -986,7 +987,7 @@
     }
 
     .landing-brain__node {
-      justify-self: start;
+      justify-self: center;
     }
 
     .landing-actions .button,

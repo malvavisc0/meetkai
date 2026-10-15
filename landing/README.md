@@ -28,6 +28,6 @@ it. Point DNS for `meetk.ai` at GitHub Pages (A/AAAA records) and enable
 ## Preview locally
 
 ```bash
-python3 -m http.server -d landing 8090
+python3 -m http.server 8090
 # open http://localhost:8090
 ```
