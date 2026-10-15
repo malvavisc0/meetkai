@@ -138,7 +138,7 @@ class TestTaskScheduler:
             )
         )
         # Force a tick; due task is executed and removed.
-        asyncio.run(sched.tick())  # noqa: SLF001
+        asyncio.run(sched.tick())
         assert [t.id for t in executed] == [task.id]
         assert asyncio.run(store.list_for()) == []
 
@@ -159,31 +159,10 @@ class TestTaskScheduler:
             )
         )
         # Should not raise even though execute fails.
-        asyncio.run(sched.tick())  # noqa: SLF001
+        asyncio.run(sched.tick())
         assert calls["n"] == 1
         # Failed task is still popped (fire-once semantics).
         assert asyncio.run(store.list_for()) == []
-
-    def test_render_due_flags_overdue(self, tmp_path: Path):
-        task = Task(
-            id="late",
-            chat_id="c1",
-            goal="take the medication with breakfast",
-            due_at=datetime.now(UTC) - timedelta(hours=2),
-        )
-        rendered = TaskScheduler.render_due(task)
-        assert "overdue" in rendered
-        assert "take the medication" in rendered
-
-    def test_render_due_not_overdue_when_on_time(self):
-        task = Task(
-            id="on",
-            chat_id="c1",
-            goal="ping the on-call engineer about the deploy",
-            due_at=datetime.now(UTC) - timedelta(seconds=1),
-        )
-        rendered = TaskScheduler.render_due(task)
-        assert "overdue" not in rendered
 
 
 class TestTaskTools:

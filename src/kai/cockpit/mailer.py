@@ -11,7 +11,7 @@ from kai.cockpit.settings import get_cockpit_settings
 
 logger = logging.getLogger(__name__)
 
-_template_environment = Environment(
+TEMPLATE_ENVIRONMENT = Environment(
     loader=PackageLoader("kai.cockpit", "email_templates"),
     autoescape=select_autoescape(["html", "xml"]),
 )
@@ -52,7 +52,7 @@ def send_magic_link(user_email: str, magic_url: str) -> None:
         f"It expires in 10 minutes. If you didn't request it, you can "
         f"safely ignore this email — no one else can use this link."
     )
-    html_content = _template_environment.get_template("magic_link.html").render(magic_url=magic_url)
+    html_content = TEMPLATE_ENVIRONMENT.get_template("magic_link.html").render(magic_url=magic_url)
     msg.add_alternative(html_content, subtype="html")
 
     try:

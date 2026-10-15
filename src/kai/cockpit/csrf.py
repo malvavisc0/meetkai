@@ -5,7 +5,7 @@ from starlette.requests import Request
 from starlette.responses import JSONResponse, PlainTextResponse
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
-_csrf_token: ContextVar[str | None] = ContextVar("csrf_token", default=None)
+CSRF_TOKEN: ContextVar[str | None] = ContextVar("csrf_token", default=None)
 
 SAFE_METHODS = frozenset({"GET", "HEAD", "OPTIONS"})
 
@@ -68,11 +68,11 @@ class CSRFMiddleware:
         send: Send,
         token: str | None,
     ) -> None:
-        marker = _csrf_token.set(token)
+        marker = CSRF_TOKEN.set(token)
         try:
             await self.app(scope, receive, send)
         finally:
-            _csrf_token.reset(marker)
+            CSRF_TOKEN.reset(marker)
 
     @staticmethod
     def is_exempt(path: str) -> bool:
@@ -132,11 +132,11 @@ class CSRFMiddleware:
             if scope["path"].startswith("/api/")
             else PlainTextResponse("CSRF token invalid", status_code=403)
         )
-        marker = _csrf_token.set(token)
+        marker = CSRF_TOKEN.set(token)
         try:
             await response(scope, receive, send)
         finally:
-            _csrf_token.reset(marker)
+            CSRF_TOKEN.reset(marker)
 
     @staticmethod
     def replay_body(body: bytes) -> Receive:

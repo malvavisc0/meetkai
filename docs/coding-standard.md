@@ -46,7 +46,7 @@ uv run ruff format .                   # format
 uv run pyright                         # type check
 uv run pytest                          # test suite (-n auto, xdist)
 uvx radon cc src -s | grep -E '-\s(C|D|E|F)\s'   # complexity gate (must be empty)
-uvx vulture src --min-confidence 60    # dead code
+uvx vulture --min-confidence 60 src vulture_whitelist.py    # dead code
 ```
 Run `ruff check`, `ruff format --check`, `pyright`, and the relevant
 tests after every change.
@@ -66,10 +66,12 @@ uvx radon cc src -s | grep -E '-\s(C|D|E|F)\s'   # must be empty
 ```
 
 ## Dead code
-Rules say "no dead code"; vulture enforces it (`uvx vulture src
---min-confidence 60`). A hit is a *suspect*: check for a registration
-site before deleting — typer commands, FastAPI routes, and pydantic
-members are framework-dispatched and legitimately look unused. Real
+Rules say "no dead code"; vulture enforces it (`uvx vulture
+--min-confidence 60 src vulture_whitelist.py`). A hit is a *suspect*: check
+for a registration site before deleting — typer commands, FastAPI routes,
+and pydantic members are framework-dispatched and legitimately look unused;
+those live in `vulture_whitelist.py` (curated, with justifications in its
+docstring — never add an entry to silence a new hit without one). Real
 dead code (never-read fields, zero-call-site functions) goes out in the
 same pass.
 

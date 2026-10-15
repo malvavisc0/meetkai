@@ -7,7 +7,6 @@ from kai.cockpit.connections.webhooks import (
     SEEN_NONCES,
     check_freshness,
     clear_seen_nonces,
-    prune_seen,
 )
 
 
@@ -71,17 +70,17 @@ class TestPruning:
         check_freshness(nonce="old", now=_NOW - 1000)
         assert SEEN_NONCES.seen("old")
 
-        prune_seen(_NOW)
+        SEEN_NONCES.prune(_NOW)
         assert not SEEN_NONCES.seen("old")
 
     def test_prune_keeps_fresh_entries(self):
         check_freshness(nonce="fresh", now=_NOW)
-        prune_seen(_NOW)
+        SEEN_NONCES.prune(_NOW)
         assert SEEN_NONCES.seen("fresh")
 
     def test_expired_nonce_can_be_reused_after_prune(self):
         check_freshness(nonce="recycled", now=_NOW - 1000)
-        prune_seen(_NOW)
+        SEEN_NONCES.prune(_NOW)
         assert not SEEN_NONCES.seen("recycled")
         assert check_freshness(nonce="recycled", now=_NOW) is True
 

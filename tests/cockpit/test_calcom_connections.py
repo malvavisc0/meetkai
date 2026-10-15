@@ -104,16 +104,13 @@ class TestSave:
 class TestDecryptApiKey:
     def test_round_trips(self, db, user):
         from kai.cockpit.connections.calcom import CalcomConnectionsService
+        from kai.cockpit.connections.secrets import decrypt_config
 
         svc = CalcomConnectionsService(db)
         svc.save(user, api_key="cal_live_abc123", base_url="")
-        assert svc.decrypt_api_key(user) == "cal_live_abc123"
-
-    def test_none_when_no_connection(self, db, user):
-        from kai.cockpit.connections.calcom import CalcomConnectionsService
-
-        svc = CalcomConnectionsService(db)
-        assert svc.decrypt_api_key(user) is None
+        conn = svc.get(user)
+        assert conn is not None
+        assert decrypt_config("calcom", conn.config).get("api_key") == "cal_live_abc123"
 
 
 class TestProbe:

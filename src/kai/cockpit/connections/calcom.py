@@ -79,12 +79,6 @@ class CalcomConnectionsService:
             self.db.delete(conn)
             self.db.commit()
 
-    def decrypt_api_key(self, user: User) -> str | None:
-        conn = self.get(user)
-        if conn is None:
-            return None
-        return decrypt_config("calcom", conn.config).get("api_key")
-
     def probe(self, api_key: str, base_url: str) -> tuple[bool, str, bool]:
         """Call Cal.com's ``GET /v2/me`` to validate the API key.
 

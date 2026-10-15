@@ -75,11 +75,6 @@ class WebhookType:
     nonce_header: str = ""
 
 
-def prune_seen(now: float) -> None:
-    """Evict nonce entries older than the freshness window."""
-    SEEN_NONCES.prune(now)
-
-
 def check_freshness(
     *, timestamp: float | None = None, nonce: str | None = None, now: float | None = None
 ) -> bool:

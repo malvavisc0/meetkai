@@ -305,8 +305,6 @@ class TaskStore:
 
 ExecuteCallback = Callable[[Task], Awaitable[None]]
 
-OVERDUE_GRACE = timedelta(minutes=1)
-
 MIN_GOAL_CHARS = 8
 
 
@@ -375,14 +373,6 @@ class TaskScheduler:
             logger.exception("Failed to execute task %s for %s", task.id, task.chat_id)
         finally:
             EXECUTING_TASK.reset(token)
-
-    @staticmethod
-    def render_due(task: Task, *, now: datetime | None = None) -> str:
-        now = now or utcnow()
-        when = task.due_at.strftime("%Y-%m-%d %H:%M UTC")
-        late = now - task.due_at > OVERDUE_GRACE
-        prefix = "⏰ Task (overdue, was due " if late else "⏰ Task ("
-        return f"{prefix}{when}): {task.goal}"
 
     async def schedule(
         self,

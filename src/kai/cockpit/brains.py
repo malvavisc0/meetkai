@@ -140,20 +140,6 @@ class BrainsService:
         self.db.refresh(conn)
         return conn
 
-    def delete_brain(self, user: User) -> None:
-        """Remove the user's Brain connection row (kai-side only).
-
-        Does NOT clear the end-user scope's documents/vectors inside Morphik —
-        that is ``MorphikClient.clear_workspace`` (a separate, explicit,
-        dangerous admin action per ``brain/client.py``), not part of this
-        lightweight "un-provision the row" flow.
-        """
-        conn = self.get_brain(user)
-        if conn is None:
-            return
-        self.db.delete(conn)
-        self.db.commit()
-
     # --- External clients (shared morphik/crawl4ai containers) ---
 
     def morphik_client(self) -> MorphikClient:

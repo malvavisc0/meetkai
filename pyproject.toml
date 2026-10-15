@@ -56,6 +56,9 @@ packages = ["src/kai"]
 [tool.ruff]
 line-length = 100
 src = ["src"]
+# vulture_whitelist.py holds bare name references for the dead-code gate,
+# not real code — type checkers and linters must skip it.
+extend-exclude = ["vulture_whitelist.py"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "N", "W", "UP"]
@@ -68,6 +71,7 @@ pythonpath = ["."]
 
 [tool.pyright]
 include = ["src", "tests"]
+exclude = ["vulture_whitelist.py"]
 venvPath = "."
 venv = ".venv"
 pythonVersion = "3.13"

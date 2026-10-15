@@ -3,7 +3,7 @@
 Covers: ``save()`` encrypts the signing secret + API key and probes
 the credentials (signing-secret base64 validity + API key accepted by
 Resend's ``GET /domains``), setting status="connected" on success,
-``delete()`` round-trip, ``decrypt_secret()``/``decrypt_api_key()``
+``delete()`` round-trip, ``decrypt_secret()``/``decrypt_config()`` API-key
 round-trip, empty-secret preserve-existing, and the start gate treating
 the ingress-only connection as connected only when both secret fields
 are present.
@@ -124,18 +124,15 @@ class TestDecryptSecret:
         svc = EmailConnectionsService(db)
         assert svc.decrypt_secret(user) is None
 
-    def test_decrypt_api_key_round_trips(self, db, user):
+    def test_api_key_decrypts_round_trip(self, db, user):
         from kai.cockpit.connections.email import EmailConnectionsService
+        from kai.cockpit.connections.secrets import decrypt_config
 
         svc = EmailConnectionsService(db)
         svc.save(user, signing_secret="whsec_dGVzdA==", api_key="re_live_abc123")
-        assert svc.decrypt_api_key(user) == "re_live_abc123"
-
-    def test_decrypt_api_key_none_when_no_connection(self, db, user):
-        from kai.cockpit.connections.email import EmailConnectionsService
-
-        svc = EmailConnectionsService(db)
-        assert svc.decrypt_api_key(user) is None
+        conn = svc.get(user)
+        assert conn is not None
+        assert decrypt_config("resend", conn.config).get("api_key") == "re_live_abc123"
 
 
 class TestSecretEncryptedAtRest:

@@ -8,7 +8,6 @@ import pytest
 from kai.brain.client import DocumentRecord, IngestResult
 from kai.brain.crawler import CrawlLinks, CrawlPage, MarkdownResult
 from kai.cockpit.brains import BrainsService, slug_for_url
-from kai.cockpit.models import Connection
 
 
 class TestCreateBrain:
@@ -57,20 +56,6 @@ class TestUpdateInstruction:
         reloaded = svc.get_brain(user)
         assert reloaded is not None
         assert reloaded.config["instruction"] == "refund policy"
-
-
-class TestDeleteBrain:
-    def test_removes_row(self, db, user):
-        svc = BrainsService(db)
-        svc.create_brain(user)
-        svc.delete_brain(user)
-        assert svc.get_brain(user) is None
-        assert db.query(Connection).filter(Connection.service == "morphik").count() == 0
-
-    def test_noop_when_no_brain(self, db, user):
-        svc = BrainsService(db)
-        svc.delete_brain(user)  # must not raise
-        assert svc.get_brain(user) is None
 
 
 class TestSlugForUrl:

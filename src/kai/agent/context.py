@@ -15,7 +15,6 @@ class MessageContext(BaseModel, frozen=True):
     """
 
     sender_name: str
-    sender_id: str = ""
     conversation_id: str = ""  # conversation identifier
     multi_party: bool = False  # multi-participant conversation
     addressed_to_bot: bool = False  # whether the message directly addresses the bot

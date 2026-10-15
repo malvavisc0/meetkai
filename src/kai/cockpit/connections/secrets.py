@@ -25,7 +25,7 @@ HKDF_INFO = b"kai-connection-secrets"
 VERSION_SEP = ":"
 
 
-class _KeyState:
+class KeyState:
     """Process-wide state for credential key rotation, encapsulated (no globals)."""
 
     def __init__(self) -> None:
@@ -40,7 +40,7 @@ class _KeyState:
         self.active_version_override = None
 
 
-_key_state = _KeyState()
+KEY_STATE = KeyState()
 
 
 class EncryptionSettings(BaseSettings):
@@ -67,8 +67,8 @@ def root_key_material() -> bytes:
 
 
 def active_version() -> str:
-    if _key_state.active_version_override is not None:
-        return _key_state.active_version_override
+    if KEY_STATE.active_version_override is not None:
+        return KEY_STATE.active_version_override
     settings = get_encryption_settings()
     if not settings.credential_key_version:
         raise RuntimeError(
@@ -80,13 +80,13 @@ def active_version() -> str:
 
 def set_active_version(version: str) -> None:
     """Set the active encryption key version for subsequent ``encrypt()`` calls."""
-    _key_state.active_version_override = version
+    KEY_STATE.active_version_override = version
 
 
 def derive_fernet(version: str) -> Fernet:
     """Derive (and cache) the Fernet key for a given version."""
-    if version in _key_state.key_cache:
-        return _key_state.key_cache[version]
+    if version in KEY_STATE.key_cache:
+        return KEY_STATE.key_cache[version]
     info = HKDF_INFO + b":" + version.encode()
     hkdf = HKDF(
         algorithm=hashes.SHA256(),
@@ -96,7 +96,7 @@ def derive_fernet(version: str) -> Fernet:
     )
     raw = hkdf.derive(root_key_material())
     fernet = Fernet(base64.urlsafe_b64encode(raw))
-    _key_state.key_cache[version] = fernet
+    KEY_STATE.key_cache[version] = fernet
     return fernet
 
 
@@ -105,7 +105,7 @@ def clear_key_cache() -> None:
 
     Test/rotation use only.
     """
-    _key_state.clear()
+    KEY_STATE.clear()
 
 
 def encrypt(plaintext: str) -> str:

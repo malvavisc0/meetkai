@@ -6,7 +6,7 @@ from kai.brain.config import BrainSettings
 
 
 @pytest.fixture(autouse=True)
-def _clean_brain_env(monkeypatch):
+def clean_brain_env(monkeypatch):
     """Clear KAI_BRAIN_* env vars so config tests see real Field defaults.
 
     pydantic-settings reads os.environ, and ``_env_file=None`` only disables

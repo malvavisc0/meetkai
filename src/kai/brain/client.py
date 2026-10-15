@@ -19,7 +19,6 @@ from kai.brain.config import BrainSettings, get_brain_settings
 
 logger = logging.getLogger(__name__)
 
-DOC_STATUS_PENDING = "pending"
 DOC_STATUS_PROCESSING = "processing"
 DOC_STATUS_PROCESSED = "completed"
 DOC_STATUS_FAILED = "failed"
@@ -275,16 +274,6 @@ class MorphikClient:
         docs = data.get("documents") or []
         return [DocumentRecord.from_list_doc(d) for d in docs if isinstance(d, dict)]
 
-    async def status_counts(self, *, workspace: str) -> dict[str, int]:
-        """POST /documents/list_docs?end_user_id= with aggregates only."""
-        resp = await self._client.post(
-            "/documents/list_docs",
-            params={"end_user_id": workspace},
-            json={"return_documents": False, "include_status_counts": True},
-        )
-        resp.raise_for_status()
-        return resp.json().get("status_counts") or {}
-
     async def delete_doc(self, *, doc_id: str, workspace: str) -> str:
         """DELETE /documents/{id} — synchronous single-doc delete.
 
@@ -295,18 +284,6 @@ class MorphikClient:
         resp = await self._client.delete(f"/documents/{doc_id}")
         resp.raise_for_status()
         return resp.json().get("status", "")
-
-    async def clear_workspace(self, *, workspace: str) -> str:
-        """Clear ALL docs for an end_user_id — list then delete each.
-
-        DANGEROUS: used by tests and a future "reset Brain" admin action.
-        Not exposed in the v1 UI.
-        """
-        docs = await self.list_docs(workspace=workspace, page=1, page_size=1000)
-        for d in docs:
-            if d.id:
-                await self.delete_doc(doc_id=d.id, workspace=workspace)
-        return "completed"
 
     # ------------------------------------------------------------------
     # Query
