@@ -1,6 +1,6 @@
 """send_email — send an email as the operator's configured SMTP account.
 
-Bot-agnostic: ``cli/bot.py:_start()`` reads ``SmtpSettings`` from env vars
+Bot-agnostic: ``cli/bot.py:start_bot()`` reads ``SmtpSettings`` from env vars
 (``KAI_SMTP_TOOL_*``), and when ``smtp_enabled`` is true, calls
 :func:`register_email_tool`, which registers the tool on the agent AND
 injects a workflow-guidance block into the system prompt.
@@ -26,11 +26,11 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 logger = logging.getLogger(__name__)
 
-_NO_REPLY = re.compile(r"^(no[-_]?reply|donotreply)@", re.IGNORECASE)
-_EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+NO_REPLY = re.compile(r"^(no[-_]?reply|donotreply)@", re.IGNORECASE)
+EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 
 # Single source of truth for the fallback sender identity — every
-# BotConfig.display_name field default, each bot's own _load_config
+# BotConfig.display_name field default, each bot's own load_config
 # fallback, and the cockpit settings form's fallback all derive from this
 # one constant instead of repeating the literal (see bots/email/setup.py,
 # bots/base.py::BaseBot.display_name(), and
@@ -71,16 +71,16 @@ class _EmailToolAgent(Protocol):
     def add_tool_workflow(self, workflow: str | None) -> None: ...
 
 
-def _valid_recipient(addr: str) -> bool:
+def valid_recipient(addr: str) -> bool:
     """Reject obviously invalid / self-defeating destinations.
 
     Not an allowlist — arbitrary recipients are allowed; only ``no-reply@``
     (and variants) and bad syntax are rejected.
     """
     a = (addr or "").strip()
-    if not a or not _EMAIL_RE.match(a):
+    if not a or not EMAIL_RE.match(a):
         return False
-    if _NO_REPLY.match(a):
+    if NO_REPLY.match(a):
         return False
     return True
 
@@ -89,13 +89,13 @@ def format_from_header(display_name: str, address: str) -> str:
     """Render an RFC 2822 ``From`` header value for an outbound email.
 
     Shared by ``make_send_email_tool`` (the agent tool) and the email bot's
-    ``_send_reply`` — one implementation so the two call sites can't drift
+    ``send_reply`` — one implementation so the two call sites can't drift
     the way the hardcoded "Knowledgeable AI" literal already had.
     """
     return formataddr((display_name, address))
 
 
-def _markdown_to_html(text: str) -> str:
+def markdown_to_html(text: str) -> str:
     """Convert markdown to HTML for the email body.
 
     The LLM produces markdown (``**bold**``, ``# heading``, ``- list``,
@@ -118,14 +118,14 @@ def set_email_body(msg: EmailMessage, body: str) -> None:
     """Set both plain-text and HTML alternatives on an ``EmailMessage``.
 
     Shared by ``make_send_email_tool`` (the agent tool) and the email bot's
-    ``_send_reply``. The plain-text part is the original markdown (readable
+    ``send_reply``. The plain-text part is the original markdown (readable
     enough as-is and degrades gracefully); the HTML part is the rendered
     markdown for clients that support it. This is the standard MIME
     multipart/alternative pattern — the recipient's client picks whichever
     it can render.
     """
     msg.set_content(body)
-    msg.add_alternative(_markdown_to_html(body), subtype="html")
+    msg.add_alternative(markdown_to_html(body), subtype="html")
 
 
 def build_email_workflow_instruction(instruction: str) -> str:
@@ -161,7 +161,7 @@ def send_via_smtp(
     """Send a pre-built ``EmailMessage`` via SMTP.
 
     Shared by ``make_send_email_tool`` (the agent tool) and the email bot's
-    ``_send_reply`` — one implementation of the connect/starttls/auth/send
+    ``send_reply`` — one implementation of the connect/starttls/auth/send
     sequence so STARTTLS-availability checks and ordering can't drift.
 
     Raises on any failure; callers decide how to surface the error.
@@ -209,7 +209,7 @@ def make_send_email_tool(
             subject: Email subject line.
             body: Plain-text email body.
         """
-        if not _valid_recipient(to):
+        if not valid_recipient(to):
             return f"Error: invalid recipient address: {to!r}"
         try:
             msg = EmailMessage()

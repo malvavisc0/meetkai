@@ -28,7 +28,7 @@ import httpx
 from kai.brain.config import get_brain_settings
 from kai.config.settings import get_settings
 
-_TIMEOUT = 3.0
+TIMEOUT = 3.0
 
 
 @dataclass
@@ -38,7 +38,7 @@ class HealthCheck:
     detail: str = ""
 
 
-async def _probe(
+async def probe(
     client: httpx.AsyncClient, url: str, *, headers: dict[str, str] | None = None
 ) -> tuple[bool, str]:
     """Single-shot GET; (ok, detail). 200 only."""
@@ -53,30 +53,28 @@ async def _probe(
         return False, type(exc).__name__
 
 
-def _config_error(label: str, exc: Exception) -> HealthCheck:
+def config_error(label: str, exc: Exception) -> HealthCheck:
     return HealthCheck(label=label, ok=False, detail=f"config error: {type(exc).__name__}")
 
 
-async def _check_llm(client: httpx.AsyncClient) -> HealthCheck:
+async def check_llm(client: httpx.AsyncClient) -> HealthCheck:
     settings = get_settings()
     if not settings.llm_api_key:
         return HealthCheck(label="LLM API", detail="no API key configured")
     headers = {"Authorization": f"Bearer {settings.llm_api_key}"}
-    ok, detail = await _probe(
-        client, f"{settings.llm_api_base.rstrip('/')}/models", headers=headers
-    )
+    ok, detail = await probe(client, f"{settings.llm_api_base.rstrip('/')}/models", headers=headers)
     return HealthCheck(label="LLM API", ok=ok, detail=detail)
 
 
-async def _check_morphik(client: httpx.AsyncClient, base_url: str, token: str) -> HealthCheck:
+async def check_morphik(client: httpx.AsyncClient, base_url: str, token: str) -> HealthCheck:
     headers = {"Authorization": f"Bearer {token}"} if token else None
-    ok, detail = await _probe(client, f"{base_url.rstrip('/')}/health", headers=headers)
+    ok, detail = await probe(client, f"{base_url.rstrip('/')}/health", headers=headers)
     return HealthCheck(label="RAG Server", ok=ok, detail=detail)
 
 
-async def _check_crawl4ai(client: httpx.AsyncClient, crawler_url: str, token: str) -> HealthCheck:
+async def check_crawl4ai(client: httpx.AsyncClient, crawler_url: str, token: str) -> HealthCheck:
     headers = {"Authorization": f"Bearer {token}"} if token else None
-    ok, detail = await _probe(client, f"{crawler_url.rstrip('/')}/health", headers=headers)
+    ok, detail = await probe(client, f"{crawler_url.rstrip('/')}/health", headers=headers)
     return HealthCheck(label="Crawler", ok=ok, detail=detail)
 
 
@@ -94,11 +92,11 @@ async def check_crawler_health() -> HealthCheck | None:
         return None
     if not bs.crawler_url:
         return None
-    async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
-        return await _check_crawl4ai(client, bs.crawler_url, bs.crawl4ai_token)
+    async with httpx.AsyncClient(timeout=TIMEOUT) as client:
+        return await check_crawl4ai(client, bs.crawler_url, bs.crawl4ai_token)
 
 
-async def _gather_probes(probes: list[Awaitable[HealthCheck]]) -> list[HealthCheck]:
+async def gather_probes(probes: list[Awaitable[HealthCheck]]) -> list[HealthCheck]:
     results = await asyncio.gather(*probes, return_exceptions=True)
     checks: list[HealthCheck] = []
     for r in results:
@@ -118,19 +116,19 @@ async def check_service_health() -> list[HealthCheck]:
     """
     checks: list[HealthCheck] = []
 
-    async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
+    async with httpx.AsyncClient(timeout=TIMEOUT) as client:
         # --- Concurrent network probes ---
-        probes: list[Awaitable[HealthCheck]] = [_check_llm(client)]
+        probes: list[Awaitable[HealthCheck]] = [check_llm(client)]
 
         try:
             bs = get_brain_settings()
             if bs.base_url:
-                probes.append(_check_morphik(client, bs.base_url, bs.morphik_token))
+                probes.append(check_morphik(client, bs.base_url, bs.morphik_token))
             if bs.crawler_url:
-                probes.append(_check_crawl4ai(client, bs.crawler_url, bs.crawl4ai_token))
+                probes.append(check_crawl4ai(client, bs.crawler_url, bs.crawl4ai_token))
         except Exception as exc:  # noqa: BLE001
-            checks.append(_config_error("Brain", exc))
+            checks.append(config_error("Brain", exc))
 
-        checks.extend(await _gather_probes(probes))
+        checks.extend(await gather_probes(probes))
 
     return checks

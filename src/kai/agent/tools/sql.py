@@ -2,7 +2,7 @@
 
 Registered by ``cli/bot.py`` when ``sql_enabled`` is true. The DSN lives only in
 the engine closure and is never passed to a logger — call/result logging is
-handled generically by ``agent/core.py:_run_with_tools`` so no per-tool
+handled generically by ``agent/core.py:run_with_tools`` so no per-tool
 ``logger.info`` is added here.
 """
 
@@ -19,30 +19,30 @@ logger = logging.getLogger(__name__)
 
 # Oversized cells are omitted, not truncated: a truncated fragment looks like
 # real data but isn't, inviting the model to draw conclusions from a partial value.
-_MAX_INLINE_CHARS = 200
+MAX_INLINE_CHARS = 200
 
 
-def _omit_large_cell(val: object) -> object:
+def omit_large_cell(val: object) -> object:
     """Inline small values; replace oversized string/bytes cells with a marker."""
-    if isinstance(val, str) and len(val) > _MAX_INLINE_CHARS:
+    if isinstance(val, str) and len(val) > MAX_INLINE_CHARS:
         return f"<omitted: {len(val)} chars, too large to display>"
     if isinstance(val, (bytes, bytearray)):
         return f"<omitted: {len(val)} bytes, binary>"
     return val
 
 
-_SELECT_RE = re.compile(r"^\s*(?:WITH\s+.*?\s+)?SELECT\b", re.IGNORECASE | re.DOTALL)
-_FORBIDDEN = re.compile(
+SELECT_RE = re.compile(r"^\s*(?:WITH\s+.*?\s+)?SELECT\b", re.IGNORECASE | re.DOTALL)
+FORBIDDEN = re.compile(
     r"\b(insert|update|delete|drop|alter|create|truncate|grant|revoke|merge)\b",
     re.IGNORECASE,
 )
 
 # Applied as a Postgres statement timeout at connection checkout so a runaway
-# query can't hang the bot. Other dialects get no timeout — see _create_sql_engine.
-_QUERY_TIMEOUT_SECONDS = 30
+# query can't hang the bot. Other dialects get no timeout — see create_sql_engine.
+QUERY_TIMEOUT_SECONDS = 30
 
 
-def _create_sql_engine(dsn: str) -> sa.Engine:
+def create_sql_engine(dsn: str) -> sa.Engine:
     """Build a SQLAlchemy engine with dialect-appropriate query timeout.
 
     For PostgreSQL, the statement timeout is set via ``connect_args.options``
@@ -55,7 +55,7 @@ def _create_sql_engine(dsn: str) -> sa.Engine:
         return sa.create_engine(
             dsn,
             connect_args={
-                "options": f"-c statement_timeout={_QUERY_TIMEOUT_SECONDS * 1000}",
+                "options": f"-c statement_timeout={QUERY_TIMEOUT_SECONDS * 1000}",
                 "connect_timeout": 10,
             },
         )
@@ -165,7 +165,7 @@ def make_sql_query_tool(
     Returns ``(query_tool, describe_tool, engine)`` so the caller can
     dispose the engine on shutdown.
     """
-    engine = _create_sql_engine(dsn)
+    engine = create_sql_engine(dsn)
 
     def sql_query(query: str) -> str:
         """Run a read-only SQL query against the operator's database.
@@ -180,7 +180,7 @@ def make_sql_query_tool(
         q = (query or "").strip().rstrip(";")
         if not q:
             return "Error: query must not be empty"
-        if _FORBIDDEN.search(q) or not _SELECT_RE.match(q):
+        if FORBIDDEN.search(q) or not SELECT_RE.match(q):
             return "Error: only SELECT / WITH ... SELECT statements are allowed"
         try:
             with engine.connect() as conn:
@@ -190,7 +190,7 @@ def make_sql_query_tool(
                 rows = rows[:row_limit]
                 cols = list(result.keys())
                 out = [
-                    {col: _omit_large_cell(val) for col, val in zip(cols, row, strict=False)}
+                    {col: omit_large_cell(val) for col, val in zip(cols, row, strict=False)}
                     for row in rows
                 ]
             text = json.dumps(out, default=str)

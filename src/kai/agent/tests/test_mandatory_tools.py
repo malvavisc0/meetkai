@@ -40,11 +40,11 @@ class _StubAgent(KaiAgent):
         self._run_calls: list[list] = []  # the messages list passed each call
         self._scripted: list[tuple[ActionResult, list[ToolCallRecord]]] = []
 
-    # --- stubs for everything chat() touches besides _run_with_tools ---
-    def _format_user_message(self, message, context=None):
+    # --- stubs for everything chat() touches besides run_with_tools ---
+    def format_user_message(self, message, context=None):
         return message
 
-    def _build_messages(
+    def build_messages(
         self,
         user_message,
         conversation_id=None,
@@ -56,23 +56,23 @@ class _StubAgent(KaiAgent):
     ) -> list[ChatMessage]:
         return [ChatMessage(role=MessageRole.USER, content=user_message)]
 
-    def _history_key(self, conversation_id=None):
+    def history_key(self, conversation_id=None):
         return conversation_id or "default"
 
-    def _get_history(self, conversation_id=None):
-        return self._history.setdefault(self._history_key(conversation_id), [])
+    def get_history(self, conversation_id=None):
+        return self._history.setdefault(self.history_key(conversation_id), [])
 
-    def _trim_history(self, conversation_id=None):
+    def trim_history(self, conversation_id=None):
         pass
 
-    def _mark_dirty(self):
+    def mark_dirty(self):
         pass
 
-    def _save_goal(self):
+    def save_goal(self):
         pass
 
     # --- the thing we want to observe ---
-    async def _run_with_tools(self, messages, output_cls, tools=None):
+    async def run_with_tools(self, messages, output_cls, tools=None):
         self._run_calls.append(messages)
         return self._scripted.pop(0)
 

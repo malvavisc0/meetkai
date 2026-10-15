@@ -18,7 +18,7 @@ from kai.cockpit.naming import kai_slug_for
 def fake_morphik_client(monkeypatch):
     client = AsyncMock()
     client.close = AsyncMock()
-    monkeypatch.setattr("kai.cockpit.brains.BrainsService._morphik_client", lambda self: client)
+    monkeypatch.setattr("kai.cockpit.brains.BrainsService.morphik_client", lambda self: client)
     return client
 
 
@@ -26,7 +26,7 @@ def fake_morphik_client(monkeypatch):
 def fake_crawler_client(monkeypatch):
     client = AsyncMock()
     client.close = AsyncMock()
-    monkeypatch.setattr("kai.cockpit.brains.BrainsService._crawler_client", lambda self: client)
+    monkeypatch.setattr("kai.cockpit.brains.BrainsService.crawler_client", lambda self: client)
     return client
 
 
@@ -53,10 +53,10 @@ def fake_dns(monkeypatch):
         "metadata.internal": ["169.254.169.254"],
     }
 
-    def _resolve(host: str) -> list[str]:
+    def resolve(host: str) -> list[str]:
         return private_hosts.get(host, ["93.184.216.34"])
 
-    monkeypatch.setattr("kai.brain.validation._resolve_all", _resolve)
+    monkeypatch.setattr("kai.brain.validation.resolve_all", resolve)
 
 
 @pytest.fixture

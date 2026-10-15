@@ -54,7 +54,7 @@ class RunRegistry:
     def __init__(self, path: Path) -> None:
         self.path = Path(path)
 
-    def _load(self) -> dict[str, dict]:
+    def load(self) -> dict[str, dict]:
         if not self.path.is_file():
             return {}
         try:
@@ -66,7 +66,7 @@ class RunRegistry:
             return {}
         return {str(k): v for k, v in raw.items() if isinstance(v, dict)}
 
-    def _save(self, data: dict[str, dict]) -> None:
+    def save(self, data: dict[str, dict]) -> None:
         self.path.parent.mkdir(parents=True, exist_ok=True)
         tmp = self.path.with_suffix(self.path.suffix + ".tmp")
         tmp.write_text(json.dumps(data, indent=2), encoding="utf-8")
@@ -80,7 +80,7 @@ class RunRegistry:
         PIDs get recycled by the OS, so a dead run's pid can coincidentally
         match a live process. Wipe the file down to just the new record.
         """
-        self._save({run_id: record.model_dump()})
+        self.save({run_id: record.model_dump()})
         logger.info(
             "Registered run %s -> %s (pid %s), replacing prior runs for this instance",
             run_id,
@@ -89,7 +89,7 @@ class RunRegistry:
         )
 
     def get(self, run_id: str) -> RunRecord | None:
-        data = self._load().get(run_id)
+        data = self.load().get(run_id)
         if data is None:
             return None
         try:
@@ -99,14 +99,14 @@ class RunRegistry:
             return None
 
     def remove(self, run_id: str) -> None:
-        data = self._load()
+        data = self.load()
         if run_id in data:
             data.pop(run_id)
-            self._save(data)
+            self.save(data)
 
     def active(self) -> dict[str, RunRecord]:
         """Return live runs, pruning entries whose pid is no longer alive."""
-        data = self._load()
+        data = self.load()
         live: dict[str, RunRecord] = {}
         changed = False
         for run_id, raw in list(data.items()):
@@ -123,7 +123,7 @@ class RunRegistry:
                 continue
             live[run_id] = record
         if changed:
-            self._save(data)
+            self.save(data)
         return live
 
 

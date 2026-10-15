@@ -50,7 +50,7 @@ RepeatKind = Literal["none", "daily", "weekly", "monthly"]
 REPEAT_KINDS: tuple[RepeatKind, ...] = ("none", "daily", "weekly", "monthly")
 
 
-def _coerce_repeat(value: object) -> RepeatKind:
+def coerce_repeat(value: object) -> RepeatKind:
     """Normalize a persisted ``repeat`` value,
     falling back to ``"none"`` for unknown values.
     """
@@ -58,11 +58,11 @@ def _coerce_repeat(value: object) -> RepeatKind:
     return cast(RepeatKind, text) if text in REPEAT_KINDS else "none"
 
 
-_MAX_FUTURE = timedelta(days=365 * 5)
+MAX_FUTURE = timedelta(days=365 * 5)
 
 # Re-entrancy guard: set while a fired task executes so the agent cannot
 # create a replacement task and recurse.
-_EXECUTING_TASK = ContextVar("kai_executing_task", default=False)
+EXECUTING_TASK = ContextVar("kai_executing_task", default=False)
 
 
 def parse_when(when: str, *, tz_hint: str | None = None) -> datetime:
@@ -140,7 +140,7 @@ class Task(BaseModel):
             due_at=parse_iso(str(data["due_at"])),
             owner_id=str(data.get("owner_id", "")),
             created_at=parse_iso(str(data["created_at"])) if data.get("created_at") else utcnow(),
-            repeat=_coerce_repeat(data.get("repeat", "none")),
+            repeat=coerce_repeat(data.get("repeat", "none")),
             interval=int(data.get("interval", 1)),
             weekdays=weekdays,
             until=parse_iso(str(data["until"])) if data.get("until") else None,
@@ -156,7 +156,7 @@ def compute_next_due(task: Task) -> datetime | None:
     """
     if task.repeat == "none":
         return None
-    next_dt = _advance_recurrence(task)
+    next_dt = advance_recurrence(task)
     if task.until and next_dt > task.until:
         return None
     if task.count is not None and task.occurrences + 1 >= task.count:
@@ -164,19 +164,19 @@ def compute_next_due(task: Task) -> datetime | None:
     return next_dt
 
 
-def _advance_recurrence(task: Task) -> datetime:
+def advance_recurrence(task: Task) -> datetime:
     interval = max(1, task.interval)
     next_dt = task.due_at
     if task.repeat == "daily":
         return next_dt + timedelta(days=interval)
     if task.repeat == "weekly":
-        return _advance_weekly(next_dt, interval, task.weekdays)
+        return advance_weekly(next_dt, interval, task.weekdays)
     if task.repeat == "monthly":
-        return _advance_monthly(next_dt, interval)
+        return advance_monthly(next_dt, interval)
     return next_dt
 
 
-def _advance_weekly(next_dt: datetime, interval: int, weekdays: tuple[int, ...] | None) -> datetime:
+def advance_weekly(next_dt: datetime, interval: int, weekdays: tuple[int, ...] | None) -> datetime:
     if not weekdays:
         return next_dt + timedelta(weeks=interval)
     for _ in range(7 * interval + 1):
@@ -186,7 +186,7 @@ def _advance_weekly(next_dt: datetime, interval: int, weekdays: tuple[int, ...] 
     return next_dt
 
 
-def _advance_monthly(next_dt: datetime, interval: int) -> datetime:
+def advance_monthly(next_dt: datetime, interval: int) -> datetime:
     year = next_dt.year
     month = next_dt.month + interval
     while month > 12:
@@ -207,14 +207,14 @@ class TaskStore:
         self._path = path
         self._tasks: dict[str, Task] = {}
         self._lock: asyncio.Lock | None = None
-        self._load()
+        self.load()
 
-    def _lock_for(self) -> asyncio.Lock:
+    def lock_for(self) -> asyncio.Lock:
         if self._lock is None:
             self._lock = asyncio.Lock()
         return self._lock
 
-    def _load(self) -> None:
+    def load(self) -> None:
         if self._path is None or not self._path.exists():
             return
         try:
@@ -229,7 +229,7 @@ class TaskStore:
         except (OSError, json.JSONDecodeError, ValueError, TypeError) as exc:
             logger.warning("Failed to load tasks from %s: %s", self._path, exc)
 
-    def _save_locked(self) -> None:
+    def save_locked(self) -> None:
         if self._path is None:
             return
         try:
@@ -242,9 +242,9 @@ class TaskStore:
             logger.warning("Failed to save tasks to %s: %s", self._path, exc)
 
     async def add(self, task: Task) -> None:
-        async with self._lock_for():
+        async with self.lock_for():
             self._tasks[task.id] = task
-            self._save_locked()
+            self.save_locked()
 
     async def cancel(self, task_id: str, *, chat_id: str) -> bool:
         """Cancel a task, but only if it belongs to ``chat_id``.
@@ -252,18 +252,18 @@ class TaskStore:
         ``chat_id`` is required (not optional) so a caller can't accidentally
         cancel a task across chats by omitting it.
         """
-        async with self._lock_for():
+        async with self.lock_for():
             task = self._tasks.get(task_id)
             if task is None:
                 return False
             if task.chat_id != chat_id:
                 return False
             del self._tasks[task_id]
-            self._save_locked()
+            self.save_locked()
             return True
 
     async def list_for(self, chat_id: str | None = None, owner_id: str | None = None) -> list[Task]:
-        async with self._lock_for():
+        async with self.lock_for():
             tasks = list(self._tasks.values())
         tasks.sort(key=lambda t: t.due_at)
         return [
@@ -281,7 +281,7 @@ class TaskStore:
         Returns tasks with their fire-time due_at (before any advance).
         """
         now = now or utcnow()
-        async with self._lock_for():
+        async with self.lock_for():
             due = [t for t in self._tasks.values() if t.due_at <= now]
             fired: list[Task] = []
             for t in due:
@@ -295,7 +295,7 @@ class TaskStore:
                         )
                         self._tasks[t2.id] = t2
             if due:
-                self._save_locked()
+                self.save_locked()
             return fired
 
     @staticmethod
@@ -305,9 +305,9 @@ class TaskStore:
 
 ExecuteCallback = Callable[[Task], Awaitable[None]]
 
-_OVERDUE_GRACE = timedelta(minutes=1)
+OVERDUE_GRACE = timedelta(minutes=1)
 
-_MIN_GOAL_CHARS = 8
+MIN_GOAL_CHARS = 8
 
 
 class TaskScheduler:
@@ -333,7 +333,7 @@ class TaskScheduler:
 
     def start(self) -> None:
         if self._task is None or self._task.done():
-            self._task = asyncio.ensure_future(self._run())
+            self._task = asyncio.ensure_future(self.run())
 
     async def stop(self) -> None:
         if self._task is None:
@@ -345,42 +345,42 @@ class TaskScheduler:
             pass
         self._task = None
 
-    async def _run(self) -> None:
+    async def run(self) -> None:
         logger.info("Task scheduler started (poll=%.1fs)", self._poll_interval)
         while True:
             try:
-                await self._tick()
+                await self.tick()
             except asyncio.CancelledError:
                 raise
             except Exception:
                 logger.exception("Task scheduler tick failed")
             await asyncio.sleep(self._poll_interval)
 
-    async def _tick(self) -> None:
+    async def tick(self) -> None:
         due = await self._store.pop_due()
         if not due:
             return
         now = utcnow()
         for task in due:
-            await self._execute_one(task, now=now)
+            await self.execute_one(task, now=now)
 
-    async def _execute_one(self, task: Task, *, now: datetime | None = None) -> None:
+    async def execute_one(self, task: Task, *, now: datetime | None = None) -> None:
         """Execute a fired task inside a recursion-guarded context."""
         now = now or utcnow()
-        token = _EXECUTING_TASK.set(True)
+        token = EXECUTING_TASK.set(True)
         try:
             await self._execute(task)
             logger.info("Task %s executed for %s", task.id, task.chat_id)
         except Exception:
             logger.exception("Failed to execute task %s for %s", task.id, task.chat_id)
         finally:
-            _EXECUTING_TASK.reset(token)
+            EXECUTING_TASK.reset(token)
 
     @staticmethod
     def render_due(task: Task, *, now: datetime | None = None) -> str:
         now = now or utcnow()
         when = task.due_at.strftime("%Y-%m-%d %H:%M UTC")
-        late = now - task.due_at > _OVERDUE_GRACE
+        late = now - task.due_at > OVERDUE_GRACE
         prefix = "⏰ Task (overdue, was due " if late else "⏰ Task ("
         return f"{prefix}{when}): {task.goal}"
 
@@ -468,7 +468,7 @@ def build_task_tools(
             until: ISO timestamp when recurrence should stop (inclusive).
             count: Maximum number of times the task should fire.
         """
-        if _EXECUTING_TASK.get():
+        if EXECUTING_TASK.get():
             return {
                 "error": (
                     "refusing to schedule a task while executing another task (this would recurse)."
@@ -476,7 +476,7 @@ def build_task_tools(
             }
 
         goal_text = (goal or "").strip()
-        if len(goal_text) < _MIN_GOAL_CHARS:
+        if len(goal_text) < MIN_GOAL_CHARS:
             return {
                 "error": (
                     "the goal is too short to be clear. Ask the user what exactly "
@@ -491,7 +491,7 @@ def build_task_tools(
         now = utcnow()
         if due <= now:
             return {"error": f"that time is in the past ({due.isoformat()})"}
-        if due - now > _MAX_FUTURE:
+        if due - now > MAX_FUTURE:
             return {"error": "that's too far in the future (max ~5 years)"}
 
         if clarity_judge is not None:

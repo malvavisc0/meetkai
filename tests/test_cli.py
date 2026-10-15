@@ -59,7 +59,7 @@ class TestStopCommand:
         record = RunRecord(
             endpoint="http://x", hmac_key="k", hmac_algorithm="sha512", pid=12345, started_at="t"
         )
-        monkeypatch.setattr(cli_mod, "_resolve_run", lambda bot, run, user="": record)
+        monkeypatch.setattr(cli_mod, "resolve_run", lambda bot, run, user="": record)
 
         sent = []
         monkeypatch.setattr(cli_mod.os, "kill", lambda pid, sig: sent.append((pid, sig)))
@@ -76,7 +76,7 @@ class TestStopCommand:
         record = RunRecord(
             endpoint="http://x", hmac_key="k", hmac_algorithm="sha512", pid=12345, started_at="t"
         )
-        monkeypatch.setattr(cli_mod, "_resolve_run", lambda bot, run, user="": record)
+        monkeypatch.setattr(cli_mod, "resolve_run", lambda bot, run, user="": record)
 
         sent = []
         monkeypatch.setattr(cli_mod.os, "kill", lambda pid, sig: sent.append((pid, sig)))
@@ -93,7 +93,7 @@ class TestStopCommand:
         record = RunRecord(
             endpoint="http://x", hmac_key="k", hmac_algorithm="sha512", pid=12345, started_at="t"
         )
-        monkeypatch.setattr(cli_mod, "_resolve_run", lambda bot, run, user="": record)
+        monkeypatch.setattr(cli_mod, "resolve_run", lambda bot, run, user="": record)
         monkeypatch.setattr(cli_mod.os, "kill", self._raise_not_found)
         removed = []
         monkeypatch.setattr(
@@ -135,7 +135,7 @@ class TestChatCommand:
         record = RunRecord(
             endpoint="http://x", hmac_key="k", hmac_algorithm="sha512", pid=1, started_at="t"
         )
-        monkeypatch.setattr(cli_mod, "_resolve_run", lambda bot, run, user="": record)
+        monkeypatch.setattr(cli_mod, "resolve_run", lambda bot, run, user="": record)
 
         inputs = iter(["/quit"])
         monkeypatch.setattr(cli_mod.console, "input", lambda *a, **k: next(inputs))
@@ -145,7 +145,7 @@ class TestChatCommand:
             calls.append((message, persist))
             return 200, {"ok": True, "reply": "ack"}
 
-        monkeypatch.setattr(cli_mod, "_post_tell", fake_post)
+        monkeypatch.setattr(cli_mod, "post_tell", fake_post)
 
         result = runner.invoke(app, ["chat", "email", "--run", "deadbeef"])
         assert result.exit_code == 0
@@ -158,7 +158,7 @@ class TestChatCommand:
         record = RunRecord(
             endpoint="http://x", hmac_key="k", hmac_algorithm="sha512", pid=1, started_at="t"
         )
-        monkeypatch.setattr(cli_mod, "_resolve_run", lambda bot, run, user="": record)
+        monkeypatch.setattr(cli_mod, "resolve_run", lambda bot, run, user="": record)
 
         def raise_eof(*a, **k):
             raise EOFError
@@ -175,7 +175,7 @@ class TestChatCommand:
         record = RunRecord(
             endpoint="http://x", hmac_key="k", hmac_algorithm="sha512", pid=1, started_at="t"
         )
-        monkeypatch.setattr(cli_mod, "_resolve_run", lambda bot, run, user="": record)
+        monkeypatch.setattr(cli_mod, "resolve_run", lambda bot, run, user="": record)
 
         inputs = iter(["/persist", "/quit"])
         monkeypatch.setattr(cli_mod.console, "input", lambda *a, **k: next(inputs))
@@ -185,7 +185,7 @@ class TestChatCommand:
             calls.append((message, persist))
             return 200, {"ok": True, "reply": "ack"}
 
-        monkeypatch.setattr(cli_mod, "_post_tell", fake_post)
+        monkeypatch.setattr(cli_mod, "post_tell", fake_post)
 
         result = runner.invoke(app, ["chat", "email", "--run", "deadbeef"])
         assert result.exit_code == 0
@@ -199,7 +199,7 @@ class TestChatCommand:
         record = RunRecord(
             endpoint="http://x", hmac_key="k", hmac_algorithm="sha512", pid=1, started_at="t"
         )
-        monkeypatch.setattr(cli_mod, "_resolve_run", lambda bot, run, user="": record)
+        monkeypatch.setattr(cli_mod, "resolve_run", lambda bot, run, user="": record)
 
         inputs = iter(["send a joke", "/quit"])
         monkeypatch.setattr(cli_mod.console, "input", lambda *a, **k: next(inputs))
@@ -213,7 +213,7 @@ class TestChatCommand:
                 "actions": [{"tool": "send_message", "chat_id": "g@g.us", "ok": True}],
             }
 
-        monkeypatch.setattr(cli_mod, "_post_tell", fake_post)
+        monkeypatch.setattr(cli_mod, "post_tell", fake_post)
 
         result = runner.invoke(app, ["chat", "email", "--run", "deadbeef"])
         assert result.exit_code == 0

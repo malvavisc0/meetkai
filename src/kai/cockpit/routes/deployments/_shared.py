@@ -34,7 +34,7 @@ WIZARD_TEMPLATES: dict[str, str] = {
 # Services that carry an instruction textarea alongside the toggle.
 TOOLS_WITH_INSTRUCTION = frozenset({"database", "smtp", "calcom"})
 
-_HOME_REDIRECT = RedirectResponse("/console", status_code=302)
+HOME_REDIRECT = RedirectResponse("/console", status_code=302)
 
 
 def build_tools_update(supported_svcs: list[str], form_fields: dict) -> dict[str, dict]:
@@ -57,7 +57,7 @@ def get_deployment(
     """Fetch a deployment and verify ownership; return redirect on failure."""
     dep = svc.get(dep_id)
     if not dep or dep.user_id != user.id:
-        return _HOME_REDIRECT
+        return HOME_REDIRECT
     return svc, dep
 
 

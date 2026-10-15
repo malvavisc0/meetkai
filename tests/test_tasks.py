@@ -4,7 +4,7 @@ from pathlib import Path
 
 from kai.agent.context import ToolContext
 from kai.agent.scheduler import (
-    _EXECUTING_TASK,
+    EXECUTING_TASK,
     Task,
     TaskScheduler,
     TaskStore,
@@ -138,7 +138,7 @@ class TestTaskScheduler:
             )
         )
         # Force a tick; due task is executed and removed.
-        asyncio.run(sched._tick())  # noqa: SLF001
+        asyncio.run(sched.tick())  # noqa: SLF001
         assert [t.id for t in executed] == [task.id]
         assert asyncio.run(store.list_for()) == []
 
@@ -159,7 +159,7 @@ class TestTaskScheduler:
             )
         )
         # Should not raise even though execute fails.
-        asyncio.run(sched._tick())  # noqa: SLF001
+        asyncio.run(sched.tick())  # noqa: SLF001
         assert calls["n"] == 1
         # Failed task is still popped (fire-once semantics).
         assert asyncio.run(store.list_for()) == []
@@ -316,14 +316,14 @@ class TestTaskTools:
         _, tools = self._tools(tmp_path)
 
         async def attempt_schedule_during_execution() -> dict:
-            token = _EXECUTING_TASK.set(True)
+            token = EXECUTING_TASK.set(True)
             try:
                 out = await tools["schedule_task"].acall(
                     when="in 1h", goal="schedule another task recursively now"
                 )
                 return out.raw_output
             finally:
-                _EXECUTING_TASK.reset(token)
+                EXECUTING_TASK.reset(token)
 
         res = asyncio.run(attempt_schedule_during_execution())
         assert "error" in res
@@ -351,7 +351,7 @@ class TestRecurringTasks:
         assert created.repeat == "daily"
         assert created.occurrences == 0
 
-        asyncio.run(sched._tick())
+        asyncio.run(sched.tick())
         assert len(executed) == 1
         assert executed[0].goal == "daily standup reminder"
         remaining = asyncio.run(store.list_for())
@@ -379,7 +379,7 @@ class TestRecurringTasks:
                 weekdays=(0, 2, 4),
             )
         )
-        asyncio.run(sched._tick())
+        asyncio.run(sched.tick())
         assert len(executed) == 1
         next_task = asyncio.run(store.list_for())[0]
         assert next_task.due_at.weekday() in (0, 2, 4)
@@ -403,14 +403,14 @@ class TestRecurringTasks:
             )
         )
         assert task0.occurrences == 0
-        asyncio.run(sched._tick())
+        asyncio.run(sched.tick())
         assert len(executed) == 1
         first_next = asyncio.run(store.list_for())[0]
         assert first_next.occurrences == 1
 
         first_next = first_next.model_copy(update={"due_at": now - timedelta(seconds=1)})
         asyncio.run(store.add(first_next))
-        asyncio.run(sched._tick())
+        asyncio.run(sched.tick())
         assert len(executed) == 2
         assert asyncio.run(store.list_for()) == []
 
@@ -433,7 +433,7 @@ class TestRecurringTasks:
                 until=until,
             )
         )
-        asyncio.run(sched._tick())
+        asyncio.run(sched.tick())
         assert len(executed) == 1
         remaining = asyncio.run(store.list_for())
         assert len(remaining) == 1

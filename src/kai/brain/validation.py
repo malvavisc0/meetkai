@@ -17,7 +17,7 @@ import socket
 from typing import BinaryIO
 from urllib.parse import urlparse
 
-_ALLOWED_URL_SCHEMES = {"http", "https"}
+ALLOWED_URL_SCHEMES = {"http", "https"}
 
 # Extensions Morphik's own docs list as supported ingest formats (allowlist).
 ALLOWED_UPLOAD_EXTENSIONS = frozenset(
@@ -44,7 +44,7 @@ ALLOWED_UPLOAD_EXTENSIONS = frozenset(
 MAX_UPLOAD_BYTES = 25 * 1024 * 1024  # 25 MB — generous for text/office docs
 
 
-def _is_disallowed_ip(ip: str) -> bool:
+def is_disallowed_ip(ip: str) -> bool:
     """True if ``ip`` must not be reachable from an Operator-submitted URL."""
     addr = ipaddress.ip_address(ip)
     return (
@@ -57,7 +57,7 @@ def _is_disallowed_ip(ip: str) -> bool:
     )
 
 
-def _resolve_all(host: str) -> list[str]:
+def resolve_all(host: str) -> list[str]:
     """Resolve every A/AAAA record for ``host``. Blocking — run via a thread."""
     infos = socket.getaddrinfo(host, None)
     return list({str(info[4][0]) for info in infos})
@@ -78,14 +78,14 @@ async def validate_ingest_url(url: str) -> None:
     defeat DNS rebinding, but removes the trivial metadata/internal URL attack.
     """
     parsed = urlparse(url)
-    if parsed.scheme not in _ALLOWED_URL_SCHEMES:
+    if parsed.scheme not in ALLOWED_URL_SCHEMES:
         raise ValueError("URL must start with http:// or https://")
     host = parsed.hostname
     if not host:
         raise ValueError("URL must include a host.")
 
     try:
-        ips = await asyncio.to_thread(_resolve_all, host)
+        ips = await asyncio.to_thread(resolve_all, host)
     except socket.gaierror:
         raise ValueError(f"Could not resolve host: {host}") from None
 
@@ -93,7 +93,7 @@ async def validate_ingest_url(url: str) -> None:
         raise ValueError(f"Could not resolve host: {host}")
 
     for ip in ips:
-        if _is_disallowed_ip(ip):
+        if is_disallowed_ip(ip):
             raise ValueError(
                 "This URL resolves to a private, local, or reserved network "
                 "address and cannot be crawled."

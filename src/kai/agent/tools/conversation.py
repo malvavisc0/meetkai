@@ -16,33 +16,33 @@ from kai.agent.core import KaiAgent
 
 logger = logging.getLogger(__name__)
 
-_NOTE_PREFIX = "[note]"
+NOTE_PREFIX = "[note]"
 
-_ROLE_LABELS = {
+ROLE_LABELS = {
     MessageRole.USER: "User",
     MessageRole.ASSISTANT: "Assistant",
 }
 
 
-def _format_history(messages: list[ChatMessage]) -> str:
+def format_history(messages: list[ChatMessage]) -> str:
     """Render a conversation's messages as ``[Role] body`` lines."""
     lines: list[str] = []
     for msg in messages:
         content = (msg.content or "").strip()
         if not content:
             continue
-        label = _ROLE_LABELS.get(msg.role, msg.role.value)
+        label = ROLE_LABELS.get(msg.role, msg.role.value)
         lines.append(f"[{label}] {content}")
     return "\n".join(lines) if lines else "No messages found."
 
 
-def _format_all_conversations(agent: KaiAgent) -> str:
+def format_all_conversations(agent: KaiAgent) -> str:
     """Render every known conversation, most recently active first."""
     conversations = agent.list_conversations()
     if not conversations:
         return "No conversations found."
     sections = [
-        f"=== {cid} ===\n{_format_history(agent.get_conversation_history(cid))}"
+        f"=== {cid} ===\n{format_history(agent.get_conversation_history(cid))}"
         for cid, _count, _last_ts in conversations
     ]
     return "\n\n".join(sections)
@@ -60,7 +60,7 @@ def register_conversation_tools(
     conversations.
     """
 
-    def _resolve(conversation_id: str) -> str:
+    def resolve(conversation_id: str) -> str:
         if conversation_id.strip():
             return conversation_id.strip()
         if tool_context is not None:
@@ -86,11 +86,11 @@ def register_conversation_tools(
                 every conversation if there is no current one (e.g. an
                 operator turn).
         """
-        resolved = _resolve(conversation_id)
+        resolved = resolve(conversation_id)
         if not resolved:
-            return _format_all_conversations(agent)
+            return format_all_conversations(agent)
         messages = agent.get_conversation_history(resolved)
-        return _format_history(messages)
+        return format_history(messages)
 
     async def record_note(note: str, conversation_id: str = "") -> str:
         """Record a note into a conversation's history without sending a message.
@@ -108,10 +108,10 @@ def register_conversation_tools(
         note = (note or "").strip()
         if not note:
             return "Error: note text is required"
-        resolved = _resolve(conversation_id)
+        resolved = resolve(conversation_id)
         if not resolved:
             return "Error: no conversation_id provided and no current chat context available."
-        await agent.record_assistant_message(resolved, f"{_NOTE_PREFIX} {note}")
+        await agent.record_assistant_message(resolved, f"{NOTE_PREFIX} {note}")
         return f"note recorded for {resolved}: {note[:100]}"
 
     agent.register_tool(

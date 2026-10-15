@@ -3,7 +3,7 @@
 Covers: the ``WebhookConnectionType`` registry, ``CONNECTION_LABELS`` spread
 from both registries, ``encrypt_config``/``decrypt_config`` accepting resend
 (error-message change lives in test_secrets.py), ``is_connected``'s
-ingress-only predicate, ``_inject_connection_env``'s early-return no-op for
+ingress-only predicate, ``inject_connection_env``'s early-return no-op for
 ingress-only services, and the required-credential env-injection loop in
 ``start()`` (the email bot's required smtp → ``KAI_SMTP_TOOL_*``).
 """
@@ -22,7 +22,7 @@ from kai.cockpit.bots import (
 from kai.cockpit.deployments import (
     ConnectionRequiredError,
     DeploymentsService,
-    _inject_connection_env,
+    inject_connection_env,
     is_connected,
 )
 from kai.cockpit.models import Connection, Deployment
@@ -189,7 +189,7 @@ class TestInjectConnectionEnvIngressNoOp:
             updated_at="now",
         )
         env: dict = {}
-        injected = _inject_connection_env(env, "resend", conn)
+        injected = inject_connection_env(env, "resend", conn)
         assert injected is False
         assert env == {}
 
@@ -206,7 +206,7 @@ class TestInjectConnectionEnvIngressNoOp:
             updated_at="now",
         )
         env: dict = {}
-        _inject_connection_env(env, "resend", conn)
+        inject_connection_env(env, "resend", conn)
         assert "signing_secret" not in env
         assert "top-secret-value" not in str(env.values())
 
@@ -220,16 +220,16 @@ class TestStartIngestsRequiredSmtp(_StartBase):
 
     @pytest.fixture(autouse=True)
     def _encryption_env(self, monkeypatch, tmp_path):
-        # _inject_connection_env → decrypt_config reads .env from CWD; chdir
+        # inject_connection_env → decrypt_config reads .env from CWD; chdir
         # to tmp so the production .env never leaks the real key version.
         monkeypatch.chdir(tmp_path)
         monkeypatch.setenv("KAI_CREDENTIAL_ENCRYPTION_KEY", _KEY)
         monkeypatch.setenv("KAI_CREDENTIAL_KEY_VERSION", "v1")
         from kai.cockpit.connections import secrets as secrets_mod
 
-        secrets_mod._clear_key_cache()
+        secrets_mod.clear_key_cache()
         yield
-        secrets_mod._clear_key_cache()
+        secrets_mod.clear_key_cache()
 
     def _smtp_bot(self, monkeypatch):
         fake_bt = BotType(

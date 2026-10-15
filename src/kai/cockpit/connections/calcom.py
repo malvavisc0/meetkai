@@ -66,7 +66,7 @@ class CalcomConnectionsService:
         # Probe the just-saved credentials and reflect the result in
         # ``status``. Transient failures preserve the prior status.
         cfg = decrypt_config("calcom", conn.config)
-        ok, _, transient = self._probe(
+        ok, _, transient = self.probe(
             cfg.get("api_key", ""),
             cfg.get("base_url", ""),
         )
@@ -85,7 +85,7 @@ class CalcomConnectionsService:
             return None
         return decrypt_config("calcom", conn.config).get("api_key")
 
-    def _probe(self, api_key: str, base_url: str) -> tuple[bool, str, bool]:
+    def probe(self, api_key: str, base_url: str) -> tuple[bool, str, bool]:
         """Call Cal.com's ``GET /v2/me`` to validate the API key.
 
         Returns ``(ok, message, transient)`` — ``transient`` is True for
@@ -129,5 +129,5 @@ class CalcomConnectionsService:
                 return False, "no Cal.com API key configured"
             test_key = cfg["api_key"]
             test_base = cfg.get("base_url", "")
-        ok, msg, _ = self._probe(test_key, test_base)
+        ok, msg, _ = self.probe(test_key, test_base)
         return ok, msg

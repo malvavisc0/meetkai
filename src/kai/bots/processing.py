@@ -32,21 +32,21 @@ from kai.bots.text_cleanup import (
 )
 from kai.templates.schema import PostProcessingConfig
 
-_SENTENCE_SPLIT_RE = re.compile(r"(?<=[.!?])\s+")
+SENTENCE_SPLIT_RE = re.compile(r"(?<=[.!?])\s+")
 
 
-def _truncate_sentences(text: str, *, limit: int) -> str:
-    sentences = _SENTENCE_SPLIT_RE.split(text.strip())
+def truncate_sentences(text: str, *, limit: int) -> str:
+    sentences = SENTENCE_SPLIT_RE.split(text.strip())
     if len(sentences) <= limit:
         return text.strip()
     return " ".join(sentences[:limit]).strip()
 
 
-_WORD_SPLIT_RE = re.compile(r"\s+")
+WORD_SPLIT_RE = re.compile(r"\s+")
 
 
-def _truncate_words(text: str, *, limit: int) -> str:
-    words = _WORD_SPLIT_RE.split(text.strip())
+def truncate_words(text: str, *, limit: int) -> str:
+    words = WORD_SPLIT_RE.split(text.strip())
     if len(words) <= limit:
         return text.strip()
     return " ".join(words[:limit]).strip()
@@ -58,7 +58,7 @@ class PostProcessor:
     def __init__(self, config: PostProcessingConfig) -> None:
         self._config = config
         if config.profile == "default_cleanup":
-            self._fn = self._run_default_cleanup
+            self._fn = self.run_default_cleanup
         elif config.profile == "none":
             self._fn = lambda text: text  # noqa: E731
         else:  # "custom"
@@ -72,19 +72,19 @@ class PostProcessor:
             if config.strip_trailing_period:
                 steps.append(strip_trailing_period)
             if config.max_sentences:
-                steps.append(partial(_truncate_sentences, limit=config.max_sentences))
+                steps.append(partial(truncate_sentences, limit=config.max_sentences))
             if config.max_words:
-                steps.append(partial(_truncate_words, limit=config.max_words))
+                steps.append(partial(truncate_words, limit=config.max_words))
             self._custom_steps = steps
-            self._fn = self._run_custom
+            self._fn = self.run_custom
 
     @staticmethod
-    def _run_default_cleanup(text: str) -> str:
+    def run_default_cleanup(text: str) -> str:
         from kai.bots.text_cleanup import post_process
 
         return post_process(text)
 
-    def _run_custom(self, text: str) -> str:
+    def run_custom(self, text: str) -> str:
         # Strip leaked reasoning channels before custom profile transforms.
         text = strip_reasoning_channels(text)
         for step in self._custom_steps:

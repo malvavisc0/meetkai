@@ -8,9 +8,9 @@ from kai.cli.style import (
     GL_OK,
     OK,
     WARN,
-    _relative,
     console,
     err_line,
+    relative,
     soft_table,
 )
 
@@ -174,7 +174,7 @@ def cockpit_user_list():
                 u.timezone,
                 f"[{WARN}]yes[/{WARN}]" if u.is_disabled else f"[{DIM}]no[/{DIM}]",
                 ",".join(on_flags) if on_flags else "-",
-                _relative(u.created_at),
+                relative(u.created_at),
             )
         console.print(table)
     finally:
@@ -202,7 +202,7 @@ def cockpit_user_disable(
         db.close()
 
 
-_USER_FLAGS: tuple[str, ...] = ("image", "sso")
+USER_FLAGS: tuple[str, ...] = ("image", "sso")
 
 
 @cockpit_user_app.command("flags")
@@ -239,7 +239,7 @@ def cockpit_user_flags(
             db.refresh(user)
 
         table = soft_table(("flag", ""), ("enabled", ""))
-        for name in _USER_FLAGS:
+        for name in USER_FLAGS:
             on = bool(flags.get(name, False))
             table.add_row(name, f"[{OK}]on[/{OK}]" if on else f"[{DIM}]off[/{DIM}]")
         console.print(table)
@@ -263,7 +263,7 @@ def cockpit_request_list():
         for r in requests:
             user = db.query(User).filter(User.id == r.user_id).first()
             email = user.email if user else "?"
-            table.add_row(str(r.id), email, _relative(r.created_at))
+            table.add_row(str(r.id), email, relative(r.created_at))
         console.print(table)
     finally:
         db.close()

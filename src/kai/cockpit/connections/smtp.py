@@ -18,7 +18,7 @@ from kai.utils.common import now_iso
 logger = logging.getLogger(__name__)
 
 
-def _smtp_test(
+def smtp_test(
     host: str, port: int, username: str, password: str, use_tls: bool
 ) -> tuple[bool, str]:
     """Connect + auth + NOOP against an SMTP server.
@@ -152,6 +152,6 @@ class SmtpConnectionsService:
         if not test_host:
             return False, "no SMTP host configured"
         try:
-            return _smtp_test(test_host, test_port, test_user, test_pass, test_tls)
+            return smtp_test(test_host, test_port, test_user, test_pass, test_tls)
         except Exception as exc:  # noqa: BLE001 - surfaced to the operator
             return False, str(exc)

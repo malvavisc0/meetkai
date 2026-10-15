@@ -10,9 +10,9 @@ def _encryption_env(monkeypatch):
     monkeypatch.setenv("KAI_CREDENTIAL_KEY_VERSION", "v1")
     from kai.cockpit.connections import secrets
 
-    secrets._clear_key_cache()
+    secrets.clear_key_cache()
     yield
-    secrets._clear_key_cache()
+    secrets.clear_key_cache()
 
 
 class TestSave:

@@ -69,7 +69,7 @@ def create_login_token(db: Session, user_id: int) -> LoginToken:
     return token
 
 
-def _is_expired(expires_at: str, now: datetime) -> bool:
+def is_expired(expires_at: str, now: datetime) -> bool:
     """True if ``expires_at`` (ISO-8601, maybe tz-naive) is in the past.
 
     Parses the timestamp rather than comparing strings lexicographically:
@@ -94,7 +94,7 @@ def consume_login_token(db: Session, token_str: str) -> int | None:
     if token.consumed_at is not None:
         return None
     now = datetime.now(UTC)
-    if _is_expired(token.expires_at, now):
+    if is_expired(token.expires_at, now):
         return None
     token.consumed_at = now.isoformat()
     db.commit()
@@ -105,7 +105,7 @@ def cleanup_expired_tokens(db: Session) -> int:
     """Delete expired, unconsumed tokens. Returns count deleted."""
     now = datetime.now(UTC)
     candidates = db.query(LoginToken).filter(LoginToken.consumed_at.is_(None)).all()
-    expired = [t for t in candidates if _is_expired(t.expires_at, now)]
+    expired = [t for t in candidates if is_expired(t.expires_at, now)]
     for token in expired:
         db.delete(token)
     db.commit()

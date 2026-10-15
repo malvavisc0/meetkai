@@ -21,14 +21,14 @@ def rotate_credential_key(db: Session) -> tuple[str, bool]:
     """
     from kai.cockpit.bots import CREDENTIAL_TYPES
     from kai.cockpit.connections.secrets import (
-        _active_version,
+        active_version,
         decrypt_config,
         encrypt_config,
         set_active_version,
     )
     from kai.cockpit.models import Connection
 
-    current_version = _active_version()
+    current_version = active_version()
 
     num = int(current_version.lstrip("v"))
     new_version = f"v{num + 1}"
@@ -42,7 +42,7 @@ def rotate_credential_key(db: Session) -> tuple[str, bool]:
         reencrypted += 1
 
     db.commit()
-    env_written = _update_env_file(new_version)
+    env_written = update_env_file(new_version)
 
     logger.info(
         "Credential key rotated: %s -> %s (%d connections re-encrypted)",
@@ -53,7 +53,7 @@ def rotate_credential_key(db: Session) -> tuple[str, bool]:
     return new_version, env_written
 
 
-def _update_env_file(version: str) -> bool:
+def update_env_file(version: str) -> bool:
     """Update ``KAI_CREDENTIAL_KEY_VERSION`` in ``.env``. Returns ``True``
     if the file was written, ``False`` if it doesn't exist."""
     env_path = Path(".env")

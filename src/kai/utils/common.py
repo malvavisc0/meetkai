@@ -8,7 +8,7 @@ import hashlib
 import hmac as hmac_mod
 from datetime import UTC, datetime
 
-_HMAC_ALGORITHMS = {"sha256": hashlib.sha256, "sha512": hashlib.sha512}
+HMAC_ALGORITHMS = {"sha256": hashlib.sha256, "sha512": hashlib.sha512}
 
 
 def now_iso() -> str:
@@ -31,5 +31,5 @@ def compute_hmac(key: str, body: bytes, algorithm: str = "sha512") -> str:
     Shared by ``cockpit/deployments.py`` and ``cli/bot.py`` so the signing
     logic isn't duplicated.
     """
-    algo = _HMAC_ALGORITHMS.get(algorithm.lower(), hashlib.sha512)
+    algo = HMAC_ALGORITHMS.get(algorithm.lower(), hashlib.sha512)
     return hmac_mod.new(key.encode(), body, algo).hexdigest()

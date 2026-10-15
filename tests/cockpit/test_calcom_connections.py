@@ -24,7 +24,7 @@ def _encryption_env(monkeypatch, tmp_path):
     monkeypatch.setenv("KAI_CREDENTIAL_KEY_VERSION", "v1")
     from kai.cockpit.connections import secrets
 
-    secrets._clear_key_cache()
+    secrets.clear_key_cache()
 
     # save() probes Cal.com's GET /v2/me to verify the key. Mock the HTTP
     # call so tests don't hit the network. Individual tests override
@@ -33,7 +33,7 @@ def _encryption_env(monkeypatch, tmp_path):
 
     monkeypatch.setattr(httpx, "get", lambda *a, **kw: _fake_resp(200))
     yield
-    secrets._clear_key_cache()
+    secrets.clear_key_cache()
 
 
 class TestSave:
@@ -124,7 +124,7 @@ class TestProbe:
         from kai.cockpit.connections.calcom import CalcomConnectionsService
 
         svc = CalcomConnectionsService(db)
-        ok, _, transient = svc._probe("k", "")
+        ok, _, transient = svc.probe("k", "")
         assert ok is False
         assert transient is False
 
@@ -135,7 +135,7 @@ class TestProbe:
         from kai.cockpit.connections.calcom import CalcomConnectionsService
 
         svc = CalcomConnectionsService(db)
-        ok, _, transient = svc._probe("k", "")
+        ok, _, transient = svc.probe("k", "")
         assert ok is False
         assert transient is True
 
@@ -150,7 +150,7 @@ class TestProbe:
         from kai.cockpit.connections.calcom import CalcomConnectionsService
 
         svc = CalcomConnectionsService(db)
-        svc._probe("k", "")
+        svc.probe("k", "")
         assert captured["url"] == "https://api.cal.com/v2/me"
 
 

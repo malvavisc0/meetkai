@@ -21,8 +21,8 @@ from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.kdf.hkdf import HKDF
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-_HKDF_INFO = b"kai-connection-secrets"
-_VERSION_SEP = ":"
+HKDF_INFO = b"kai-connection-secrets"
+VERSION_SEP = ":"
 
 
 class _KeyState:
@@ -56,7 +56,7 @@ def get_encryption_settings() -> EncryptionSettings:
     return EncryptionSettings()
 
 
-def _root_key_material() -> bytes:
+def root_key_material() -> bytes:
     settings = get_encryption_settings()
     if not settings.credential_encryption_key:
         raise RuntimeError(
@@ -66,7 +66,7 @@ def _root_key_material() -> bytes:
     return settings.credential_encryption_key.encode()
 
 
-def _active_version() -> str:
+def active_version() -> str:
     if _key_state.active_version_override is not None:
         return _key_state.active_version_override
     settings = get_encryption_settings()
@@ -83,24 +83,24 @@ def set_active_version(version: str) -> None:
     _key_state.active_version_override = version
 
 
-def _derive_fernet(version: str) -> Fernet:
+def derive_fernet(version: str) -> Fernet:
     """Derive (and cache) the Fernet key for a given version."""
     if version in _key_state.key_cache:
         return _key_state.key_cache[version]
-    info = _HKDF_INFO + b":" + version.encode()
+    info = HKDF_INFO + b":" + version.encode()
     hkdf = HKDF(
         algorithm=hashes.SHA256(),
         length=32,
         salt=None,
         info=info,
     )
-    raw = hkdf.derive(_root_key_material())
+    raw = hkdf.derive(root_key_material())
     fernet = Fernet(base64.urlsafe_b64encode(raw))
     _key_state.key_cache[version] = fernet
     return fernet
 
 
-def _clear_key_cache() -> None:
+def clear_key_cache() -> None:
     """Drop cached Fernet instances and reset the active-version override.
 
     Test/rotation use only.
@@ -110,18 +110,18 @@ def _clear_key_cache() -> None:
 
 def encrypt(plaintext: str) -> str:
     """Encrypt a secret, returning a versioned ciphertext envelope."""
-    version = _active_version()
-    fernet = _derive_fernet(version)
+    version = active_version()
+    fernet = derive_fernet(version)
     token = fernet.encrypt(plaintext.encode()).decode()
-    return f"{version}{_VERSION_SEP}{token}"
+    return f"{version}{VERSION_SEP}{token}"
 
 
 def decrypt(ciphertext: str) -> str:
     """Decrypt a versioned ciphertext envelope. Raises ValueError on failure."""
-    if _VERSION_SEP not in ciphertext:
+    if VERSION_SEP not in ciphertext:
         raise ValueError("ciphertext missing version envelope")
-    version, token = ciphertext.split(_VERSION_SEP, 1)
-    fernet = _derive_fernet(version)
+    version, token = ciphertext.split(VERSION_SEP, 1)
+    fernet = derive_fernet(version)
     try:
         return fernet.decrypt(token.encode()).decode()
     except InvalidToken as exc:
@@ -135,9 +135,9 @@ def is_encrypted(value: str) -> bool:
     raises on anything invalid). Used by ``encrypt_config``/``decrypt_config``
     to avoid double-encrypting or passing plaintext through.
     """
-    if _VERSION_SEP not in value:
+    if VERSION_SEP not in value:
         return False
-    version, _ = value.split(_VERSION_SEP, 1)
+    version, _ = value.split(VERSION_SEP, 1)
     return version.startswith("v") and len(value) > len(version) + 10
 
 

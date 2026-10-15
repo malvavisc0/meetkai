@@ -58,9 +58,9 @@ def _encryption_env(monkeypatch, tmp_path):
     monkeypatch.setenv("KAI_CREDENTIAL_KEY_VERSION", "v1")
     from kai.cockpit.connections import secrets as secrets_mod
 
-    secrets_mod._clear_key_cache()
+    secrets_mod.clear_key_cache()
     yield
-    secrets_mod._clear_key_cache()
+    secrets_mod.clear_key_cache()
 
 
 def _make_user(db) -> User:

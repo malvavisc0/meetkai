@@ -5,7 +5,7 @@ import secrets
 import pytest
 
 from kai.cockpit.connections.secrets import decrypt_config, encrypt_config, is_encrypted
-from kai.cockpit.key_rotation import _update_env_file, rotate_credential_key
+from kai.cockpit.key_rotation import rotate_credential_key, update_env_file
 from kai.cockpit.models import Connection
 
 _KEY = secrets.token_hex(32)
@@ -14,15 +14,15 @@ _KEY = secrets.token_hex(32)
 @pytest.fixture(autouse=True)
 def _encryption_env(monkeypatch, tmp_path):
     # Chdir to tmp so EncryptionSettings (env_file=".env") and
-    # _update_env_file (Path(".env")) don't touch the real .env.
+    # update_env_file (Path(".env")) don't touch the real .env.
     monkeypatch.chdir(tmp_path)
     monkeypatch.setenv("KAI_CREDENTIAL_ENCRYPTION_KEY", _KEY)
     monkeypatch.setenv("KAI_CREDENTIAL_KEY_VERSION", "v1")
     from kai.cockpit.connections import secrets as secrets_mod
 
-    secrets_mod._clear_key_cache()
+    secrets_mod.clear_key_cache()
     yield
-    secrets_mod._clear_key_cache()
+    secrets_mod.clear_key_cache()
 
 
 def _db_conn(user_id: int, service: str, config: dict) -> Connection:
@@ -114,7 +114,7 @@ class TestUpdateEnvFile:
             encoding="utf-8",
         )
 
-        written = _update_env_file("v2")
+        written = update_env_file("v2")
 
         assert written is True
         text = env_path.read_text(encoding="utf-8")
@@ -126,7 +126,7 @@ class TestUpdateEnvFile:
         env_path = tmp_path / ".env"
         env_path.write_text("OTHER=val\n", encoding="utf-8")
 
-        written = _update_env_file("v2")
+        written = update_env_file("v2")
 
         assert written is True
         text = env_path.read_text(encoding="utf-8")
@@ -134,6 +134,6 @@ class TestUpdateEnvFile:
         assert "OTHER=val" in text
 
     def test_returns_false_when_no_env_file(self, tmp_path):
-        written = _update_env_file("v2")
+        written = update_env_file("v2")
 
         assert written is False

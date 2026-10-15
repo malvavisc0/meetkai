@@ -1,7 +1,7 @@
 """Transport-neutral reply text cleanup.
 
 Provides the monolithic :func:`post_process` pipeline and the individual
-transform steps it's built from, plus the shared ``_EMOJI_RE`` emoji range.
+transform steps it's built from, plus the shared ``EMOJI_RE`` emoji range.
 
 The individual steps (``strip_markdown``, ``collapse_lines``, ``strip_emojis``,
 ``strip_trailing_period``) are the single source of truth — both
@@ -20,7 +20,7 @@ from kai.agent.core import strip_reasoning_channels
 # dingbats, flags (regional indicators), and the modern supplementary emoji
 # blocks. Shared by ``post_process`` and the custom ``PostProcessor`` step list
 # so the two never drift on what counts as an emoji.
-_EMOJI_RE = re.compile(
+EMOJI_RE = re.compile(
     "["
     "\U0001f600-\U0001f64f"
     "\U0001f300-\U0001f5ff"
@@ -74,7 +74,7 @@ def collapse_lines(text: str) -> str:
 
 def strip_emojis(text: str) -> str:
     """Replace every emoji with a space, then collapse doubled whitespace."""
-    text = _EMOJI_RE.sub(" ", text)
+    text = EMOJI_RE.sub(" ", text)
     return re.sub(r"\s{2,}", " ", text)
 
 

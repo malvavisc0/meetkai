@@ -30,7 +30,7 @@ def test_web_search_accepts_dict_results(monkeypatch):
         ),
     )
 
-    assert tools_web._web_search("test") == [
+    assert tools_web.web_search("test") == [
         {
             "title": "Dict title",
             "url": "https://example.com/dict",
@@ -42,7 +42,7 @@ def test_web_search_accepts_dict_results(monkeypatch):
 def test_web_search_accepts_object_results(monkeypatch):
     monkeypatch.setattr(tools_web, "DDGS", lambda: _FakeDDGS([_ObjectResult()]))
 
-    assert tools_web._web_search("test") == [
+    assert tools_web.web_search("test") == [
         {
             "title": "Object title",
             "url": "https://example.com/object",
@@ -89,7 +89,7 @@ def test_get_webpage_content_converts_html_to_markdown(monkeypatch):
         ),
     )
 
-    result = tools_web._get_webpage_content("https://example.com/fact-check")
+    result = tools_web.get_webpage_content("https://example.com/fact-check")
 
     assert "Fact check" in result
     assert "This claim is false." in result
@@ -105,7 +105,7 @@ def test_get_webpage_content_returns_error_on_request_error(monkeypatch):
         ),
     )
 
-    result = tools_web._get_webpage_content("https://example.com/fail")
+    result = tools_web.get_webpage_content("https://example.com/fail")
     assert result.startswith("Error:")
     assert "https://example.com/fail" in result
 
@@ -123,7 +123,7 @@ def test_get_webpage_content_returns_error_on_http_status(monkeypatch):
         ),
     )
 
-    result = tools_web._get_webpage_content("https://example.com/missing")
+    result = tools_web.get_webpage_content("https://example.com/missing")
     assert result.startswith("Error: HTTP 404")
 
 
@@ -140,7 +140,7 @@ def test_strip_boilerplate_drops_head_and_chrome():
         "<aside>Ad</aside>"
         "</body></html>"
     )
-    cleaned = tools_web._strip_boilerplate(html)
+    cleaned = tools_web.strip_boilerplate(html)
 
     assert "The real article content here" in cleaned
     assert "Site" not in cleaned
@@ -153,7 +153,7 @@ def test_strip_boilerplate_drops_head_and_chrome():
 
 def test_strip_boilerplate_falls_back_when_no_body_tag():
     html = "<div><p>fragment content</p></div>"
-    cleaned = tools_web._strip_boilerplate(html)
+    cleaned = tools_web.strip_boilerplate(html)
     assert "fragment content" in cleaned
 
 
@@ -168,7 +168,7 @@ def test_get_webpage_content_only_returns_body(monkeypatch):
         lambda **kwargs: _FakeClient(response=_FakeResponse(full), **kwargs),
     )
 
-    result = tools_web._get_webpage_content("https://example.com/article")
+    result = tools_web.get_webpage_content("https://example.com/article")
 
     assert "Article" in result
     assert "Body text" in result
@@ -184,7 +184,7 @@ def test_get_webpage_content_truncates_long_body(monkeypatch):
         lambda **kwargs: _FakeClient(response=_FakeResponse(full), **kwargs),
     )
 
-    result = tools_web._get_webpage_content("https://example.com/long")
+    result = tools_web.get_webpage_content("https://example.com/long")
 
-    assert len(result) <= tools_web._WEBPAGE_MAX_CHARS + 50
+    assert len(result) <= tools_web.WEBPAGE_MAX_CHARS + 50
     assert "[content truncated]" in result

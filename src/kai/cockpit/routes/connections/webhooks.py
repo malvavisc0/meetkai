@@ -17,7 +17,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
 
-from kai.bots.webhook import _MAX_BODY_BYTES
+from kai.bots.webhook import MAX_BODY_BYTES
 from kai.cockpit.bots import BOT_TYPES
 from kai.cockpit.connections.secrets import decrypt_config
 from kai.cockpit.connections.webhooks import (
@@ -40,15 +40,15 @@ async def webhook_ingest(
     request: Request,
     db: Session = Depends(get_db),
 ):
-    body = await _read_capped_body(request)
-    wh_type, user, cfg = _resolve_webhook(db, workspace_slug, type_name, request, body)
+    body = await read_capped_body(request)
+    wh_type, user, cfg = resolve_webhook(db, workspace_slug, type_name, request, body)
 
     nonce = request.headers.get(wh_type.nonce_header, "") if wh_type.nonce_header else ""
     if nonce and is_nonce_seen(nonce):
         return JSONResponse({"deduped": True}, status_code=202)
 
-    normalized = _parse_payload(wh_type, body, cfg)
-    matched = _find_consuming_deployment(db, user.id, type_name)
+    normalized = parse_payload(wh_type, body, cfg)
+    matched = find_consuming_deployment(db, user.id, type_name)
     if matched is None:
         raise HTTPException(status_code=404, detail="no running bot consumes this webhook type")
 
@@ -65,7 +65,7 @@ async def webhook_ingest(
     return JSONResponse({"ok": True}, status_code=202)
 
 
-def _resolve_webhook(
+def resolve_webhook(
     db: Session, workspace_slug: str, type_name: str, request: Request, body: bytes
 ):
     """Resolve webhook type, user, connection, and verify the signature."""
@@ -92,18 +92,18 @@ def _resolve_webhook(
     return wh_type, user, cfg
 
 
-async def _read_capped_body(request: Request) -> bytes:
+async def read_capped_body(request: Request) -> bytes:
     """Read the request body, rejecting oversized payloads."""
     cl = request.headers.get("content-length")
-    if cl and cl.isdigit() and int(cl) > _MAX_BODY_BYTES:
+    if cl and cl.isdigit() and int(cl) > MAX_BODY_BYTES:
         raise HTTPException(status_code=413, detail="payload too large")
     body = await request.body()
-    if len(body) > _MAX_BODY_BYTES:
+    if len(body) > MAX_BODY_BYTES:
         raise HTTPException(status_code=413, detail="payload too large")
     return body
 
 
-def _parse_payload(wh_type, body: bytes, cfg: dict):
+def parse_payload(wh_type, body: bytes, cfg: dict):
     """Parse and normalize the webhook payload."""
     try:
         payload = json.loads(body) if body else {}
@@ -117,7 +117,7 @@ def _parse_payload(wh_type, body: bytes, cfg: dict):
         raise HTTPException(status_code=400, detail="malformed payload")
 
 
-def _find_consuming_deployment(db: Session, user_id: int, type_name: str) -> Deployment | None:
+def find_consuming_deployment(db: Session, user_id: int, type_name: str) -> Deployment | None:
     """Find a running deployment that consumes this webhook type."""
     for dep in (
         db.query(Deployment)

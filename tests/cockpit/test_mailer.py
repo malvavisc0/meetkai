@@ -23,7 +23,7 @@ def test_send_magic_link_includes_text_and_html_alternatives(monkeypatch) -> Non
     server = _SmtpServer()
     magic_url = "https://cockpit.example.test/login?token=example-token"
 
-    monkeypatch.setattr(mailer, "_smtp_server", lambda *_: server)
+    monkeypatch.setattr(mailer, "smtp_server", lambda *_: server)
 
     mailer.send_magic_link("operator@example.test", magic_url)
 

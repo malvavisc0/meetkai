@@ -9,7 +9,7 @@ import re
 from datetime import UTC, datetime, timedelta
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
-_UTC = ZoneInfo("UTC")
+UTC_ZONE = ZoneInfo("UTC")
 
 
 def utcnow() -> datetime:
@@ -52,7 +52,7 @@ def resolve_tz(name: str | None) -> ZoneInfo:
             return ZoneInfo(name)
         except (ZoneInfoNotFoundError, ValueError):
             pass
-    return _UTC
+    return UTC_ZONE
 
 
 def parse_relative(text: str) -> timedelta | None:
@@ -61,10 +61,10 @@ def parse_relative(text: str) -> timedelta | None:
     Returns ``None`` for anything that isn't a relative offset, and ``None``
     for a zero/negative total (callers treat that as "no delta").
     """
-    m = _REL_RE.match(text)
+    m = REL_RE.match(text)
     if not m:
         return None
-    matches = _REL_UNIT_RE.findall(text)
+    matches = REL_UNIT_RE.findall(text)
     if not matches:
         return None
     delta = timedelta()
@@ -100,10 +100,10 @@ def try_iso(text: str, tz: ZoneInfo) -> datetime | None:
     return dt
 
 
-_REL_RE = re.compile(
+REL_RE = re.compile(
     r"^\s*in\s+((?:(?:\d+)\s*(?:d|days?)\s*)?"
     r"(?:(?:\d+)\s*(?:h|hrs?|hours?)\s*)?"
     r"(?:(?:\d+)\s*(?:m|mins?|minutes?)\s*)?)$",
     re.IGNORECASE,
 )
-_REL_UNIT_RE = re.compile(r"(\d+)\s*(d|h|m|days?|hrs?|hours?|mins?|minutes?)", re.IGNORECASE)
+REL_UNIT_RE = re.compile(r"(\d+)\s*(d|h|m|days?|hrs?|hours?|mins?|minutes?)", re.IGNORECASE)

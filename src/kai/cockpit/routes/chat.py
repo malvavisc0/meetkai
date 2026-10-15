@@ -16,15 +16,15 @@ from kai.cockpit.models import Deployment, User
 
 router = APIRouter()
 
-_HOME_REDIRECT = RedirectResponse("/console", status_code=302)
+HOME_REDIRECT = RedirectResponse("/console", status_code=302)
 
 
-def _get_deployment(
+def get_deployment(
     svc: DeploymentsService, dep_id: int, user: User
 ) -> tuple[DeploymentsService, Deployment] | RedirectResponse:
     dep = svc.get(dep_id)
     if not dep or dep.user_id != user.id:
-        return _HOME_REDIRECT
+        return HOME_REDIRECT
     return svc, dep
 
 
@@ -37,7 +37,7 @@ async def chat_send(
     db: Session = Depends(get_db),
 ):
     svc = DeploymentsService(db)
-    result = _get_deployment(svc, dep_id, user)
+    result = get_deployment(svc, dep_id, user)
     if isinstance(result, RedirectResponse):
         return result
     svc, dep = result
@@ -70,7 +70,7 @@ async def chat_clear(
     db: Session = Depends(get_db),
 ):
     svc = DeploymentsService(db)
-    result = _get_deployment(svc, dep_id, user)
+    result = get_deployment(svc, dep_id, user)
     if isinstance(result, RedirectResponse):
         return result
     svc, dep = result

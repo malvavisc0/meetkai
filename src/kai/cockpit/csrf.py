@@ -7,7 +7,7 @@ from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 _csrf_token: ContextVar[str | None] = ContextVar("csrf_token", default=None)
 
-_SAFE_METHODS = frozenset({"GET", "HEAD", "OPTIONS"})
+SAFE_METHODS = frozenset({"GET", "HEAD", "OPTIONS"})
 
 
 class CSRFMiddleware:
@@ -25,43 +25,43 @@ class CSRFMiddleware:
                 "(outermost) so request.session is populated"
             )
         session = scope["session"]
-        if scope["method"].upper() in _SAFE_METHODS:
-            await self._handle_safe(scope, receive, send, session)
+        if scope["method"].upper() in SAFE_METHODS:
+            await self.handle_safe(scope, receive, send, session)
         else:
-            await self._handle_unsafe(scope, receive, send, session)
+            await self.handle_unsafe(scope, receive, send, session)
 
-    async def _handle_safe(self, scope: Scope, receive: Receive, send: Send, session: dict) -> None:
+    async def handle_safe(self, scope: Scope, receive: Receive, send: Send, session: dict) -> None:
         # Ensure a token exists for templates to embed; mint one on first
         # visit so the very first form render already carries a valid token.
         token = session.get("csrf_token")
         if not isinstance(token, str) or not token:
             token = secrets.token_urlsafe(32)
             session["csrf_token"] = token
-        await self._call_with_token(scope, receive, send, token)
+        await self.call_with_token(scope, receive, send, token)
 
-    async def _handle_unsafe(
+    async def handle_unsafe(
         self, scope: Scope, receive: Receive, send: Send, session: dict
     ) -> None:
         token = session.get("csrf_token")
         context_token = token if isinstance(token, str) else None
-        if self._is_exempt(scope["path"]):
-            await self._call_with_token(scope, receive, send, context_token)
+        if self.is_exempt(scope["path"]):
+            await self.call_with_token(scope, receive, send, context_token)
             return
 
-        submitted = self._header_token(scope)
+        submitted = self.header_token(scope)
         body: bytes | None = None
         if submitted is None:
-            body = await self._read_body(receive)
-            submitted = await self._form_token(scope, body)
+            body = await self.read_body(receive)
+            submitted = await self.form_token(scope, body)
 
-        if not self._matches(token, submitted):
-            await self._invalid(scope, receive, send, context_token)
+        if not self.matches(token, submitted):
+            await self.invalid(scope, receive, send, context_token)
             return
 
-        replay = self._replay(body) if body is not None else receive
-        await self._call_with_token(scope, replay, send, context_token)
+        replay = self.replay_body(body) if body is not None else receive
+        await self.call_with_token(scope, replay, send, context_token)
 
-    async def _call_with_token(
+    async def call_with_token(
         self,
         scope: Scope,
         receive: Receive,
@@ -75,21 +75,21 @@ class CSRFMiddleware:
             _csrf_token.reset(marker)
 
     @staticmethod
-    def _is_exempt(path: str) -> bool:
+    def is_exempt(path: str) -> bool:
         # /webhook/{workspace_slug}/{type_name} is HMAC-verified machine
         # ingress (routes/connections/webhooks.py). The trailing slash after
         # "webhook" ensures we match the full prefix, not e.g. /webhookfoo.
         return path.startswith("/webhook/") or path == "/api/escalations"
 
     @staticmethod
-    def _header_token(scope: Scope) -> str | None:
+    def header_token(scope: Scope) -> str | None:
         for name, value in scope["headers"]:
             if name.lower() == b"x-csrf-token":
                 return value.decode("latin-1")
         return None
 
     @staticmethod
-    async def _read_body(receive: Receive) -> bytes:
+    async def read_body(receive: Receive) -> bytes:
         chunks: list[bytes] = []
         while True:
             message = await receive()
@@ -101,8 +101,8 @@ class CSRFMiddleware:
         return b"".join(chunks)
 
     @classmethod
-    async def _form_token(cls, scope: Scope, body: bytes) -> str | None:
-        request = Request(scope, cls._replay(body))
+    async def form_token(cls, scope: Scope, body: bytes) -> str | None:
+        request = Request(scope, cls.replay_body(body))
         try:
             form = await request.form()
         except (ValueError, RuntimeError):
@@ -111,7 +111,7 @@ class CSRFMiddleware:
         return token if isinstance(token, str) else None
 
     @staticmethod
-    def _matches(expected: object, submitted: str | None) -> bool:
+    def matches(expected: object, submitted: str | None) -> bool:
         return (
             isinstance(expected, str)
             and bool(expected)
@@ -120,7 +120,7 @@ class CSRFMiddleware:
         )
 
     @classmethod
-    async def _invalid(
+    async def invalid(
         cls,
         scope: Scope,
         receive: Receive,
@@ -139,7 +139,7 @@ class CSRFMiddleware:
             _csrf_token.reset(marker)
 
     @staticmethod
-    def _replay(body: bytes) -> Receive:
+    def replay_body(body: bytes) -> Receive:
         sent = False
 
         async def receive() -> Message:

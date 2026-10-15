@@ -90,7 +90,7 @@ class TestTemplatesRender:
             ),
             encoding="utf-8",
         )
-        monkeypatch.setattr(cli_templates, "_REGISTRY", TemplateRegistry(tmp_path))
+        monkeypatch.setattr(cli_templates, "REGISTRY", TemplateRegistry(tmp_path))
         result = runner.invoke(app, ["templates", "render", "email/noprompt"])
         assert result.exit_code != 0
         assert "prompt" in result.stdout.lower()
@@ -113,7 +113,7 @@ class TestTemplatesRender:
             ],
         }
         _write_template(tmp_path, "email", "esc", data, prompt="BASE {{language}}\n")
-        monkeypatch.setattr(cli_templates, "_REGISTRY", TemplateRegistry(tmp_path))
+        monkeypatch.setattr(cli_templates, "REGISTRY", TemplateRegistry(tmp_path))
 
         result = runner.invoke(app, ["templates", "render", "email/esc"])
         assert result.exit_code == 0

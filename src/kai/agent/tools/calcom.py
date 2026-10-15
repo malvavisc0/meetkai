@@ -13,11 +13,11 @@ logger = logging.getLogger(__name__)
 DEFAULT_BASE_URL = "https://api.cal.com/v2"
 
 # Per-endpoint Cal.com v2 API versions.
-_EVENT_TYPES_VERSION = "2024-06-14"
-_SLOTS_VERSION = "2024-09-04"
-_BOOKINGS_VERSION = "2026-02-25"
+EVENT_TYPES_VERSION = "2024-06-14"
+SLOTS_VERSION = "2024-09-04"
+BOOKINGS_VERSION = "2026-02-25"
 
-_TIMEOUT = 30
+TIMEOUT = 30
 
 
 class CalcomSettings(BaseSettings):
@@ -45,11 +45,11 @@ class _CalcomToolAgent(Protocol):
     def add_tool_workflow(self, workflow: str | None) -> None: ...
 
 
-def _headers(api_key: str, version: str) -> dict[str, str]:
+def auth_headers(api_key: str, version: str) -> dict[str, str]:
     return {"Authorization": f"Bearer {api_key}", "cal-api-version": version}
 
 
-def _request(
+def request(
     method: str,
     path: str,
     *,
@@ -67,25 +67,25 @@ def _request(
         resp = httpx.request(
             method,
             url,
-            headers=_headers(api_key, version),
+            headers=auth_headers(api_key, version),
             params=params,
             json=json_body,
-            timeout=_TIMEOUT,
+            timeout=TIMEOUT,
         )
     except Exception as exc:  # noqa: BLE001 - surfaced to the model as a tool result
         return None, f"could not reach Cal.com API: {exc}"
     if resp.status_code >= 400:
-        return None, _error_detail(resp)
+        return None, error_detail(resp)
     try:
         return resp.json(), None
     except Exception as exc:  # noqa: BLE001 - surfaced to the model as a tool result
         return None, f"Cal.com API returned a non-JSON response: {exc}"
 
 
-_ERROR_DETAIL_MAX = 300
+ERROR_DETAIL_MAX = 300
 
 
-def _error_detail(resp: httpx.Response) -> str:
+def error_detail(resp: httpx.Response) -> str:
     """Build a concise ``Cal.com API returned {code}: {detail}`` string.
 
     Tries to extract a human-readable message from a JSON error body (Cal.com
@@ -100,7 +100,7 @@ def _error_detail(resp: httpx.Response) -> str:
         text = (resp.text or "").strip()
         if not text:
             return base
-        return f"{base}: {text[:_ERROR_DETAIL_MAX]}"
+        return f"{base}: {text[:ERROR_DETAIL_MAX]}"
     if isinstance(body, dict):
         # Cal.com error shape is {"error": {"message": ..., "code": ...}};
         # some endpoints use a top-level "message" instead.
@@ -111,7 +111,7 @@ def _error_detail(resp: httpx.Response) -> str:
             or (err.get("code") if isinstance(err, dict) else None)
         )
         if msg:
-            return f"{base}: {str(msg)[:_ERROR_DETAIL_MAX]}"
+            return f"{base}: {str(msg)[:ERROR_DETAIL_MAX]}"
     return base
 
 
@@ -177,12 +177,12 @@ def make_calcom_tools(api_key: str, base_url: str) -> list[FunctionTool]:
 
         No arguments.
         """
-        payload, err = _request(
+        payload, err = request(
             "GET",
             "/event-types",
             api_key=api_key,
             base_url=base_url,
-            version=_EVENT_TYPES_VERSION,
+            version=EVENT_TYPES_VERSION,
         )
         if err is not None:
             return f"Error: {err}"
@@ -193,7 +193,7 @@ def make_calcom_tools(api_key: str, base_url: str) -> list[FunctionTool]:
         # the attendee object, not bookingFieldsResponses.
         items = payload.get("data", []) if isinstance(payload, dict) else []
 
-        def _compact_fields(fields: list | None) -> list[dict]:
+        def compact_fields(fields: list | None) -> list[dict]:
             out = []
             for bf in fields or []:
                 if not isinstance(bf, dict) or not bf.get("slug"):
@@ -219,7 +219,7 @@ def make_calcom_tools(api_key: str, base_url: str) -> list[FunctionTool]:
                 "lengthInMinutes": et.get("lengthInMinutes"),
                 "bookingUrl": et.get("bookingUrl"),
                 "hidden": et.get("hidden"),
-                "bookingFields": _compact_fields(et.get("bookingFields")),
+                "bookingFields": compact_fields(et.get("bookingFields")),
             }
             for et in items
             if isinstance(et, dict)
@@ -238,12 +238,12 @@ def make_calcom_tools(api_key: str, base_url: str) -> list[FunctionTool]:
             timezone: IANA timezone for the returned slot times (e.g.
                 Europe/Berlin). Defaults to UTC.
         """
-        payload, err = _request(
+        payload, err = request(
             "GET",
             "/slots",
             api_key=api_key,
             base_url=base_url,
-            version=_SLOTS_VERSION,
+            version=SLOTS_VERSION,
             params={
                 "eventTypeId": event_type_id,
                 "start": start_date,
@@ -291,12 +291,12 @@ def make_calcom_tools(api_key: str, base_url: str) -> list[FunctionTool]:
         }
         if booking_fields:
             body["bookingFieldsResponses"] = booking_fields
-        payload, err = _request(
+        payload, err = request(
             "POST",
             "/bookings",
             api_key=api_key,
             base_url=base_url,
-            version=_BOOKINGS_VERSION,
+            version=BOOKINGS_VERSION,
             json_body=body,
         )
         if err is not None:
@@ -319,12 +319,12 @@ def make_calcom_tools(api_key: str, base_url: str) -> list[FunctionTool]:
         body: dict[str, Any] = {"start": start_time}
         if reason:
             body["rescheduleReason"] = reason
-        payload, err = _request(
+        payload, err = request(
             "POST",
             f"/bookings/{booking_uid}/reschedule",
             api_key=api_key,
             base_url=base_url,
-            version=_BOOKINGS_VERSION,
+            version=BOOKINGS_VERSION,
             json_body=body,
         )
         if err is not None:
@@ -342,12 +342,12 @@ def make_calcom_tools(api_key: str, base_url: str) -> list[FunctionTool]:
             reason: Optional cancellation reason.
         """
         body: dict[str, Any] = {"cancellationReason": reason}
-        payload, err = _request(
+        payload, err = request(
             "POST",
             f"/bookings/{booking_uid}/cancel",
             api_key=api_key,
             base_url=base_url,
-            version=_BOOKINGS_VERSION,
+            version=BOOKINGS_VERSION,
             json_body=body,
         )
         if err is not None:

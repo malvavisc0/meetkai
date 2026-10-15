@@ -73,14 +73,14 @@ class EscalationStore:
         self._path = path
         self._escalations: dict[str, Escalation] = {}
         self._lock: asyncio.Lock | None = None
-        self._load()
+        self.load()
 
-    def _lock_for(self) -> asyncio.Lock:
+    def lock_for(self) -> asyncio.Lock:
         if self._lock is None:
             self._lock = asyncio.Lock()
         return self._lock
 
-    def _load(self) -> None:
+    def load(self) -> None:
         if self._path is None or not self._path.exists():
             return
         try:
@@ -95,7 +95,7 @@ class EscalationStore:
         except (OSError, json.JSONDecodeError, ValueError, TypeError) as exc:
             logger.warning("Failed to load escalations from %s: %s", self._path, exc)
 
-    def _save_locked(self) -> None:
+    def save_locked(self) -> None:
         if self._path is None:
             return
         try:
@@ -108,9 +108,9 @@ class EscalationStore:
             logger.warning("Failed to save escalations to %s: %s", self._path, exc)
 
     async def add(self, escalation: Escalation) -> None:
-        async with self._lock_for():
+        async with self.lock_for():
             self._escalations[escalation.id] = escalation
-            self._save_locked()
+            self.save_locked()
 
     async def resolve(
         self,
@@ -119,7 +119,7 @@ class EscalationStore:
         resolved_by: str | None = None,
         owner_slug: str | None = None,
     ) -> bool:
-        async with self._lock_for():
+        async with self.lock_for():
             esc = self._escalations.get(escalation_id)
             if esc is None or esc.resolved:
                 return False
@@ -133,11 +133,11 @@ class EscalationStore:
                 }
             )
             self._escalations[escalation_id] = updated
-            self._save_locked()
+            self.save_locked()
             return True
 
     async def list_all(self) -> list[Escalation]:
-        async with self._lock_for():
+        async with self.lock_for():
             escs = list(self._escalations.values())
         escs.sort(key=lambda e: e.created_at)
         return escs
@@ -160,9 +160,9 @@ class EscalationStore:
 
     async def clear(self) -> None:
         """Remove all escalation events. Used for testing."""
-        async with self._lock_for():
+        async with self.lock_for():
             self._escalations.clear()
-            self._save_locked()
+            self.save_locked()
 
     def active_count(self) -> int:
         """Sync count of unresolved escalations. Used by the cockpit's sidebar."""
@@ -186,13 +186,13 @@ class _State:
         self.owner_slug: str = ""
 
 
-_DYN = _State()
+DYN = _State()
 
 
-def _resolve_chat_id(override: str | None = None) -> str:
+def resolve_chat_id(override: str | None = None) -> str:
     if override and override.strip():
         return override.strip()
-    ctx = _DYN.tool_context
+    ctx = DYN.tool_context
     if ctx is not None:
         current = ctx.current()
         if current.chat_id:
@@ -207,17 +207,17 @@ def set_escalation_handler(
     handler: Callable[[Escalation], Awaitable[None]],
 ) -> None:
     """Register the bot's escalation callback."""
-    _DYN.on_escalation = handler
+    DYN.on_escalation = handler
 
 
 def set_blacklist(blacklist: list[str]) -> None:
     """Give tools access to the bot's mutable blacklist list."""
-    _DYN.blacklist = blacklist
+    DYN.blacklist = blacklist
 
 
 def set_tool_context(ctx: ToolContext | None) -> None:
     """Give tools access to the current chat context."""
-    _DYN.tool_context = ctx
+    DYN.tool_context = ctx
 
 
 def set_escalation_store(store: EscalationStore) -> None:
@@ -226,7 +226,7 @@ def set_escalation_store(store: EscalationStore) -> None:
     Called from ``BaseBot.setup_escalation_store()``. Until this is called,
     tools use a process-lifetime in-memory store (see ``_State.store``).
     """
-    _DYN.store = store
+    DYN.store = store
 
 
 def set_cockpit_url(url: str) -> None:
@@ -236,7 +236,7 @@ def set_cockpit_url(url: str) -> None:
     ``Settings.cockpit_url``). Empty string (the default for a standalone
     ``kai start``) disables forwarding.
     """
-    _DYN.cockpit_url = url.rstrip("/") if url else ""
+    DYN.cockpit_url = url.rstrip("/") if url else ""
 
 
 def set_escalation_secret(secret: str) -> None:
@@ -245,7 +245,7 @@ def set_escalation_secret(secret: str) -> None:
     Called from ``BaseBot.setup_escalation_store()`` (which reads
     ``Settings.cockpit_escalation_secret``). Empty string disables auth.
     """
-    _DYN.cockpit_escalation_secret = secret
+    DYN.cockpit_escalation_secret = secret
 
 
 def set_owner_slug(slug: str) -> None:
@@ -258,7 +258,7 @@ def set_owner_slug(slug: str) -> None:
     unowned. The dashboard routes refuse to show unowned escalations to any
     user; the bearer-authed ``/api/escalations`` endpoints still return them.
     """
-    _DYN.owner_slug = slug
+    DYN.owner_slug = slug
 
 
 # ── Tool functions (bound in get_tools()) ────────────────────────────
@@ -291,7 +291,7 @@ async def escalate(
         severity: How urgent — "low", "medium", "high", or "critical".
         summary: Optional context for the operator (what was discussed).
     """
-    chat_id = _resolve_chat_id()
+    chat_id = resolve_chat_id()
     esc = Escalation(
         id=EscalationStore.new_id(),
         chat_id=chat_id,
@@ -299,12 +299,12 @@ async def escalate(
         reason=reason,
         severity=severity,
         summary=summary,
-        user_id=_DYN.owner_slug,
+        user_id=DYN.owner_slug,
         created_at=datetime.now(UTC),
     )
-    await _DYN.store.add(esc)
+    await DYN.store.add(esc)
 
-    handler = _DYN.on_escalation
+    handler = DYN.on_escalation
     if handler is not None:
         try:
             await handler(esc)
@@ -329,7 +329,7 @@ async def blacklist(contact_id: str = "") -> str:
             blacklist the current conversation's contact.
     """
     explicit = contact_id.strip()
-    current = _resolve_chat_id()
+    current = resolve_chat_id()
     resolved = explicit or current
     if not resolved:
         return "Error: no contact_id provided and no current conversation context."
@@ -339,7 +339,7 @@ async def blacklist(contact_id: str = "") -> str:
             f"conversation's contact ({current}) can be blacklisted."
         )
 
-    bl = _DYN.blacklist
+    bl = DYN.blacklist
     if bl is None:
         return "Error: blacklist not configured."
     if resolved not in bl:
@@ -352,11 +352,11 @@ async def blacklist(contact_id: str = "") -> str:
         reason="contact blacklisted",
         severity="low",
         summary=f"Contact {resolved} blacklisted by the model.",
-        user_id=_DYN.owner_slug,
+        user_id=DYN.owner_slug,
     )
-    await _DYN.store.add(esc)
+    await DYN.store.add(esc)
 
-    handler = _DYN.on_escalation
+    handler = DYN.on_escalation
     if handler is not None:
         try:
             await handler(esc)
@@ -371,22 +371,22 @@ async def blacklist(contact_id: str = "") -> str:
 
 async def list_escalations() -> list[Escalation]:
     """Return all escalation events recorded by the current store."""
-    return await _DYN.store.list_all()
+    return await DYN.store.list_all()
 
 
 async def get_active_escalations() -> list[Escalation]:
     """Return unresolved escalation events."""
-    return await _DYN.store.list_active()
+    return await DYN.store.list_active()
 
 
 async def list_escalations_for_chat(chat_id: str) -> list[Escalation]:
     """Return escalation events for a specific chat."""
-    return await _DYN.store.list_for_chat(chat_id)
+    return await DYN.store.list_for_chat(chat_id)
 
 
 async def list_escalations_for_user(owner_slug: str) -> list[Escalation]:
     """Return escalation events owned by ``owner_slug`` (cockpit dashboard)."""
-    return await _DYN.store.list_for_user(owner_slug)
+    return await DYN.store.list_for_user(owner_slug)
 
 
 async def resolve_escalation(
@@ -401,12 +401,12 @@ async def resolve_escalation(
     (including empty/unowned) is refused. The bearer-authed API routes omit
     ``owner_slug`` so they can still resolve any escalation.
     """
-    return await _DYN.store.resolve(esc_id, resolved_by=resolved_by, owner_slug=owner_slug)
+    return await DYN.store.resolve(esc_id, resolved_by=resolved_by, owner_slug=owner_slug)
 
 
 async def clear_escalations() -> None:
     """Remove all escalation events. Used for testing."""
-    await _DYN.store.clear()
+    await DYN.store.clear()
 
 
 def active_escalation_count() -> int:
@@ -415,7 +415,7 @@ def active_escalation_count() -> int:
     Registered as a Jinja global by the cockpit so the sidebar badge renders
     on every page without an async call (see ``EscalationStore.active_count``).
     """
-    return _DYN.store.active_count()
+    return DYN.store.active_count()
 
 
 async def forward_to_cockpit(escalation: Escalation) -> None:
@@ -426,12 +426,12 @@ async def forward_to_cockpit(escalation: Escalation) -> None:
     so a cockpit that's down (or ``cockpit_url`` unset) just means the cockpit
     dashboard won't show it — the bot's own store still has it. Never raises.
     """
-    url = _DYN.cockpit_url
+    url = DYN.cockpit_url
     if not url:
         return
     endpoint = f"{url}/api/escalations"
     headers: dict[str, str] = {}
-    secret = _DYN.cockpit_escalation_secret
+    secret = DYN.cockpit_escalation_secret
     if secret:
         headers["Authorization"] = f"Bearer {secret}"
     try:

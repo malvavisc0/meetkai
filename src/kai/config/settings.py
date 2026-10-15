@@ -38,6 +38,11 @@ class Settings(BaseSettings):
         gt=0,
         description="Max output tokens per LLM completion (bounds per-call spend)",
     )
+    llm_timeout: float = Field(
+        default=300.0,
+        gt=0,
+        description="LLM HTTP read timeout in seconds.",
+    )
 
     agent_max_history_messages: int = Field(
         default=100,

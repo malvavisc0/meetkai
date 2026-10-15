@@ -1,10 +1,10 @@
 """Tests for the escalate and blacklist tools.
 
 These tools are default tools registered in get_tools() and rely on
-module-level _DYN state set by Bot.configure(). The tests verify:
+module-level DYN state set by Bot.configure(). The tests verify:
 - escalate() persists (via EscalationStore) and fires callback
 - blacklist() modifies the bot's blacklist
-- _resolve_chat_id() works with explicit ID, ToolContext, and no context
+- resolve_chat_id() works with explicit ID, ToolContext, and no context
 - list_escalations() and get_active_escalations() filter correctly
 - resolve_escalation() marks escalations as resolved
 - EscalationStore persists to disk and reloads
@@ -20,7 +20,7 @@ import respx
 from kai.agent.context import ToolContext
 from kai.agent.tools import get_tools
 from kai.agent.tools.escalate import (
-    _DYN,
+    DYN,
     Escalation,
     EscalationStore,
     active_escalation_count,
@@ -51,13 +51,13 @@ def _reset_state():
 
 
 def _reset_dyn_state() -> None:
-    """Reset all module-level _DYN attributes to their defaults."""
-    _DYN.on_escalation = None
-    _DYN.blacklist = None
-    _DYN.tool_context = None
-    _DYN.cockpit_url = ""
-    _DYN.cockpit_escalation_secret = ""
-    _DYN.store = EscalationStore(None)
+    """Reset all module-level DYN attributes to their defaults."""
+    DYN.on_escalation = None
+    DYN.blacklist = None
+    DYN.tool_context = None
+    DYN.cockpit_url = ""
+    DYN.cockpit_escalation_secret = ""
+    DYN.store = EscalationStore(None)
 
 
 class TestEscalate:
@@ -428,24 +428,28 @@ class TestDefaultToolsIncludeNewTools:
 class TestSetCockpitUrl:
     def test_empty_url_disables_forwarding(self):
         set_cockpit_url("")
-        assert _DYN.cockpit_url == ""
+        assert DYN.cockpit_url == ""
 
     def test_strips_trailing_slash(self):
         set_cockpit_url("http://cockpit:8080/")
-        assert _DYN.cockpit_url == "http://cockpit:8080"
+        assert DYN.cockpit_url == "http://cockpit:8080"
 
     def test_keeps_url_without_trailing_slash(self):
         set_cockpit_url("http://cockpit:8080")
-        assert _DYN.cockpit_url == "http://cockpit:8080"
+        assert DYN.cockpit_url == "http://cockpit:8080"
 
 
 class TestForwardToCockpit:
+    @respx.mock
     @pytest.mark.asyncio
     async def test_noop_when_cockpit_url_empty(self):
-        # No cockpit_url set → forward_to_cockpit returns without raising.
         set_cockpit_url("")
+        route = respx.post("http://cockpit:8080/api/escalations")
         esc = Escalation(id="esc-1", chat_id="c", reason="test")
-        await forward_to_cockpit(esc)  # must not raise
+
+        await forward_to_cockpit(esc)
+
+        assert not route.called
 
     @respx.mock
     @pytest.mark.asyncio
@@ -474,22 +478,27 @@ class TestForwardToCockpit:
     @pytest.mark.asyncio
     async def test_does_not_raise_on_http_error(self):
         set_cockpit_url("http://cockpit:8080")
-        respx.post("http://cockpit:8080/api/escalations").mock(
+        route = respx.post("http://cockpit:8080/api/escalations").mock(
             side_effect=httpx.ConnectError("connection refused")
         )
         esc = Escalation(id="esc-1", chat_id="c", reason="test")
-        # Must not raise — forwarding is best-effort.
+
         await forward_to_cockpit(esc)
+
+        assert route.called
 
     @respx.mock
     @pytest.mark.asyncio
     async def test_does_not_raise_on_4xx_response(self):
         set_cockpit_url("http://cockpit:8080")
-        respx.post("http://cockpit:8080/api/escalations").mock(
+        route = respx.post("http://cockpit:8080/api/escalations").mock(
             return_value=httpx.Response(400, text="bad request")
         )
         esc = Escalation(id="esc-1", chat_id="c", reason="test")
-        await forward_to_cockpit(esc)  # must not raise
+
+        await forward_to_cockpit(esc)
+
+        assert route.called
 
     @respx.mock
     @pytest.mark.asyncio
@@ -508,7 +517,7 @@ class TestForwardToCockpit:
     @pytest.mark.asyncio
     async def test_no_auth_header_when_secret_unset(self):
         set_cockpit_url("http://cockpit:8080")
-        # _reset_state sets _DYN.cockpit_escalation_secret = "" (verify below)
+        # _reset_state sets DYN.cockpit_escalation_secret = "" (verify below)
         route = respx.post("http://cockpit:8080/api/escalations").mock(
             return_value=httpx.Response(201, json={"ok": True})
         )
@@ -519,16 +528,18 @@ class TestForwardToCockpit:
 
     @respx.mock
     @pytest.mark.asyncio
-    async def test_logs_warning_on_401(self, caplog):
+    async def test_401_response_is_handled_without_raising(self):
         set_cockpit_url("http://cockpit:8080")
         set_escalation_secret("s3cret")
-        respx.post("http://cockpit:8080/api/escalations").mock(
+        route = respx.post("http://cockpit:8080/api/escalations").mock(
             return_value=httpx.Response(401, text="unauthorized")
         )
         esc = Escalation(id="esc-1", chat_id="c", reason="test")
-        with caplog.at_level("WARNING", logger="kai.agent.tools.escalate"):
-            await forward_to_cockpit(esc)
-        assert any("bad secret" in r.message for r in caplog.records)
+
+        await forward_to_cockpit(esc)
+
+        assert route.called
+        assert b"esc-1" in route.calls.last.request.content
 
 
 class TestActiveCount:
@@ -552,7 +563,7 @@ class TestActiveCount:
         assert store.active_count() == 1
 
     def test_active_escalation_count_reads_current_store(self):
-        # Module-level helper reads _DYN.store (the default in-memory store
+        # Module-level helper reads DYN.store (the default in-memory store
         # from the _reset_state fixture).
         assert active_escalation_count() == 0
 

@@ -15,8 +15,8 @@ from kai.agent.context import ToolContext
 from kai.agent.core import KaiAgent
 from kai.agent.goal import GoalManager
 from kai.agent.tools.conversation import (
-    _NOTE_PREFIX,
-    _format_history,
+    NOTE_PREFIX,
+    format_history,
     register_conversation_tools,
 )
 from kai.config.settings import Settings
@@ -38,7 +38,7 @@ class TestFormatHistory:
             ChatMessage(role=MessageRole.USER, content="hello"),
             ChatMessage(role=MessageRole.ASSISTANT, content="hi there"),
         ]
-        result = _format_history(messages)
+        result = format_history(messages)
         assert "[User] hello" in result
         assert "[Assistant] hi there" in result
 
@@ -47,12 +47,12 @@ class TestFormatHistory:
             ChatMessage(role=MessageRole.USER, content=""),
             ChatMessage(role=MessageRole.ASSISTANT, content="real reply"),
         ]
-        result = _format_history(messages)
+        result = format_history(messages)
         assert "[User]" not in result
         assert "[Assistant] real reply" in result
 
     def test_returns_no_messages_for_empty_list(self):
-        assert _format_history([]) == "No messages found."
+        assert format_history([]) == "No messages found."
 
 
 async def _call_tool(tool, **kwargs) -> str:
@@ -137,7 +137,7 @@ class TestRecordNote:
         history = agent.get_conversation_history(conversation)
         assert len(history) == 1
         assert history[0].content
-        assert history[0].content.startswith(_NOTE_PREFIX)
+        assert history[0].content.startswith(NOTE_PREFIX)
         assert "gina is on Premium tier" in history[0].content
         assert history[0].role == MessageRole.ASSISTANT
 
@@ -154,7 +154,7 @@ class TestRecordNote:
 
         # Simulate a subsequent inbound turn loading hank's history
         history = agent.get_conversation_history("hank@example.com")
-        assert any(_NOTE_PREFIX in (m.content or "") for m in history)
+        assert any(NOTE_PREFIX in (m.content or "") for m in history)
 
     @pytest.mark.asyncio
     async def test_error_when_no_conversation_id_and_no_context(self):
@@ -191,7 +191,7 @@ class TestRecordNote:
         assert "120363@g.us" in result
 
         history = agent.get_conversation_history("120363@g.us")
-        assert any(_NOTE_PREFIX in (m.content or "") for m in history)
+        assert any(NOTE_PREFIX in (m.content or "") for m in history)
 
 
 class TestGetConversationHistory:

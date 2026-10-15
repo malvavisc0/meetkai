@@ -3,21 +3,21 @@ import sys
 from pathlib import Path
 
 
-def _has_console_handler(root: logging.Logger) -> bool:
+def has_console_handler(root: logging.Logger) -> bool:
     return any(
         isinstance(h, logging.StreamHandler) and not isinstance(h, logging.FileHandler)
         for h in root.handlers
     )
 
 
-def _has_file_handler(root: logging.Logger, log_dir: Path) -> bool:
+def has_file_handler(root: logging.Logger, log_dir: Path) -> bool:
     return any(
         isinstance(h, logging.FileHandler) and Path(h.baseFilename).parent == log_dir
         for h in root.handlers
     )
 
 
-def _silence_noisy_loggers() -> None:
+def silence_noisy_loggers() -> None:
     for name in ("httpx", "httpcore", "uvicorn.access"):
         logging.getLogger(name).setLevel(logging.WARNING)
 
@@ -37,13 +37,13 @@ def setup_logging(log_dir: Path | None = None, level: int = logging.INFO) -> Non
     root.setLevel(level)
     root.propagate = False
 
-    if not _has_console_handler(root):
+    if not has_console_handler(root):
         console = logging.StreamHandler(sys.stderr)
         console.setFormatter(fmt)
         console.setLevel(level)
         root.addHandler(console)
 
-    if log_dir and not _has_file_handler(root, log_dir):
+    if log_dir and not has_file_handler(root, log_dir):
         try:
             log_dir.mkdir(parents=True, exist_ok=True)
 
@@ -67,7 +67,7 @@ def setup_logging(log_dir: Path | None = None, level: int = logging.INFO) -> Non
                 "Failed to set up file logging in %s: %s", log_dir, exc
             )
 
-    _silence_noisy_loggers()
+    silence_noisy_loggers()
     logging.getLogger(__name__).debug("Logging initialized (level=%s)", logging.getLevelName(level))
 
 

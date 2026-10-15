@@ -6,6 +6,7 @@ from typing import Protocol
 from fastapi import FastAPI, HTTPException, Request
 
 from kai.bots.base import TellResult
+from kai.utils.common import HMAC_ALGORITHMS
 
 logger = logging.getLogger(__name__)
 
@@ -22,15 +23,11 @@ class TellHandler(Protocol):
 StatusHandler = Callable[[], Awaitable[dict]]
 ClearHandler = Callable[[], Awaitable[dict]]
 
-_HMAC_ALGORITHMS: dict[str, str] = {
-    "sha256": "sha256",
-    "sha512": "sha512",
-}
-_MAX_BODY_BYTES = 1 * 1024 * 1024
+MAX_BODY_BYTES = 1 * 1024 * 1024
 
 
-def _verify_signature(hmac_key: str, hmac_algorithm: str, body: bytes, signature: str) -> bool:
-    algo = _HMAC_ALGORITHMS.get(hmac_algorithm.lower(), "sha512")
+def verify_signature(hmac_key: str, hmac_algorithm: str, body: bytes, signature: str) -> bool:
+    algo = HMAC_ALGORITHMS.get(hmac_algorithm.lower(), HMAC_ALGORITHMS["sha512"])
     expected = hmac.new(hmac_key.encode(), body, algo).hexdigest()
     return bool(signature) and hmac.compare_digest(signature, expected)
 
@@ -68,12 +65,12 @@ def create_webhook_app(
     async def webhook(request: Request):
         body = await request.body()
 
-        if len(body) > _MAX_BODY_BYTES:
+        if len(body) > MAX_BODY_BYTES:
             logger.warning("Oversized webhook body rejected: %d bytes", len(body))
             raise HTTPException(status_code=413, detail="payload too large")
 
         signature = request.headers.get("X-Webhook-Hmac", "")
-        if not _verify_signature(hmac_key, hmac_algorithm, body, signature):
+        if not verify_signature(hmac_key, hmac_algorithm, body, signature):
             logger.warning("Invalid webhook signature")
             raise HTTPException(status_code=401, detail="Invalid signature")
 
@@ -88,7 +85,7 @@ def create_webhook_app(
         if event == "message":
             logger.info(
                 "Received message from %s",
-                payload.get("payload", {}).get("from", "unknown"),
+                (payload.get("payload") or {}).get("from", "unknown"),
             )
             if on_message:
                 try:
@@ -115,11 +112,11 @@ def create_webhook_app(
             raise HTTPException(status_code=404, detail="tell not supported by this bot")
 
         body = await request.body()
-        if len(body) > _MAX_BODY_BYTES:
+        if len(body) > MAX_BODY_BYTES:
             raise HTTPException(status_code=413, detail="payload too large")
 
         signature = request.headers.get("X-Webhook-Hmac", "")
-        if not _verify_signature(hmac_key, hmac_algorithm, body, signature):
+        if not verify_signature(hmac_key, hmac_algorithm, body, signature):
             logger.warning("Invalid /tell signature")
             raise HTTPException(status_code=401, detail="Invalid signature")
 
@@ -159,11 +156,11 @@ def create_webhook_app(
             raise HTTPException(status_code=404, detail="ingest not supported by this bot")
 
         body = await request.body()
-        if len(body) > _MAX_BODY_BYTES:
+        if len(body) > MAX_BODY_BYTES:
             raise HTTPException(status_code=413, detail="payload too large")
 
         signature = request.headers.get("X-Webhook-Hmac", "")
-        if not _verify_signature(hmac_key, hmac_algorithm, body, signature):
+        if not verify_signature(hmac_key, hmac_algorithm, body, signature):
             raise HTTPException(status_code=401, detail="Invalid signature")
 
         try:
@@ -192,7 +189,7 @@ def create_webhook_app(
             raise HTTPException(status_code=404, detail="status not supported by this bot")
 
         signature = request.headers.get("X-Webhook-Hmac", "")
-        if not _verify_signature(hmac_key, hmac_algorithm, b"", signature):
+        if not verify_signature(hmac_key, hmac_algorithm, b"", signature):
             logger.warning("Invalid /status signature")
             raise HTTPException(status_code=401, detail="Invalid signature")
 
@@ -214,7 +211,7 @@ def create_webhook_app(
             raise HTTPException(status_code=404, detail="clear not supported by this bot")
 
         signature = request.headers.get("X-Webhook-Hmac", "")
-        if not _verify_signature(hmac_key, hmac_algorithm, b"", signature):
+        if not verify_signature(hmac_key, hmac_algorithm, b"", signature):
             logger.warning("Invalid /clear signature")
             raise HTTPException(status_code=401, detail="Invalid signature")
 

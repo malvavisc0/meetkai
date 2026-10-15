@@ -28,14 +28,14 @@ templates.env.globals["csrf_field"] = lambda: Markup(
 )
 logger = logging.getLogger(__name__)
 
-_PLACEHOLDER_SECRETS = frozenset(
+PLACEHOLDER_SECRETS = frozenset(
     {"", "change-me", "change-me-openssl-rand-hex-16", "change-me-openssl-rand-hex-32"}
 )
 
 
-def _require_real_secret(name: str, value: str) -> None:
+def require_real_secret(name: str, value: str) -> None:
     """Fail fast at boot when a required secret is unset or a known placeholder."""
-    if value in _PLACEHOLDER_SECRETS:
+    if value in PLACEHOLDER_SECRETS:
         raise RuntimeError(
             f"{name} is not set to a real value (generate: openssl rand -hex 32). "
             "Set it, or run with KAI_COCKPIT_TESTING=1 for local dev."
@@ -73,7 +73,7 @@ def format_timestamp(timestamp: str | datetime | None) -> str:
 
 templates.env.globals["format_timestamp"] = format_timestamp
 
-# ``active_escalation_count`` reads ``_DYN.store`` lazily at render time, so
+# ``active_escalation_count`` reads ``DYN.store`` lazily at render time, so
 # registering it here (before ``create_app`` sets the cockpit store) is safe.
 # The cockpit's store is created inside ``create_app`` so per-test env
 # redirection of ``KAI_ESCALATIONS_PATH`` (see cockpit conftest) is respected.
@@ -82,7 +82,7 @@ from kai.agent.tools.escalate import active_escalation_count  # noqa: E402
 templates.env.globals["active_escalation_count"] = active_escalation_count
 
 
-def _reconcile_deployments_in_background() -> None:
+def reconcile_deployments_in_background() -> None:
     # Bot subprocesses are children of this process, so a container restart
     # kills all of them even though each deployment's `desired_state` is
     # still "running" in the DB. Restart in a background thread so a
@@ -106,14 +106,14 @@ def _reconcile_deployments_in_background() -> None:
 
 
 @asynccontextmanager
-async def _lifespan(app: FastAPI):
+async def lifespan(app: FastAPI):
     # Skipped under pytest: tests use an in-memory SQLite StaticPool (single
     # shared connection) and a background thread racing that connection
     # against the test's own session corrupts SQLAlchemy's identity map.
     # Production runs always reconcile on startup.
     if not get_cockpit_settings().cockpit_testing:
         threading.Thread(
-            target=_reconcile_deployments_in_background,
+            target=reconcile_deployments_in_background,
             name="reconcile-deployments",
             daemon=True,
         ).start()
@@ -128,7 +128,7 @@ def create_app() -> FastAPI:
     )
 
     settings = get_cockpit_settings()
-    app = FastAPI(title="kai cockpit", lifespan=_lifespan)
+    app = FastAPI(title="kai cockpit", lifespan=lifespan)
 
     app.add_middleware(CSRFMiddleware)
     app.add_middleware(
@@ -149,11 +149,11 @@ def create_app() -> FastAPI:
 
     if not settings.cockpit_testing:
         run_migrations()
-        _require_real_secret("KAI_COCKPIT_SECRET", settings.cockpit_secret)
-        _require_real_secret("KAI_COCKPIT_ESCALATION_SECRET", settings.cockpit_escalation_secret)
+        require_real_secret("KAI_COCKPIT_SECRET", settings.cockpit_secret)
+        require_real_secret("KAI_COCKPIT_ESCALATION_SECRET", settings.cockpit_escalation_secret)
         from kai.cockpit.connections.secrets import get_encryption_settings
 
-        _require_real_secret(
+        require_real_secret(
             "KAI_CREDENTIAL_ENCRYPTION_KEY",
             get_encryption_settings().credential_encryption_key,
         )

@@ -26,27 +26,43 @@ router = APIRouter()
 # Simple in-memory sliding-window rate limit for login requests. The cockpit is
 # a single-process server-rendered app, so a process-local limiter is sufficient
 # to blunt magic-link request spam without adding a dependency.
-_LOGIN_WINDOW_SECONDS = 300
-_LOGIN_MAX_ATTEMPTS = 5
-_login_hits: dict[str, deque[float]] = {}
-_login_lock = Lock()
+LOGIN_WINDOW_SECONDS = 300
+LOGIN_MAX_ATTEMPTS = 5
 
 
-def _enforce_login_rate_limit(request: Request) -> None:
+class LoginRateLimiter:
+    """Sliding-window limiter keyed by client, encapsulated so no bare mutable
+    module-level state is exposed."""
+
+    def __init__(self, window_seconds: int, max_attempts: int) -> None:
+        self._window_seconds = window_seconds
+        self._max_attempts = max_attempts
+        self._hits: dict[str, deque[float]] = {}
+        self._lock = Lock()
+
+    def allow(self, client: str, now: float) -> bool:
+        with self._lock:
+            hits = self._hits.setdefault(client, deque())
+            while hits and now - hits[0] > self._window_seconds:
+                hits.popleft()
+            if len(hits) >= self._max_attempts:
+                return False
+            hits.append(now)
+            return True
+
+
+LOGIN_RATE_LIMITER = LoginRateLimiter(LOGIN_WINDOW_SECONDS, LOGIN_MAX_ATTEMPTS)
+
+
+def enforce_login_rate_limit(request: Request) -> None:
     if get_cockpit_settings().cockpit_testing:
         return
     client = request.client.host if request.client else "unknown"
-    now = time.monotonic()
-    with _login_lock:
-        hits = _login_hits.setdefault(client, deque())
-        while hits and now - hits[0] > _LOGIN_WINDOW_SECONDS:
-            hits.popleft()
-        if len(hits) >= _LOGIN_MAX_ATTEMPTS:
-            raise HTTPException(status_code=429, detail="Too many login requests. Try again later.")
-        hits.append(now)
+    if not LOGIN_RATE_LIMITER.allow(client, time.monotonic()):
+        raise HTTPException(status_code=429, detail="Too many login requests. Try again later.")
 
 
-def _auto_approve_enabled() -> bool:
+def auto_approve_enabled() -> bool:
     return get_cockpit_settings().cockpit_auto_approve_login
 
 
@@ -64,11 +80,11 @@ async def login_post(
     email: str = Form(...),
     db: Session = Depends(get_db),
 ):
-    _enforce_login_rate_limit(request)
+    enforce_login_rate_limit(request)
     user = db.query(User).filter(User.email == email).first()
     if user and not user.is_disabled:
         req = tokens.create_login_request(db, user.id)
-        if _auto_approve_enabled() and req is not None:
+        if auto_approve_enabled() and req is not None:
             provider = MagicLinkProvider(db)
             token = provider.initiate_login(user.id)
             magic_url = build_magic_link_url(token.token)

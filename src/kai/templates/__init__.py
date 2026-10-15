@@ -7,8 +7,8 @@ from kai.templates.schema import TemplateDef
 
 logger = logging.getLogger(__name__)
 
-_TEMPLATE_FILE = "template.yaml"
-_PROMPT_FILE = "prompt.md"
+TEMPLATE_FILE = "template.yaml"
+PROMPT_FILE = "prompt.md"
 
 
 class TemplateRegistry:
@@ -27,14 +27,14 @@ class TemplateRegistry:
         for dir_path in self._dirs:
             if not dir_path.is_dir():
                 continue
-            for t_name, transport_dir in self._iter_transport_dirs(dir_path, transport):
-                for tmpl in self._iter_templates_in_transport(transport_dir, t_name):
+            for t_name, transport_dir in self.iter_transport_dirs(dir_path, transport):
+                for tmpl in self.iter_templates_in_transport(transport_dir, t_name):
                     if tmpl not in templates:
                         templates.append(tmpl)
         return templates
 
     @staticmethod
-    def _iter_transport_dirs(dir_path, transport: str | None):
+    def iter_transport_dirs(dir_path, transport: str | None):
         if transport:
             yield (transport, dir_path / transport)
             return
@@ -42,25 +42,25 @@ class TemplateRegistry:
             if entry.is_dir():
                 yield (entry.name, entry)
 
-    def _iter_templates_in_transport(self, transport_dir, t_name: str):
+    def iter_templates_in_transport(self, transport_dir, t_name: str):
         if not transport_dir.is_dir():
             return
         for entry in sorted(transport_dir.iterdir()):
             if not entry.is_dir():
                 continue
-            template_path = entry / _TEMPLATE_FILE
+            template_path = entry / TEMPLATE_FILE
             if template_path.is_file():
-                yield self._load_template_file(template_path, t_name)
+                yield self.load_template_file(template_path, t_name)
 
     def get(self, transport: str, name: str) -> TemplateDef:
         for dir_path in self._dirs:
             template_dir = dir_path / transport / name
-            template_path = template_dir / _TEMPLATE_FILE
+            template_path = template_dir / TEMPLATE_FILE
             if template_path.is_file():
-                return self._load_template_file(template_path, transport)
+                return self.load_template_file(template_path, transport)
         raise FileNotFoundError(f"Template not found: {transport}/{name}")
 
-    def _load_template_file(self, path: Path, transport: str | None) -> TemplateDef:
+    def load_template_file(self, path: Path, transport: str | None) -> TemplateDef:
         with open(path, encoding="utf-8") as f:
             data = yaml.safe_load(f)
         if not isinstance(data, dict):
@@ -75,7 +75,7 @@ class TemplateRegistry:
 
     def prompt_path(self, transport: str, name: str) -> Path | None:
         for dir_path in self._dirs:
-            prompt_file = dir_path / transport / name / _PROMPT_FILE
+            prompt_file = dir_path / transport / name / PROMPT_FILE
             if prompt_file.is_file():
                 return prompt_file
         return None

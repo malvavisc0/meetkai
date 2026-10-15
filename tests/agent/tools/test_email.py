@@ -6,11 +6,11 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from kai.agent.tools.email import (
-    _valid_recipient,
     build_email_workflow_instruction,
     format_from_header,
     make_send_email_tool,
     register_email_tool,
+    valid_recipient,
 )
 
 
@@ -29,7 +29,7 @@ class TestValidRecipient:
         ],
     )
     def test_accepts_valid(self, addr):
-        assert _valid_recipient(addr) is True
+        assert valid_recipient(addr) is True
 
     @pytest.mark.parametrize(
         "addr",
@@ -47,7 +47,7 @@ class TestValidRecipient:
         ],
     )
     def test_rejects_invalid(self, addr):
-        assert _valid_recipient(addr) is False
+        assert valid_recipient(addr) is False
 
 
 class TestSendEmailRejects:

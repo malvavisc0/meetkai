@@ -14,11 +14,42 @@ from fastapi import Request
 from pydantic import BaseModel
 
 FRESHNESS_WINDOW_SECONDS = 300
-_SEEN_NONCES_MAX = 10000
-_seen_nonces: OrderedDict[str, float] = OrderedDict()
+SEEN_NONCES_MAX = 10000
 
 
-def _strip_whsec_prefix(secret: str) -> str:
+class NonceStore:
+    """Bounded record of recently seen webhook nonces (process-local dedup).
+
+    Encapsulated so the mutable state is not a bare module-level global.
+    """
+
+    def __init__(self) -> None:
+        self._items: OrderedDict[str, float] = OrderedDict()
+
+    def prune(self, now: float) -> None:
+        cutoff = now - FRESHNESS_WINDOW_SECONDS
+        while self._items and next(iter(self._items.values())) < cutoff:
+            self._items.popitem(last=False)
+
+    def seen(self, nonce: str) -> bool:
+        return nonce in self._items
+
+    def record(self, nonce: str, now: float) -> None:
+        self._items[nonce] = now
+        if len(self._items) > SEEN_NONCES_MAX:
+            self._items.popitem(last=False)
+
+    def count(self) -> int:
+        return len(self._items)
+
+    def clear(self) -> None:
+        self._items.clear()
+
+
+SEEN_NONCES = NonceStore()
+
+
+def strip_whsec_prefix(secret: str) -> str:
     """Strip the ``whsec_`` prefix Resend/Svix prepends to signing secrets."""
     return secret[len("whsec_") :] if secret.startswith("whsec_") else secret
 
@@ -35,7 +66,7 @@ class NormalizedMessage(BaseModel):
 @dataclass(frozen=True)
 class WebhookType:
     name: str
-    # Verify the provider's signature; call _check_freshness after.
+    # Verify the provider's signature; call check_freshness after.
     verify_signature: Callable[[Request, bytes, str], bool]
     # Parse raw webhook JSON + decrypted connection config dict into NormalizedMessage.
     parse: Callable[[dict, dict], NormalizedMessage]
@@ -44,14 +75,12 @@ class WebhookType:
     nonce_header: str = ""
 
 
-def _prune_seen(now: float) -> None:
+def prune_seen(now: float) -> None:
     """Evict nonce entries older than the freshness window."""
-    cutoff = now - FRESHNESS_WINDOW_SECONDS
-    while _seen_nonces and next(iter(_seen_nonces.values())) < cutoff:
-        _seen_nonces.popitem(last=False)
+    SEEN_NONCES.prune(now)
 
 
-def _check_freshness(
+def check_freshness(
     *, timestamp: float | None = None, nonce: str | None = None, now: float | None = None
 ) -> bool:
     """Reject stale (past freshness window) and replayed (duplicate nonce) requests.
@@ -63,27 +92,25 @@ def _check_freshness(
     if timestamp is None and nonce is None:
         return False
     t = now if now is not None else time.time()
-    _prune_seen(t)
+    SEEN_NONCES.prune(t)
     if timestamp is not None and abs(t - timestamp) > FRESHNESS_WINDOW_SECONDS:
         return False
     if nonce is not None:
-        if nonce in _seen_nonces:
+        if SEEN_NONCES.seen(nonce):
             return False
-        _seen_nonces[nonce] = t
-        if len(_seen_nonces) > _SEEN_NONCES_MAX:
-            _seen_nonces.popitem(last=False)
+        SEEN_NONCES.record(nonce, t)
     return True
 
 
-def _clear_seen_nonces() -> None:
+def clear_seen_nonces() -> None:
     """Drop all cached nonces (test use only)."""
-    _seen_nonces.clear()
+    SEEN_NONCES.clear()
 
 
 def is_nonce_seen(nonce: str) -> bool:
     """Return True if ``nonce`` was recorded by a prior successful forward."""
-    _prune_seen(time.time())
-    return nonce in _seen_nonces
+    SEEN_NONCES.prune(time.time())
+    return SEEN_NONCES.seen(nonce)
 
 
 def record_nonce(nonce: str, now: float | None = None) -> None:
@@ -93,32 +120,30 @@ def record_nonce(nonce: str, now: float | None = None) -> None:
     bot failure leaves the nonce unrecorded so retries get a clean re-forward.
     """
     t = now if now is not None else time.time()
-    _prune_seen(t)
-    _seen_nonces[nonce] = t
-    if len(_seen_nonces) > _SEEN_NONCES_MAX:
-        _seen_nonces.popitem(last=False)
+    SEEN_NONCES.prune(t)
+    SEEN_NONCES.record(nonce, t)
 
 
-def _sign_resend(svix_id: str, svix_timestamp: str, body: bytes, secret: str) -> str:
+def sign_resend(svix_id: str, svix_timestamp: str, body: bytes, secret: str) -> str:
     """Produce the ``v1,<base64-mac>`` signature for a Resend/Svix payload.
 
-    Shared between ``_verify_resend`` and ``EmailConnectionsService.test()``
+    Shared between ``verify_resend`` and ``EmailConnectionsService.test()``
     so producer and verifier can never drift. Raises ``ValueError`` on
     invalid base64 secret.
     """
     signed = f"{svix_id}.{svix_timestamp}.".encode() + body
-    key = base64.b64decode(_strip_whsec_prefix(secret))  # raises on invalid base64
+    key = base64.b64decode(strip_whsec_prefix(secret))  # raises on invalid base64
     mac = base64.b64encode(hmac.new(key, signed, hashlib.sha256).digest()).decode()
     return f"v1,{mac}"
 
 
-def _verify_resend(request: Request, body: bytes, secret: str) -> bool:
+def verify_resend(request: Request, body: bytes, secret: str) -> bool:
     """Verify a Resend (Svix-signed) inbound webhook.
 
     Decodes the base64 signing secret, computes HMAC-SHA256 over
     ``{svix-id}.{svix-timestamp}.{raw_body}``, and compares against the
     ``svix-signature`` header candidates. Timestamp freshness is checked via
-    ``_check_freshness``; nonce dedup is owned by the route.
+    ``check_freshness``; nonce dedup is owned by the route.
     """
     svix_id = request.headers.get("svix-id", "")
     svix_ts = request.headers.get("svix-timestamp", "")
@@ -129,10 +154,10 @@ def _verify_resend(request: Request, body: bytes, secret: str) -> bool:
         ts = int(svix_ts)
     except ValueError:
         return False
-    if not _check_freshness(timestamp=ts, nonce=None):
+    if not check_freshness(timestamp=ts, nonce=None):
         return False
     try:
-        expected = _sign_resend(svix_id, svix_ts, body, secret)
+        expected = sign_resend(svix_id, svix_ts, body, secret)
     except Exception:
         return False
     expected_mac = expected[3:]  # strip "v1," for comparison
@@ -152,14 +177,14 @@ class WebhookUpstreamError(Exception):
     """
 
 
-_RESEND_API_BASE = "https://api.resend.com"
+RESEND_API_BASE = "https://api.resend.com"
 
 
-def _fetch_resend_email(email_id: str, api_key: str) -> dict:
+def fetch_resend_email(email_id: str, api_key: str) -> dict:
     """GET /emails/receiving/{id} — the only source of body text/HTML."""
     try:
         resp = httpx.get(
-            f"{_RESEND_API_BASE}/emails/receiving/{email_id}",
+            f"{RESEND_API_BASE}/emails/receiving/{email_id}",
             headers={"Authorization": f"Bearer {api_key}"},
             timeout=10,
         )
@@ -174,11 +199,11 @@ def _fetch_resend_email(email_id: str, api_key: str) -> dict:
     return resp.json()
 
 
-def _fetch_resend_attachments(email_id: str, api_key: str) -> list[dict]:
+def fetch_resend_attachments(email_id: str, api_key: str) -> list[dict]:
     """GET /emails/receiving/{id}/attachments — the only source of download URLs."""
     try:
         resp = httpx.get(
-            f"{_RESEND_API_BASE}/emails/receiving/{email_id}/attachments",
+            f"{RESEND_API_BASE}/emails/receiving/{email_id}/attachments",
             headers={"Authorization": f"Bearer {api_key}"},
             timeout=10,
         )
@@ -193,7 +218,7 @@ def _fetch_resend_attachments(email_id: str, api_key: str) -> list[dict]:
     return resp.json().get("data", [])
 
 
-def _extract_attachments(attachments: list[dict]) -> list[dict]:
+def extract_attachments(attachments: list[dict]) -> list[dict]:
     """Map the Attachments API response to the URL-only contract."""
     return [
         {
@@ -205,7 +230,7 @@ def _extract_attachments(attachments: list[dict]) -> list[dict]:
     ]
 
 
-def _extract_email_body(email: dict) -> str:
+def extract_email_body(email: dict) -> str:
     """Prefer the text part; fall back to stripped HTML if no text part."""
     text = email.get("text", "")
     if text:
@@ -217,7 +242,7 @@ def _extract_email_body(email: dict) -> str:
     return ""
 
 
-def _parse_resend(payload: dict, cfg: dict) -> NormalizedMessage:
+def parse_resend(payload: dict, cfg: dict) -> NormalizedMessage:
     """Map a Resend ``email.received`` event to NormalizedMessage.
 
     The webhook carries only envelope metadata; body text/HTML and attachment
@@ -232,17 +257,17 @@ def _parse_resend(payload: dict, cfg: dict) -> NormalizedMessage:
 
     api_key = cfg.get("api_key", "")
     email_id = data["email_id"]
-    email = _fetch_resend_email(email_id, api_key)
-    attachments = _fetch_resend_attachments(email_id, api_key) if data.get("attachments") else []
+    email = fetch_resend_email(email_id, api_key)
+    attachments = fetch_resend_attachments(email_id, api_key) if data.get("attachments") else []
 
     return NormalizedMessage(
         source=data["from"],
-        text=_extract_email_body(email),
+        text=extract_email_body(email),
         metadata={
             "message_id": data.get("message_id", ""),
             "subject": data.get("subject", ""),
             "to": data.get("to", []),
-            "attachments": _extract_attachments(attachments),
+            "attachments": extract_attachments(attachments),
         },
         event="email.inbound",
     )
@@ -251,8 +276,8 @@ def _parse_resend(payload: dict, cfg: dict) -> NormalizedMessage:
 WEBHOOK_TYPES: dict[str, WebhookType] = {
     "resend": WebhookType(
         name="resend",
-        verify_signature=_verify_resend,
-        parse=_parse_resend,
+        verify_signature=verify_resend,
+        parse=parse_resend,
         nonce_header="svix-id",
     ),
 }

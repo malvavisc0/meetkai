@@ -49,7 +49,7 @@ class BotStartupError(Exception):
     """Raised when a bot fails during async startup."""
 
 
-def _uptime_seconds(started_at: str) -> int | None:
+def uptime_seconds(started_at: str) -> int | None:
     """Seconds since the run's ``started_at`` ISO timestamp, or None."""
     if not started_at:
         return None
@@ -63,9 +63,9 @@ def _uptime_seconds(started_at: str) -> int | None:
         return None
 
 
-def _relative(started_at: str) -> str:
+def relative(started_at: str) -> str:
     """Compact '2m ago' / '3h ago' / 'just now' from an ISO timestamp."""
-    secs = _uptime_seconds(started_at)
+    secs = uptime_seconds(started_at)
     if secs is None:
         return ""
     if secs < 5:

@@ -14,7 +14,7 @@ from kai.cockpit.routes.deployments._shared import fmt_ts, get_deployment
 router = APIRouter()
 
 
-def _conv_sort_key(item: tuple[str, list[dict]]) -> str:
+def conv_sort_key(item: tuple[str, list[dict]]) -> str:
     """Sort conversations by their latest message timestamp (newest first)."""
     _chat_id, msgs = item
     last_ts = ""
@@ -43,7 +43,7 @@ async def deployment_history(
     total = sum(len(msgs) for msgs in history_raw.values())
 
     history: dict[str, list[dict]] = {}
-    for chat_id, msgs in sorted(history_raw.items(), key=_conv_sort_key, reverse=True):
+    for chat_id, msgs in sorted(history_raw.items(), key=conv_sort_key, reverse=True):
         history[chat_id] = [{**m, "ts": fmt_ts(m.get("ts"))} for m in reversed(msgs)]
 
     return templates.TemplateResponse(

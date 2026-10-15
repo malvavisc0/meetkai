@@ -4,8 +4,8 @@
 secret verification, nonce dedup (202) via the route-owned helpers, and
 nonce-not-recorded-on-502 (so provider retries re-forward).
 
-03 covers: ``_verify_resend`` (svix scheme: good/bad signature, stale
-timestamp, missing headers, base64 secret), ``_parse_resend`` (text part,
+03 covers: ``verify_resend`` (svix scheme: good/bad signature, stale
+timestamp, missing headers, base64 secret), ``parse_resend`` (text part,
 HTML fallback, attachments), the ``NormalizedMessage`` contract, and
 ``is_nonce_seen``/``record_nonce`` helpers.
 """
@@ -24,11 +24,11 @@ from kai.cockpit.connections.secrets import encrypt_config
 from kai.cockpit.connections.webhooks import (
     WEBHOOK_TYPES,
     NormalizedMessage,
-    _clear_seen_nonces,
-    _parse_resend,
-    _verify_resend,
+    clear_seen_nonces,
     is_nonce_seen,
+    parse_resend,
     record_nonce,
+    verify_resend,
 )
 from kai.cockpit.deployments import DeploymentsService
 from kai.cockpit.models import Connection, Deployment, User
@@ -68,9 +68,9 @@ def _resend_conn(user_id: int, secret: str) -> Connection:
 
 @pytest.fixture(autouse=True)
 def _clean_nonces():
-    _clear_seen_nonces()
+    clear_seen_nonces()
     yield
-    _clear_seen_nonces()
+    clear_seen_nonces()
 
 
 @pytest.fixture(autouse=True)
@@ -80,9 +80,9 @@ def _encryption_env(monkeypatch, tmp_path):
     monkeypatch.setenv("KAI_CREDENTIAL_KEY_VERSION", "v1")
     from kai.cockpit.connections import secrets as secrets_mod
 
-    secrets_mod._clear_key_cache()
+    secrets_mod.clear_key_cache()
     yield
-    secrets_mod._clear_key_cache()
+    secrets_mod.clear_key_cache()
 
 
 def _svix_sign(secret: str, svix_id: str, ts: int, body: bytes) -> str:
@@ -94,13 +94,13 @@ def _svix_sign(secret: str, svix_id: str, ts: int, body: bytes) -> str:
 
 
 # ---------------------------------------------------------------------------
-# 03: _verify_resend
+# 03: verify_resend
 # ---------------------------------------------------------------------------
 
 
 class _FakeRequest(Request):
     """Minimal stand-in for Starlette Request — only headers are read by
-    _verify_resend (the body is passed separately as the 2nd positional arg)."""
+    verify_resend (the body is passed separately as the 2nd positional arg)."""
 
     def __init__(self, headers: dict[str, str]):
         self._headers = Headers(headers)
@@ -123,7 +123,7 @@ class TestVerifyResend:
         req = _FakeRequest(
             {"svix-id": "msg-1", "svix-timestamp": str(ts), "svix-signature": sig},
         )
-        assert _verify_resend(req, body, secret) is True
+        assert verify_resend(req, body, secret) is True
 
     def test_bad_signature_rejected(self):
         secret = base64.b64encode(b"raw-key-bytes").decode()
@@ -132,7 +132,7 @@ class TestVerifyResend:
         req = _FakeRequest(
             {"svix-id": "msg-1", "svix-timestamp": str(ts), "svix-signature": "v1,deadbeef=="},
         )
-        assert _verify_resend(req, body, secret) is False
+        assert verify_resend(req, body, secret) is False
 
     def test_stale_timestamp_rejected(self):
         secret = base64.b64encode(b"raw-key-bytes").decode()
@@ -142,17 +142,17 @@ class TestVerifyResend:
         req = _FakeRequest(
             {"svix-id": "msg-1", "svix-timestamp": str(ts), "svix-signature": sig},
         )
-        assert _verify_resend(req, body, secret) is False
+        assert verify_resend(req, body, secret) is False
 
     def test_missing_headers_rejected(self):
         req = _FakeRequest({})
-        assert _verify_resend(req, b"{}", "secret") is False
+        assert verify_resend(req, b"{}", "secret") is False
 
     def test_non_integer_timestamp_rejected(self):
         req = _FakeRequest(
             {"svix-id": "x", "svix-timestamp": "not-a-number", "svix-signature": "v1,x"},
         )
-        assert _verify_resend(req, b"{}", base64.b64encode(b"k").decode()) is False
+        assert verify_resend(req, b"{}", base64.b64encode(b"k").decode()) is False
 
     def test_invalid_base64_secret_rejected(self):
         ts = int(time.time())
@@ -160,7 +160,7 @@ class TestVerifyResend:
             {"svix-id": "x", "svix-timestamp": str(ts), "svix-signature": "v1,x"},
         )
         # secret that isn't valid base64 → b64decode fails → False
-        assert _verify_resend(req, b"{}", "not!!!base64!!!") is False
+        assert verify_resend(req, b"{}", "not!!!base64!!!") is False
 
     def test_verify_records_no_nonce(self):
         # verify_signature must NOT record the nonce — the route owns dedup.
@@ -171,7 +171,7 @@ class TestVerifyResend:
         req = _FakeRequest(
             {"svix-id": "msg-nonce", "svix-timestamp": str(ts), "svix-signature": sig},
         )
-        assert _verify_resend(req, body, secret) is True
+        assert verify_resend(req, body, secret) is True
         # the svix-id is NOT in the nonce set after verify alone
         assert is_nonce_seen("msg-nonce") is False
 
@@ -185,22 +185,22 @@ class TestVerifyResend:
         req = _FakeRequest(
             {"svix-id": "msg-1", "svix-timestamp": str(ts), "svix-signature": sig},
         )
-        assert _verify_resend(req, body, secret) is True
+        assert verify_resend(req, body, secret) is True
 
 
 # ---------------------------------------------------------------------------
-# 03: _parse_resend
+# 03: parse_resend
 # ---------------------------------------------------------------------------
 
 
 class TestParseResend:
-    """``_parse_resend`` maps Resend's real webhook shape.
+    """``parse_resend`` maps Resend's real webhook shape.
 
     The webhook body is ``{"type": ..., "created_at": ..., "data": {...}}``
     — envelope metadata only. Body text/HTML and attachment download URLs
     require follow-up calls to the Received Emails / Attachments REST APIs
-    (monkeypatched here via ``kai.cockpit.connections.webhooks._fetch_resend_email`` /
-    ``_fetch_resend_attachments``), authenticated with the connection's
+    (monkeypatched here via ``kai.cockpit.connections.webhooks.fetch_resend_email`` /
+    ``fetch_resend_attachments``), authenticated with the connection's
     ``api_key``.
     """
 
@@ -225,10 +225,10 @@ class TestParseResend:
 
         monkeypatch.setattr(
             webhooks_mod,
-            "_fetch_resend_email",
+            "fetch_resend_email",
             lambda email_id, api_key: {"text": "hello", "html": "<p>x</p>"},
         )
-        msg = _parse_resend(self._payload(), {"api_key": "re_test"})
+        msg = parse_resend(self._payload(), {"api_key": "re_test"})
         assert msg.source == "a@b.com"
         assert msg.text == "hello"
         assert msg.event == "email.inbound"
@@ -238,27 +238,27 @@ class TestParseResend:
 
         monkeypatch.setattr(
             webhooks_mod,
-            "_fetch_resend_email",
+            "fetch_resend_email",
             lambda email_id, api_key: {"html": "<p>Hello <b>world</b></p>"},
         )
-        msg = _parse_resend(self._payload(), {"api_key": "re_test"})
+        msg = parse_resend(self._payload(), {"api_key": "re_test"})
         assert "Hello" in msg.text
         assert "<p>" not in msg.text
 
     def test_empty_body_when_no_text_or_html(self, monkeypatch):
         import kai.cockpit.connections.webhooks as webhooks_mod
 
-        monkeypatch.setattr(webhooks_mod, "_fetch_resend_email", lambda email_id, api_key: {})
-        msg = _parse_resend(self._payload(), {"api_key": "re_test"})
+        monkeypatch.setattr(webhooks_mod, "fetch_resend_email", lambda email_id, api_key: {})
+        msg = parse_resend(self._payload(), {"api_key": "re_test"})
         assert msg.text == ""
 
     def test_metadata_fields(self, monkeypatch):
         import kai.cockpit.connections.webhooks as webhooks_mod
 
         monkeypatch.setattr(
-            webhooks_mod, "_fetch_resend_email", lambda email_id, api_key: {"text": "hi"}
+            webhooks_mod, "fetch_resend_email", lambda email_id, api_key: {"text": "hi"}
         )
-        msg = _parse_resend(self._payload(), {"api_key": "re_test"})
+        msg = parse_resend(self._payload(), {"api_key": "re_test"})
         assert msg.metadata["message_id"] == "msg-42"
         assert msg.metadata["subject"] == "Question"
         assert msg.metadata["to"] == ["support@meetk.ai"]
@@ -267,11 +267,11 @@ class TestParseResend:
         import kai.cockpit.connections.webhooks as webhooks_mod
 
         monkeypatch.setattr(
-            webhooks_mod, "_fetch_resend_email", lambda email_id, api_key: {"text": "see attached"}
+            webhooks_mod, "fetch_resend_email", lambda email_id, api_key: {"text": "see attached"}
         )
         monkeypatch.setattr(
             webhooks_mod,
-            "_fetch_resend_attachments",
+            "fetch_resend_attachments",
             lambda email_id, api_key: [
                 {
                     "download_url": "https://resend.example/att1",
@@ -280,7 +280,7 @@ class TestParseResend:
                 },
             ],
         )
-        msg = _parse_resend(
+        msg = parse_resend(
             self._payload(attachments=[{"id": "att-1", "filename": "shot.png"}]),
             {"api_key": "re_test"},
         )
@@ -294,14 +294,14 @@ class TestParseResend:
         import kai.cockpit.connections.webhooks as webhooks_mod
 
         monkeypatch.setattr(
-            webhooks_mod, "_fetch_resend_email", lambda email_id, api_key: {"text": "hi"}
+            webhooks_mod, "fetch_resend_email", lambda email_id, api_key: {"text": "hi"}
         )
 
         def _boom(email_id, api_key):
             raise AssertionError("attachments API should not be called")
 
-        monkeypatch.setattr(webhooks_mod, "_fetch_resend_attachments", _boom)
-        msg = _parse_resend(self._payload(attachments=[]), {"api_key": "re_test"})
+        monkeypatch.setattr(webhooks_mod, "fetch_resend_attachments", _boom)
+        msg = parse_resend(self._payload(attachments=[]), {"api_key": "re_test"})
         assert msg.metadata["attachments"] == []
 
     def test_non_inbound_event_skips_api_calls(self, monkeypatch):
@@ -310,10 +310,10 @@ class TestParseResend:
         def _boom(*args, **kwargs):
             raise AssertionError("no API call should be made for a non-inbound event")
 
-        monkeypatch.setattr(webhooks_mod, "_fetch_resend_email", _boom)
-        monkeypatch.setattr(webhooks_mod, "_fetch_resend_attachments", _boom)
+        monkeypatch.setattr(webhooks_mod, "fetch_resend_email", _boom)
+        monkeypatch.setattr(webhooks_mod, "fetch_resend_attachments", _boom)
         payload = {"type": "email.sent", "created_at": "x", "data": {"from": "a@b.com"}}
-        msg = _parse_resend(payload, {"api_key": "re_test"})
+        msg = parse_resend(payload, {"api_key": "re_test"})
         assert msg.event == "email.sent"
         assert msg.text == ""
 
@@ -323,9 +323,9 @@ class TestParseResend:
         def _fail(email_id, api_key):
             raise webhooks_mod.WebhookUpstreamError("boom")
 
-        monkeypatch.setattr(webhooks_mod, "_fetch_resend_email", _fail)
+        monkeypatch.setattr(webhooks_mod, "fetch_resend_email", _fail)
         with pytest.raises(webhooks_mod.WebhookUpstreamError):
-            _parse_resend(self._payload(), {"api_key": "re_test"})
+            parse_resend(self._payload(), {"api_key": "re_test"})
 
     def test_normalized_message_contract_fields(self):
         msg = NormalizedMessage(source="s", text="t", metadata={"k": 1}, event="e")
@@ -353,7 +353,7 @@ class TestNonceHelpers:
         assert is_nonce_seen("stale") is False
 
     def test_record_bounds_to_max(self, monkeypatch):
-        monkeypatch.setattr("kai.cockpit.connections.webhooks._SEEN_NONCES_MAX", 3)
+        monkeypatch.setattr("kai.cockpit.connections.webhooks.SEEN_NONCES_MAX", 3)
         record_nonce("a")
         record_nonce("b")
         record_nonce("c")

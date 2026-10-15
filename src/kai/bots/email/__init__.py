@@ -31,11 +31,11 @@ from kai.agent.tools import WEB_WORKFLOW_INSTRUCTIONS
 from kai.agent.tools.conversation import register_conversation_tools
 from kai.agent.tools.email import (
     SmtpSettings,
-    _valid_recipient,
     format_from_header,
     get_smtp_settings,
     send_via_smtp,
     set_email_body,
+    valid_recipient,
 )
 from kai.bots.base import BaseBot, TellResult
 from kai.bots.email.config import EmailSettings, get_email_settings
@@ -111,6 +111,16 @@ class Bot(BaseBot):
         self._shutting_down = asyncio.Event()
         self._smtp: SmtpSettings | None = None
 
+    @property
+    def reply_style(self) -> str:
+        """Reply style applied to outgoing bodies (from the template)."""
+        return self._reply_style
+
+    @property
+    def post_processing_profile(self) -> str:
+        """Post-processing profile applied to outgoing bodies."""
+        return self._post_processor._config.profile
+
     def configure(
         self,
         agent: KaiAgent,
@@ -122,27 +132,26 @@ class Bot(BaseBot):
         super().configure(agent, settings, template=template, tools=tools)
         self._settings = settings
         self._email = get_email_settings()
-        self._config = self._load_config(template)
+        self._config = self.load_config(template)
         if settings.agent_language_explicit:
             self._config = self._config.model_copy(update={"language": settings.agent_language})
         self._reply_style = template.reply_style
         self._post_processor = PostProcessor(template.post_processing)
-        self._prompt = self._load_prompt(template)
+        self._prompt = self.load_prompt(template)
         agent.set_system_prompt(self._prompt)
         agent.set_temperature(self._config.temperature)
         agent.set_timezone(self._config.timezone)
-        if self._has_tool("web_search"):
+        if self.has_tool("web_search"):
             agent.add_tool_workflow(WEB_WORKFLOW_INSTRUCTIONS)
-        if self._has_tool("record_note") or self._has_tool("get_conversation_messages"):
+        if self.has_tool("record_note") or self.has_tool("get_conversation_messages"):
             register_conversation_tools(agent, tool_context=self._tool_context)
         self.setup_task_scheduler(agent, settings)
         # Wire escalation and blacklist tools' module-level state to this bot.
-        self._wire_escalation_tools(settings, self._config.blacklist)
-        # SMTP settings for the reply path (KAI_SMTP_TOOL_* env, injected by
-        # the cockpit's required-credential env-injection loop added in 01).
+        self.wire_escalation_tools(settings, self._config.blacklist)
+        # SMTP settings for the reply path (KAI_SMTP_TOOL_* injected by the cockpit).
         self._smtp = get_smtp_settings()
 
-    def _load_config(self, template: TemplateDef, config_path: Path | None = None) -> BotConfig:
+    def load_config(self, template: TemplateDef, config_path: Path | None = None) -> BotConfig:
         # Config merge: BotConfig defaults ← template.config ← config.json
         # (the per-deployment file the cockpit writes).
         path = config_path or self.resolve_config_path()
@@ -157,7 +166,7 @@ class Bot(BaseBot):
     def display_name(self) -> str:
         return self._config.display_name
 
-    def _load_prompt(self, template: TemplateDef) -> str:
+    def load_prompt(self, template: TemplateDef) -> str:
         from kai.templates import TemplateRegistry, escalation_prompt_section
 
         registry = TemplateRegistry.bundled()
@@ -231,18 +240,18 @@ class Bot(BaseBot):
             return {"ok": False}
 
         source = event.get("source", "")
-        if self._is_blacklisted(source):
+        if self.is_blacklisted(source):
             logger.info("Ignoring blacklisted sender: %s", source)
             return {"ok": True}
 
         try:
-            await self._process_inbound_email(event, source)
+            await self.process_inbound_email(event, source)
             return {"ok": True}
         except Exception:
             logger.exception("ingest_event failed for %s", event.get("source", "<unknown>"))
             return {"ok": False}
 
-    def _is_blacklisted(self, source: str) -> bool:
+    def is_blacklisted(self, source: str) -> bool:
         # Drop blacklisted senders before any attachment download or agent
         # turn — the list is re-checked from config on every email (no
         # persisted block history). Both args are the normalized sender;
@@ -252,7 +261,7 @@ class Bot(BaseBot):
             sender, sender, set(), {e.lower() for e in self._config.blacklist}
         )
 
-    async def _process_inbound_email(self, event: dict, source: str) -> None:
+    async def process_inbound_email(self, event: dict, source: str) -> None:
         assert self._agent is not None
         text = event["text"]
         metadata = event.get("metadata", {})
@@ -260,7 +269,7 @@ class Bot(BaseBot):
         message_id = metadata.get("message_id", "")
         attachments = metadata.get("attachments", [])
 
-        images, enriched_text = await self._process_attachments(text, attachments)
+        images, enriched_text = await self.process_attachments(text, attachments)
 
         context = MessageContext(
             sender_name=source,
@@ -282,19 +291,19 @@ class Bot(BaseBot):
         )
 
         action = result.action
-        if action.action == "reply" and action.text and not self._sent_via_tool(result, source):
-            await self._send_reply(
+        if action.action == "reply" and action.text and not self.sent_via_tool(result, source):
+            await self.send_reply(
                 source, subject, action.text, message_id=message_id, original_body=text
             )
 
     @staticmethod
-    def _sent_via_tool(result: ChatResult, target: str) -> bool:
+    def sent_via_tool(result: ChatResult, target: str) -> bool:
         """True if a ``send_email`` tool call already delivered to ``target``.
 
         The generic ``send_email`` tool (``kai.agent.tools.email``) is
         registered on every bot's agent whenever SMTP is configured — the
         email bot included — alongside this bot's own action-based send
-        path (``reply`` -> :meth:`_send_reply`). Nothing stops the model
+        path (``reply`` -> :meth:`send_reply`). Nothing stops the model
         from using both in the same turn (e.g. calling the tool, then still
         returning ``action="reply"`` in its structured output), which would
         otherwise deliver the same message twice. Checking the turn's
@@ -350,7 +359,7 @@ class Bot(BaseBot):
         The agent decides what to do (send an email, answer the operator,
         stay silent) through its
         structured ``EmailAction``. The bot dispatches it — see
-        :meth:`_sent_via_tool` for why a tool call and a ``reply`` action in
+        :meth:`sent_via_tool` for why a tool call and a ``reply`` action in
         the same turn don't cause a double send. ``reply`` delivers the
         email via SMTP (unless already delivered by the tool) and records it
         in the target's history; ``console`` returns the reply to the
@@ -374,7 +383,7 @@ class Bot(BaseBot):
                 extra_system_context=self._OPERATOR_TURN_CONTEXT,
                 # ``reply`` text is addressed to the *target* email, not the
                 # operator — don't record it as an assistant reply in the
-                # operator's own history bucket. ``_dispatch_operator_action``
+                # operator's own history bucket. ``dispatch_operator_action``
                 # records it in the target's history once delivery is confirmed.
                 is_delegated_action=lambda a: a.action == "reply",
             )
@@ -382,9 +391,9 @@ class Bot(BaseBot):
             logger.exception("operator turn failed")
             return TellResult(ok=False, reply="operator turn failed")
 
-        return await self._dispatch_operator_action(result)
+        return await self.dispatch_operator_action(result)
 
-    async def _dispatch_operator_action(self, result: ChatResult) -> TellResult:
+    async def dispatch_operator_action(self, result: ChatResult) -> TellResult:
         """Dispatch the agent's structured action for an operator turn.
 
         ``reply`` sends an email to ``action.target`` via SMTP and records it
@@ -396,22 +405,22 @@ class Bot(BaseBot):
         kind = action.action
 
         if kind == "reply":
-            return await self._dispatch_reply(result, action)
+            return await self.dispatch_reply(result, action)
         if kind == "silent":
             return TellResult(ok=True, reply="", actions=[{"tool": kind, "ok": True}])
-        return self._dispatch_console(result, action)
+        return self.dispatch_console(result, action)
 
-    async def _dispatch_reply(self, result: ChatResult, action) -> TellResult:
+    async def dispatch_reply(self, result: ChatResult, action) -> TellResult:
         target = (action.target or "").strip()
         out_text = action.text or ""
-        sent_ok, reply = await self._send_operator_reply(result, target, out_text)
+        sent_ok, reply = await self.send_operator_reply(result, target, out_text)
         return TellResult(
             ok=sent_ok and result.error is None,
             actions=[{"tool": "send_reply", "target": target, "text": out_text, "ok": sent_ok}],
             reply=reply,
         )
 
-    async def _send_operator_reply(
+    async def send_operator_reply(
         self, result: ChatResult, target: str, out_text: str
     ) -> tuple[bool, str]:
         if not target:
@@ -420,7 +429,7 @@ class Bot(BaseBot):
             return False, "reply action missing text"
 
         sent_ok = True
-        already_sent = self._sent_via_tool(result, target)
+        already_sent = self.sent_via_tool(result, target)
         if already_sent:
             console.print(
                 f"[green]>[/green]  {out_text[:60]}  "
@@ -429,7 +438,7 @@ class Bot(BaseBot):
         else:
             console.print(f"[green]>[/green]  {out_text[:60]}  [dim](email to {target})[/dim]")
             try:
-                await self._send_email(target, "", out_text)
+                await self.send_email(target, "", out_text)
             except Exception as exc:
                 logger.error("Failed to send email to %s: %s", target, exc)
                 console.print(f"[red]send failed: {target}: {exc}[/red]")
@@ -441,7 +450,7 @@ class Bot(BaseBot):
         return sent_ok, reply
 
     @staticmethod
-    def _dispatch_console(result: ChatResult, action) -> TellResult:
+    def dispatch_console(result: ChatResult, action) -> TellResult:
         actions: list[dict] = []
         for tc in result.tool_calls:
             entry: dict = {"tool": tc.name, "ok": tc.ok}
@@ -471,7 +480,7 @@ class Bot(BaseBot):
         await self._agent.clear_history("operator")
         return {"ok": True}
 
-    async def _send_reply(
+    async def send_reply(
         self,
         to: str,
         subject: str,
@@ -485,9 +494,9 @@ class Bot(BaseBot):
         into the original thread, and appends a quoted copy of the inbound
         body below the agent's reply.
         """
-        smtp = self._require_smtp()
+        smtp = self.require_smtp()
         full_body = (
-            f"{self._post_processor.process(body)}\n\n{self._format_quote(original_body, to)}"
+            f"{self._post_processor.process(body)}\n\n{self.format_quote(original_body, to)}"
         )
         from_domain = smtp.from_address.split("@", 1)[-1] or "localhost"
         msg = EmailMessage()
@@ -499,28 +508,28 @@ class Bot(BaseBot):
             msg["In-Reply-To"] = message_id
             msg["References"] = message_id
         set_email_body(msg, full_body)
-        self._deliver(msg, to, smtp)
+        self.deliver(msg, to, smtp)
 
-    async def _send_email(self, to: str, subject: str, body: str) -> None:
+    async def send_email(self, to: str, subject: str, body: str) -> None:
         """Send a fresh (non-threaded) email — operator-initiated sends."""
-        smtp = self._require_smtp()
+        smtp = self.require_smtp()
         msg = EmailMessage()
         msg["Subject"] = subject or "Re: your email"
         msg["From"] = format_from_header(self._config.display_name, smtp.from_address)
         msg["To"] = to
         set_email_body(msg, self._post_processor.process(body))
-        self._deliver(msg, to, smtp)
+        self.deliver(msg, to, smtp)
 
-    def _require_smtp(self) -> SmtpSettings:
+    def require_smtp(self) -> SmtpSettings:
         """Return the validated SMTP config, raising if not configured."""
         if not self._smtp or not self._smtp.smtp_enabled:
             logger.error("SMTP not configured")
             raise RuntimeError("SMTP not configured")
         return self._smtp
 
-    def _deliver(self, msg: EmailMessage, to: str, smtp: SmtpSettings) -> None:
+    def deliver(self, msg: EmailMessage, to: str, smtp: SmtpSettings) -> None:
         """Validate recipient and send via SMTP."""
-        if not _valid_recipient(to):
+        if not valid_recipient(to):
             logger.error("Invalid recipient: %s", to)
             raise RuntimeError(f"invalid recipient: {to}")
         send_via_smtp(
@@ -533,7 +542,7 @@ class Bot(BaseBot):
         )
 
     @staticmethod
-    def _format_quote(original_body: str, sender: str) -> str:
+    def format_quote(original_body: str, sender: str) -> str:
         """Format the inbound body as a standard ``> `` quoted block."""
         text = original_body.strip()
         if len(text) > 2000:
@@ -541,7 +550,7 @@ class Bot(BaseBot):
         quoted = "\n".join(f"> {line}" if line else ">" for line in text.splitlines())
         return f"On {formatdate(localtime=True)}, {sender} wrote:\n{quoted}"
 
-    async def _process_attachments(
+    async def process_attachments(
         self, text: str, attachments: list[dict]
     ) -> tuple[list[bytes], str]:
         """Download image attachments, tag non-image attachments.
@@ -559,8 +568,8 @@ class Bot(BaseBot):
             filename = att.get("filename", "")
             url = att.get("url", "")
 
-            if content_type.startswith("image/") and self._vision_enabled():
-                img_bytes = await self._download_attachment(url)
+            if content_type.startswith("image/") and self.vision_enabled():
+                img_bytes = await self.download_attachment(url)
                 if img_bytes:
                     images.append(img_bytes)
                     tag = f"[image attached: {filename}]"
@@ -573,7 +582,7 @@ class Bot(BaseBot):
 
         return images, enriched
 
-    async def _download_attachment(self, url: str) -> bytes | None:
+    async def download_attachment(self, url: str) -> bytes | None:
         """Download an attachment with a size cap.
 
         The URL comes from Resend's signed webhook (already verified by the
@@ -595,7 +604,7 @@ class Bot(BaseBot):
             logger.exception("Failed to download attachment: %s", url)
             return None
 
-    def _vision_enabled(self) -> bool:
+    def vision_enabled(self) -> bool:
         """True when the deployment's image feature flag is on.
 
         Sourced from ``BotConfig.vision`` (config.json, written by the cockpit

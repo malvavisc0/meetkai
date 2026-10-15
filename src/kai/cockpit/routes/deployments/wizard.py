@@ -24,14 +24,14 @@ from kai.templates.resolver import tool_configured_map, validate_tools
 router = APIRouter()
 
 
-def _templates_for(bot_type: str) -> list:
+def templates_for(bot_type: str) -> list:
     """Bundled templates for a transport, sorted by display name."""
     templates_list = TemplateRegistry.bundled().list(transport=bot_type)
     templates_list.sort(key=lambda t: t.display_name.lower())
     return templates_list
 
 
-def _wizard_context(
+def wizard_context(
     request: Request,
     bot_type: str,
     goal: str,
@@ -55,7 +55,7 @@ def _wizard_context(
             "goal": goal,
             "language": language,
             "languages": ALL_LANGUAGES,
-            "templates": _templates_for(bot_type),
+            "templates": templates_for(bot_type),
             "template": template,
             "missing_connections": missing_required_connections(db, user, bt) if bt else [],
             "error": error,
@@ -79,7 +79,7 @@ async def deploy_new_get(
     if existing:
         return RedirectResponse(f"/deployments/{existing.id}", status_code=302)
 
-    return _wizard_context(
+    return wizard_context(
         request,
         bot_type=bot_type,
         goal=bt.default_goal,
@@ -108,7 +108,7 @@ async def deploy_new_post(
         TemplateRegistry.bundled().get(bot_type, template)
     except FileNotFoundError:
         bt = BOT_TYPES.get(bot_type)
-        return _wizard_context(
+        return wizard_context(
             request,
             bot_type=bot_type,
             goal=goal,
@@ -122,7 +122,7 @@ async def deploy_new_post(
     try:
         dep = svc.create(user, bot_type, goal, language, template=template)
     except (ValueError, ConnectionRequiredError) as exc:
-        return _wizard_context(
+        return wizard_context(
             request,
             bot_type=bot_type,
             goal=goal,

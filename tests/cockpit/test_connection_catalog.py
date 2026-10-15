@@ -14,7 +14,7 @@ from kai.cockpit.bots import BOT_TYPES, CREDENTIAL_TYPES, BotType
 from kai.cockpit.deployments import (
     ConnectionRequiredError,
     DeploymentsService,
-    _inject_connection_env,
+    inject_connection_env,
 )
 from kai.cockpit.models import Connection, Deployment
 
@@ -251,7 +251,7 @@ class TestSupportedInjectionLoop(_StartBase):
         self, db, user, monkeypatch, tmp_path
     ):
         """When a supported connection is not toggled on in settings["tools"],
-        _inject_connection_env must not be called for it — start() succeeds.
+        inject_connection_env must not be called for it — start() succeeds.
         (Required connections like smtp are still injected.)"""
         db.add(_resend_conn(user.id))
         db.add(_smtp_conn(user.id))
@@ -265,7 +265,7 @@ class TestSupportedInjectionLoop(_StartBase):
         def record(_env, service, _conn):
             called.append(service)
 
-        monkeypatch.setattr("kai.cockpit.deployments._inject_connection_env", record)
+        monkeypatch.setattr("kai.cockpit.deployments.inject_connection_env", record)
 
         # tools not set at all → no database toggle
         self._run_start(svc, dep, monkeypatch, tmp_path, user)
@@ -287,7 +287,7 @@ class TestSupportedInjectionLoop(_StartBase):
             if service == "database":
                 raise NotImplementedError(service)
 
-        monkeypatch.setattr("kai.cockpit.deployments._inject_connection_env", boom)
+        monkeypatch.setattr("kai.cockpit.deployments.inject_connection_env", boom)
 
         self._run_start(svc, dep, monkeypatch, tmp_path, user)
 
@@ -371,7 +371,7 @@ class TestInjectConnectionEnv:
             updated_at="now",
         )
         with pytest.raises(NotImplementedError, match="legacy"):
-            _inject_connection_env({}, "legacy", conn)
+            inject_connection_env({}, "legacy", conn)
 
     def test_database_injects_sql_dsn(self, monkeypatch):
         """The database branch decrypts the URL and sets KAI_SQL_DSN."""
@@ -379,7 +379,7 @@ class TestInjectConnectionEnv:
         monkeypatch.setenv("KAI_CREDENTIAL_KEY_VERSION", "v1")
         from kai.cockpit.connections import secrets
 
-        secrets._clear_key_cache()
+        secrets.clear_key_cache()
         try:
             encrypted_url = secrets.encrypt("sqlite:///test")
             conn = Connection(
@@ -391,10 +391,10 @@ class TestInjectConnectionEnv:
                 updated_at="now",
             )
             env: dict = {}
-            _inject_connection_env(env, "database", conn)
+            inject_connection_env(env, "database", conn)
             assert env["KAI_SQL_DSN"] == "sqlite:///test"
         finally:
-            secrets._clear_key_cache()
+            secrets.clear_key_cache()
 
     def test_smtp_injects_all_env_vars(self, monkeypatch):
         """The smtp branch decrypts and sets all six KAI_SMTP_TOOL_* vars."""
@@ -402,7 +402,7 @@ class TestInjectConnectionEnv:
         monkeypatch.setenv("KAI_CREDENTIAL_KEY_VERSION", "v1")
         from kai.cockpit.connections import secrets
 
-        secrets._clear_key_cache()
+        secrets.clear_key_cache()
         try:
             encrypted_pw = secrets.encrypt("secret123")
             conn = Connection(
@@ -421,7 +421,7 @@ class TestInjectConnectionEnv:
                 updated_at="now",
             )
             env: dict = {}
-            injected = _inject_connection_env(env, "smtp", conn)
+            injected = inject_connection_env(env, "smtp", conn)
             assert injected is True
             assert env["KAI_SMTP_TOOL_HOST"] == "smtp.example.com"
             assert env["KAI_SMTP_TOOL_PORT"] == "587"
@@ -430,7 +430,7 @@ class TestInjectConnectionEnv:
             assert env["KAI_SMTP_TOOL_FROM_ADDRESS"] == "user@example.com"
             assert env["KAI_SMTP_TOOL_USE_TLS"] == "true"
         finally:
-            secrets._clear_key_cache()
+            secrets.clear_key_cache()
 
 
 class TestSettingsStoresToolToggle:

@@ -35,7 +35,7 @@ class TaskAction(ActionResult):
 
     A scheduled task either replies (delivering the result to the chat) or
     stays silent (no delivery). Bots with richer action vocabularies
-    override :meth:`_execute_task` to pass their own ``ActionResult``
+    override :meth:`execute_task` to pass their own ``ActionResult``
     subclass as ``output_cls``.
     """
 
@@ -147,7 +147,7 @@ class BaseBot(ABC):
         self._template = template
         self._tool_resolution = tools
 
-    def _has_tool(self, name: str) -> bool:
+    def has_tool(self, name: str) -> bool:
         """True when ``name`` is in the resolved tool set for this deployment.
 
         Bot-owned tool registration (``register_chat_history_tool``, the
@@ -178,7 +178,7 @@ class BaseBot(ABC):
         if self._task_scheduler is not None:
             return
         task_tool_names = ("schedule_task", "list_tasks", "cancel_task")
-        if not any(self._has_tool(n) for n in task_tool_names):
+        if not any(self.has_tool(n) for n in task_tool_names):
             return
 
         self._agent = agent
@@ -188,7 +188,7 @@ class BaseBot(ABC):
         self._task_store = TaskStore(store_path)
         self._task_scheduler = TaskScheduler(
             self._task_store,
-            execute=self._execute_task,
+            execute=self.execute_task,
             poll_interval=settings.tasks_poll_interval_seconds,
         )
         ctx = self._tool_context
@@ -196,7 +196,7 @@ class BaseBot(ABC):
             for tool in build_task_tools(
                 self._task_scheduler,
                 context=ctx,
-                clarity_judge=self._judge_goal_clarity,
+                clarity_judge=self.judge_goal_clarity,
             ):
                 agent.register_tool(tool)
         logger.info("Task scheduler wired for bot %s", self.name)
@@ -206,7 +206,7 @@ class BaseBot(ABC):
 
         The store is created once (idempotent creation — a second call keeps
         the existing store so escalations aren't lost). The module-level
-        ``_DYN`` state is *re-published* on every call, so a re-``configure()``
+        ``DYN`` state is *re-published* on every call, so a re-``configure()``
         after another bot overwrote the global restores this bot's store as
         the active one. (Single-bot-per-process is the production model; the
         re-publish keeps multi-bot tests and re-configuration correct.)
@@ -225,7 +225,7 @@ class BaseBot(ABC):
         set_owner_slug(settings.owner_slug)
         logger.info("Escalation store wired for bot %s", self.name)
 
-    def _wire_escalation_tools(self, settings: Settings, blacklist: list[str]) -> None:
+    def wire_escalation_tools(self, settings: Settings, blacklist: list[str]) -> None:
         """Wire the escalate/blacklist tools' module-level state to this bot.
 
         Centralizes the ``setup_escalation_store`` + ``set_escalation_handler``
@@ -251,7 +251,7 @@ class BaseBot(ABC):
             return
         ctx.set(chat_id=chat_id, owner_id=owner_id, tz_hint=tz_hint)
 
-    async def _execute_task(self, task) -> None:
+    async def execute_task(self, task) -> None:
         """Execute a fired task by feeding its goal back to the agent.
 
         The agent runs with its normal tools EXCEPT that ``schedule_task``
@@ -348,7 +348,7 @@ class BaseBot(ABC):
         """
         return DEFAULT_DISPLAY_NAME
 
-    async def _judge_goal_clarity(self, goal: str) -> bool:
+    async def judge_goal_clarity(self, goal: str) -> bool:
         """LLM-backed check that a goal is clear enough to act on autonomously.
 
         Asks the agent's LLM a yes/no question via :meth:`KaiAgent.complete`;

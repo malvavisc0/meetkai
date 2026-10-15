@@ -7,9 +7,9 @@ from markdownify import markdownify as md
 
 logger = logging.getLogger(__name__)
 
-_WEBPAGE_MAX_CHARS = 8000
+WEBPAGE_MAX_CHARS = 8000
 
-_BOILERPLATE_TAG_RE = {
+BOILERPLATE_TAG_RE = {
     "script": re.compile(r"<script\b[^>]*>.*?</script>", re.IGNORECASE | re.DOTALL),
     "style": re.compile(r"<style\b[^>]*>.*?</style>", re.IGNORECASE | re.DOTALL),
     "noscript": re.compile(r"<noscript\b[^>]*>.*?</noscript>", re.IGNORECASE | re.DOTALL),
@@ -22,10 +22,10 @@ _BOILERPLATE_TAG_RE = {
     "form": re.compile(r"<form\b[^>]*>.*?</form>", re.IGNORECASE | re.DOTALL),
 }
 
-_BODY_RE = re.compile(r"<body\b[^>]*>(.*?)</body>", re.IGNORECASE | re.DOTALL)
+BODY_RE = re.compile(r"<body\b[^>]*>(.*?)</body>", re.IGNORECASE | re.DOTALL)
 
 
-def _web_search(query: str, max_results: int = 15) -> list[dict[str, str]]:
+def web_search(query: str, max_results: int = 15) -> list[dict[str, str]]:
     results: list[dict[str, str]] = []
     try:
         raw_results = DDGS().text(query, max_results=max_results)
@@ -53,14 +53,14 @@ def _web_search(query: str, max_results: int = 15) -> list[dict[str, str]]:
     return results
 
 
-def _strip_boilerplate(html: str) -> str:
-    for pattern in _BOILERPLATE_TAG_RE.values():
+def strip_boilerplate(html: str) -> str:
+    for pattern in BOILERPLATE_TAG_RE.values():
         html = pattern.sub("", html)
-    match = _BODY_RE.search(html)
+    match = BODY_RE.search(html)
     return match.group(1) if match else html
 
 
-def _truncate(text: str, max_chars: int) -> str:
+def truncate(text: str, max_chars: int) -> str:
     if len(text) <= max_chars:
         return text
     cut = text.rfind(" ", 0, max_chars)
@@ -69,9 +69,7 @@ def _truncate(text: str, max_chars: int) -> str:
     return text[:cut].rstrip() + "\n\n[content truncated]"
 
 
-def _get_webpage_content(
-    url: str, timeout: float = 20.0, max_chars: int = _WEBPAGE_MAX_CHARS
-) -> str:
+def get_webpage_content(url: str, timeout: float = 20.0, max_chars: int = WEBPAGE_MAX_CHARS) -> str:
     headers = {
         "User-Agent": (
             "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
@@ -93,8 +91,8 @@ def _get_webpage_content(
         ) as client:
             response = client.get(url)
             response.raise_for_status()
-            cleaned = _strip_boilerplate(response.text)
-            return _truncate(md(cleaned), max_chars)
+            cleaned = strip_boilerplate(response.text)
+            return truncate(md(cleaned), max_chars)
     except httpx.HTTPStatusError as exc:
         logger.warning("failed to fetch webpage %s: %s", url, exc)
         return f"Error: HTTP {exc.response.status_code} fetching {url}"

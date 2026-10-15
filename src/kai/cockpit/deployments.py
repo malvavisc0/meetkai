@@ -33,27 +33,27 @@ from kai.utils.common import compute_hmac, now_iso
 logger = logging.getLogger(__name__)
 
 
-def _require_supported_language(language: str) -> None:
+def require_supported_language(language: str) -> None:
     if language not in ALL_LANGUAGES:
         raise ValueError(f"unsupported language: {language!r}. Supported: {ALL_LANGUAGES}")
 
 
-def _require_non_empty(value: object, label: str) -> None:
+def require_non_empty(value: object, label: str) -> None:
     if not value or not str(value).strip():
         raise ValueError(f"{label} is required")
 
 
-def _validate_create_inputs(user: User, bot_type: str, goal: str, language: str) -> None:
+def validate_create_inputs(user: User, bot_type: str, goal: str, language: str) -> None:
     if user.is_disabled:
         raise ValueError(f"Operator '{user.email}' is disabled")
     if bot_type not in BOT_TYPES:
         raise ValueError(f"unknown bot type: {bot_type}")
-    _require_non_empty(goal, "goal")
-    _require_non_empty(language, "language")
-    _require_supported_language(language.strip())
+    require_non_empty(goal, "goal")
+    require_non_empty(language, "language")
+    require_supported_language(language.strip())
 
 
-def _kai_argv_prefix() -> list[str]:
+def kai_argv_prefix() -> list[str]:
     """Resolve the `kai` executable for spawning bot subprocesses.
 
     Uses the `kai` console script on PATH when available; falls back to
@@ -93,16 +93,16 @@ def attention_reason(dep: Deployment, status_data: dict | None) -> str | None:
     return None
 
 
-def _instance_id(bot_type: str, email: str) -> str:
+def instance_id_for(bot_type: str, email: str) -> str:
     return f"{bot_type}-{email}"
 
 
-def _tool_enabled(value: dict) -> bool:
+def tool_enabled(value: dict) -> bool:
     """Read the ``enabled`` flag from a stored tool toggle."""
     return bool(value.get("enabled", False))
 
 
-def _tool_instruction(value: dict) -> str:
+def tool_instruction(value: dict) -> str:
     return str(value.get("instruction", ""))
 
 
@@ -147,7 +147,7 @@ def is_connected(service: str, conn: Connection | None) -> bool:
     return conn.status == "connected"
 
 
-def _inject_connection_env(env: dict, service: str, conn: Connection) -> bool:
+def inject_connection_env(env: dict, service: str, conn: Connection) -> bool:
     """Inject env vars for a supported credential connection into ``env``.
 
     Driven by ``SERVICE_ENV_VARS``. A service not listed raises
@@ -164,7 +164,7 @@ def _inject_connection_env(env: dict, service: str, conn: Connection) -> bool:
         from kai.cockpit.connections.secrets import decrypt_config
 
         cfg = decrypt_config(service, conn.config)
-        return _apply_service_env_vars(env, cfg, svc_vars)
+        return apply_service_env_vars(env, cfg, svc_vars)
     except DeploymentStartupError:
         raise
     except NotImplementedError:
@@ -175,7 +175,7 @@ def _inject_connection_env(env: dict, service: str, conn: Connection) -> bool:
         ) from exc
 
 
-def _apply_service_env_vars(env: dict, cfg: dict, svc_vars: dict) -> bool:
+def apply_service_env_vars(env: dict, cfg: dict, svc_vars: dict) -> bool:
     bool_fields = svc_vars.get("bool_fields", set())
     injected = False
     for config_key, env_var in svc_vars.get("fields", {}).items():
@@ -194,18 +194,18 @@ class DeploymentsService:
     def __init__(self, db: Session) -> None:
         self.db = db
 
-    def _user_for(self, deployment: Deployment) -> User:
+    def user_for(self, deployment: Deployment) -> User:
         user = self.db.query(User).filter(User.id == deployment.user_id).first()
         if user is None:
             raise ValueError(f"deployment {deployment.id} has no Operator")
         return user
 
-    def _instance_id(self, deployment: Deployment, *, user: User | None = None) -> str:
+    def deployment_instance_id(self, deployment: Deployment, *, user: User | None = None) -> str:
         if user is None:
-            user = self._user_for(deployment)
-        return _instance_id(deployment.bot_type, user.email)
+            user = self.user_for(deployment)
+        return instance_id_for(deployment.bot_type, user.email)
 
-    def _allocate_control_port(self, db: Session, user: User) -> int:
+    def allocate_control_port(self, db: Session, user: User) -> int:
         """Pick a free control port from 8200-8299."""
         used: set[int] = set()
         for dep in db.query(Deployment).filter(Deployment.status == "running").all():
@@ -217,23 +217,23 @@ class DeploymentsService:
                 return port
         raise RuntimeError(f"no available control ports in range 8200-8299 ({len(used)} in use)")
 
-    def _registry(self, deployment: Deployment, *, user: User | None = None) -> RunRegistry:
+    def run_registry(self, deployment: Deployment, *, user: User | None = None) -> RunRegistry:
         from kai.config.settings import get_settings
 
         settings = get_settings()
-        instance_id = self._instance_id(deployment, user=user)
+        instance_id = self.deployment_instance_id(deployment, user=user)
         return RunRegistry(runs_path(settings.agent_history_folder, instance_id))
 
-    def _resolve_run(self, deployment: Deployment):
+    def resolve_run(self, deployment: Deployment):
         if not deployment.run_id:
             return None
-        registry = self._registry(deployment)
+        registry = self.run_registry(deployment)
         return registry.get(deployment.run_id)
 
-    def _compute_hmac(self, record, body: bytes) -> str:
+    def sign_body(self, record, body: bytes) -> str:
         return compute_hmac(record.hmac_key, body, record.hmac_algorithm)
 
-    def _call_bot(
+    def call_bot(
         self,
         record,
         method: str,
@@ -246,7 +246,7 @@ class DeploymentsService:
 
         Returns the JSON response dict on success, or an error dict on failure.
         """
-        signature = self._compute_hmac(record, body)
+        signature = self.sign_body(record, body)
         headers: dict[str, str] = {"X-Webhook-Hmac": signature}
         if body:
             headers["Content-Type"] = "application/json"
@@ -267,13 +267,13 @@ class DeploymentsService:
         """Forward a normalized inbound event to a running deployment's bot.
 
         Returns True if the bot accepted the event, False if the bot isn't
-        reachable or rejected it. ``_call_bot`` returns ``{"ok": False, ...}``
+        reachable or rejected it. ``call_bot`` returns ``{"ok": False, ...}``
         on every failure shape, so ``False`` is the one failure signal.
         """
-        record = self._resolve_run(deployment)
+        record = self.resolve_run(deployment)
         if record is None:
             return False
-        result = self._call_bot(record, "POST", path, body)
+        result = self.call_bot(record, "POST", path, body)
         return result.get("ok", True) is not False
 
     def get(self, deployment_id: int) -> Deployment | None:
@@ -298,10 +298,10 @@ class DeploymentsService:
         template: str = "general",
     ) -> Deployment:
         """Create a deployment. Validates required fields."""
-        _validate_create_inputs(user, bot_type, goal, language)
+        validate_create_inputs(user, bot_type, goal, language)
         bt = BOT_TYPES[bot_type]
-        self._require_connections(bt, user)
-        self._reject_duplicate(bot_type, user)
+        self.require_connections(bt, user)
+        self.reject_duplicate(bot_type, user)
 
         # Seed settings from the bot type's own BotConfig so each transport
         # carries only its own schema. Bots follow the
@@ -330,13 +330,13 @@ class DeploymentsService:
         self.db.refresh(dep)
         return dep
 
-    def _require_connections(self, bt: BotType, user: User) -> None:
+    def require_connections(self, bt: BotType, user: User) -> None:
         for service in bt.required_connections:
-            c = self._find_connection(user, service)
+            c = self.find_connection(user, service)
             if not is_connected(service, c):
                 raise ConnectionRequiredError(f"Connect {service} first at /connections")
 
-    def _reject_duplicate(self, bot_type: str, user: User) -> None:
+    def reject_duplicate(self, bot_type: str, user: User) -> None:
         existing = (
             self.db.query(Deployment)
             .filter(Deployment.user_id == user.id, Deployment.bot_type == bot_type)
@@ -353,7 +353,7 @@ class DeploymentsService:
             raise ValueError(f"unknown bot type: {deployment.bot_type}")
 
         settings_changed = False
-        apply = _FIELD_APPLIERS
+        apply = FIELD_APPLIERS
         for key, value in fields.items():
             handler = apply.get(key)
             if handler is None:
@@ -373,27 +373,27 @@ class DeploymentsService:
         # write_config may normalize ``deployment.settings``, so run it before
         # the commit to persist any such mutation alongside the edit.
         try:
-            config_writer.write_config(deployment, self._instance_id(deployment))
+            config_writer.write_config(deployment, self.deployment_instance_id(deployment))
         except OSError:
             logger.warning("Failed to write config for deployment %s", deployment.id, exc_info=True)
 
         self.db.commit()
         return deployment
 
-    def _apply_goal(self, deployment: Deployment, bt: BotType, value: object) -> bool:
-        _require_non_empty(value, "goal")
+    def apply_goal(self, deployment: Deployment, bt: BotType, value: object) -> bool:
+        require_non_empty(value, "goal")
         deployment.goal = str(value).strip()
         return False
 
-    def _apply_language(self, deployment: Deployment, bt: BotType, value: object) -> bool:
-        _require_non_empty(value, "language")
+    def apply_language(self, deployment: Deployment, bt: BotType, value: object) -> bool:
+        require_non_empty(value, "language")
         language = str(value).strip()
-        _require_supported_language(language)
+        require_supported_language(language)
         deployment.language = language
         deployment.settings["language"] = deployment.language
         return True
 
-    def _apply_feature_flags(self, deployment: Deployment, bt: BotType, value: object) -> bool:
+    def apply_feature_flags(self, deployment: Deployment, bt: BotType, value: object) -> bool:
         if not isinstance(value, dict):
             raise ValueError("feature_flags must be a dict")
         invalid = set(value.keys()) - set(bt.feature_flags)
@@ -402,7 +402,7 @@ class DeploymentsService:
         deployment.feature_flags = value
         return False
 
-    def _apply_settings(self, deployment: Deployment, bt: BotType, value: object) -> bool:
+    def apply_settings(self, deployment: Deployment, bt: BotType, value: object) -> bool:
         if not isinstance(value, dict):
             raise ValueError("settings must be a dict")
         for req in bt.required_settings:
@@ -411,23 +411,23 @@ class DeploymentsService:
         deployment.settings = {**deployment.settings, **value}
         return True
 
-    def _apply_brain_mandatory(self, deployment: Deployment, bt: BotType, value: object) -> bool:
+    def apply_brain_mandatory(self, deployment: Deployment, bt: BotType, value: object) -> bool:
         if value is not None and not isinstance(value, bool):
             raise ValueError("brain_mandatory must be a bool or null")
         deployment.brain_mandatory = value
         return False
 
-    def _apply_brain_instruction(self, deployment: Deployment, bt: BotType, value: object) -> bool:
+    def apply_brain_instruction(self, deployment: Deployment, bt: BotType, value: object) -> bool:
         if value is not None and not isinstance(value, str):
             raise ValueError("brain_instruction must be a string or null")
         deployment.brain_instruction = str(value).strip() if value is not None else None
         return False
 
-    def _apply_template(self, deployment: Deployment, bt: BotType, value: object) -> bool:
+    def apply_template(self, deployment: Deployment, bt: BotType, value: object) -> bool:
         deployment.template = str(value)
         return False
 
-    def _apply_tool_overrides(self, deployment: Deployment, bt: BotType, value: object) -> bool:
+    def apply_tool_overrides(self, deployment: Deployment, bt: BotType, value: object) -> bool:
         if not isinstance(value, dict):
             raise ValueError("tool_overrides must be a dict")
         if set(value.keys()) - {"enable", "disable"}:
@@ -444,18 +444,18 @@ class DeploymentsService:
         if bt is None:
             raise ValueError(f"unknown bot type: {deployment.bot_type}")
 
-        user = self._user_for(deployment)
-        instance_id = self._instance_id(deployment, user=user)
+        user = self.user_for(deployment)
+        instance_id = self.deployment_instance_id(deployment, user=user)
 
-        required_conns = self._resolve_required_connections(bt, user)
-        brain_conn = self._find_connection(user, "morphik")
+        required_conns = self.resolve_required_connections(bt, user)
+        brain_conn = self.find_connection(user, "morphik")
 
         config_writer.write_config(deployment, instance_id)
 
-        argv = self._build_spawn_argv(deployment, user)
-        env = self._build_spawn_env(deployment, bt, user, required_conns, brain_conn)
+        argv = self.build_spawn_argv(deployment, user)
+        env = self.build_spawn_env(deployment, bt, user, required_conns, brain_conn)
 
-        run_id = self._spawn_and_await_run_id(deployment, user, argv, env)
+        run_id = self.spawn_and_await_run_id(deployment, user, argv, env)
 
         deployment.run_id = run_id
         deployment.status = "running"
@@ -464,16 +464,16 @@ class DeploymentsService:
         deployment.updated_at = now_iso()
         self.db.commit()
 
-    def _resolve_required_connections(self, bt: BotType, user: User) -> dict[str, Connection]:
+    def resolve_required_connections(self, bt: BotType, user: User) -> dict[str, Connection]:
         required: dict[str, Connection] = {}
         for service in bt.required_connections:
-            c = self._find_connection(user, service)
+            c = self.find_connection(user, service)
             if c is None or not is_connected(service, c):
                 raise ConnectionRequiredError(f"Connect {service} first at /connections")
             required[service] = c
         return required
 
-    def _find_connection(self, user: User, service: str) -> Connection | None:
+    def find_connection(self, user: User, service: str) -> Connection | None:
         return (
             self.db.query(Connection)
             .filter(
@@ -483,9 +483,9 @@ class DeploymentsService:
             .first()
         )
 
-    def _build_spawn_argv(self, deployment: Deployment, user: User) -> list[str]:
+    def build_spawn_argv(self, deployment: Deployment, user: User) -> list[str]:
         argv = [
-            *_kai_argv_prefix(),
+            *kai_argv_prefix(),
             "start",
             deployment.bot_type,
             "--user",
@@ -504,7 +504,7 @@ class DeploymentsService:
             argv += ["--disable-tools", t]
         return argv
 
-    def _build_spawn_env(
+    def build_spawn_env(
         self,
         deployment: Deployment,
         bt: BotType,
@@ -530,7 +530,7 @@ class DeploymentsService:
         # Ingress-only (resend) is a no-op.
         for service, c in required_conns.items():
             try:
-                _inject_connection_env(env, service, c)
+                inject_connection_env(env, service, c)
             except DeploymentStartupError as exc:
                 raise ConnectionRequiredError(f"{service} config unreadable: {exc}") from exc
 
@@ -538,7 +538,7 @@ class DeploymentsService:
         # in Deployment.settings["control_port"] (JSON, no migration) and
         # cleared on stop(). This is the generic path — the next webhook bot
         # needs zero cockpit changes.
-        control_port = self._allocate_control_port(self.db, user)
+        control_port = self.allocate_control_port(self.db, user)
         env["KAI_BOT_CONTROL_PORT"] = str(control_port)
         env["KAI_BOT_CONTROL_HOST"] = "0.0.0.0"
         env["KAI_BOT_HMAC_KEY"] = user.hmac_key
@@ -546,12 +546,12 @@ class DeploymentsService:
         deployment.settings = {**deployment.settings, "control_port": control_port}
 
         if brain_conn is not None:
-            self._inject_brain_env(env, deployment, brain_conn)
+            self.inject_brain_env(env, deployment, brain_conn)
 
-        self._inject_optional_tools_env(env, deployment, bt, user)
+        self.inject_optional_tools_env(env, deployment, bt, user)
         return env
 
-    def _inject_brain_env(
+    def inject_brain_env(
         self, env: dict[str, str], deployment: Deployment, brain_conn: Connection
     ) -> None:
         workspace = brain_conn.config["workspace"]
@@ -564,7 +564,7 @@ class DeploymentsService:
         env["KAI_BRAIN_INSTRUCTION"] = instruction
         env["KAI_BRAIN_MANDATORY"] = "true" if mandatory else "false"
 
-    def _inject_optional_tools_env(
+    def inject_optional_tools_env(
         self,
         env: dict[str, str],
         deployment: Deployment,
@@ -575,13 +575,13 @@ class DeploymentsService:
         for service in bt.supported_connections:
             if service in bt.required_connections:
                 continue
-            if not _tool_enabled(tools_cfg.get(service, {})):
+            if not tool_enabled(tools_cfg.get(service, {})):
                 continue
-            c = self._find_connection(user, service)
+            c = self.find_connection(user, service)
             if c is None:
                 continue
             try:
-                _inject_connection_env(env, service, c)
+                inject_connection_env(env, service, c)
             except DeploymentStartupError as exc:
                 logger.warning(
                     "Skipping %s connection for deployment %s: %s",
@@ -593,9 +593,9 @@ class DeploymentsService:
             svc_vars = SERVICE_ENV_VARS.get(service, {})
             instr_var = svc_vars.get("instruction")
             if instr_var and any(ev in env for ev in svc_vars.get("fields", {}).values()):
-                env[instr_var] = _tool_instruction(tools_cfg.get(service, {}))
+                env[instr_var] = tool_instruction(tools_cfg.get(service, {}))
 
-    def _spawn_and_await_run_id(
+    def spawn_and_await_run_id(
         self,
         deployment: Deployment,
         user: User,
@@ -621,9 +621,9 @@ class DeploymentsService:
         # was previously only read up to the first "KAI_RUN_ID=" line, then
         # abandoned — once the bot's own logging filled the OS pipe buffer
         # (typically 64KB), the next write() would block forever, hanging the bot.
-        instance_id_for_logs = self._instance_id(deployment, user=user)
+        instance_id_for_logs = self.deployment_instance_id(deployment, user=user)
 
-        def _pump_output() -> None:
+        def pump_output() -> None:
             try:
                 for line in iter(stdout.readline, ""):
                     line = line.rstrip("\n")
@@ -636,15 +636,15 @@ class DeploymentsService:
                 pass
 
         pump_thread = threading.Thread(
-            target=_pump_output,
+            target=pump_output,
             name=f"bot-output-{instance_id_for_logs}",
             daemon=True,
         )
         pump_thread.start()
 
         try:
-            run_id = self._wait_for_run_id(proc, run_id_found, run_id_box, deadline)
-            self._await_registry_entry(deployment, user, run_id)
+            run_id = self.wait_for_run_id(proc, run_id_found, run_id_box, deadline)
+            self.await_registry_entry(deployment, user, run_id)
         except DeploymentStartupError:
             if hasattr(proc, "kill"):
                 proc.kill()
@@ -653,7 +653,7 @@ class DeploymentsService:
             raise
         return run_id
 
-    def _wait_for_run_id(
+    def wait_for_run_id(
         self,
         proc: subprocess.Popen,
         run_id_found: threading.Event,
@@ -671,8 +671,8 @@ class DeploymentsService:
 
         raise DeploymentStartupError("Timed out waiting for KAI_RUN_ID")
 
-    def _await_registry_entry(self, deployment: Deployment, user: User, run_id: str) -> None:
-        registry = self._registry(deployment, user=user)
+    def await_registry_entry(self, deployment: Deployment, user: User, run_id: str) -> None:
+        registry = self.run_registry(deployment, user=user)
         deadline = time.time() + 10
         while time.time() < deadline:
             if registry.get(run_id) is not None:
@@ -680,7 +680,7 @@ class DeploymentsService:
             time.sleep(0.5)
         raise DeploymentStartupError(f"Run {run_id} not found in registry")
 
-    def _clear_control_port(self, deployment: Deployment) -> None:
+    def clear_control_port(self, deployment: Deployment) -> None:
         if "control_port" in deployment.settings:
             deployment.settings = {
                 k: v for k, v in deployment.settings.items() if k != "control_port"
@@ -691,12 +691,12 @@ class DeploymentsService:
             deployment.status = "stopped"
             deployment.desired_state = "stopped"
             deployment.needs_restart = False
-            self._clear_control_port(deployment)
+            self.clear_control_port(deployment)
             deployment.updated_at = now_iso()
             self.db.commit()
             return
 
-        registry = self._registry(deployment)
+        registry = self.run_registry(deployment)
         record = registry.get(deployment.run_id)
 
         if record and pid_alive(record.pid):
@@ -721,7 +721,7 @@ class DeploymentsService:
         deployment.status = "stopped"
         deployment.desired_state = "stopped"
         deployment.needs_restart = False
-        self._clear_control_port(deployment)
+        self.clear_control_port(deployment)
         deployment.updated_at = now_iso()
         self.db.commit()
 
@@ -730,21 +730,21 @@ class DeploymentsService:
         if deployment.status == "running" or deployment.run_id:
             self.stop(deployment)
 
-        self._purge_bot_state(deployment)
+        self.purge_bot_state(deployment)
 
         self.db.delete(deployment)
         self.db.commit()
 
-    def _purge_bot_state(self, deployment: Deployment) -> None:
+    def purge_bot_state(self, deployment: Deployment) -> None:
         """Remove every per-bot state file for this deployment instance."""
-        instance_id = self._instance_id(deployment)
+        instance_id = self.deployment_instance_id(deployment)
 
         from kai.config.settings import get_settings
 
         settings = get_settings()
 
         # The suffixes below are hardcoded to match independent producers with no
-        # shared naming helper: KaiAgent._resolve_history_file (history/goal),
+        # shared naming helper: KaiAgent.resolve_history_file (history/goal),
         # runs.runs_path (runs), kai.bots.base.Bot (tasks). The seen/sleep
         # suffixes purge leftover state files from removed bot features so they
         # don't linger on disk. If any naming rule changes, update the suffixes
@@ -784,35 +784,35 @@ class DeploymentsService:
             pass
 
     def run_started_at(self, deployment: Deployment) -> str | None:
-        record = self._resolve_run(deployment)
+        record = self.resolve_run(deployment)
         return record.started_at if record else None
 
     def fetch_status(self, deployment: Deployment) -> dict | None:
         """Fetch live status from the running bot, or None if stopped."""
-        record = self._resolve_run(deployment)
+        record = self.resolve_run(deployment)
         if record is None:
             return None
 
-        result = self._call_bot(record, "GET", "/status", timeout=10.0)
+        result = self.call_bot(record, "GET", "/status", timeout=10.0)
         if "error" in result and not result.get("ok", True):
             return None
         return result
 
     def send_message(self, deployment: Deployment, message: str, persist: bool = False) -> dict:
         """Forward an operator message to the running bot's /tell route."""
-        record = self._resolve_run(deployment)
+        record = self.resolve_run(deployment)
         if record is None:
             return {"ok": False, "reply": "bot is not running"}
 
         body = json.dumps({"message": message, "persist": persist}).encode()
-        return self._call_bot(record, "POST", "/tell", body, timeout=120.0)
+        return self.call_bot(record, "POST", "/tell", body, timeout=120.0)
 
     def clear_history(self, deployment: Deployment) -> dict:
-        record = self._resolve_run(deployment)
+        record = self.resolve_run(deployment)
         if record is None:
             return {"ok": False, "error": "bot is not running"}
 
-        return self._call_bot(record, "POST", "/clear")
+        return self.call_bot(record, "POST", "/clear")
 
     def history(self, deployment: Deployment) -> dict[str, list[dict]]:
         """Load the per-bot history file and return ``{chat_id: [messages]}``.
@@ -825,26 +825,26 @@ class DeploymentsService:
         reading it from the cockpit is safe.
 
         On-disk keys are namespaced as ``{instance_id}:{conversation_id}``
-        (see :meth:`KaiAgent._history_key``); the returned dict strips the
+        (see :meth:`KaiAgent.history_key``); the returned dict strips the
         instance prefix so the cockpit surfaces the raw conversation id
         (e.g. ``operator``, ``1809...@g.us``).
         """
-        instance_id = self._instance_id(deployment)
-        raw = self._load_history_raw(deployment, instance_id)
+        instance_id = self.deployment_instance_id(deployment)
+        raw = self.load_history_raw(deployment, instance_id)
         if not isinstance(raw, dict):
             return {}
         history_data = raw.get("history", raw)
         if not isinstance(history_data, dict):
             return {}
-        return self._normalize_history(history_data, instance_id)
+        return self.normalize_history(history_data, instance_id)
 
-    def _load_history_raw(self, deployment: Deployment, instance_id: str | None = None) -> object:
+    def load_history_raw(self, deployment: Deployment, instance_id: str | None = None) -> object:
         from kai.config.settings import get_settings
 
         folder = get_settings().agent_history_folder
         if folder is None:
             return {}
-        iid = instance_id or self._instance_id(deployment)
+        iid = instance_id or self.deployment_instance_id(deployment)
         path = Path(folder) / f"{iid}.json"
         if not path.exists():
             return {}
@@ -855,14 +855,14 @@ class DeploymentsService:
             return {}
 
     @staticmethod
-    def _normalize_history(history_data: dict, instance_id: str) -> dict[str, list[dict]]:
+    def normalize_history(history_data: dict, instance_id: str) -> dict[str, list[dict]]:
         prefix = f"{instance_id}:"
         result: dict[str, list[dict]] = {}
         for key, messages in history_data.items():
             if not isinstance(key, str) or not isinstance(messages, list):
                 continue
             chat_id = key[len(prefix) :] if key.startswith(prefix) else key
-            result[chat_id] = [_normalize_msg(m) for m in messages if _valid_msg(m)]
+            result[chat_id] = [normalize_msg(m) for m in messages if valid_msg(m)]
         return result
 
     def interaction_summary(self, deployment: Deployment) -> tuple[int, int]:
@@ -875,15 +875,15 @@ class DeploymentsService:
 # Dispatch table for DeploymentsService.edit — maps a field name to the
 # method that applies it. Methods return True when the edit changes
 # ``deployment.settings`` (so the language resync below runs).
-_FIELD_APPLIERS: dict[str, Callable[[DeploymentsService, Deployment, BotType, object], bool]] = {
-    "goal": DeploymentsService._apply_goal,
-    "language": DeploymentsService._apply_language,
-    "feature_flags": DeploymentsService._apply_feature_flags,
-    "settings": DeploymentsService._apply_settings,
-    "brain_mandatory": DeploymentsService._apply_brain_mandatory,
-    "brain_instruction": DeploymentsService._apply_brain_instruction,
-    "template": DeploymentsService._apply_template,
-    "tool_overrides": DeploymentsService._apply_tool_overrides,
+FIELD_APPLIERS: dict[str, Callable[[DeploymentsService, Deployment, BotType, object], bool]] = {
+    "goal": DeploymentsService.apply_goal,
+    "language": DeploymentsService.apply_language,
+    "feature_flags": DeploymentsService.apply_feature_flags,
+    "settings": DeploymentsService.apply_settings,
+    "brain_mandatory": DeploymentsService.apply_brain_mandatory,
+    "brain_instruction": DeploymentsService.apply_brain_instruction,
+    "template": DeploymentsService.apply_template,
+    "tool_overrides": DeploymentsService.apply_tool_overrides,
 }
 
 
@@ -912,7 +912,7 @@ def reconcile_deployments() -> None:
             if svc.fetch_status(dep) is None:
                 dep.status = "stopped"
                 dep.needs_restart = False
-                svc._clear_control_port(dep)
+                svc.clear_control_port(dep)
                 dep.updated_at = now_iso()
                 logger.info("reconcile: cleared stale state for crashed deployment %s", dep.id)
         db.commit()
@@ -971,20 +971,20 @@ def topbar_status(request, user) -> str:
     unexpected_down = sum(
         1 for status, desired in rows if desired == "running" and status != "running"
     )
-    return _topbar_level(running, unexpected_down)
+    return topbar_level(running, unexpected_down)
 
 
-def _topbar_level(running: int, unexpected_down: int) -> str:
+def topbar_level(running: int, unexpected_down: int) -> str:
     if unexpected_down:
         return "down" if running == 0 else "warn"
     return "ok" if running > 0 else "warn"
 
 
-def _valid_msg(m: object) -> bool:
+def valid_msg(m: object) -> bool:
     return isinstance(m, dict) and "role" in m and "content" in m
 
 
-def _normalize_msg(m: dict) -> dict:
+def normalize_msg(m: dict) -> dict:
     ts = m.get("ts")
     return {
         "role": str(m["role"]),

@@ -36,7 +36,7 @@ from kai.cockpit.settings import get_cockpit_settings
 router = APIRouter()
 
 
-def _check_escalation_secret(request: Request) -> JSONResponse | None:
+def check_escalation_secret(request: Request) -> JSONResponse | None:
     """Validate the bearer token when KAI_COCKPIT_ESCALATION_SECRET is set.
 
     Returns a 401 JSONResponse on mismatch, or None when auth passes / is off
@@ -104,7 +104,7 @@ async def ingest(request: Request) -> JSONResponse:
     ``KAI_COCKPIT_ESCALATION_SECRET`` is set, a matching ``Authorization:
     Bearer <secret>`` header is required (401 otherwise).
     """
-    denied = _check_escalation_secret(request)
+    denied = check_escalation_secret(request)
     if denied is not None:
         return denied
     try:
@@ -119,7 +119,7 @@ async def ingest(request: Request) -> JSONResponse:
         escalation = Escalation.model_validate(payload)
     except (ValidationError, ValueError, TypeError) as exc:
         return JSONResponse({"ok": False, "error": f"invalid escalation: {exc}"}, status_code=400)
-    store: EscalationStore = _store()
+    store: EscalationStore = escalation_store()
     await store.add(escalation)
     return JSONResponse({"ok": True, "escalation": escalation.to_dict()}, status_code=201)
 
@@ -158,8 +158,8 @@ async def resolve_api(
     return {"ok": True, "escalation": esc_id}
 
 
-def _store() -> EscalationStore:
+def escalation_store() -> EscalationStore:
     """Return the cockpit's escalation store set up by ``create_app``."""
-    from kai.agent.tools.escalate import _DYN
+    from kai.agent.tools.escalate import DYN
 
-    return _DYN.store
+    return DYN.store

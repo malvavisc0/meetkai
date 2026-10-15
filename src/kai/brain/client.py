@@ -51,12 +51,12 @@ class DocumentRecord(BaseModel):
 
     @field_validator("content_length", mode="before")
     @classmethod
-    def _default_none(cls, v: int | None) -> int:
+    def default_none(cls, v: int | None) -> int:
         return v or 0
 
     @field_validator("metadata", mode="before")
     @classmethod
-    def _default_metadata(cls, v: dict[str, Any] | None) -> dict[str, Any]:
+    def default_metadata(cls, v: dict[str, Any] | None) -> dict[str, Any]:
         return v or {}
 
     @property
@@ -66,16 +66,17 @@ class DocumentRecord(BaseModel):
     @classmethod
     def from_list_doc(cls, doc: dict[str, Any]) -> "DocumentRecord":
         """Build from one element of /documents/list_docs documents[]."""
+        meta = doc.get("system_metadata") or {}
         return cls.model_validate(
             {
                 "id": doc.get("external_id", ""),
-                "status": doc.get("system_metadata", {}).get("status", "") or doc.get("status", ""),
-                "file_path": doc.get("filename", "") or "",
-                "chunks_count": len(doc.get("chunk_ids", []) or []) or None,
-                "content_length": doc.get("system_metadata", {}).get("content_length", 0) or 0,
-                "created_at": doc.get("system_metadata", {}).get("created_at", "") or "",
-                "updated_at": doc.get("system_metadata", {}).get("updated_at", "") or "",
-                "metadata": doc.get("metadata", {}) or {},
+                "status": meta.get("status", "") or doc.get("status", ""),
+                "file_path": doc.get("filename") or "",
+                "chunks_count": len(doc.get("chunk_ids") or []) or None,
+                "content_length": meta.get("content_length", 0) or 0,
+                "created_at": meta.get("created_at") or "",
+                "updated_at": meta.get("updated_at") or "",
+                "metadata": doc.get("metadata") or {},
             }
         )
 
@@ -106,10 +107,8 @@ class IngestResult(BaseModel):
         # the handle used to poll /documents/{id}/status.
         return cls(
             track_id=data.get("external_id", ""),
-            status=data.get("system_metadata", {}).get("status", "pending")
-            if isinstance(data.get("system_metadata"), dict)
-            else "pending",
-            message=data.get("filename", "") or "",
+            status=(data.get("system_metadata") or {}).get("status", "pending"),
+            message=data.get("filename") or "",
         )
 
 
@@ -136,7 +135,7 @@ class QueryResult(BaseModel):
         # file_path as document_id for traceability.
         sources = data.get("sources") or []
         return cls(
-            response=data.get("completion", "") or "",
+            response=data.get("completion") or "",
             references=[
                 QueryReference(file_path=s.get("document_id", ""))
                 for s in sources
@@ -284,9 +283,9 @@ class MorphikClient:
             json={"return_documents": False, "include_status_counts": True},
         )
         resp.raise_for_status()
-        return resp.json().get("status_counts", {}) or {}
+        return resp.json().get("status_counts") or {}
 
-    async def delete_doc(self, *, doc_id: str, workspace: str, delete_file: bool = True) -> str:
+    async def delete_doc(self, *, doc_id: str, workspace: str) -> str:
         """DELETE /documents/{id} — synchronous single-doc delete.
 
         ``workspace`` (end_user_id) isn't a path param on Morphik's delete;
@@ -320,7 +319,6 @@ class MorphikClient:
         workspace: str,
         mode: QueryMode = "mix",
         enable_rerank: bool = True,
-        include_references: bool = True,
     ) -> QueryResult:
         """POST /query — retrieve + synthesize a grounded answer.
 

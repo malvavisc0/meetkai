@@ -23,7 +23,7 @@ def _encryption_env(monkeypatch, tmp_path):
     monkeypatch.setenv("KAI_CREDENTIAL_KEY_VERSION", "v1")
     from kai.cockpit.connections import secrets
 
-    secrets._clear_key_cache()
+    secrets.clear_key_cache()
 
     # save() now probes Resend's API (GET /domains) to verify the key.
     # Mock the HTTP call so tests don't hit the network. Returns 200 =
@@ -35,7 +35,7 @@ def _encryption_env(monkeypatch, tmp_path):
 
     monkeypatch.setattr(httpx, "get", lambda *a, **kw: _FakeResp())
     yield
-    secrets._clear_key_cache()
+    secrets.clear_key_cache()
 
 
 class TestSave:
@@ -106,7 +106,8 @@ class TestDelete:
         from kai.cockpit.connections.email import EmailConnectionsService
 
         svc = EmailConnectionsService(db)
-        svc.delete(user)  # should not raise
+        svc.delete(user)
+        assert svc.get(user) is None
 
 
 class TestDecryptSecret:

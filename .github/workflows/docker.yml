@@ -44,6 +44,12 @@ jobs:
       - name: Radon complexity
         run: uvx radon cc -s -n C src -e tests
 
+      # min-confidence 100: exact dead code (unused params/vars) with no
+      # framework false positives. The doc's 60 also flags FastAPI/typer/
+      # pydantic dispatch targets and needs a curated whitelist.
+      - name: Vulture dead code
+        run: uvx vulture src --min-confidence 100
+
       - name: Pytest
         run: uv run pytest -q
 

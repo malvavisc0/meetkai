@@ -14,7 +14,7 @@ class TestKaiVersionSlug:
             raise naming_mod.PackageNotFoundError
 
         monkeypatch.setattr(naming_mod, "version", _raise)
-        assert kai_version_slug() == naming_mod._FALLBACK_VERSION
+        assert kai_version_slug() == naming_mod.FALLBACK_VERSION
 
     def test_tracks_version_bumps_dynamically(self, monkeypatch):
         # Simulate a future release — the slug must follow it without any

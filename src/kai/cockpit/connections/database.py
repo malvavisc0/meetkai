@@ -9,7 +9,7 @@ from sqlalchemy import create_engine, text
 from sqlalchemy.orm import Session
 
 from kai.cockpit.connections.probe import (
-    _is_transient_db_error,
+    is_transient_db_error,
     reflect_probe_status,
 )
 from kai.cockpit.connections.secrets import decrypt_config, encrypt_config
@@ -59,7 +59,7 @@ class DatabaseConnectionsService:
         # Transient failures preserve the prior status.
         test_url = decrypt_config("database", conn.config).get("url", "")
         if test_url:
-            ok, _, transient = self._probe_url(test_url)
+            ok, _, transient = self.probe_url(test_url)
         else:
             ok, transient = False, False
         reflect_probe_status(self.db, conn, ok, transient=transient)
@@ -77,7 +77,7 @@ class DatabaseConnectionsService:
             return None
         return decrypt_config("database", conn.config).get("url")
 
-    def _probe_url(self, test_url: str) -> tuple[bool, str, bool]:
+    def probe_url(self, test_url: str) -> tuple[bool, str, bool]:
         """Connect to ``test_url`` and run ``SELECT 1``. Returns
         ``(ok, message, transient)`` — ``transient`` for network/timeout
         failures, False for auth rejections or invalid DSNs."""
@@ -91,7 +91,7 @@ class DatabaseConnectionsService:
                 conn.execute(text("SELECT 1"))
             return True, "ok", False
         except Exception as exc:
-            return False, str(exc), _is_transient_db_error(exc)
+            return False, str(exc), is_transient_db_error(exc)
         finally:
             if engine:
                 engine.dispose()
@@ -105,5 +105,5 @@ class DatabaseConnectionsService:
             test_url = self.decrypt_url(user)
         if not test_url:
             return False, "no connection URL configured"
-        ok, msg, _ = self._probe_url(test_url)
+        ok, msg, _ = self.probe_url(test_url)
         return ok, msg

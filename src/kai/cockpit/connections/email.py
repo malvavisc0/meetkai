@@ -14,11 +14,11 @@ import httpx
 from sqlalchemy.orm import Session
 
 from kai.cockpit.connections.probe import (
-    _is_transient_resend_error,
+    is_transient_resend_error,
     reflect_probe_status,
 )
 from kai.cockpit.connections.secrets import decrypt_config, encrypt_config
-from kai.cockpit.connections.webhooks import _RESEND_API_BASE, _sign_resend, _strip_whsec_prefix
+from kai.cockpit.connections.webhooks import RESEND_API_BASE, sign_resend, strip_whsec_prefix
 from kai.cockpit.models import Connection, User
 from kai.utils.common import now_iso
 
@@ -64,7 +64,7 @@ class EmailConnectionsService:
 
         # Probe the just-saved credentials and reflect the result in ``status``.
         # Transient failures preserve the prior status.
-        ok, _, transient = self._verify_conn(conn)
+        ok, _, transient = self.verify_conn(conn)
         reflect_probe_status(self.db, conn, ok, transient=transient)
         return conn
 
@@ -91,10 +91,10 @@ class EmailConnectionsService:
         conn = self.get(user)
         if conn is None:
             return False, "no Resend connection configured"
-        ok, msg, _ = self._verify_conn(conn)
+        ok, msg, _ = self.verify_conn(conn)
         return ok, msg
 
-    def _verify_conn(self, conn: Connection) -> tuple[bool, str, bool]:
+    def verify_conn(self, conn: Connection) -> tuple[bool, str, bool]:
         """Validate persisted Resend credentials.
 
         Two checks, both must pass:
@@ -112,12 +112,12 @@ class EmailConnectionsService:
         if not api_key:
             return False, "no API key configured", False
         try:
-            base64.b64decode(_strip_whsec_prefix(secret))
+            base64.b64decode(strip_whsec_prefix(secret))
         except Exception as exc:
             return False, f"signing secret is not valid base64: {exc}", False
         try:
             resp = httpx.get(
-                f"{_RESEND_API_BASE}/domains",
+                f"{RESEND_API_BASE}/domains",
                 headers={"Authorization": f"Bearer {api_key}"},
                 params={"limit": 1},
                 timeout=10,
@@ -127,7 +127,7 @@ class EmailConnectionsService:
         if resp.status_code in (401, 403):
             return False, f"Resend API rejected the key ({resp.status_code})", False
         if resp.status_code != 200:
-            transient = _is_transient_resend_error(resp.status_code, None)
+            transient = is_transient_resend_error(resp.status_code, None)
             return False, f"Resend API returned {resp.status_code}", transient
         return True, "ok", False
 
@@ -180,17 +180,17 @@ class EmailConnectionsService:
         ).encode()
 
         try:
-            signature = _sign_resend(svix_id, str(ts), body, secret)
+            signature = sign_resend(svix_id, str(ts), body, secret)
         except Exception as exc:
             return False, f"secret is not valid base64: {exc}"
 
-        resp = _post_loopback(base_url, user.kai_slug, body, svix_id, ts, signature)
+        resp = post_loopback(base_url, user.kai_slug, body, svix_id, ts, signature)
         if isinstance(resp, tuple):
             return resp
-        return _interpret_loopback_status(resp)
+        return interpret_loopback_status(resp)
 
 
-def _post_loopback(
+def post_loopback(
     base_url: str, slug: str, body: bytes, svix_id: str, ts: int, signature: str
 ) -> httpx.Response | tuple[bool, str]:
     webhook_url = f"{base_url.rstrip('/')}/webhook/{slug}/resend"
@@ -210,7 +210,7 @@ def _post_loopback(
         return False, f"could not reach ingress: {exc}"
 
 
-def _interpret_loopback_status(resp: httpx.Response) -> tuple[bool, str]:
+def interpret_loopback_status(resp: httpx.Response) -> tuple[bool, str]:
     if resp.status_code == 202:
         return True, "ok — webhook verified and forwarded"
     if resp.status_code == 401:

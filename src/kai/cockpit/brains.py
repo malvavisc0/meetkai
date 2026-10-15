@@ -25,18 +25,18 @@ from kai.brain.validation import (
 from kai.cockpit.models import Connection, Deployment, User
 from kai.utils.common import now_iso, user_slug
 
-_NON_SLUG_CHARS = re.compile(r"[^a-zA-Z0-9]+")
+NON_SLUG_CHARS = re.compile(r"[^a-zA-Z0-9]+")
 
 
-def _slug_for_url(url: str) -> str:
+def slug_for_url(url: str) -> str:
     """Derive a stable, readable ``file_source`` name from a URL."""
     parsed = urlparse(url)
     stem = f"{parsed.netloc}{parsed.path}".strip("/")
-    slug = _NON_SLUG_CHARS.sub("-", stem).strip("-")
+    slug = NON_SLUG_CHARS.sub("-", stem).strip("-")
     return slug or url
 
 
-def _normalize_internal_link(href: str, page_url: str, seed_host: str) -> str | None:
+def normalize_internal_link(href: str, page_url: str, seed_host: str) -> str | None:
     """Resolve a discovered link against its page to an absolute same-host URL.
 
     Returns ``None`` for anything that should not enter the BFS frontier:
@@ -156,13 +156,13 @@ class BrainsService:
 
     # --- External clients (shared morphik/crawl4ai containers) ---
 
-    def _morphik_client(self) -> MorphikClient:
+    def morphik_client(self) -> MorphikClient:
         return MorphikClient(get_brain_settings())
 
-    def _crawler_client(self) -> Crawl4aiClient:
+    def crawler_client(self) -> Crawl4aiClient:
         return Crawl4aiClient(get_brain_settings())
 
-    def _require_brain(self, user: User) -> Connection:
+    def require_brain(self, user: User) -> Connection:
         conn = self.get_brain(user)
         if conn is None:
             raise ValueError("No Brain provisioned for this Operator yet. Create the Brain first.")
@@ -176,8 +176,8 @@ class BrainsService:
         ``name`` becomes Morphik's ``filename`` — the single display name
         shown in the Documents table.
         """
-        brain = self._require_brain(user)
-        client = self._morphik_client()
+        brain = self.require_brain(user)
+        client = self.morphik_client()
         try:
             return await client.ingest_text(
                 file_source=name, text=text, workspace=brain.config["workspace"]
@@ -195,8 +195,8 @@ class BrainsService:
         """
         validate_upload_filename(filename)
         validate_upload_size(file)
-        brain = self._require_brain(user)
-        client = self._morphik_client()
+        brain = self.require_brain(user)
+        client = self.morphik_client()
         try:
             return await client.ingest_file(
                 file=file, filename=filename, workspace=brain.config["workspace"]
@@ -224,28 +224,26 @@ class BrainsService:
         (incl. cloud metadata)/reserved address — see
         ``kai.brain.validation.validate_ingest_url``. Same-host links
         discovered during the BFS are re-validated before being fetched,
-        since ``_normalize_internal_link`` only checks scheme + hostname
+        since ``normalize_internal_link`` only checks scheme + hostname
         match, not the address they resolve to.
         """
         await validate_ingest_url(url)
-        brain = self._require_brain(user)
+        brain = self.require_brain(user)
         settings = get_brain_settings()
         seed_host = urlparse(url).netloc
-        crawler = self._crawler_client()
+        crawler = self.crawler_client()
         pages: list[tuple[str, str]] = []
         try:
-            pages = await self._bfs_crawl(crawler, url, seed_host, settings)
+            pages = await self.bfs_crawl(crawler, url, seed_host, settings)
         finally:
             await crawler.close()
 
         if not pages:
             raise ValueError(f"could not extract any content from {url}")
 
-        return await self._ingest_crawled_pages(brain, pages)
+        return await self.ingest_crawled_pages(brain, pages)
 
-    async def _bfs_crawl(
-        self, crawler, url: str, seed_host: str, settings
-    ) -> list[tuple[str, str]]:
+    async def bfs_crawl(self, crawler, url: str, seed_host: str, settings) -> list[tuple[str, str]]:
         """BFS crawl: fetch the seed page and same-host linked pages."""
         pages: list[tuple[str, str]] = []
         fetched = 0
@@ -262,11 +260,11 @@ class BrainsService:
             if not (page.success and page.markdown.raw_markdown.strip()):
                 continue
             pages.append((page_url, page.markdown.raw_markdown))
-            self._enqueue_links(page, page_url, depth, seed_host, settings, visited, queue)
+            self.enqueue_links(page, page_url, depth, seed_host, settings, visited, queue)
         return pages
 
     @staticmethod
-    def _enqueue_links(
+    def enqueue_links(
         page,
         page_url: str,
         depth: int,
@@ -278,15 +276,15 @@ class BrainsService:
         if depth >= settings.crawl_max_depth:
             return
         for href in page.links.internal:
-            next_url = _normalize_internal_link(href, page_url, seed_host)
+            next_url = normalize_internal_link(href, page_url, seed_host)
             if next_url is not None and next_url not in visited:
                 visited.add(next_url)
                 queue.append((next_url, depth + 1))
 
-    async def _ingest_crawled_pages(self, brain, pages: list[tuple[str, str]]) -> IngestResult:
-        file_sources = [_slug_for_url(u) for u, _ in pages]
+    async def ingest_crawled_pages(self, brain, pages: list[tuple[str, str]]) -> IngestResult:
+        file_sources = [slug_for_url(u) for u, _ in pages]
         texts = [md for _, md in pages]
-        client = self._morphik_client()
+        client = self.morphik_client()
         try:
             result = await client.ingest_texts(
                 file_sources=file_sources, texts=texts, workspace=brain.config["workspace"]
@@ -309,7 +307,7 @@ class BrainsService:
         brain = self.get_brain(user)
         if brain is None:
             return []
-        client = self._morphik_client()
+        client = self.morphik_client()
         try:
             return await client.list_docs(workspace=brain.config["workspace"])
         finally:
@@ -317,8 +315,8 @@ class BrainsService:
 
     async def delete_doc(self, user: User, *, doc_id: str) -> str:
         """Delete one document from the Brain, scoped to its workspace."""
-        brain = self._require_brain(user)
-        client = self._morphik_client()
+        brain = self.require_brain(user)
+        client = self.morphik_client()
         try:
             return await client.delete_doc(doc_id=doc_id, workspace=brain.config["workspace"])
         finally:

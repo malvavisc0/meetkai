@@ -52,7 +52,7 @@ def fake_webhook_type(monkeypatch):
     # signing_secret — mirroring how "resend" is paired with its
     # WebhookConnectionType in production).
     from kai.cockpit.bots import WEBHOOK_CONNECTION_TYPES, WebhookConnectionType
-    from kai.cockpit.connections.webhooks import _clear_seen_nonces
+    from kai.cockpit.connections.webhooks import clear_seen_nonces
 
     monkeypatch.setitem(WEBHOOK_TYPES, "test", _FAKE_TYPE)
     monkeypatch.setitem(
@@ -66,11 +66,11 @@ def fake_webhook_type(monkeypatch):
             secret_fields=["signing_secret"],
         ),
     )
-    _clear_seen_nonces()
+    clear_seen_nonces()
     yield
     WEBHOOK_TYPES.pop("test", None)
     WEBHOOK_CONNECTION_TYPES.pop("test", None)
-    _clear_seen_nonces()
+    clear_seen_nonces()
 
 
 @pytest.fixture
@@ -266,8 +266,8 @@ class TestForwardEvent:
         db.add(dep)
         db.commit()
 
-        monkeypatch.setattr(svc, "_resolve_run", lambda d: object())
-        monkeypatch.setattr(svc, "_call_bot", lambda *a, **k: {"ok": False, "error": "boom"})
+        monkeypatch.setattr(svc, "resolve_run", lambda d: object())
+        monkeypatch.setattr(svc, "call_bot", lambda *a, **k: {"ok": False, "error": "boom"})
         assert svc.forward_event(dep, "/ingest", b"{}") is False
 
     def test_returns_true_on_success(self, db, alice, monkeypatch):
@@ -288,8 +288,8 @@ class TestForwardEvent:
         db.add(dep)
         db.commit()
 
-        monkeypatch.setattr(svc, "_resolve_run", lambda d: object())
-        monkeypatch.setattr(svc, "_call_bot", lambda *a, **k: {"status": "ok"})
+        monkeypatch.setattr(svc, "resolve_run", lambda d: object())
+        monkeypatch.setattr(svc, "call_bot", lambda *a, **k: {"status": "ok"})
         assert svc.forward_event(dep, "/ingest", b"{}") is True
 
 

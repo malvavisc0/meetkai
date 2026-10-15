@@ -3,7 +3,7 @@ from typing import get_args
 from kai.bots.email import EmailAction
 from kai.bots.email.setup import BotConfig as EmailBotConfig
 from kai.templates.resolver import (
-    _EMAIL_VALID_ACTIONS,
+    EMAIL_VALID_ACTIONS,
     resolve_config,
     resolve_tools,
     validate_actions,
@@ -363,4 +363,4 @@ class TestActionVocabularyDrift:
 
     def test_email_actions_match_bot_definition(self):
         email_literal_args = set(get_args(EmailAction.model_fields["action"].annotation))
-        assert email_literal_args == _EMAIL_VALID_ACTIONS
+        assert email_literal_args == EMAIL_VALID_ACTIONS

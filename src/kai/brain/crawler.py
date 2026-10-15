@@ -35,7 +35,7 @@ class CrawlLinks(BaseModel):
         if not links:
             return cls()
 
-        def _hrefs(entries: list[Any]) -> list[str]:
+        def hrefs(entries: list[Any]) -> list[str]:
             out: list[str] = []
             for entry in entries:
                 href = entry.get("href") if isinstance(entry, dict) else entry
@@ -44,8 +44,8 @@ class CrawlLinks(BaseModel):
             return out
 
         return cls(
-            internal=_hrefs(links.get("internal") or []),
-            external=_hrefs(links.get("external") or []),
+            internal=hrefs(links.get("internal") or []),
+            external=hrefs(links.get("external") or []),
         )
 
 
@@ -66,7 +66,7 @@ class MarkdownResult(BaseModel):
 
     @model_validator(mode="before")
     @classmethod
-    def _coerce_source(cls, data: Any) -> Any:
+    def coerce_source(cls, data: Any) -> Any:
         """Accept the /crawl dict shape, or a bare string (defensive)."""
         if isinstance(data, str):
             return {"raw_markdown": data}
@@ -133,7 +133,7 @@ class Crawl4aiClient:
         # /md returns {"markdown": "<string>", "success": true, ...}
         md = data.get("markdown", "")
         if isinstance(md, dict):  # /md should return a string, but handle unexpected dict
-            md = md.get("raw_markdown", "") or ""
+            md = md.get("raw_markdown") or ""
         return md if isinstance(md, str) else ""
 
     async def crawl(self, *, url: str, exclude_external_links: bool = True) -> CrawlPage:

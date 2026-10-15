@@ -60,8 +60,8 @@ class TestEmailWiring:
         tools = resolve_tools(tmpl, [], [])
         bot.configure(agent, _settings(), template=tmpl, tools=tools)
 
-        assert bot._reply_style == tmpl.reply_style
-        assert bot._post_processor._config.profile == "none"
+        assert bot.reply_style == tmpl.reply_style
+        assert bot.post_processing_profile == "none"
 
     def test_general_registers_conversation_tools(self, _email_env):
         bot = EmailBot(_email_dir())

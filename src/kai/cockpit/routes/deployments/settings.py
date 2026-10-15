@@ -18,7 +18,7 @@ from kai.cockpit.bots import (
 from kai.cockpit.brains import BrainsService
 from kai.cockpit.connections.service import ConnectionsService
 from kai.cockpit.db import get_db
-from kai.cockpit.deployments import DeploymentsService, _tool_enabled, _tool_instruction
+from kai.cockpit.deployments import DeploymentsService, tool_enabled, tool_instruction
 from kai.cockpit.flash import flash
 from kai.cockpit.models import User
 from kai.cockpit.routes.deployments._shared import (
@@ -46,15 +46,15 @@ SettingsParseResult = dict | RedirectResponse
 SettingsParser = Callable[[int, Request, dict], SettingsParseResult]
 
 
-def _parse_email_settings(dep_id: int, request: Request, form_fields: dict) -> SettingsParseResult:
+def parse_email_settings(dep_id: int, request: Request, form_fields: dict) -> SettingsParseResult:
     """Email-only settings: a blocklist of sender addresses to silently ignore."""
     updates = {
         "blacklist": [
             line.strip().lower()
-            for line in (form_fields.get("blacklist", "") or "").splitlines()
+            for line in (form_fields.get("blacklist") or "").splitlines()
             if line.strip()
         ],
-        "display_name": (form_fields.get("display_name", "") or "").strip() or DEFAULT_DISPLAY_NAME,
+        "display_name": (form_fields.get("display_name") or "").strip() or DEFAULT_DISPLAY_NAME,
     }
     return updates
 
@@ -62,8 +62,8 @@ def _parse_email_settings(dep_id: int, request: Request, form_fields: dict) -> S
 # Bot types with no entry here (e.g. a brand-new bot type) simply get no
 # extra settings parsed — ``settings_update`` keeps the shared
 # timezone/tools keys only, same as before this table existed.
-_SETTINGS_PARSERS: dict[str, SettingsParser] = {
-    "email": _parse_email_settings,
+SETTINGS_PARSERS: dict[str, SettingsParser] = {
+    "email": parse_email_settings,
 }
 
 
@@ -82,12 +82,12 @@ async def deployment_settings_page(
 
     bt = BOT_TYPES.get(dep.bot_type)
     entitlements = {k for k, v in (user.feature_flags or {}).items() if v}
-    feature_flags = _build_feature_flags(bt, entitlements)
+    feature_flags = build_feature_flags(bt, entitlements)
     available_conns = {c.service for c in ConnectionsService(db).list_for_user(user)}
-    supported_tools = _build_supported_tools(bt, available_conns)
-    tools_state = _build_tools_state(supported_tools, dep.settings.get("tools", {}))
-    tmpl = _resolve_template(dep)
-    template_tools, template_warnings = _build_template_tools(tmpl, dep.tool_overrides or {})
+    supported_tools = build_supported_tools(bt, available_conns)
+    tools_state = build_tools_state(supported_tools, dep.settings.get("tools", {}))
+    tmpl = resolve_template(dep)
+    template_tools, template_warnings = build_template_tools(tmpl, dep.tool_overrides or {})
 
     flash = request.session.pop("flash", None)
 
@@ -118,7 +118,7 @@ async def deployment_settings_page(
     )
 
 
-def _build_feature_flags(bt, entitlements: set[str]) -> list[tuple[str, str, bool]]:
+def build_feature_flags(bt, entitlements: set[str]) -> list[tuple[str, str, bool]]:
     """Render every flag the bot type declares: an unentitled flag shows up
     disabled + unchecked so the operator sees what's possible. The POST
     handler clamps submitted values to entitlements so a crafted checkbox
@@ -132,7 +132,7 @@ def _build_feature_flags(bt, entitlements: set[str]) -> list[tuple[str, str, boo
     return flags
 
 
-def _build_supported_tools(bt, available_conns: set[str]) -> list[tuple[str, str, bool]]:
+def build_supported_tools(bt, available_conns: set[str]) -> list[tuple[str, str, bool]]:
     """One checkbox per supported connection that isn't required. Each is
     disabled when the connection doesn't exist yet."""
     tools: list[tuple[str, str, bool]] = []
@@ -150,28 +150,28 @@ def _build_supported_tools(bt, available_conns: set[str]) -> list[tuple[str, str
     return tools
 
 
-def _build_tools_state(
+def build_tools_state(
     supported_tools: list[tuple[str, str, bool]], tools_enabled: dict
 ) -> dict[str, dict]:
     state: dict[str, dict] = {}
     for conn_svc, _, available in supported_tools:
         raw = tools_enabled.get(conn_svc, {})
         state[conn_svc] = {
-            "enabled": _tool_enabled(raw),
-            "instruction": _tool_instruction(raw),
+            "enabled": tool_enabled(raw),
+            "instruction": tool_instruction(raw),
             "available": available,
         }
     return state
 
 
-def _resolve_template(dep):
+def resolve_template(dep):
     try:
         return TemplateRegistry.bundled().get(dep.bot_type, dep.template)
     except FileNotFoundError:
         return None
 
 
-def _build_template_tools(tmpl, saved_overrides: dict) -> tuple[list[tuple[str, bool]], list[str]]:
+def build_template_tools(tmpl, saved_overrides: dict) -> tuple[list[tuple[str, bool]], list[str]]:
     """Template optional tool toggles: each row is a checkbox the operator
     can uncheck to disable that optional tool for the deployment."""
     if tmpl is None:
@@ -179,12 +179,12 @@ def _build_template_tools(tmpl, saved_overrides: dict) -> tuple[list[tuple[str, 
     configured = tool_configured_map(tmpl)
     tools: list[tuple[str, bool]] = []
     for tool_name in sorted(set(tmpl.tools.optional) & KNOWN_TOOL_NAMES):
-        is_on = _template_tool_is_on(tool_name, configured.get(tool_name, True), saved_overrides)
+        is_on = template_tool_is_on(tool_name, configured.get(tool_name, True), saved_overrides)
         tools.append((tool_name, is_on))
     return tools, validate_tools(tmpl)
 
 
-def _template_tool_is_on(tool_name: str, is_configured: bool, saved: dict) -> bool:
+def template_tool_is_on(tool_name: str, is_configured: bool, saved: dict) -> bool:
     # Reflect persisted overrides: explicitly-disabled stays unchecked;
     # explicitly-enabled stays checked; otherwise default to "on" for
     # configured optional tools.
@@ -197,7 +197,7 @@ def _template_tool_is_on(tool_name: str, is_configured: bool, saved: dict) -> bo
     return is_configured
 
 
-def _build_feature_flags_for_post(bt, entitlements: set[str], form_fields: dict) -> dict:
+def build_feature_flags_for_post(bt, entitlements: set[str], form_fields: dict) -> dict:
     # Clamp submitted feature flag values to the user's entitlements — the
     # POST can spoof any checkbox name, so we silently drop unentitled
     # flags rather than returning 403 (avoids leaking entitlement state).
@@ -210,7 +210,7 @@ def _build_feature_flags_for_post(bt, entitlements: set[str], form_fields: dict)
     return flags
 
 
-def _supported_optional_services(bt) -> list[str]:
+def supported_optional_services(bt) -> list[str]:
     if not bt:
         return []
     return [
@@ -218,7 +218,7 @@ def _supported_optional_services(bt) -> list[str]:
     ]
 
 
-def _build_tool_overrides(tmpl, form_fields: dict) -> dict:
+def build_tool_overrides(tmpl, form_fields: dict) -> dict:
     # Parse template tool overrides from the form. Unchecked optional tools
     # go into the "disable" list; checked ones stay on (the resolver still
     # env-gates any optional tool, so enabling an unconfigured tool is a
@@ -232,7 +232,7 @@ def _build_tool_overrides(tmpl, form_fields: dict) -> dict:
     return overrides
 
 
-def _validate_tool_overrides(
+def validate_tool_overrides(
     request: Request, dep_id: int, tmpl, tool_overrides: dict
 ) -> RedirectResponse | None:
     # Server-side validation: reject disabling default/required tools and
@@ -271,18 +271,18 @@ async def deployment_settings(
     form_fields = {k: v for k, v in (await request.form()).items() if isinstance(v, str)}
     bt = BOT_TYPES.get(dep.bot_type)
     entitlements = {k for k, v in (user.feature_flags or {}).items() if v}
-    tmpl = _resolve_template(dep)
-    tool_overrides = _build_tool_overrides(tmpl, form_fields)
+    tmpl = resolve_template(dep)
+    tool_overrides = build_tool_overrides(tmpl, form_fields)
 
-    redirect = _validate_tool_overrides(request, dep_id, tmpl, tool_overrides)
+    redirect = validate_tool_overrides(request, dep_id, tmpl, tool_overrides)
     if redirect is not None:
         return redirect
 
-    parsed = _parse_bot_settings(dep, dep_id, request, form_fields)
+    parsed = parse_bot_settings(dep, dep_id, request, form_fields)
     if isinstance(parsed, RedirectResponse):
         return parsed
 
-    edit_fields = _build_edit_fields(
+    edit_fields = build_edit_fields(
         bt,
         dep,
         goal,
@@ -295,15 +295,15 @@ async def deployment_settings(
         tool_overrides,
         parsed,
     )
-    redirect = _apply_edit(request, dep_id, svc, dep, edit_fields)
+    redirect = apply_edit(request, dep_id, svc, dep, edit_fields)
     if redirect is not None:
         return redirect
 
-    _flash_saved(request, dep)
+    flash_saved(request, dep)
     return RedirectResponse(f"/deployments/{dep_id}/settings", status_code=302)
 
 
-def _build_edit_fields(
+def build_edit_fields(
     bt,
     dep,
     goal,
@@ -316,8 +316,8 @@ def _build_edit_fields(
     tool_overrides,
     parsed,
 ) -> dict:
-    feature_flags = _build_feature_flags_for_post(bt, entitlements, form_fields)
-    supported_svcs = _supported_optional_services(bt)
+    feature_flags = build_feature_flags_for_post(bt, entitlements, form_fields)
+    supported_svcs = supported_optional_services(bt)
     settings_update: dict = {
         "timezone": timezone or None,
         "tools": build_tools_update(supported_svcs, form_fields),
@@ -335,7 +335,7 @@ def _build_edit_fields(
     }
 
 
-def _apply_edit(
+def apply_edit(
     request: Request,
     dep_id: int,
     svc: DeploymentsService,
@@ -350,15 +350,15 @@ def _apply_edit(
     return None
 
 
-def _flash_saved(request: Request, dep) -> None:
+def flash_saved(request: Request, dep) -> None:
     if dep.status == "running":
         flash(request, "info", "Settings saved. Restart to apply.")
     else:
         flash(request, "success", "Settings saved.")
 
 
-def _parse_bot_settings(dep, dep_id: int, request: Request, form_fields: dict):
-    parser = _SETTINGS_PARSERS.get(dep.bot_type)
+def parse_bot_settings(dep, dep_id: int, request: Request, form_fields: dict):
+    parser = SETTINGS_PARSERS.get(dep.bot_type)
     if parser is None:
         return {}
     return parser(dep_id, request, form_fields)

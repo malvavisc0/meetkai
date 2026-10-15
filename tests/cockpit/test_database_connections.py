@@ -11,9 +11,9 @@ def _encryption_env(monkeypatch):
     # Clear the key cache so the new env takes effect.
     from kai.cockpit.connections import secrets
 
-    secrets._clear_key_cache()
+    secrets.clear_key_cache()
     yield
-    secrets._clear_key_cache()
+    secrets.clear_key_cache()
 
 
 class TestSave:

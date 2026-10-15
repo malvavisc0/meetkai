@@ -13,7 +13,7 @@ from llama_index.llms.openai import utils as _openai_utils
 from llama_index.llms.openai_like import OpenAILike
 
 from kai.agent.context import MessageContext
-from kai.agent.core import _DEFAULT_SYSTEM_PROMPT, ActionResult, KaiAgent
+from kai.agent.core import DEFAULT_SYSTEM_PROMPT, ActionResult, KaiAgent
 from kai.agent.goal import GoalManager
 from kai.config.settings import Settings
 
@@ -35,7 +35,7 @@ def _mock_llm(reply_content: str | None = "ok", *, action: _TEST_ACTIONS = "repl
     ``action="silent"`` with ``reply_content=None`` to simulate a silent turn.
 
     The structured terminal step is wired through ``llm.achat`` so the mock
-    exercises the same call path as production: ``_run_with_tools`` calls
+    exercises the same call path as production: ``run_with_tools`` calls
     ``self._llm.achat(messages=...)`` once for the terminal step and parses the
     response's ``message.content`` as JSON into ``output_cls``. The mock
     serializes the action as JSON in the content rather than using a bare
@@ -92,20 +92,20 @@ def _wire_structured_side_effect(
 class TestKaiAgent:
     def test_default_system_prompt(self):
         agent = KaiAgent(settings=None, goal_manager=GoalManager())
-        prompt = agent._get_system_prompt()
+        prompt = agent.get_system_prompt()
         assert "helpful assistant" in prompt
 
     def test_custom_system_prompt(self):
         agent = KaiAgent(settings=None, goal_manager=GoalManager())
         agent.set_system_prompt("You are a joke bot.")
-        prompt = agent._get_system_prompt()
+        prompt = agent.get_system_prompt()
         assert "joke bot" in prompt
 
     def test_goal_appended_to_prompt(self):
         gm = GoalManager()
         gm.set_goal("Tell jokes")
         agent = KaiAgent(settings=None, goal_manager=gm)
-        prompt = agent._get_system_prompt()
+        prompt = agent.get_system_prompt()
         assert "Tell jokes" in prompt
         assert "Current goal" in prompt
 
@@ -114,7 +114,7 @@ class TestKaiAgent:
         gm.set_goal("Be funny")
         agent = KaiAgent(settings=None, goal_manager=gm)
         agent.set_system_prompt("You are a bot.")
-        prompt = agent._get_system_prompt()
+        prompt = agent.get_system_prompt()
         assert "You are a bot." in prompt
         assert "Be funny" in prompt
 
@@ -123,7 +123,7 @@ class TestKaiAgent:
         gm.set_goal("Be helpful")
         agent = KaiAgent(settings=None, goal_manager=gm)
         agent.set_system_prompt("Base prompt.")
-        prompt = agent._get_system_prompt(overrides="Custom per-call prompt.")
+        prompt = agent.get_system_prompt(overrides="Custom per-call prompt.")
         assert "Custom per-call prompt." in prompt
         assert "Be helpful" in prompt
         assert "Base prompt." not in prompt
@@ -131,7 +131,7 @@ class TestKaiAgent:
     def test_extra_context_augments_base_prompt(self):
         agent = KaiAgent(settings=None, goal_manager=GoalManager())
         agent.set_system_prompt("Base prompt.")
-        prompt = agent._get_system_prompt(extra_context="People in this chat: Alice, Bob")
+        prompt = agent.get_system_prompt(extra_context="People in this chat: Alice, Bob")
         # extra_context must AUGMENT the base persona, not replace it.
         assert "Base prompt." in prompt
         assert "People in this chat: Alice, Bob" in prompt
@@ -139,7 +139,7 @@ class TestKaiAgent:
     def test_build_messages_extra_context_keeps_base_prompt(self):
         agent = KaiAgent(settings=None, goal_manager=GoalManager())
         agent.set_system_prompt("Base prompt.")
-        messages = agent._build_messages("Hello", extra_system_context="People in this chat: Alice")
+        messages = agent.build_messages("Hello", extra_system_context="People in this chat: Alice")
         system = messages[0].content
         assert system is not None
         assert "Base prompt." in system
@@ -147,14 +147,14 @@ class TestKaiAgent:
 
     def test_system_prompt_includes_current_time(self):
         agent = KaiAgent(settings=None, goal_manager=GoalManager())
-        prompt = agent._get_system_prompt()
+        prompt = agent.get_system_prompt()
         assert "Current date and time:" in prompt
         assert "UTC:" in prompt
 
     def test_timezone_changes_local_time_in_prompt(self):
         agent = KaiAgent(settings=None, goal_manager=GoalManager())
         agent.set_timezone("America/New_York")
-        prompt = agent._get_system_prompt()
+        prompt = agent.get_system_prompt()
         assert "Current date and time:" in prompt
         # Verify the timezone was applied by checking the local time matches
         # New York's offset (EDT = UTC-4 in summer, EST = UTC-5 in winter).
@@ -170,19 +170,19 @@ class TestKaiAgent:
     def test_set_timezone_none_falls_back_to_local(self):
         agent = KaiAgent(settings=None, goal_manager=GoalManager())
         agent.set_timezone(None)
-        prompt = agent._get_system_prompt()
+        prompt = agent.get_system_prompt()
         assert "Current date and time:" in prompt
 
     def test_set_timezone_strips_whitespace(self):
         agent = KaiAgent(settings=None, goal_manager=GoalManager())
         agent.set_timezone("  Europe/Berlin  ")
-        assert agent._timezone == "Europe/Berlin"
+        assert agent.timezone == "Europe/Berlin"
 
     def test_unknown_timezone_falls_back_gracefully(self):
         agent = KaiAgent(settings=None, goal_manager=GoalManager())
         agent.set_timezone("Not/A_Real_Zone")
         # Must not raise; falls back to local time and still produces a prompt.
-        prompt = agent._get_system_prompt()
+        prompt = agent.get_system_prompt()
         assert "Current date and time:" in prompt
 
     def test_history_cleared_on_prompt_change(self):
@@ -203,7 +203,7 @@ class TestKaiAgent:
         agent._history["chat"] = [ChatMessage(role=MessageRole.USER, content="fake")]
         gm.set_goal("New goal")
 
-        messages = agent._build_messages("Hello", conversation_id="chat")
+        messages = agent.build_messages("Hello", conversation_id="chat")
 
         system = messages[0].content
         assert system is not None
@@ -215,7 +215,7 @@ class TestKaiAgent:
         gm = GoalManager()
         agent = KaiAgent(settings=None, goal_manager=gm)
         agent.set_system_prompt("System instructions.")
-        messages = agent._build_messages("Hello")
+        messages = agent.build_messages("Hello")
         assert len(messages) == 2
         assert messages[0].role.value == "system"
         system = messages[0].content
@@ -230,7 +230,7 @@ class TestKaiAgent:
             ChatMessage(role=MessageRole.USER, content="prev user"),
             ChatMessage(role=MessageRole.ASSISTANT, content="prev assistant"),
         ]
-        messages = agent._build_messages("new message")
+        messages = agent.build_messages("new message")
         assert len(messages) == 4
         assert messages[1].content == "prev user"
         assert messages[2].content == "prev assistant"
@@ -239,7 +239,7 @@ class TestKaiAgent:
     def test_build_messages_per_call_system_prompt(self):
         agent = KaiAgent(settings=None, goal_manager=GoalManager())
         agent.set_system_prompt("Base prompt.")
-        messages = agent._build_messages("Hello", system_prompt="Override prompt.")
+        messages = agent.build_messages("Hello", system_prompt="Override prompt.")
         system = messages[0].content
         assert system is not None
         assert "Override prompt." in system
@@ -249,31 +249,31 @@ class TestKaiAgent:
         agent = KaiAgent(settings=None, goal_manager=GoalManager())
         agent._max_history = 4
         for i in range(10):
-            agent._get_history().append(ChatMessage(role=MessageRole.USER, content=f"msg{i}"))
-        agent._trim_history()
-        assert len(agent._get_history()) == 4
-        assert agent._get_history()[0].content == "msg6"
+            agent.get_history().append(ChatMessage(role=MessageRole.USER, content=f"msg{i}"))
+        agent.trim_history()
+        assert len(agent.get_history()) == 4
+        assert agent.get_history()[0].content == "msg6"
 
     def test_trim_history_by_character_budget(self):
         agent = KaiAgent(settings=None, goal_manager=GoalManager())
         agent._max_history = 10
         agent._max_history_chars = 8
         for content in ("1234", "5678", "9012"):
-            agent._get_history().append(ChatMessage(role=MessageRole.USER, content=content))
+            agent.get_history().append(ChatMessage(role=MessageRole.USER, content=content))
 
-        agent._trim_history()
+        agent.trim_history()
 
-        assert [message.content for message in agent._get_history()] == ["5678", "9012"]
+        assert [message.content for message in agent.get_history()] == ["5678", "9012"]
 
     def test_trim_history_preserves_alternating_pattern(self):
         agent = KaiAgent(settings=None, goal_manager=GoalManager())
         agent._max_history = 4
         agent._max_history_chars = 9999
         for i in range(6):
-            agent._get_history().append(ChatMessage(role=MessageRole.USER, content=f"u{i}"))
-            agent._get_history().append(ChatMessage(role=MessageRole.ASSISTANT, content=f"a{i}"))
-        agent._trim_history()
-        history = agent._get_history()
+            agent.get_history().append(ChatMessage(role=MessageRole.USER, content=f"u{i}"))
+            agent.get_history().append(ChatMessage(role=MessageRole.ASSISTANT, content=f"a{i}"))
+        agent.trim_history()
+        history = agent.get_history()
         assert len(history) == 4
         assert history[0].content == "u4"
         assert history[1].content == "a4"
@@ -306,7 +306,7 @@ class TestKaiAgentChat:
         agent._llm = _mock_llm("Sure!")
 
         await agent.chat("Hello", output_cls=_TestAction)
-        history = agent._get_history()
+        history = agent.get_history()
         assert len(history) == 2
         assert history[0].role == MessageRole.USER
         assert history[0].content == "Hello"
@@ -363,7 +363,7 @@ class TestKaiAgentChat:
         for i in range(10):
             await agent.chat(f"msg{i}", output_cls=_TestAction)
 
-        assert len(agent._get_history()) == 4
+        assert len(agent.get_history()) == 4
 
     @pytest.mark.asyncio
     async def test_chat_isolates_history_by_conversation(self, settings):
@@ -375,7 +375,7 @@ class TestKaiAgentChat:
 
         second_call = agent._llm.achat_with_tools.call_args_list[1]
         messages = second_call.kwargs["chat_history"]
-        assert _DEFAULT_SYSTEM_PROMPT in messages[0].content
+        assert DEFAULT_SYSTEM_PROMPT in messages[0].content
         assert messages[1].content == "from chat two"
 
     @pytest.mark.asyncio
@@ -384,7 +384,7 @@ class TestKaiAgentChat:
         agent._llm = _mock_llm("ok")
 
         await agent.observe("background message", conversation_id="chat-1")
-        history = agent._get_history("chat-1")
+        history = agent.get_history("chat-1")
         assert len(history) == 1
         assert history[0].role == MessageRole.USER
         assert history[0].content == "background message"
@@ -401,7 +401,7 @@ class TestKaiAgentChat:
             conversation_id="chat-1",
             store_user_message=False,
         )
-        history = agent._get_history("chat-1")
+        history = agent.get_history("chat-1")
         assert len(history) == 2
         assert [m.role for m in history] == [MessageRole.USER, MessageRole.ASSISTANT]
 
@@ -414,7 +414,7 @@ class TestKaiAgentChat:
         assert result.reply == ""
         assert result.action.text is None
         # An empty reply stores nothing (mirrors the old silent early-return).
-        assert len(agent._get_history()) == 0
+        assert len(agent.get_history()) == 0
 
     @pytest.mark.asyncio
     async def test_chat_delegated_action_stores_user_message_only(self, settings):
@@ -435,7 +435,7 @@ class TestKaiAgentChat:
         )
 
         assert result.action.text == "hola mundo"
-        history = agent._get_history("operator")
+        history = agent.get_history("operator")
         # User message IS stored (the operator's instruction).
         assert any(m.role == MessageRole.USER for m in history)
         # Assistant reply is NOT stored here (delegated to target chat).
@@ -443,7 +443,7 @@ class TestKaiAgentChat:
 
     def test_build_llm_disables_thinking_by_default(self, settings):
         agent = KaiAgent(settings=settings, goal_manager=GoalManager())
-        llm = agent._build_llm()
+        llm = agent.build_llm()
         assert (
             llm.additional_kwargs["extra_body"]["chat_template_kwargs"]["enable_thinking"] is False
         )
@@ -457,14 +457,14 @@ class TestKaiAgentChat:
             llm_enable_thinking=True,
         )
         agent = KaiAgent(settings=settings, goal_manager=GoalManager())
-        llm = agent._build_llm()
+        llm = agent.build_llm()
         assert (
             llm.additional_kwargs["extra_body"]["chat_template_kwargs"]["enable_thinking"] is True
         )
 
     def test_build_llm_omits_reasoning_effort_by_default(self, settings):
         agent = KaiAgent(settings=settings, goal_manager=GoalManager())
-        llm = agent._build_llm()
+        llm = agent.build_llm()
         assert "reasoning_effort" not in llm.additional_kwargs["extra_body"]
 
     def test_build_llm_sets_reasoning_effort_when_configured(self):
@@ -476,7 +476,7 @@ class TestKaiAgentChat:
             llm_reasoning_effort="high",
         )
         agent = KaiAgent(settings=settings, goal_manager=GoalManager())
-        llm = agent._build_llm()
+        llm = agent.build_llm()
         assert llm.additional_kwargs["extra_body"]["reasoning_effort"] == "high"
 
     @pytest.mark.asyncio
@@ -489,7 +489,7 @@ class TestKaiAgentChat:
         await agent.flush()
 
         restored = KaiAgent(settings=settings, goal_manager=GoalManager())
-        assert [message.content for message in restored._get_history("chat-1")] == [
+        assert [message.content for message in restored.get_history("chat-1")] == [
             "remember me",
             "stored",
         ]
@@ -512,7 +512,7 @@ class TestKaiAgentChat:
         assert restored_goal is not None
         assert restored_goal.description == "Support users"
         assert restored_gm.revision == 0
-        assert [message.content for message in restored._get_history("default")] == [
+        assert [message.content for message in restored.get_history("default")] == [
             "hello",
             "done",
         ]
@@ -536,7 +536,7 @@ class TestKaiAgentContext:
             conversation_id="123@g.us",
             multi_party=True,
         )
-        result = agent._format_user_message("hello", ctx)
+        result = agent.format_user_message("hello", ctx)
         assert result == "[Juan Palotes] hello"
 
     def test_format_user_message_group_mentions_bot(self):
@@ -548,7 +548,7 @@ class TestKaiAgentContext:
             multi_party=True,
             addressed_to_bot=True,
         )
-        result = agent._format_user_message("hello", ctx)
+        result = agent.format_user_message("hello", ctx)
         assert result == "[Juan Palotes (addressing you)] hello"
 
     def test_format_user_message_dm(self):
@@ -559,17 +559,17 @@ class TestKaiAgentContext:
             conversation_id="12345678901234@lid",
             multi_party=False,
         )
-        result = agent._format_user_message("hi", ctx)
+        result = agent.format_user_message("hi", ctx)
         assert result == "[Lucerna] hi"
 
     def test_format_user_message_no_context(self):
         agent = KaiAgent(settings=None, goal_manager=GoalManager())
-        result = agent._format_user_message("hello", None)
+        result = agent.format_user_message("hello", None)
         assert result == "hello"
 
     def test_get_system_prompt_no_roster_injection(self):
         agent = KaiAgent(settings=None, goal_manager=GoalManager())
-        prompt = agent._get_system_prompt()
+        prompt = agent.get_system_prompt()
         assert "People in this chat" not in prompt
         assert "@[Name]" not in prompt
 
@@ -582,7 +582,7 @@ class TestKaiAgentContext:
         assert result.action.action == "silent"
         assert result.reply == ""
         # A silent turn stores nothing in history.
-        history = agent._get_history()
+        history = agent.get_history()
         assert len(history) == 0
 
     @pytest.mark.asyncio
@@ -633,7 +633,7 @@ class TestKaiAgentToolHistory:
 
         mock_tool = AsyncMock()
         mock_tool.acall.return_value = MagicMock(content="[{'title': 'Result', 'url': 'http://x'}]")
-        agent._tools_by_name["web_search"] = mock_tool
+        agent.override_tool("web_search", mock_tool)
 
         mock_llm = MagicMock()
         mock_llm.achat_with_tools = AsyncMock(side_effect=[tool_response, final_response])
@@ -644,7 +644,7 @@ class TestKaiAgentToolHistory:
         result = await agent.chat("search for test", output_cls=_TestAction)
         assert result.action.text == "Here are the results"
 
-        history = agent._get_history()
+        history = agent.get_history()
         assert len(history) == 2
         assert history[0].role == MessageRole.USER
         assert history[0].content == "search for test"
@@ -663,7 +663,7 @@ class TestKaiAgentToolHistory:
 
         mock_tool = AsyncMock()
         mock_tool.acall.return_value = MagicMock(content="result text")
-        agent._tools_by_name["web_search"] = mock_tool
+        agent.override_tool("web_search", mock_tool)
 
         mock_llm = MagicMock()
         mock_llm.achat_with_tools = AsyncMock(side_effect=[tool_response, final_response])
@@ -696,7 +696,7 @@ class TestKaiAgentToolHistory:
         )
         mock_tool = AsyncMock()
         mock_tool.acall.return_value = MagicMock(content="x")
-        agent._tools_by_name["web_search"] = mock_tool
+        agent.override_tool("web_search", mock_tool)
         mock_llm = MagicMock()
         mock_llm.achat_with_tools = AsyncMock(side_effect=[tool_response, final_response])
         mock_llm.get_tool_calls_from_response = MagicMock(side_effect=[[tc], []])
@@ -717,7 +717,7 @@ class TestKaiAgentToolHistory:
         )
         mock_tool = AsyncMock()
         mock_tool.acall.return_value = MagicMock(content="x")
-        agent._tools_by_name["web_search"] = mock_tool
+        agent.override_tool("web_search", mock_tool)
         mock_llm = MagicMock()
         mock_llm.achat_with_tools = AsyncMock(side_effect=[tool_response, final_response])
         mock_llm.get_tool_calls_from_response = MagicMock(side_effect=[[tc], []])
@@ -751,7 +751,7 @@ class TestKaiAgentToolHistory:
         result = await agent.chat("do something", output_cls=_TestAction)
         assert result.action.text == "I tried but it failed"
 
-        history = agent._get_history()
+        history = agent.get_history()
         assert len(history) == 2
         for msg in history:
             assert "Error" not in (msg.content or "")
@@ -773,8 +773,8 @@ class TestKaiAgentToolHistory:
         mock_tool_search.acall.return_value = MagicMock(content="[search results]")
         mock_tool_fetch = AsyncMock()
         mock_tool_fetch.acall.return_value = MagicMock(content="Page content")
-        agent._tools_by_name["web_search"] = mock_tool_search
-        agent._tools_by_name["get_webpage_html"] = mock_tool_fetch
+        agent.override_tool("web_search", mock_tool_search)
+        agent.override_tool("get_webpage_html", mock_tool_fetch)
 
         mock_llm = MagicMock()
         mock_llm.achat_with_tools = AsyncMock(side_effect=[round1, round2, final])
@@ -785,7 +785,7 @@ class TestKaiAgentToolHistory:
         result = await agent.chat("find info about cats", output_cls=_TestAction)
         assert result.action.text == "Combined answer"
 
-        history = agent._get_history()
+        history = agent.get_history()
         assert len(history) == 2
         assert history[0].role == MessageRole.USER
         assert history[1].role == MessageRole.ASSISTANT
@@ -800,7 +800,7 @@ class TestKaiAgentToolHistory:
 
         mock_tool = AsyncMock()
         mock_tool.acall.return_value = MagicMock(content="result")
-        agent._tools_by_name["web_search"] = mock_tool
+        agent.override_tool("web_search", mock_tool)
 
         mock_llm = MagicMock()
         mock_llm.achat_with_tools = AsyncMock(return_value=tool_response)
@@ -811,7 +811,7 @@ class TestKaiAgentToolHistory:
         result = await agent.chat("infinite loop", output_cls=_TestAction)
         assert result.action.text == "done"
 
-        history = agent._get_history()
+        history = agent.get_history()
         assert len(history) == 2
         assert history[0].role == MessageRole.USER
         assert history[1].role == MessageRole.ASSISTANT
@@ -829,7 +829,7 @@ class TestKaiAgentToolHistory:
 
         mock_tool = AsyncMock()
         mock_tool.acall.return_value = MagicMock(content="Weather: 25°C, sunny")
-        agent._tools_by_name["web_search"] = mock_tool
+        agent.override_tool("web_search", mock_tool)
 
         mock_llm = MagicMock()
         mock_llm.achat_with_tools = AsyncMock(side_effect=[tool_response, final_response])
@@ -883,7 +883,7 @@ class TestKaiAgentToolHistory:
 
         mock_tool = AsyncMock()
         mock_tool.acall.side_effect = RuntimeError("Connection timeout")
-        agent._tools_by_name["web_search"] = mock_tool
+        agent.override_tool("web_search", mock_tool)
 
         mock_llm = MagicMock()
         mock_llm.achat_with_tools = AsyncMock(side_effect=[tool_response, final_response])
@@ -913,7 +913,7 @@ class TestKaiAgentToolHistory:
 
         mock_tool = AsyncMock()
         mock_tool.acall.return_value = MagicMock(content="tool result")
-        agent._tools_by_name["web_search"] = mock_tool
+        agent.override_tool("web_search", mock_tool)
 
         mock_llm = MagicMock()
         mock_llm.achat_with_tools = AsyncMock(side_effect=[tool_response, final1, plain2])
@@ -924,7 +924,7 @@ class TestKaiAgentToolHistory:
         await agent.chat("question one", output_cls=_TestAction)
         await agent.chat("question two", output_cls=_TestAction)
 
-        history = agent._get_history()
+        history = agent.get_history()
         assert len(history) == 4
         assert history[0].role == MessageRole.USER
         assert history[0].content == "question one"
@@ -999,7 +999,7 @@ class TestAuditFixes:
         agent = KaiAgent(settings=None, goal_manager=gm)
         agent._history["chat"] = [ChatMessage(role=MessageRole.USER, content="kept")]
         gm.set_goal("New goal")
-        agent._build_messages("Hello", conversation_id="chat")
+        agent.build_messages("Hello", conversation_id="chat")
         assert agent._history["chat"][0].content == "kept"
 
     @pytest.mark.asyncio
@@ -1043,41 +1043,41 @@ class TestAuditFixes:
         from llama_index.core.tools import FunctionTool
 
         agent = KaiAgent(settings=None, goal_manager=GoalManager())
-        initial_count = len(agent._tools)
+        initial_count = len(agent.get_tools())
 
         def custom_tool(x: str) -> str:
             return x
 
         tool = FunctionTool.from_defaults(fn=custom_tool, name="custom_test")
         agent.register_tool(tool)
-        assert len(agent._tools) == initial_count + 1
-        assert "custom_test" in agent._tools_by_name
+        assert len(agent.get_tools()) == initial_count + 1
+        assert "custom_test" in agent.tools_by_name
 
         agent.unregister_tool("custom_test")
-        assert len(agent._tools) == initial_count
-        assert "custom_test" not in agent._tools_by_name
+        assert len(agent.get_tools()) == initial_count
+        assert "custom_test" not in agent.tools_by_name
 
     def test_clear_tools_drops_defaults(self):
         agent = KaiAgent(settings=None, goal_manager=GoalManager())
-        assert len(agent._tools) > 0
+        assert len(agent.get_tools()) > 0
         agent.clear_tools()
-        assert agent._tools == []
-        assert agent._tools_by_name == {}
-        assert agent._tool_instructions == ""
+        assert agent.get_tools() == []
+        assert agent.tools_by_name == {}
+        assert agent.tool_instructions == ""
 
     def test_add_tool_workflow_appends_to_instructions(self):
         from kai.agent.tools import WEB_WORKFLOW_INSTRUCTIONS
 
         agent = KaiAgent(settings=None, goal_manager=GoalManager())
         # Default: clean slate, no chat-bot workflow baked in.
-        assert "fact-checking" not in agent._tool_instructions.lower()
+        assert "fact-checking" not in agent.tool_instructions.lower()
         agent.add_tool_workflow(WEB_WORKFLOW_INSTRUCTIONS)
-        assert "fact-checking" in agent._tool_instructions
-        prompt = agent._get_system_prompt()
+        assert "fact-checking" in agent.tool_instructions
+        prompt = agent.get_system_prompt()
         assert "fact-checking" in prompt
         # Turning it back off removes the workflow from the rendered prompt.
         agent.add_tool_workflow(None)
-        assert "fact-checking" not in agent._get_system_prompt()
+        assert "fact-checking" not in agent.get_system_prompt()
 
     def test_clear_tools_then_register_keeps_clean_slate(self):
         from llama_index.core.tools import FunctionTool
@@ -1090,15 +1090,15 @@ class TestAuditFixes:
 
         tool = FunctionTool.from_defaults(fn=docker_inspect, name="docker_inspect")
         agent.register_tool(tool)
-        assert len(agent._tools) == 1
+        assert len(agent.get_tools()) == 1
         # Only the registered tool appears in instructions; no web-search table rows.
-        assert "docker_inspect" in agent._tool_instructions
-        assert "web_search" not in agent._tool_instructions
+        assert "docker_inspect" in agent.tool_instructions
+        assert "web_search" not in agent.tool_instructions
 
     def test_reply_style_appended(self):
         agent = KaiAgent(settings=None, goal_manager=GoalManager())
         agent.set_system_prompt("Base.")
-        prompt = agent._get_system_prompt(reply_style="Be very brief.")
+        prompt = agent.get_system_prompt(reply_style="Be very brief.")
         assert "Be very brief." in prompt
 
     def test_allow_silence_is_a_schema_decision(self):
@@ -1107,7 +1107,7 @@ class TestAuditFixes:
         # ``Literal``. The prompt no longer carries a ``<<silent>>`` directive.
         agent = KaiAgent(settings=None, goal_manager=GoalManager())
         agent.set_system_prompt("Base.")
-        prompt = agent._get_system_prompt()
+        prompt = agent.get_system_prompt()
         assert "<<silent>>" not in prompt
         assert "Never output" not in prompt
 
@@ -1125,7 +1125,7 @@ class TestAuditFixes:
         agent = KaiAgent(settings=settings, goal_manager=GoalManager())
         agent._llm = _mock_llm("ok")
         await agent.observe("", conversation_id="test")
-        history = agent._get_history("test")
+        history = agent.get_history("test")
         assert len(history) == 0
 
 
@@ -1137,7 +1137,7 @@ class TestBotHistoryFolderIsolation:
             agent_history_folder=tmp_path,
         )
         agent = KaiAgent(settings=settings, goal_manager=GoalManager(), namespace="email")
-        assert agent._history_file == tmp_path / "email.json"
+        assert agent.resolve_history_file() == tmp_path / "email.json"
 
     def test_history_file_default_namespace(self, tmp_path):
         settings = Settings.for_test(
@@ -1146,7 +1146,7 @@ class TestBotHistoryFolderIsolation:
             agent_history_folder=tmp_path,
         )
         agent = KaiAgent(settings=settings, goal_manager=GoalManager())
-        assert agent._history_file == tmp_path / "default.json"
+        assert agent.resolve_history_file() == tmp_path / "default.json"
 
     def test_history_file_none_when_folder_unset(self):
         settings = Settings.for_test(
@@ -1155,7 +1155,7 @@ class TestBotHistoryFolderIsolation:
             agent_history_folder=None,
         )
         agent = KaiAgent(settings=settings, goal_manager=GoalManager(), namespace="email")
-        assert agent._history_file is None
+        assert agent.resolve_history_file() is None
 
     def test_per_bot_history_isolation(self, tmp_path):
         folder = tmp_path / "data"
@@ -1180,8 +1180,8 @@ class TestBotHistoryFolderIsolation:
         agent_primary._history["chat"] = [ChatMessage(role=MessageRole.USER, content="primary msg")]
         agent_email._history["chat"] = [ChatMessage(role=MessageRole.USER, content="email msg")]
 
-        assert agent_primary._history_file == folder / "primary.json"
-        assert agent_email._history_file == folder / "email.json"
+        assert agent_primary.resolve_history_file() == folder / "primary.json"
+        assert agent_email.resolve_history_file() == folder / "email.json"
         assert agent_primary._history["chat"][0].content == "primary msg"
         assert agent_email._history["chat"][0].content == "email msg"
 
@@ -1198,27 +1198,27 @@ class TestHistoryEdits:
 
     def test_history_key_namespaced_by_bot(self):
         agent = KaiAgent(settings=None, goal_manager=GoalManager(), namespace="email")
-        assert agent._history_key("123@c.us") == "email:123@c.us"
-        assert agent._history_key(None) == "email:default"
+        assert agent.history_key("123@c.us") == "email:123@c.us"
+        assert agent.history_key(None) == "email:default"
 
     def test_history_key_unnamespaced_without_namespace(self):
         agent = KaiAgent(settings=None, goal_manager=GoalManager())
-        assert agent._history_key("123@c.us") == "123@c.us"
-        assert agent._history_key(None) == "default"
+        assert agent.history_key("123@c.us") == "123@c.us"
+        assert agent.history_key(None) == "default"
 
     def test_namespaced_agents_keep_separate_history(self):
         a = KaiAgent(settings=None, goal_manager=GoalManager(), namespace="primary")
         b = KaiAgent(settings=None, goal_manager=GoalManager(), namespace="email")
-        a._get_history("shared-id").append(ChatMessage(role=MessageRole.USER, content="primary"))
-        b._get_history("shared-id").append(ChatMessage(role=MessageRole.USER, content="email"))
-        assert a._get_history("shared-id")[0].content == "primary"
-        assert b._get_history("shared-id")[0].content == "email"
+        a.get_history("shared-id").append(ChatMessage(role=MessageRole.USER, content="primary"))
+        b.get_history("shared-id").append(ChatMessage(role=MessageRole.USER, content="email"))
+        assert a.get_history("shared-id")[0].content == "primary"
+        assert b.get_history("shared-id")[0].content == "email"
 
     def test_history_conversations_evicted_beyond_cap(self):
         agent = KaiAgent(settings=None, goal_manager=GoalManager())
         agent._max_conversations = 3
         for i in range(5):
-            agent._get_history(f"chat-{i}").append(
+            agent.get_history(f"chat-{i}").append(
                 ChatMessage(role=MessageRole.USER, content=f"msg-{i}")
             )
         assert len(agent._history) == 3
@@ -1246,7 +1246,7 @@ class TestHistoryEdits:
         agent = KaiAgent(settings=settings, goal_manager=GoalManager())
         agent._llm = _mock_llm("ok")
         await agent.observe("", conversation_id="test", images=[b"\x89PNG"])
-        history = agent._get_history("test")
+        history = agent.get_history("test")
         assert len(history) == 1
         content = history[0].content
         assert content is not None
@@ -1336,10 +1336,10 @@ class TestStructuredPredictionContract:
         parser = PydanticOutputParser(output_cls=_TestAction)
         # No JSON object at all.
         with pytest.raises(ValueError):
-            KaiAgent._parse_structured_text("just some prose", _TestAction, parser)
+            KaiAgent.parse_structured_text("just some prose", _TestAction, parser)
         # JSON object missing the action key.
         with pytest.raises(ValueError):
-            KaiAgent._parse_structured_text(json.dumps({"text": "hi"}), _TestAction, parser)
+            KaiAgent.parse_structured_text(json.dumps({"text": "hi"}), _TestAction, parser)
 
     def test_parse_structured_text_does_not_recover_control_action(self):
         # A no-silent turn excludes ``silent`` from its vocabulary. If the
@@ -1358,13 +1358,13 @@ class TestStructuredPredictionContract:
         parser = PydanticOutputParser(output_cls=_TestNoSilentAction)
         # silent with no text (the normal case) -> raises.
         with pytest.raises(ValueError):
-            KaiAgent._parse_structured_text(
+            KaiAgent.parse_structured_text(
                 json.dumps({"action": "silent"}), _TestNoSilentAction, parser
             )
         # silent WITH text (contradictory) -> still raises; the control-action
         # guard must dominate the "has text" heuristic.
         with pytest.raises(ValueError):
-            KaiAgent._parse_structured_text(
+            KaiAgent.parse_structured_text(
                 json.dumps({"action": "silent", "text": "ghost me"}),
                 _TestNoSilentAction,
                 parser,
@@ -1379,25 +1379,25 @@ class TestLiteralNewlineUnescape:
     """
 
     def test_unescapes_literal_newlines_when_no_real_newlines(self):
-        from kai.agent.core import _unescape_literal_newlines
+        from kai.agent.core import unescape_literal_newlines
 
         body = "Hello there,\\n\\nhere is the comparison:\\n\\n### 1. GPU"
-        out = _unescape_literal_newlines(body)
+        out = unescape_literal_newlines(body)
         assert out == "Hello there,\n\nhere is the comparison:\n\n### 1. GPU"
 
     def test_leaves_real_newlines_untouched(self):
-        from kai.agent.core import _unescape_literal_newlines
+        from kai.agent.core import unescape_literal_newlines
 
         body = "line one\nline two\\nstill line two?"
         # Already has a real newline -> nothing is mangled, literal \\n kept.
-        assert _unescape_literal_newlines(body) == body
+        assert unescape_literal_newlines(body) == body
 
     def test_does_not_mangle_single_literal_backslash_n(self):
-        from kai.agent.core import _unescape_literal_newlines
+        from kai.agent.core import unescape_literal_newlines
 
         # A Windows-style path has one literal \\n; not the multi-line
         # signature, so it must be preserved verbatim.
-        assert _unescape_literal_newlines("C:\\new folder") == "C:\\new folder"
+        assert unescape_literal_newlines("C:\\new folder") == "C:\\new folder"
 
     def test_parse_structured_text_unescapes_double_escaped_json(self):
         # The model returned valid JSON but double-escaped the newlines in the
@@ -1418,7 +1418,7 @@ class TestLiteralNewlineUnescape:
             }
         )
 
-        action = KaiAgent._parse_structured_text(payload, _TestAction, parser)
+        action = KaiAgent.parse_structured_text(payload, _TestAction, parser)
 
         assert action.action == "reply"
         assert action.text == "Hello there,\n\nhere is the plan:\n\n1. step"
@@ -1474,7 +1474,7 @@ class TestVideoBlockShim:
     def test_build_messages_attaches_video_block(self):
         agent = KaiAgent(settings=None, goal_manager=GoalManager())
         mp4 = b"\x00\x00\x00\x1cftypmp42"
-        messages = agent._build_messages("hi", videos=[mp4])
+        messages = agent.build_messages("hi", videos=[mp4])
         user_msg = messages[-1]
         assert user_msg.role == MessageRole.USER
         block_types = [type(b).__name__ for b in user_msg.blocks]

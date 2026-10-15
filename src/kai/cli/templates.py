@@ -7,14 +7,14 @@ from kai.templates.schema import TemplateDef
 
 app = typer.Typer(help="Bot templates")
 
-_REGISTRY = TemplateRegistry.bundled()
+REGISTRY = TemplateRegistry.bundled()
 
 
 @app.command()
 def list(
     transport: str | None = typer.Option(None, help="Filter by transport (email)"),
 ):
-    templates = _REGISTRY.list(transport)
+    templates = REGISTRY.list(transport)
     if not templates:
         if transport:
             typer.echo(f"No templates found for transport: {transport}")
@@ -36,14 +36,14 @@ def list(
 def show(
     template_id: str = typer.Argument(..., help="Template identifier (e.g. email/general)"),
 ):
-    parts = _parse_id(template_id)
+    parts = parse_id(template_id)
     try:
-        tmpl = _REGISTRY.get(parts.transport, parts.name)
+        tmpl = REGISTRY.get(parts.transport, parts.name)
     except FileNotFoundError:
         typer.echo(f"Template not found: {template_id}")
         raise typer.Exit(1)
 
-    _render_template(tmpl)
+    render_template(tmpl)
 
 
 @app.command()
@@ -52,14 +52,14 @@ def render(
     goal: str = typer.Option("", "--goal", "-g", help="Goal to inject for preview"),
     language: str = typer.Option("", "--language", "-l", help="Language to inject"),
 ):
-    parts = _parse_id(template_id)
+    parts = parse_id(template_id)
     try:
-        tmpl = _REGISTRY.get(parts.transport, parts.name)
+        tmpl = REGISTRY.get(parts.transport, parts.name)
     except FileNotFoundError:
         typer.echo(f"Template not found: {template_id}")
         raise typer.Exit(1)
 
-    prompt_path = _REGISTRY.prompt_path(parts.transport, parts.name)
+    prompt_path = REGISTRY.prompt_path(parts.transport, parts.name)
     if prompt_path is None:
         typer.echo(f"No prompt.md found for {template_id}")
         raise typer.Exit(1)
@@ -90,7 +90,7 @@ class TemplateParts:
         self.name = name
 
 
-def _parse_id(template_id: str) -> TemplateParts:
+def parse_id(template_id: str) -> TemplateParts:
     parts = template_id.split("/")
     if len(parts) != 2:
         typer.echo(
@@ -105,7 +105,7 @@ def _parse_id(template_id: str) -> TemplateParts:
     return TemplateParts(transport=transport, name=name)
 
 
-def _render_template(tmpl: TemplateDef) -> None:
+def render_template(tmpl: TemplateDef) -> None:
     from rich.console import Console
 
     c = Console()
@@ -116,12 +116,12 @@ def _render_template(tmpl: TemplateDef) -> None:
     first_line = tmpl.description.strip().split("\n")[0]
     c.print(f"  [{DIM}]{first_line}[/{DIM}]")
 
-    _render_template_tools(c, tmpl)
-    _render_template_config(c, tmpl)
-    _render_template_sections(c, tmpl)
+    render_template_tools(c, tmpl)
+    render_template_config(c, tmpl)
+    render_template_sections(c, tmpl)
 
 
-def _render_template_tools(c, tmpl: TemplateDef) -> None:
+def render_template_tools(c, tmpl: TemplateDef) -> None:
     if tmpl.actions:
         c.print("\n  [bold]actions[/bold]  " + ", ".join(tmpl.actions))
     if tmpl.tools.required:
@@ -130,7 +130,7 @@ def _render_template_tools(c, tmpl: TemplateDef) -> None:
         c.print("  [bold]optional tools[/bold]  " + ", ".join(tmpl.tools.optional))
 
 
-def _render_template_config(c, tmpl: TemplateDef) -> None:
+def render_template_config(c, tmpl: TemplateDef) -> None:
     if not tmpl.config:
         return
     c.print("\n  [bold]config[/bold]")
@@ -142,7 +142,7 @@ def _render_template_config(c, tmpl: TemplateDef) -> None:
         c.print(f"    language: {la}")
 
 
-def _render_template_sections(c, tmpl: TemplateDef) -> None:
+def render_template_sections(c, tmpl: TemplateDef) -> None:
     if tmpl.reply_style:
         c.print("\n  [bold]reply_style[/bold]")
         for line in tmpl.reply_style.strip().split("\n")[:4]:

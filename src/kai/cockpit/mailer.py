@@ -56,7 +56,7 @@ def send_magic_link(user_email: str, magic_url: str) -> None:
     msg.add_alternative(html_content, subtype="html")
 
     try:
-        with _smtp_server(smtp_host, smtp_port, smtp_user, smtp_pass) as server:
+        with smtp_server(smtp_host, smtp_port, smtp_user, smtp_pass) as server:
             server.send_message(msg)
     except MailError:
         raise
@@ -65,7 +65,7 @@ def send_magic_link(user_email: str, magic_url: str) -> None:
         raise MailError(f"Failed to send email: {exc}") from exc
 
 
-def _smtp_server(host: str, port: int, user: str, password: str) -> smtplib.SMTP:
+def smtp_server(host: str, port: int, user: str, password: str) -> smtplib.SMTP:
     if port == 465:
         server = smtplib.SMTP_SSL(host, port)
         try:

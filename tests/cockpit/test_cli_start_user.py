@@ -23,7 +23,7 @@ def _brain_env(monkeypatch):
     """The email ``general`` template declares ``brain_query`` as a required
     tool, so the boot gate checks for Brain env vars. Provide stubs so the
     gate passes without a real Morphik server (registration is best-effort
-    and wrapped in a try/except in ``_start``)."""
+    and wrapped in a try/except in ``start_bot``)."""
     monkeypatch.setenv("KAI_BRAIN_BASE_URL", "http://brain.example.com")
     monkeypatch.setenv("KAI_BRAIN_MORPHIK_TOKEN", "stub-token")
 
@@ -40,10 +40,10 @@ def _patch_minimal_bot_lifecycle(monkeypatch):
     monkeypatch.setattr(Bot, "tell_endpoint", lambda self: "http://127.0.0.1:9999")
     monkeypatch.setattr(Bot, "tell_hmac_key", lambda self: "test-key")
 
-    async def _run(self):
+    async def run(self):
         return None
 
-    monkeypatch.setattr(Bot, "run", _run)
+    monkeypatch.setattr(Bot, "run", run)
 
 
 class TestStartUserFlag:
@@ -61,16 +61,16 @@ class TestStartUserFlag:
         monkeypatch.setattr(email_mod.Bot, "__init__", _capture_instance)
 
         # Capture the instance id actually used for the run registry by
-        # spying on _runs_registry in cli.py.
+        # spying on runs_registry in cli.py.
         from kai.cli import bot as cli_mod
 
-        original_registry = cli_mod._runs_registry
+        original_registry = cli_mod.runs_registry
 
         def _spy_registry(bot_name, settings):
             seen_instances.append(bot_name)
             return original_registry(bot_name, settings)
 
-        monkeypatch.setattr(cli_mod, "_runs_registry", _spy_registry)
+        monkeypatch.setattr(cli_mod, "runs_registry", _spy_registry)
 
         result = runner.invoke(app, ["start", "email", "--user", "bob@example.com"])
 
@@ -83,13 +83,13 @@ class TestStartUserFlag:
         from kai.cli import bot as cli_mod
 
         seen_instances = []
-        original_registry = cli_mod._runs_registry
+        original_registry = cli_mod.runs_registry
 
         def _spy_registry(bot_name, settings):
             seen_instances.append(bot_name)
             return original_registry(bot_name, settings)
 
-        monkeypatch.setattr(cli_mod, "_runs_registry", _spy_registry)
+        monkeypatch.setattr(cli_mod, "runs_registry", _spy_registry)
 
         result = runner.invoke(app, ["start", "email"])
 

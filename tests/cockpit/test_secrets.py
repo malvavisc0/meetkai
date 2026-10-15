@@ -23,9 +23,9 @@ def _encryption_env(monkeypatch, tmp_path):
     monkeypatch.setenv("KAI_CREDENTIAL_KEY_VERSION", "v1")
     from kai.cockpit.connections import secrets as secrets_mod
 
-    secrets_mod._clear_key_cache()
+    secrets_mod.clear_key_cache()
     yield
-    secrets_mod._clear_key_cache()
+    secrets_mod.clear_key_cache()
 
 
 class TestRoundTrip:
@@ -46,7 +46,7 @@ class TestRoundTrip:
         from kai.cockpit.connections import secrets as secrets_mod
 
         monkeypatch.setenv("KAI_CREDENTIAL_KEY_VERSION", "v2")
-        secrets_mod._clear_key_cache()
+        secrets_mod.clear_key_cache()
         ciphertext_v2 = encrypt("secret")
         assert ciphertext_v2.startswith("v2:")
 
@@ -55,7 +55,7 @@ class TestRoundTrip:
         from kai.cockpit.connections import secrets as secrets_mod
 
         monkeypatch.setenv("KAI_CREDENTIAL_KEY_VERSION", "v2")
-        secrets_mod._clear_key_cache()
+        secrets_mod.clear_key_cache()
         assert decrypt(ciphertext) == "secret-value"
 
 
@@ -111,7 +111,7 @@ class TestMissingKey:
         monkeypatch.delenv("KAI_CREDENTIAL_ENCRYPTION_KEY")
         from kai.cockpit.connections import secrets as secrets_mod
 
-        secrets_mod._clear_key_cache()
+        secrets_mod.clear_key_cache()
         with pytest.raises(RuntimeError, match="KAI_CREDENTIAL_ENCRYPTION_KEY"):
             encrypt("secret")
 
@@ -119,7 +119,7 @@ class TestMissingKey:
         monkeypatch.delenv("KAI_CREDENTIAL_KEY_VERSION")
         from kai.cockpit.connections import secrets as secrets_mod
 
-        secrets_mod._clear_key_cache()
+        secrets_mod.clear_key_cache()
         with pytest.raises(RuntimeError, match="KAI_CREDENTIAL_KEY_VERSION"):
             encrypt("secret")
 

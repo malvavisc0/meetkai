@@ -7,7 +7,7 @@ import pytest
 
 from kai.brain.client import DocumentRecord, IngestResult
 from kai.brain.crawler import CrawlLinks, CrawlPage, MarkdownResult
-from kai.cockpit.brains import BrainsService, _slug_for_url
+from kai.cockpit.brains import BrainsService, slug_for_url
 from kai.cockpit.models import Connection
 
 
@@ -83,24 +83,24 @@ class TestSlugForUrl:
         ],
     )
     def test_derives_readable_slug(self, url, expected):
-        assert _slug_for_url(url) == expected
+        assert slug_for_url(url) == expected
 
 
 @pytest.fixture
 def fake_morphik_client(monkeypatch):
-    """Patch BrainsService._morphik_client with an AsyncMock MorphikClient."""
+    """Patch BrainsService.morphik_client with an AsyncMock MorphikClient."""
     client = AsyncMock()
     client.close = AsyncMock()
-    monkeypatch.setattr("kai.cockpit.brains.BrainsService._morphik_client", lambda self: client)
+    monkeypatch.setattr("kai.cockpit.brains.BrainsService.morphik_client", lambda self: client)
     return client
 
 
 @pytest.fixture
 def fake_crawler_client(monkeypatch):
-    """Patch BrainsService._crawler_client with an AsyncMock Crawl4aiClient."""
+    """Patch BrainsService.crawler_client with an AsyncMock Crawl4aiClient."""
     client = AsyncMock()
     client.close = AsyncMock()
-    monkeypatch.setattr("kai.cockpit.brains.BrainsService._crawler_client", lambda self: client)
+    monkeypatch.setattr("kai.cockpit.brains.BrainsService.crawler_client", lambda self: client)
     return client
 
 
@@ -118,10 +118,10 @@ def fake_dns(monkeypatch):
         "intranet.local": ["10.0.0.5"],
     }
 
-    def _resolve(host: str) -> list[str]:
+    def resolve(host: str) -> list[str]:
         return private_hosts.get(host, ["93.184.216.34"])
 
-    monkeypatch.setattr("kai.brain.validation._resolve_all", _resolve)
+    monkeypatch.setattr("kai.brain.validation.resolve_all", resolve)
 
 
 class TestIngestText:

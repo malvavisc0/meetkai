@@ -1,7 +1,7 @@
 """``brain_query`` — the agent-facing tool over a user's Morphik Brain.
 
 Bot-agnostic by design: no bot module imports this directly. Instead
-``cli/bot.py``'s ``_start()`` is the single funnel every bot passes through;
+``cli/bot.py``'s ``start_bot()`` is the single funnel every bot passes through;
 after ``bot.configure()`` it builds a ``MorphikClient`` from
 ``BrainSettings`` and calls :func:`register_brain_tool` here, which is the
 only place that touches both the agent and the Morphik client.
@@ -9,7 +9,7 @@ only place that touches both the agent and the Morphik client.
 The tool itself is an ``async def`` (the agent's tool dispatch is already
 async, so no thread/executor wrapping is needed and no second sync client
 class is required). It is registered **without** the
-``_logged`` wrapper from ``agent/tools/__init__.py`` because that wrapper is
+``logged`` wrapper from ``agent/tools/__init__.py`` because that wrapper is
 sync and would break llama_index's coroutine detection — logging is left to
 ``KaiAgent``'s existing tool-call/tool-result logging in ``agent/core.py``.
 """
@@ -24,9 +24,9 @@ from kai.brain.config import BRAIN_TOOL_NAME, build_brain_workflow_instruction
 
 logger = logging.getLogger(__name__)
 
-_MAX_QUERY_CHARS = 2000
+MAX_QUERY_CHARS = 2000
 
-_VALID_MODES: frozenset[QueryMode] = frozenset({"naive", "local", "global", "hybrid", "mix"})
+VALID_MODES: frozenset[QueryMode] = frozenset({"naive", "local", "global", "hybrid", "mix"})
 
 # Structural contracts for the two collaborators ``register_brain_tool``
 # depends on. Declaring them as Protocols (rather than the concrete
@@ -86,8 +86,8 @@ def make_brain_query_tool(
         q = (query or "").strip()
         if not q:
             return "Error: query must not be empty"
-        q = q[:_MAX_QUERY_CHARS]
-        resolved_mode = mode if mode in _VALID_MODES else default_mode
+        q = q[:MAX_QUERY_CHARS]
+        resolved_mode = mode if mode in VALID_MODES else default_mode
         try:
             result = await client.query(query=q, workspace=workspace, mode=resolved_mode)
         except Exception as exc:  # noqa: BLE001 - surfaced to the model as a tool result, not raised
@@ -130,7 +130,7 @@ def register_brain_tool(
     """Register ``brain_query`` on ``agent`` and inject the workflow prompt.
 
     This is the bot-agnostic seam: called once from ``cli/bot.py``
-    ``_start()`` after ``bot.configure()``, never from a bot's own
+    ``start_bot()`` after ``bot.configure()``, never from a bot's own
     ``configure()``. The workflow instruction is *added* (not replacing any
     web-search workflow a bot may already have set — ``KaiAgent.add_tool_workflow``
     composes, see ``agent/core.py``).

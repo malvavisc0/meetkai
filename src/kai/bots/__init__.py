@@ -4,7 +4,7 @@ from pathlib import Path
 
 from kai.bots.base import BaseBot
 
-_PKG = __name__
+PKG = __name__
 
 
 def list_bots() -> list[str]:
@@ -20,7 +20,7 @@ def load_bot(name: str) -> BaseBot:
     """
     if name not in list_bots():
         raise ValueError(f"Bot '{name}' not found. Available: {list_bots()}")
-    module = importlib.import_module(f"{_PKG}.{name}")
+    module = importlib.import_module(f"{PKG}.{name}")
     bot_cls = getattr(module, "Bot", None)
     if bot_cls is None:
         raise ValueError(

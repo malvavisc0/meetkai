@@ -19,7 +19,7 @@ class PostProcessingConfig(BaseModel):
     max_words: int | None = None
 
     @model_validator(mode="after")
-    def _reject_dead_config(self) -> "PostProcessingConfig":
+    def reject_dead_config(self) -> "PostProcessingConfig":
         if self.profile == "custom":
             return self
 

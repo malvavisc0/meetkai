@@ -21,10 +21,10 @@ logger = logging.getLogger(__name__)
 # Overall wall-clock budget for a save-time SMTP probe. smtplib's per-
 # socket-operation timeout doesn't cover DNS resolution or the full
 # handshake, so a dead host can block 50s+.
-_SMTP_PROBE_TIMEOUT = 15
+SMTP_PROBE_TIMEOUT = 15
 
 
-def _is_transient_smtp_error(exc: Exception) -> bool:
+def is_transient_smtp_error(exc: Exception) -> bool:
     """True if the SMTP failure is transient (network/timeout), not an
     auth rejection."""
     if isinstance(exc, smtplib.SMTPAuthenticationError):
@@ -40,7 +40,7 @@ def _is_transient_smtp_error(exc: Exception) -> bool:
     return False
 
 
-def _is_transient_db_error(exc: Exception) -> bool:
+def is_transient_db_error(exc: Exception) -> bool:
     """True if the database failure is transient (network/timeout), not an
     auth rejection or invalid DSN."""
     exc_name = type(exc).__name__
@@ -54,7 +54,7 @@ def _is_transient_db_error(exc: Exception) -> bool:
     return False
 
 
-def _is_transient_resend_error(status_code: int | None, exc: Exception | None) -> bool:
+def is_transient_resend_error(status_code: int | None, exc: Exception | None) -> bool:
     """True if the Resend API failure is transient (network/429/5xx), not
     an auth rejection (401/403)."""
     if exc is not None:
@@ -102,12 +102,12 @@ def run_smtp_probe_with_timeout(
     Returns ``(ok, message, transient)``. Uses a manual ThreadPoolExecutor
     so on timeout the pool shuts down without blocking the calling thread.
     """
-    from kai.cockpit.connections.smtp import _smtp_test
+    from kai.cockpit.connections.smtp import smtp_test
 
     pool = ThreadPoolExecutor(max_workers=1)
-    future = pool.submit(_smtp_test, host, port, username, password, use_tls)
+    future = pool.submit(smtp_test, host, port, username, password, use_tls)
     try:
-        ok, msg = future.result(timeout=_SMTP_PROBE_TIMEOUT)
+        ok, msg = future.result(timeout=SMTP_PROBE_TIMEOUT)
         pool.shutdown(wait=True)
         return ok, msg, False
     except FuturesTimeoutError:
@@ -115,4 +115,4 @@ def run_smtp_probe_with_timeout(
         return False, "probe timed out", True
     except Exception as exc:
         pool.shutdown(wait=True)
-        return False, str(exc), _is_transient_smtp_error(exc)
+        return False, str(exc), is_transient_smtp_error(exc)

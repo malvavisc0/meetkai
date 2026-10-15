@@ -9,37 +9,35 @@ from llama_index.core.tools import FunctionTool
 from kai.agent.tools.calculator import calculate
 from kai.agent.tools.escalate import blacklist, escalate
 from kai.agent.tools.time import get_time_in_timezone, get_weather
-from kai.agent.tools.web import _get_webpage_content, _web_search
+from kai.agent.tools.web import get_webpage_content, web_search
 
 logger = logging.getLogger(__name__)
 
-_LOG_REPR_LIMIT = 200
+LOG_REPR_LIMIT = 200
 
 # Path to the mandatory tools block — loaded once and cached.
-_MANDATORY_BLOCK_PATH = (
-    Path(__file__).resolve().parents[4] / "templates" / "_tools" / "mandatory.md"
-)
+MANDATORY_BLOCK_PATH = Path(__file__).resolve().parents[4] / "templates" / "_tools" / "mandatory.md"
 
 
-def _load_mandatory_block() -> str:
+def load_mandatory_block() -> str:
     """Read ``templates/_tools/mandatory.md`` once, return its contents."""
-    if _MANDATORY_BLOCK_PATH.is_file():
-        return _MANDATORY_BLOCK_PATH.read_text(encoding="utf-8").strip()
+    if MANDATORY_BLOCK_PATH.is_file():
+        return MANDATORY_BLOCK_PATH.read_text(encoding="utf-8").strip()
     return ""
 
 
-def _short_repr(value: Any, limit: int = _LOG_REPR_LIMIT) -> str:
+def short_repr(value: Any, limit: int = LOG_REPR_LIMIT) -> str:
     text = repr(value)
     if len(text) <= limit:
         return text
     return f"{text[:limit]}...(truncated, {len(text)} chars)"
 
 
-def _logged(name: str, fn: Callable[..., Any]) -> Callable[..., Any]:
+def logged(name: str, fn: Callable[..., Any]) -> Callable[..., Any]:
     @functools.wraps(fn)
     def wrapper(*args: Any, **kwargs: Any) -> Any:
         call_args = ", ".join(
-            [_short_repr(a) for a in args] + [f"{k}={_short_repr(v)}" for k, v in kwargs.items()]
+            [short_repr(a) for a in args] + [f"{k}={short_repr(v)}" for k, v in kwargs.items()]
         )
         logger.info("tool call: %s(%s)", name, call_args)
         try:
@@ -47,7 +45,7 @@ def _logged(name: str, fn: Callable[..., Any]) -> Callable[..., Any]:
         except Exception:
             logger.exception("tool %s raised an exception", name)
             raise
-        logger.info("tool %s returned %s", name, _short_repr(result))
+        logger.info("tool %s returned %s", name, short_repr(result))
         return result
 
     return wrapper
@@ -56,13 +54,13 @@ def _logged(name: str, fn: Callable[..., Any]) -> Callable[..., Any]:
 def get_tools() -> list[FunctionTool]:
     specs: list[tuple[Callable[..., Any], str, str]] = [
         (
-            _web_search,
+            web_search,
             "web_search",
             "Search the web using DuckDuckGo. "
             "Returns a list of results with title, url, and snippet.",
         ),
         (
-            _get_webpage_content,
+            get_webpage_content,
             "get_webpage_content",
             "Fetch a webpage and convert its content to Markdown. "
             "Returns the page content, or a short 'Error: ...' string if "
@@ -106,7 +104,7 @@ def get_tools() -> list[FunctionTool]:
 
     return [
         FunctionTool.from_defaults(
-            fn=_logged(name, fn),
+            fn=logged(name, fn),
             name=name,
             description=description,
         )
@@ -132,7 +130,7 @@ def get_tool_instructions(
         return ""
 
     out = ""
-    mandatory = _load_mandatory_block()
+    mandatory = load_mandatory_block()
     if mandatory:
         out += "\n\n# Safety & math\n\n" + mandatory + "\n"
 

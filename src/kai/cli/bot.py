@@ -26,12 +26,12 @@ from kai.cli.style import (
     OK,
     WARN,
     BotStartupError,
-    _relative,
-    _uptime_seconds,
     card,
     console,
     err_line,
+    relative,
     soft_table,
+    uptime_seconds,
 )
 from kai.config.settings import Settings, get_settings
 from kai.logging.logger import setup_logging
@@ -41,16 +41,16 @@ from kai.utils.common import compute_hmac, now_iso
 logger = logging.getLogger(__name__)
 
 
-def _runs_registry(bot_name: str, settings: Settings) -> RunRegistry:
+def runs_registry(bot_name: str, settings: Settings) -> RunRegistry:
     return RunRegistry(runs_path(settings.agent_history_folder, bot_name))
 
 
-def _instance_id(bot_name: str, user: str = "") -> str:
+def bot_instance_id(bot_name: str, user: str = "") -> str:
     """Per-user instance id matching what `start` registers under."""
     return f"{bot_name}-{user}" if user else bot_name
 
 
-def _parse_tool_list(raw: str) -> list[str]:
+def parse_tool_list(raw: str) -> list[str]:
     """Parse a comma-separated ``--enable-tools`` / ``--disable-tools``
     value. Empty / whitespace-only -> ``[]``.
     """
@@ -59,7 +59,7 @@ def _parse_tool_list(raw: str) -> list[str]:
     return [t.strip() for t in raw.split(",") if t.strip()]
 
 
-def _fail_on_errors(errors: list[str]) -> bool:
+def fail_on_errors(errors: list[str]) -> bool:
     """Print errors and return True if any were found."""
     if not errors:
         return False
@@ -68,7 +68,7 @@ def _fail_on_errors(errors: list[str]) -> bool:
     return True
 
 
-def _fail_on_tool_resolution(tool_resolution) -> bool:
+def fail_on_tool_resolution(tool_resolution) -> bool:
     """Print tool-resolution errors and return True if any were found."""
     had_errors = False
     for err in tool_resolution.missing_required:
@@ -83,12 +83,12 @@ def _fail_on_tool_resolution(tool_resolution) -> bool:
     return had_errors
 
 
-def _resolve_run(bot_name: str, run_id: str, user: str = "") -> RunRecord:
+def resolve_run(bot_name: str, run_id: str, user: str = "") -> RunRecord:
     """Resolve a run_id to a live RunRecord or exit with an error panel."""
     settings = get_settings()
     setup_logging()
-    instance_id = _instance_id(bot_name, user)
-    registry = _runs_registry(instance_id, settings)
+    instance_id = bot_instance_id(bot_name, user)
+    registry = runs_registry(instance_id, settings)
     record = registry.active().get(run_id)
     if record is None:
         hint = f"kai runs {bot_name}" + (f" --user {user}" if user else "")
@@ -97,7 +97,7 @@ def _resolve_run(bot_name: str, run_id: str, user: str = "") -> RunRecord:
     return record
 
 
-def _post_tell(record: RunRecord, message: str, *, persist: bool) -> tuple[int, dict]:
+def post_tell(record: RunRecord, message: str, *, persist: bool) -> tuple[int, dict]:
     """POST {message, persist} to the run's /tell route, return (status, data)."""
     body = json.dumps({"message": message, "persist": persist}).encode("utf-8")
     signature = compute_hmac(record.hmac_key, body, record.hmac_algorithm)
@@ -114,7 +114,7 @@ def _post_tell(record: RunRecord, message: str, *, persist: bool) -> tuple[int, 
     return resp.status_code, data
 
 
-def _post_clear(record: RunRecord) -> tuple[int, dict]:
+def post_clear(record: RunRecord) -> tuple[int, dict]:
     """POST an HMAC-signed empty body to the run's /clear route."""
     signature = compute_hmac(record.hmac_key, b"", record.hmac_algorithm)
     resp = httpx.post(
@@ -130,22 +130,22 @@ def _post_clear(record: RunRecord) -> tuple[int, dict]:
     return resp.status_code, data
 
 
-def _render_status(data: dict, *, uptime: int | None = None) -> None:
+def render_status(data: dict, *, uptime: int | None = None) -> None:
     """Render a status snapshot dict (from the ``/status`` route) as bullets."""
     lines: list = []
 
     if uptime is not None:
-        lines.append(_format_uptime_line(uptime))
+        lines.append(format_uptime_line(uptime))
 
-    lines.extend(_format_tasks_lines(data.get("tasks")))
-    lines.extend(_format_caps_lines(data.get("capabilities")))
+    lines.extend(format_tasks_lines(data.get("tasks")))
+    lines.extend(format_caps_lines(data.get("capabilities")))
 
     from rich.console import Group
 
     console.print(Group(*(Align.left(line) for line in lines)))
 
 
-def _format_uptime_line(uptime: int) -> str:
+def format_uptime_line(uptime: int) -> str:
     days, rem = divmod(uptime, 86400)
     hours, rem = divmod(rem, 3600)
     minutes, seconds = divmod(rem, 60)
@@ -160,7 +160,7 @@ def _format_uptime_line(uptime: int) -> str:
     return f"[blue]\u25cf[/blue] [bold]uptime[/bold]  [{DIM}]{dur}  ({uptime}s)[/{DIM}]"
 
 
-def _format_tasks_lines(tasks: dict | None) -> list[str]:
+def format_tasks_lines(tasks: dict | None) -> list[str]:
     if not tasks:
         return []
     pending = tasks.get("pending", 0)
@@ -183,7 +183,7 @@ def _format_tasks_lines(tasks: dict | None) -> list[str]:
     return lines
 
 
-def _format_caps_lines(caps: dict | None) -> list[str]:
+def format_caps_lines(caps: dict | None) -> list[str]:
     if not caps:
         return []
     flags = []
@@ -192,7 +192,7 @@ def _format_caps_lines(caps: dict | None) -> list[str]:
     return ["[bold]capabilities[/bold]  " + "  ".join(flags)]
 
 
-def _render_tell(data: dict) -> None:
+def render_tell(data: dict) -> None:
     """Render a TellResult dict as a compact, styled summary."""
     ok = data.get("ok", False)
     reply = data.get("reply", "") or "(no reply)"
@@ -213,23 +213,23 @@ def _render_tell(data: dict) -> None:
         ("status", ""),
     )
     for a in actions:
-        table.add_row(*_render_tell_row(a))
+        table.add_row(*render_tell_row(a))
     console.print(table)
 
 
-def _render_tell_row(a: dict) -> tuple:
+def render_tell_row(a: dict) -> tuple:
     name = a.get("tool", "?")
     a_ok = a.get("ok", False)
     mark = GL_OK if a_ok else GL_ERR
-    target = _first_nonempty(a, ("chat_id", "target"))
-    target = _truncate(target, 40) if target else f"[{DIM}]\u2014[/{DIM}]"
-    text = _first_nonempty(a, ("text", "goal")) or _first_other_arg(a)
-    text = _truncate(text, 80) if text else f"[{DIM}]\u2014[/{DIM}]"
+    target = first_nonempty(a, ("chat_id", "target"))
+    target = truncate(target, 40) if target else f"[{DIM}]\u2014[/{DIM}]"
+    text = first_nonempty(a, ("text", "goal")) or first_other_arg(a)
+    text = truncate(text, 80) if text else f"[{DIM}]\u2014[/{DIM}]"
     status = f"[{OK}]ok[/{OK}]" if a_ok else f"[{ERR}]failed[/{ERR}]"
     return mark, name, target, text, status
 
 
-def _first_nonempty(a: dict, keys: tuple[str, ...]) -> str:
+def first_nonempty(a: dict, keys: tuple[str, ...]) -> str:
     for key in keys:
         val = a.get(key)
         if val:
@@ -237,7 +237,7 @@ def _first_nonempty(a: dict, keys: tuple[str, ...]) -> str:
     return ""
 
 
-def _first_other_arg(a: dict) -> str:
+def first_other_arg(a: dict) -> str:
     for key, val in a.items():
         if key in ("tool", "ok", "target", "chat_id"):
             continue
@@ -247,11 +247,11 @@ def _first_other_arg(a: dict) -> str:
     return ""
 
 
-def _truncate(text: str, limit: int) -> str:
+def truncate(text: str, limit: int) -> str:
     return text[: limit - 3] + "..." if len(text) > limit else text
 
 
-def _render_help() -> None:
+def render_help() -> None:
     """Render the slash-command list shown by ``/help``."""
     table = soft_table(("command", "magenta"), ("description", DIM))
     table.add_row("/help", "list these commands")
@@ -261,7 +261,7 @@ def _render_help() -> None:
     console.print(table)
 
 
-def _start(
+def start_bot(
     bot_name: str,
     goal_text: str,
     language: str,
@@ -301,18 +301,18 @@ def _start(
         err_line(f"template not found: {transport}/{tmpl_name}")
         raise typer.Exit(1)
 
-    if _fail_on_errors(validate_actions(tmpl)):
+    if fail_on_errors(validate_actions(tmpl)):
         raise typer.Exit(1)
 
-    operator_enable = _parse_tool_list(enable_tools)
-    operator_disable = _parse_tool_list(disable_tools)
+    operator_enable = parse_tool_list(enable_tools)
+    operator_disable = parse_tool_list(disable_tools)
 
     tool_resolution = resolve_tools(tmpl, operator_enable, operator_disable)
-    if _fail_on_tool_resolution(tool_resolution):
+    if fail_on_tool_resolution(tool_resolution):
         raise typer.Exit(1)
 
     # Instance namespace: when --user is provided, isolate files per user.
-    instance_id = _instance_id(bot_name, user)
+    instance_id = bot_instance_id(bot_name, user)
 
     if user:
         bot.instance = instance_id
@@ -327,7 +327,7 @@ def _start(
         f"[{DIM}]{transport}/{tmpl_name}[/{DIM}]"
     )
 
-    async def _main() -> int:
+    async def main() -> int:
         stop_task: asyncio.Task | None = None
         run_id: str | None = None
         brain_client: MorphikClient | None = None
@@ -435,7 +435,7 @@ def _start(
         endpoint = bot.tell_endpoint()
         if endpoint is not None:
             run_id = generate_run_id()
-            registry = _runs_registry(instance_id, settings)
+            registry = runs_registry(instance_id, settings)
             registry.replace(
                 run_id,
                 RunRecord(
@@ -459,23 +459,23 @@ def _start(
         force_quit = asyncio.Event()
         run_task = asyncio.ensure_future(bot.run())
 
-        def _request_shutdown():
+        def request_shutdown():
             if not shutdown_requested.is_set():
                 shutdown_requested.set()
                 nonlocal stop_task
                 stop_task = asyncio.ensure_future(bot.stop())
-                stop_task.add_done_callback(_on_stop_done)
+                stop_task.add_done_callback(on_stop_done)
             elif not force_quit.is_set():
                 force_quit.set()
                 err_line("forcing exit")
                 run_task.cancel()
 
-        def _on_stop_done(task: asyncio.Task):
+        def on_stop_done(task: asyncio.Task):
             if task.exception() and not task.cancelled():
                 logger.error("bot.stop() raised: %s", task.exception())
 
         for sig in (signal.SIGINT, signal.SIGTERM):
-            loop.add_signal_handler(sig, _request_shutdown)
+            loop.add_signal_handler(sig, request_shutdown)
 
         exit_code = 0
         try:
@@ -507,18 +507,18 @@ def _start(
                     logger.debug("sql_engine.dispose() raised during shutdown", exc_info=True)
             if run_id is not None:
                 try:
-                    _runs_registry(instance_id, settings).remove(run_id)
+                    runs_registry(instance_id, settings).remove(run_id)
                 except Exception:
                     logger.debug("failed to unregister run %s", run_id, exc_info=True)
             console.print(f"{GL_IDLE} [{DIM}]kai stopped[/{DIM}]")
         return exit_code
 
-    exit_code = asyncio.run(_main())
+    exit_code = asyncio.run(main())
     if exit_code:
         raise typer.Exit(exit_code)
 
 
-def _list_cmd() -> None:
+def list_available_bots() -> None:
     """List available bots."""
     bots = list_bots()
     if not bots:
@@ -531,7 +531,7 @@ def _list_cmd() -> None:
     console.print(table)
 
 
-def _status(
+def status_bot(
     bot_name: str,
     run_id: str,
     user: str,
@@ -541,7 +541,7 @@ def _status(
     Targets a specific run (from `kai start` output), not a bot name: it GETs
     the run's ``/status`` route and renders the snapshot the bot returns.
     """
-    record = _resolve_run(bot_name, run_id, user=user)
+    record = resolve_run(bot_name, run_id, user=user)
 
     signature = compute_hmac(record.hmac_key, b"", record.hmac_algorithm)
 
@@ -565,10 +565,10 @@ def _status(
         err_line(f"invalid status response  {exc}")
         raise typer.Exit(1) from exc
 
-    _render_status(data, uptime=_uptime_seconds(record.started_at))
+    render_status(data, uptime=uptime_seconds(record.started_at))
 
 
-def _tell(
+def tell_bot(
     bot_name: str,
     run_id: str,
     message: str,
@@ -581,10 +581,10 @@ def _tell(
     CLI is bot-agnostic: it forwards ``{message, persist}`` verbatim and
     prints the structured ``TellResult`` the bot returns.
     """
-    record = _resolve_run(bot_name, run_id, user=user)
+    record = resolve_run(bot_name, run_id, user=user)
 
     try:
-        status_code, data = _post_tell(record, message, persist=persist)
+        status_code, data = post_tell(record, message, persist=persist)
     except httpx.HTTPError as exc:
         err_line(f"failed to reach {record.endpoint}  {exc}")
         raise typer.Exit(1) from exc
@@ -599,12 +599,12 @@ def _tell(
         }
         data.setdefault("ok", False)
 
-    _render_tell(data)
+    render_tell(data)
     if status_code != 200 or not data.get("ok"):
         raise typer.Exit(1)
 
 
-def _chat(
+def chat_bot(
     bot_name: str,
     run_id: str,
     persist: bool,
@@ -618,7 +618,7 @@ def _chat(
     beyond the ``persist`` toggle. Slash commands act locally; everything
     else is forwarded as an operator turn.
     """
-    record = _resolve_run(bot_name, run_id, user=user)
+    record = resolve_run(bot_name, run_id, user=user)
 
     console.print(
         f"[bold magenta]kai chat[/bold magenta] [{DIM}]{bot_name} \u00b7 {run_id}[/{DIM}]"
@@ -629,7 +629,7 @@ def _chat(
     local_persist = persist
 
     while True:
-        tag = _persist_tag(local_persist)
+        tag = persist_tag(local_persist)
         try:
             message = console.input(f"{tag} [bold cyan]\u203a[/bold cyan] ")
         except (EOFError, KeyboardInterrupt):
@@ -645,19 +645,19 @@ def _chat(
             return
 
         if message.startswith("/"):
-            local_persist = _handle_slash(message, local_persist, record)
+            local_persist = handle_slash(message, local_persist, record)
             continue
 
-        data = _post_and_clean_tell(record, message, local_persist)
+        data = post_and_clean_tell(record, message, local_persist)
         if data is not None:
-            _render_tell(data)
+            render_tell(data)
 
 
-def _post_and_clean_tell(record, message: str, persist: bool) -> dict | None:
+def post_and_clean_tell(record, message: str, persist: bool) -> dict | None:
     """POST a /tell and return cleaned data, or None on failure."""
     try:
         with console.status(f"[{DIM}]thinking...[/{DIM}]", spinner="dots"):
-            _status_code, data = _post_tell(record, message, persist=persist)
+            _status_code, data = post_tell(record, message, persist=persist)
     except httpx.HTTPError as exc:
         err_line(f"failed to reach {record.endpoint}  {exc}")
         return None
@@ -671,17 +671,17 @@ def _post_and_clean_tell(record, message: str, persist: bool) -> dict | None:
     return data
 
 
-def _persist_tag(local_persist: bool) -> str:
+def persist_tag(local_persist: bool) -> str:
     if local_persist:
         return "[bold green]\u25cfpersist[/bold green]"
     return f"[{DIM}]\u25cb[/{DIM}]"
 
 
-def _handle_slash(message: str, local_persist: bool, record) -> bool:
+def handle_slash(message: str, local_persist: bool, record) -> bool:
     """Handle a slash command (except /quit, handled by the caller).
     Returns the (possibly toggled) ``local_persist`` value."""
     if message == "/help":
-        _render_help()
+        render_help()
         return local_persist
     if message == "/persist":
         local_persist = not local_persist
@@ -689,13 +689,13 @@ def _handle_slash(message: str, local_persist: bool, record) -> bool:
         console.print(f"[{DIM}]persist[/{DIM}] [bold]{state}[/bold]")
         return local_persist
     if message == "/clear":
-        _do_clear(record)
+        do_clear(record)
     return local_persist
 
 
-def _do_clear(record) -> None:
+def do_clear(record) -> None:
     try:
-        status_code, data = _post_clear(record)
+        status_code, data = post_clear(record)
     except httpx.HTTPError as exc:
         err_line(f"failed to reach {record.endpoint}  {exc}")
         return
@@ -708,7 +708,7 @@ def _do_clear(record) -> None:
         err_line("clear failed")
 
 
-def _stop(
+def stop_bot(
     bot_name: str,
     run_id: str,
     force: bool,
@@ -722,15 +722,15 @@ def _stop(
     sends SIGKILL — use only if the bot is wedged, as its run record is
     pruned lazily on the next `kai runs` rather than cleaned up by the bot.
     """
-    instance_id = _instance_id(bot_name, user)
-    record = _resolve_run(bot_name, run_id, user=user)
+    instance_id = bot_instance_id(bot_name, user)
+    record = resolve_run(bot_name, run_id, user=user)
 
     sig = signal.SIGKILL if force else signal.SIGTERM
     try:
         os.kill(record.pid, sig)
     except ProcessLookupError:
         # Already gone — prune the stale record so `kai runs` is accurate.
-        _runs_registry(instance_id, get_settings()).remove(run_id)
+        runs_registry(instance_id, get_settings()).remove(run_id)
         console.print(
             f"[{WARN}]\u25cf[/{WARN}] [{WARN}]stopped[/{WARN}]  run {run_id} was already gone"
         )
@@ -746,14 +746,14 @@ def _stop(
     )
 
 
-def _runs_cmd(
+def list_runs(
     bot_name: str,
     user: str,
 ) -> None:
     """List active runs for a bot (recovers a forgotten run_id)."""
     settings = get_settings()
-    instance_id = _instance_id(bot_name, user)
-    registry = _runs_registry(instance_id, settings)
+    instance_id = bot_instance_id(bot_name, user)
+    registry = runs_registry(instance_id, settings)
     active = registry.active()
     if not active:
         console.print(f"[{DIM}]{instance_id}[/{DIM}]  [{DIM}]no active runs[/{DIM}]")
@@ -766,7 +766,7 @@ def _runs_cmd(
         ("started", DIM),
     )
     for rid, record in active.items():
-        table.add_row(rid, record.endpoint, str(record.pid), _relative(record.started_at))
+        table.add_row(rid, record.endpoint, str(record.pid), relative(record.started_at))
     console.print(table)
 
 
@@ -796,7 +796,7 @@ def register(app: typer.Typer) -> None:
             help="Comma-separated tools to disable from the template",
         ),
     ):
-        _start(
+        start_bot(
             bot_name,
             goal_text,
             language,
@@ -808,7 +808,7 @@ def register(app: typer.Typer) -> None:
 
     @app.command(name="list")
     def list_cmd():
-        _list_cmd()
+        list_available_bots()
 
     @app.command()
     def status(
@@ -821,7 +821,7 @@ def register(app: typer.Typer) -> None:
             help="User email the instance was started with (--user on `kai start`)",
         ),
     ):
-        _status(bot_name, run_id, user)
+        status_bot(bot_name, run_id, user)
 
     @app.command()
     def tell(
@@ -838,7 +838,7 @@ def register(app: typer.Typer) -> None:
             help="User email the instance was started with (--user on `kai start`)",
         ),
     ):
-        _tell(bot_name, run_id, message, persist, user)
+        tell_bot(bot_name, run_id, message, persist, user)
 
     @app.command()
     def chat(
@@ -852,7 +852,7 @@ def register(app: typer.Typer) -> None:
             help="User email the instance was started with (--user on `kai start`)",
         ),
     ):
-        _chat(bot_name, run_id, persist, user)
+        chat_bot(bot_name, run_id, persist, user)
 
     @app.command()
     def stop(
@@ -868,7 +868,7 @@ def register(app: typer.Typer) -> None:
             help="User email the instance was started with (--user on `kai start`)",
         ),
     ):
-        _stop(bot_name, run_id, force, user)
+        stop_bot(bot_name, run_id, force, user)
 
     @app.command(name="runs")
     def runs_cmd(
@@ -880,4 +880,4 @@ def register(app: typer.Typer) -> None:
             help="User email the instance was started with (--user on `kai start`)",
         ),
     ):
-        _runs_cmd(bot_name, user)
+        list_runs(bot_name, user)
