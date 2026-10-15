@@ -5,7 +5,9 @@ Lives outside ``conftest.py`` so test modules can import it directly via
 collection order.
 """
 
+import weakref
 from datetime import UTC, datetime
+from typing import Any
 
 
 def _connect_email(db, user, status: str = "connected"):
@@ -63,9 +65,12 @@ def _connect_smtp(db, user, status: str = "connected"):
 # --- CSRF (Workstream A1) -----------------------------------------------------
 #
 # Module-level cache so repeated ``csrf_post`` calls in one test share the
-# same token without re-hitting ``GET /_csrf``. Keyed by ``id(client)`` so
-# distinct TestClient instances (each with its own cookie jar) stay separate.
-_cached_csrf_token: dict[int, str] = {}
+# same token without re-hitting ``GET /_csrf``. Keyed weakly by the client
+# object so distinct TestClient instances (each with its own cookie jar)
+# stay separate. A plain ``id(client)`` key is unsafe: under pytest-xdist a
+# client is released after its test and a later client can be allocated at
+# the same address, making the lookup return a dead client's token.
+_cached_csrf_token: weakref.WeakKeyDictionary[Any, str] = weakref.WeakKeyDictionary()
 
 
 def _fetch_csrf_token(client) -> str:
@@ -78,7 +83,7 @@ def _fetch_csrf_token(client) -> str:
     own Starlette app. Those tests go through ``client.post`` directly and
     need no CSRF token (webhook ingress is exempt by middleware policy).
     """
-    cached = _cached_csrf_token.get(id(client))
+    cached = _cached_csrf_token.get(client)
     if cached:
         return cached
     resp = client.get("/_csrf")
@@ -88,7 +93,7 @@ def _fetch_csrf_token(client) -> str:
             "ensure the cockpit app is in testing mode (KAI_COCKPIT_TESTING=1)"
         )
     token = resp.json()["token"]
-    _cached_csrf_token[id(client)] = token
+    _cached_csrf_token[client] = token
     return token
 
 
