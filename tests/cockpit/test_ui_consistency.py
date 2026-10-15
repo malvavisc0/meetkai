@@ -17,6 +17,8 @@ makes both rules an actual, always-run check instead of a reminder.
 import re
 from pathlib import Path
 
+from tests.cockpit.helpers import csrf_post
+
 COCKPIT_STATIC_DIR = Path(__file__).parents[2] / "src" / "kai" / "cockpit" / "static"
 COCKPIT_TEMPLATES_DIR = Path(__file__).parents[2] / "src" / "kai" / "cockpit" / "templates"
 COCKPIT_CSS = COCKPIT_STATIC_DIR / "cockpit.css"
@@ -121,3 +123,53 @@ def test_no_hardcoded_px_outside_tokens_layer():
         "`tokens` layer. Use var(--text-*) / var(--space-*) instead "
         "(see STYLEGUIDE.md):\n" + "\n".join(offenders)
     )
+
+
+def test_login_preserves_email_and_csrf_form_contract(client):
+    response = client.get("/login")
+
+    assert response.status_code == 200
+    assert 'class="auth-hero__wordmark"' in response.text
+    assert '<form action="/login" method="post"' in response.text
+    assert 'name="_csrf"' in response.text
+    email = re.search(r'<input\s+id="email"[^>]+>', response.text)
+    assert email
+    assert 'type="email"' in email.group()
+    assert 'name="email"' in email.group()
+    assert 'autocomplete="email"' in email.group()
+    assert 'aria-describedby="login-help"' in email.group()
+    assert "required" in email.group()
+    assert 'id="login-help"' in response.text
+
+
+def test_login_rejects_post_without_csrf(client):
+    response = client.post("/login", data={"email": "unknown@example.test"})
+
+    assert response.status_code == 403
+
+
+def test_invalid_magic_link_offers_working_retry_form(client):
+    response = client.get("/login/auth?token=invalid-ui-test-token")
+
+    assert response.status_code == 200
+    assert 'id="login-error" role="alert"' in response.text
+    assert "Invalid or expired token." in response.text
+    assert '<form action="/login" method="post"' in response.text
+    assert 'aria-describedby="login-help login-error"' in response.text
+    retry = csrf_post(client, "/login", data={"email": "unknown@example.test"})
+    assert retry.status_code == 200
+    assert "Check your email" in retry.text
+    assert 'id="email"' not in retry.text
+
+
+def test_login_confirmation_does_not_disclose_account_membership(client, user, monkeypatch):
+    from kai.cockpit.routes import auth
+
+    monkeypatch.setattr(auth, "auto_approve_enabled", lambda: False)
+    approved = csrf_post(client, "/login", data={"email": user.email})
+    unknown = csrf_post(client, "/login", data={"email": "unknown@example.test"})
+
+    assert approved.status_code == unknown.status_code == 200
+    assert approved.text == unknown.text
+    assert "If your address is approved" in approved.text
+    assert user.email not in approved.text

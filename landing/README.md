@@ -10,9 +10,10 @@ site root.
   inlined (no templating). The login button links to the cockpit at
   `https://cockpit.meetk.ai/login`.
 - `static/` — assets served under `/static/…` (the paths `index.html` expects):
-  - `cockpit.css` — a copy of the cockpit stylesheet, kept intact so the
-    landing renders identically. Only the `.landing-*` rules and fonts are
-    actually used here; it can be trimmed later if desired.
+  - `cockpit.css` — landing components using the cockpit's color, typography,
+    and spacing tokens.
+  - `landing.js` — keyboard-accessible example switching. The first example
+    and native template accordions also work without JavaScript.
   - `fonts/`, favicons, `apple-touch-icon.png`, `icon-192.png`, `icon-512.png`,
     `og.png`, `site.webmanifest`.
 - `CNAME` — binds the GitHub Pages custom domain (`meetk.ai`).

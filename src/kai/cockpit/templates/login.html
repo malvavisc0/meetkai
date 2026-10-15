@@ -1,35 +1,40 @@
 {% extends "base.html" %}
 {% block topbar %}{% endblock %}
 {% block content %}
-<div class="page auth-page">
+<main class="page auth-page">
   <section class="card auth-shell">
     <div class="auth-hero">
-      <a class="auth-hero__brand" href="https://meetk.ai/" aria-label="Back to kAI home">
-        <span class="auth-hero__brand-mark" aria-hidden="true">K</span>
-        <span>Knowledgeable Artificial Intelligence</span>
+      <a class="auth-hero__brand" href="https://meetk.ai/" aria-label="meetk.ai home">
+        <span class="auth-hero__wordmark">meet<span>k.ai</span></span>
       </a>
 
       <div class="auth-hero__copy">
-        <p class="page-eyebrow">Operator console</p>
-        <h1 class="auth-title">Manage your agents.</h1>
-        <p>See what they handled today and adjust how they work.</p>
+        <p class="page-eyebrow">Operator cockpit</p>
+        <h1 class="auth-title">Manage <span>your agents.</span></h1>
+        <p>Review conversations, guide your agents, and handle the work that needs your attention.</p>
       </div>
+      <p class="auth-hero__caption">No-code workflow automation</p>
     </div>
 
     <div class="auth-panel">
       {% if requested %}
         <div class="empty-state auth-confirmation">
           <span class="icon icon--lg auth-confirmation__icon" aria-hidden="true">{% include "icons/send.svg" %}</span>
-          <h2 class="card__title">Check your email</h2>
-          <p class="empty-state__hint">A one-time link is on its way.</p>
+          <h2 class="auth-panel__title" id="login-title">Check your email</h2>
+          <p class="empty-state__hint">If your address is approved, you'll receive a one-time access link.</p>
         </div>
       {% else %}
         <div class="auth-panel__header">
           <p class="page-eyebrow">Invite-only beta</p>
+          <h2 class="auth-panel__title" id="login-title">Log in to your cockpit.</h2>
           <p class="page-subtitle">Enter your email to receive a one-time access link.</p>
         </div>
 
-        <form method="post" class="auth-form stack text-left">
+        {% if error %}
+          <p class="field__error auth-error" id="login-error" role="alert">{{ error }}</p>
+        {% endif %}
+
+        <form action="/login" method="post" class="auth-form stack text-left" aria-labelledby="login-title">
           {{ csrf_field() }}
           <div class="field">
             <label class="field__label" for="email">Email address</label>
@@ -39,21 +44,21 @@
               name="email"
               autocomplete="email"
               inputmode="email"
+              aria-describedby="login-help{% if error %} login-error{% endif %}"
               placeholder="you@example.com"
               required
             >
+            <p class="field__help" id="login-help">Use the email approved for your workspace.</p>
           </div>
           <button type="submit" class="button button--primary button--block">
-            <span class="icon">{% include "icons/send.svg" %}</span>
+            <span class="icon" aria-hidden="true">{% include "icons/send.svg" %}</span>
             Send link
           </button>
         </form>
       {% endif %}
 
-      {% if error %}
-        <p class="field__error auth-error" role="alert">{{ error }}</p>
-      {% endif %}
+      <p class="auth-panel__footer">Need access? <a href="mailto:hello@meetk.ai">Contact the team</a>.</p>
     </div>
   </section>
-</div>
+</main>
 {% endblock %}

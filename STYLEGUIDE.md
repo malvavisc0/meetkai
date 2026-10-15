@@ -1,8 +1,10 @@
-# kAI Cockpit UI Standards
+# kAI UI Standards
 
-This is the durable single source of truth for the Operator Console UI.
-`src/kai/cockpit/static/cockpit.css` is the central styling truth; this
-document states the rules new and existing pages must follow.
+This is the durable single source of truth for the Operator Console and its
+pre-auth surfaces. `src/kai/cockpit/static/cockpit.css` owns the server-rendered
+console and login styles. `landing/static/cockpit.css` owns the standalone
+marketing composition. Both preserve the same brand, font, color, and spacing
+contract; marketing layout changes must not spill into operator screens.
 
 ## Architecture
 
@@ -10,7 +12,7 @@ The Cockpit is a server-rendered Jinja UI with static CSS and small static
 JavaScript enhancements. Do not introduce a frontend framework, a build step,
 or new package dependencies.
 
-New pages/components use existing primitives in `cockpit.css`. Propose
+New operator pages/components use existing primitives in `cockpit.css`. Propose
 additions to the primitives, not one-off page styles. The `tokens` cascade
 layer is the only place raw `px`/`rem` values legitimately live; everywhere
 else, use tokens/classes.
@@ -25,9 +27,14 @@ else, use tokens/classes.
 | Form labels | `--text-sm` | 600 |
 | Help text, metadata, eyebrows, table headers | `--text-sm` | 400 |
 | Micro labels / badges | `--text-xs` | 600 |
-| Landing promise (`.landing-title`) | `--text-landing-display` (44-64px clamp) | 600 |
+| Landing promise (`.landing-title`) | `--text-landing-display` (44-64px clamp) | 650 |
+| Marketing section titles | `--text-landing-section` (30-42px clamp) | 650 |
+| Template outcome, first paragraph | `--text-lg` (17px) | 500 |
+| Template supporting description | `--text-base` (15px) | 400 |
+| Auth promise (`.auth-title`) | `--text-auth-display` (32-64px clamp) | 650 |
+| Auth form / confirmation title | `--text-xl` (24px) | 600 |
 
-- `--text-md` (17px) is reserved for genuinely emphasized inline body copy
+- `--text-md` (16px) is reserved for genuinely emphasized inline body copy
   (`.chat-reply`). It is never used for standard labels, help text, or
   card titles. The pre-auth `.landing-lede` uses standard `--text-base`
   with the secondary ink color, not `--text-md`.
@@ -57,8 +64,9 @@ else, use tokens/classes.
 - Card headers use `.card__eyebrow` only for a grouping label and
   `.card__title` for the actionable section name. Help text explains a control
   or its operator impact; it does not repeat the title.
-- `Brain` is the product name for shared knowledge. In explanatory copy,
-  describe it as knowledge that agents consult before replying.
+- `Brain` is the product name for shared company knowledge that connected
+  agents can consult. Do not imply instant access, guaranteed accuracy, or
+  that every agent consults it before every action.
 - `channel` means where work arrives or replies are delivered; `tool` means a
   connected capability an agent can use; `readiness` means the availability of
   supporting services.
@@ -227,13 +235,54 @@ carries status edge classes (`.status-card--*`). Escalation severity
 maps to `danger`/`warn`/`muted` — never `live`, because an unresolved
 escalation is not healthy.
 
+## Pre-auth Surfaces
+
+The landing and login share a light `--color-page` canvas, the `meetk.ai`
+wordmark, cobalt actions, Inter typography, and an ink-colored contrast panel.
+They are deliberate exceptions to operator-card composition, not a second
+theme for authenticated pages.
+
+- Landing `--color-stage` and login `--color-auth-stage` are `#101c33`;
+  secondary stage text is `#b6c3d9` and dark-surface focus is `#b6c8ff`.
+  Keep these mirrored values aligned across the two standalone stylesheets.
+- The landing example panel and `.auth-shell` use a 16px radius and a
+  restrained stage shadow. Standard operator `.card` rules are unchanged.
+- The landing navbar contains only the wordmark and `Log in`. Do not add
+  section navigation or a second `Explore an example` action beside the beta CTA.
+- Section headings start with a verb and name a concrete action. Current
+  templates are beta starting points, not the product's capability ceiling.
+- Template descriptions lead with the user's gain, then explain the work the
+  agent handles. Use 17px for the outcome and 15px for supporting text. Do not
+  repeat a request-access CTA inside every template.
+- Example requests and outputs are visibly labeled as illustrative sample data.
+  Never imply that selecting a tab starts a live agent, runs a query, sends
+  mail, or books an appointment. Do not show invented runtime telemetry or
+  model thought traces.
+- Example tabs support Left/Right, Home/End, visible keyboard focus, one
+  selected/roving tab, and one accessible panel. Inactive panels can retain
+  layout height but must be absent from the accessibility tree.
+- Without JavaScript, the Report example remains readable and the tab controls
+  stay hidden. Template disclosure uses native `details` / `summary` controls
+  and remains usable without scripts.
+- Focus indicators must contrast with their surrounding surface, not just the
+  control. The white demo CTA on cobalt uses a white, offset focus outline;
+  brand links on ink use the light stage-focus token.
+- Pre-auth standalone controls are at least 44px high; login inputs and submit
+  use the 48px `--auth-control-height`. Console controls retain their existing
+  sizing. Login styling stays inside `.auth-*`, with no global form changes.
+- Login retains the required `email` field, `csrf_field()`, native validation,
+  and an explicit `POST /login` form action, including the invalid-link state.
+  Requested-link feedback is identical for approved and unknown addresses and
+  does not claim mail was delivered. Errors use `role="alert"` and associated
+  help text. Do not add passwords, providers, or client-side auth behavior.
+
 ## Motion
 
-Default is **zero animation**. No entrance effects, simulated activity, or
+Default is **zero animation**. No page-entry effects, simulated activity, or
 decorative motion. The product should feel modern through composition,
 typography, contrast, and clear operational state.
 
-Three animated exceptions are permitted:
+Four animated exceptions are permitted:
 
 1. **`.status-dot--running::after`** — radar pulse ring on live dots. Used only
    to read "actively alive" at a glance (agent status dot, readiness live row).
@@ -249,15 +298,22 @@ Three animated exceptions are permitted:
    arrives or the page state changes. No full-screen overlays, no "AI is
    thinking" copy, no simulated typing.
 
+4. **Pre-auth example selection** - a short opacity / position transition
+   (220ms maximum) after the visitor selects another example. It is never
+   triggered on page load, never advances automatically, and implies no live
+   processing. It is disabled under `prefers-reduced-motion`.
+
 Subtle hover/focus transitions on interactive controls are acceptable when used
-sparingly (button state feedback, card hover). No transforms on hover, no
-entrance animations, no staggered reveals. Loading states with a known
+sparingly (button state feedback, disclosure indicators). No transforms on
+hover, no page-entry animations, no staggered reveals. Loading states with a known
 duration use the thinking spinner above; loading states with unknown duration
 use concise static text or a stable progress indicator.
 
 ## Mobile behavior
 
 - Existing breakpoints (`640px`, `700px`, `760px`) are preserved.
+- Pre-auth landing composition also stacks at `900px`; compact controls use
+  `640px` / `380px` adjustments. The login shell stacks below `760px`.
 - All Settings grids (`.field-grid`, form action clusters) collapse to one
   column below tablet width.
 - `Load more chats` and form action clusters become full-width on mobile.
@@ -283,14 +339,19 @@ use concise static text or a stable progress indicator.
 | `.status-dot--running::after` | Radar pulse ring on live status dots — animated exception to the zero-motion default, read as "actively alive" |
 | `.source-item--stack` | Opts a `.source-item` out of the compact inline "input + button" two-column layout for items whose controls are a fuller block (a form with a reply panel, a divided sub-panel) rather than a single-line input/button pair |
 | `.sleep-panel` / `.sleep-panel__section` / `.sleep-panel__title` | Two-halves-of-one-workflow layout divided by a border (`border-left`, `border-top` on mobile) instead of two boxed subcards |
-| `.landing-*` | Pre-auth marketing landing composition: navigation, two-column hero, static workflow illustration, onboarding path, Brain diagram, connection band, and proof invitation. Scoped to the landing page and built from the shared token system. |
-| `.landing-workflow__diagram` / `__stage` / `__resources` / `__decision` | Static, connected workflow line art: incoming channels, selected role, Brain and tools, then possible actions. It never renders a fabricated message, reply, timestamp, or runtime status. |
-| `.landing-steps` / `.landing-steps__path` | One continuous four-step onboarding path rather than a feature-card grid. |
-| `.landing-brain` / `.landing-brain__diagram` | Shared-knowledge explanation showing documents, website, and notes feeding the Brain and configured agent roles. |
-| `.landing-connections` / `.landing-connections__group` | Semantic connection band grouping channels where work arrives separately from tools agents use; visible text labels are retained until approved local integration assets are available. |
-| `.landing-proof` / `.landing-proof__path` / `__cta` | Editorial proof invitation with the factual email-to-agent-to-inbox path and one compact mail action. The CTA uses the shared cobalt surface tokens and monospace face to make the support address actionable without competing with the invite CTA. |
-| `.landing-nav` / `__inner` | Full-width navigation bar on pre-auth surfaces. `__inner` shares the landing content width so brand and CTA align with the page grid; the outer bar uses the shared `--color-page` canvas and a neutral divider. It is not sticky, so it never obscures landing content. |
-| `.landing-footer` / `__inner` | Full-width closing reassurance at the foot of the landing page. A restrained cobalt-tinted dark surface and cobalt top rule create the light-to-dark transition; `__inner` aligns its beta statement and GitHub link to the landing content grid. |
+| `.landing-*` | Standalone marketing composition: simplified navigation, two-column hero, illustrative example viewer, template accordion, shared knowledge, available connections, and real-agent invitation. |
+| `.landing-example` / `__tabs` / `__panels` / `__output` | Ink-colored example viewer with Report, Follow-up, and Booking samples. Persistent sample-data labeling; no live actions. Small deferred `landing.js` enhancement supplies accessible tab selection. |
+| `[data-enhanced]` / `[data-interacted]` | Example layout enhancement and actual visitor-interaction state. Only the latter enables the optional panel transition. |
+| `.landing-templates__list` / `.landing-template__body` / `__title` / `__toggle` / `__number` | Native, exclusive template disclosures; benefit-first copy with larger text, numbered headings, and stateful disclosure indicators. No per-template CTA. |
+| `.landing-brain` / `__diagram` / `__sources` / `__agents` / `__node` | Shared-knowledge schematic with real source types and role labels. Centered hub, matching list boundaries, and compact source / agent grids on mobile. |
+| `.landing-connections` / `__items` / `__body` / `.landing-section__intro--wide` | Cobalt-tinted connection band, actual provider labels, and a four-column tool rail that becomes two columns on mobile. No invented connected/healthy states. |
+| `.landing-proof` / `__path` / `__cta` | Cobalt closing panel for the real email demo. A white secondary CTA preserves the beta invitation as the single primary; its keyboard ring contrasts with the cobalt background. |
+| `.landing-nav` / `__inner` / `__actions` | Sticky, light navbar with wordmark and login only. Its inner width aligns with the landing grid; focus/anchor targets retain clearance below it. |
+| `.landing-footer` / `__inner` / `__links` | Quiet light footer aligned with the page grid, containing copyright, Contact, and Log in. |
+| `.auth-page` / `.auth-shell` | Full-viewport pre-auth layout with an ink brand panel and white form panel. Stacks below 760px; does not modify the operator `.page` or `.card` contract. |
+| `.auth-hero` / `__brand` / `__wordmark` / `__copy` / `__caption` / `.auth-title` | Landing-aligned wordmark, static technical grid, concise cockpit context, and responsive display type. No fake activity. |
+| `.auth-panel` / `__header` / `__title` / `__footer` / `.auth-form` | Passwordless form / requested-link composition with scoped 48px controls, existing field primitives, and an access-help link. |
+| `.auth-confirmation` / `__icon` / `.auth-error` | Generic, non-enumerating request feedback and readable invalid-link errors. Neither the icon nor the copy claims verified email delivery. |
 | `.deployment-card__summary` | Compact, right-aligned operational summary on an agent card; collapses below the card content on mobile. |
 | `.deployment-card--attention` / `--running` / `--stopped` | State modifier on `.deployment-card`. Attention gets a danger-tinted border (4% danger mix on surface). Running uses a stronger neutral border. Stopped dims the whole card to 0.85. |
 | `.readiness-summary` / `.readiness-summary__section` | Exception-led infrastructure health summary: a concise readiness state followed by divided attention and available-service sections. |
@@ -374,6 +435,17 @@ Before merging a Cockpit UI change, check:
   that introduces it.
 - No CSS deadcode.
 - No Javascript deadcode.
+- Check pre-auth pages at narrow/mobile and desktop widths, including the
+  landing's three examples, expanded templates, and login form/request/error
+  states. Exercise keyboard controls, reduced motion, and the no-JavaScript
+  fallback. Never use real login submissions to generate visual fixtures.
+- Verify the focus ring on both light and dark backgrounds. A ring with the
+  same color as its surrounding panel is not a visible focus indicator.
+- The standalone landing is served separately from Docker. Login templates
+  and assets are baked into the cockpit image; a host edit or container
+  restart alone does not refresh them. Rebuild only the cockpit service for a
+  real `http://localhost:8080/login` check, preserving database and storage
+  volumes and accounting for the brief interruption to hosted agents.
 - **Template-side checks** (not only CSS):
   - Every class referenced in a template has either a `cockpit.css`
     selector or an entry in the primitives table — no one-off classes.
