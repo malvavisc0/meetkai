@@ -145,9 +145,6 @@ class EscalationStore:
     async def list_active(self) -> list[Escalation]:
         return [e for e in await self.list_all() if not e.resolved]
 
-    async def list_for_chat(self, chat_id: str) -> list[Escalation]:
-        return [e for e in await self.list_all() if e.chat_id == chat_id]
-
     async def list_for_user(self, owner_slug: str) -> list[Escalation]:
         """Return escalations owned by ``owner_slug``.
 
@@ -173,280 +170,176 @@ class EscalationStore:
         return f"esc-{uuid.uuid4().hex[:12]}"
 
 
-# Populated from Bot.configure(). Tools (created as closures in get_tools())
-# read these attributes at call time.
-class _State:
-    def __init__(self) -> None:
-        self.blacklist: list[str] | None = None
-        self.on_escalation: Callable[[Escalation], Awaitable[None]] | None = None
-        self.tool_context: ToolContext | None = None
-        self.store: EscalationStore = EscalationStore(None)
-        self.cockpit_url: str = ""
-        self.cockpit_escalation_secret: str = ""
-        self.owner_slug: str = ""
+class EscalationState:
+    """Wiring for the escalate/blacklist tools in one process.
 
-
-DYN = _State()
-
-
-def resolve_chat_id(override: str | None = None) -> str:
-    if override and override.strip():
-        return override.strip()
-    ctx = DYN.tool_context
-    if ctx is not None:
-        current = ctx.current()
-        if current.chat_id:
-            return current.chat_id
-    return ""
-
-
-# ── Public API (called from Bot.configure()) ─────────────────────────
-
-
-def set_escalation_handler(
-    handler: Callable[[Escalation], Awaitable[None]],
-) -> None:
-    """Register the bot's escalation callback."""
-    DYN.on_escalation = handler
-
-
-def set_blacklist(blacklist: list[str]) -> None:
-    """Give tools access to the bot's mutable blacklist list."""
-    DYN.blacklist = blacklist
-
-
-def set_tool_context(ctx: ToolContext | None) -> None:
-    """Give tools access to the current chat context."""
-    DYN.tool_context = ctx
-
-
-def set_escalation_store(store: EscalationStore) -> None:
-    """Point the tools at a (possibly persistent) EscalationStore.
-
-    Called from ``BaseBot.setup_escalation_store()``. Until this is called,
-    tools use a process-lifetime in-memory store (see ``_State.store``).
+    Holds the escalation store, the bot's mutable blacklist and chat context,
+    the escalation callback, and the cockpit forwarding config. A bot's
+    :class:`~kai.bots.base.BaseBot` owns one instance and hands it to
+    :class:`~kai.agent.core.KaiAgent`, whose tools are bound methods of it
+    (see :func:`kai.agent.tools.get_tools`); the cockpit owns a separate
+    instance for its aggregated store (see ``kai.cockpit.app``). Fields are
+    read at call time, so configuring after agent construction works.
     """
-    DYN.store = store
 
+    def __init__(
+        self,
+        store: EscalationStore | None = None,
+        *,
+        on_escalation: Callable[[Escalation], Awaitable[None]] | None = None,
+        blacklist: list[str] | None = None,
+        tool_context: ToolContext | None = None,
+        cockpit_url: str = "",
+        cockpit_escalation_secret: str = "",
+        owner_slug: str = "",
+    ) -> None:
+        self.store = store or EscalationStore(None)
+        self.on_escalation = on_escalation
+        self.blacklist = blacklist
+        self.tool_context = tool_context
+        self.cockpit_url = cockpit_url.rstrip("/") if cockpit_url else ""
+        self.cockpit_escalation_secret = cockpit_escalation_secret
+        self.owner_slug = owner_slug
 
-def set_cockpit_url(url: str) -> None:
-    """Set the cockpit base URL for escalation forwarding.
+    def resolve_chat_id(self, override: str | None = None) -> str:
+        if override and override.strip():
+            return override.strip()
+        ctx = self.tool_context
+        if ctx is not None:
+            current = ctx.current()
+            if current.chat_id:
+                return current.chat_id
+        return ""
 
-    Called from ``BaseBot.setup_escalation_store()`` (which reads
-    ``Settings.cockpit_url``). Empty string (the default for a standalone
-    ``kai start``) disables forwarding.
-    """
-    DYN.cockpit_url = url.rstrip("/") if url else ""
-
-
-def set_escalation_secret(secret: str) -> None:
-    """Set the shared secret for the escalation webhook.
-
-    Called from ``BaseBot.setup_escalation_store()`` (which reads
-    ``Settings.cockpit_escalation_secret``). Empty string disables auth.
-    """
-    DYN.cockpit_escalation_secret = secret
-
-
-def set_owner_slug(slug: str) -> None:
-    """Stamp ``slug`` onto every new Escalation for cockpit-side per-user scoping.
-
-    Called from ``BaseBot.setup_escalation_store()`` (which reads
-    ``Settings.owner_slug``). The slug is injected by the cockpit at spawn
-    time (see ``DeploymentsService.start``), so a bot run independently
-    (``kai start`` without a cockpit) leaves it "" and escalations are
-    unowned. The dashboard routes refuse to show unowned escalations to any
-    user; the bearer-authed ``/api/escalations`` endpoints still return them.
-    """
-    DYN.owner_slug = slug
-
-
-# ── Tool functions (bound in get_tools()) ────────────────────────────
-
-
-async def escalate(
-    reason: str,
-    severity: Severity = "medium",
-    summary: str = "",
-) -> str:
-    """Alert the operator that this conversation needs human attention.
-
-    Call this BEFORE choosing your action (reply/silent/etc). The escalation
-    is a side-channel alert — it does not change what you say to the user.
-    You can reply to the user AND escalate in the same turn.
-
-    Use when:
-    - The user explicitly asks for a human / to speak to someone
-    - The conversation involves threats, legal issues, or safety concerns
-    - You cannot answer and the question is important enough to warrant human review
-    - Your escalation_rules (if configured) trigger
-
-    Do NOT use for:
-    - Questions you can answer with your tools
-    - Casual complaints or minor issues
-    - Anything you can handle yourself
-
-    Args:
-        reason: Short description of why you're escalating.
-        severity: How urgent — "low", "medium", "high", or "critical".
-        summary: Optional context for the operator (what was discussed).
-    """
-    chat_id = resolve_chat_id()
-    esc = Escalation(
-        id=EscalationStore.new_id(),
-        chat_id=chat_id,
-        conversation_id=chat_id,
-        reason=reason,
-        severity=severity,
-        summary=summary,
-        user_id=DYN.owner_slug,
-        created_at=datetime.now(UTC),
-    )
-    await DYN.store.add(esc)
-
-    handler = DYN.on_escalation
-    if handler is not None:
+    async def record(self, escalation: Escalation) -> None:
+        """Persist an escalation and fire the configured callback."""
+        await self.store.add(escalation)
+        handler = self.on_escalation
+        if handler is None:
+            return
         try:
-            await handler(esc)
+            await handler(escalation)
         except Exception:
             logger.exception("escalation handler raised")
 
-    return f"escalation recorded (severity={severity}): {reason}"
+    # ── Tool functions (bound in get_tools()) ──────────────────────────
 
+    async def escalate(
+        self,
+        reason: str,
+        severity: Severity = "medium",
+        summary: str = "",
+    ) -> str:
+        """Alert the operator that this conversation needs human attention.
 
-async def blacklist(contact_id: str = "") -> str:
-    """Add the current chat's contact to the blacklist to prevent further messages.
+        Call this BEFORE choosing your action (reply/silent/etc). The escalation
+        is a side-channel alert — it does not change what you say to the user.
+        You can reply to the user AND escalate in the same turn.
 
-    Use for contacts that are spamming, abusive, or otherwise undesired. After
-    blacklisting, the bot will silently ignore all future messages from this
-    contact for the rest of the run. Only the current conversation's contact
-    can be blacklisted — an explicit ``contact_id`` that doesn't match is
-    refused, so a prompt-injected message can't coerce the model into
-    blacklisting arbitrary contacts.
+        Use when:
+        - The user explicitly asks for a human / to speak to someone
+        - The conversation involves threats, legal issues, or safety concerns
+        - You cannot answer and the question is important enough to warrant human review
+        - Your escalation_rules (if configured) trigger
 
-    Args:
-        contact_id: The chat ID / sender ID to blacklist. Leave empty to
-            blacklist the current conversation's contact.
-    """
-    explicit = contact_id.strip()
-    current = resolve_chat_id()
-    resolved = explicit or current
-    if not resolved:
-        return "Error: no contact_id provided and no current conversation context."
-    if explicit and current and explicit != current:
-        return (
-            f"Error: cannot blacklist {explicit} — only the current "
-            f"conversation's contact ({current}) can be blacklisted."
+        Do NOT use for:
+        - Questions you can answer with your tools
+        - Casual complaints or minor issues
+        - Anything you can handle yourself
+
+        Args:
+            reason: Short description of why you're escalating.
+            severity: How urgent — "low", "medium", "high", or "critical".
+            summary: Optional context for the operator (what was discussed).
+        """
+        chat_id = self.resolve_chat_id()
+        await self.record(
+            Escalation(
+                id=EscalationStore.new_id(),
+                chat_id=chat_id,
+                conversation_id=chat_id,
+                reason=reason,
+                severity=severity,
+                summary=summary,
+                user_id=self.owner_slug,
+                created_at=datetime.now(UTC),
+            )
         )
+        return f"escalation recorded (severity={severity}): {reason}"
 
-    bl = DYN.blacklist
-    if bl is None:
-        return "Error: blacklist not configured."
-    if resolved not in bl:
-        bl.append(resolved)
+    async def add_to_blacklist(self, contact_id: str = "") -> str:
+        """Add the current chat's contact to the blacklist to prevent further messages.
 
-    esc = Escalation(
-        id=EscalationStore.new_id(),
-        chat_id=resolved,
-        conversation_id=resolved,
-        reason="contact blacklisted",
-        severity="low",
-        summary=f"Contact {resolved} blacklisted by the model.",
-        user_id=DYN.owner_slug,
-    )
-    await DYN.store.add(esc)
+        Use for contacts that are spamming, abusive, or otherwise undesired. After
+        blacklisting, the bot will silently ignore all future messages from this
+        contact for the rest of the run. Only the current conversation's contact
+        can be blacklisted — an explicit ``contact_id`` that doesn't match is
+        refused, so a prompt-injected message can't coerce the model into
+        blacklisting arbitrary contacts.
 
-    handler = DYN.on_escalation
-    if handler is not None:
+        Args:
+            contact_id: The chat ID / sender ID to blacklist. Leave empty to
+                blacklist the current conversation's contact.
+        """
+        explicit = contact_id.strip()
+        current = self.resolve_chat_id()
+        resolved = explicit or current
+        if not resolved:
+            return "Error: no contact_id provided and no current conversation context."
+        if explicit and current and explicit != current:
+            return (
+                f"Error: cannot blacklist {explicit} — only the current "
+                f"conversation's contact ({current}) can be blacklisted."
+            )
+
+        bl = self.blacklist
+        if bl is None:
+            return "Error: blacklist not configured."
+        if resolved not in bl:
+            bl.append(resolved)
+
+        await self.record(
+            Escalation(
+                id=EscalationStore.new_id(),
+                chat_id=resolved,
+                conversation_id=resolved,
+                reason="contact blacklisted",
+                severity="low",
+                summary=f"Contact {resolved} blacklisted by the model.",
+                user_id=self.owner_slug,
+            )
+        )
+        return f"contact blacklisted: {resolved}"
+
+    async def forward_to_cockpit(self, escalation: Escalation) -> None:
+        """POST an escalation to the cockpit's ``/api/escalations`` webhook.
+
+        Called from ``BaseBot.on_escalation`` so every bot forwards the same way.
+        Best-effort: the escalation is already persisted locally before this runs,
+        so a cockpit that's down (or ``cockpit_url`` unset) just means the cockpit
+        dashboard won't show it — the bot's own store still has it. Never raises.
+        """
+        url = self.cockpit_url
+        if not url:
+            return
+        endpoint = f"{url}/api/escalations"
+        headers: dict[str, str] = {}
+        secret = self.cockpit_escalation_secret
+        if secret:
+            headers["Authorization"] = f"Bearer {secret}"
         try:
-            await handler(esc)
+            import httpx
+
+            async with httpx.AsyncClient(timeout=5.0) as client:
+                resp = await client.post(endpoint, json=escalation.to_dict(), headers=headers)
+                if resp.status_code == 401:
+                    logger.warning("cockpit escalation POST rejected (bad secret): %s", endpoint)
+                elif resp.status_code >= 400:
+                    logger.warning(
+                        "cockpit escalation POST to %s returned %s: %s",
+                        endpoint,
+                        resp.status_code,
+                        resp.text[:200],
+                    )
         except Exception:
-            logger.exception("escalation handler raised for blacklist")
-
-    return f"contact blacklisted: {resolved}"
-
-
-# ── Inspection helpers ───────────────────────────────────────────────
-
-
-async def list_escalations() -> list[Escalation]:
-    """Return all escalation events recorded by the current store."""
-    return await DYN.store.list_all()
-
-
-async def get_active_escalations() -> list[Escalation]:
-    """Return unresolved escalation events."""
-    return await DYN.store.list_active()
-
-
-async def list_escalations_for_chat(chat_id: str) -> list[Escalation]:
-    """Return escalation events for a specific chat."""
-    return await DYN.store.list_for_chat(chat_id)
-
-
-async def list_escalations_for_user(owner_slug: str) -> list[Escalation]:
-    """Return escalation events owned by ``owner_slug`` (cockpit dashboard)."""
-    return await DYN.store.list_for_user(owner_slug)
-
-
-async def resolve_escalation(
-    esc_id: str,
-    *,
-    resolved_by: str | None = None,
-    owner_slug: str | None = None,
-) -> bool:
-    """Mark an escalation as resolved. Returns True if found, unresolved, and owned.
-
-    When ``owner_slug`` is provided, an escalation whose ``user_id`` differs
-    (including empty/unowned) is refused. The bearer-authed API routes omit
-    ``owner_slug`` so they can still resolve any escalation.
-    """
-    return await DYN.store.resolve(esc_id, resolved_by=resolved_by, owner_slug=owner_slug)
-
-
-async def clear_escalations() -> None:
-    """Remove all escalation events. Used for testing."""
-    await DYN.store.clear()
-
-
-def active_escalation_count() -> int:
-    """Sync count of unresolved escalations in the current store.
-
-    Registered as a Jinja global by the cockpit so the sidebar badge renders
-    on every page without an async call (see ``EscalationStore.active_count``).
-    """
-    return DYN.store.active_count()
-
-
-async def forward_to_cockpit(escalation: Escalation) -> None:
-    """POST an escalation to the cockpit's ``/api/escalations`` webhook.
-
-    Called from ``BaseBot.on_escalation`` so every bot forwards the same way.
-    Best-effort: the escalation is already persisted locally before this runs,
-    so a cockpit that's down (or ``cockpit_url`` unset) just means the cockpit
-    dashboard won't show it — the bot's own store still has it. Never raises.
-    """
-    url = DYN.cockpit_url
-    if not url:
-        return
-    endpoint = f"{url}/api/escalations"
-    headers: dict[str, str] = {}
-    secret = DYN.cockpit_escalation_secret
-    if secret:
-        headers["Authorization"] = f"Bearer {secret}"
-    try:
-        import httpx
-
-        async with httpx.AsyncClient(timeout=5.0) as client:
-            resp = await client.post(endpoint, json=escalation.to_dict(), headers=headers)
-            if resp.status_code == 401:
-                logger.warning("cockpit escalation POST rejected (bad secret): %s", endpoint)
-            elif resp.status_code >= 400:
-                logger.warning(
-                    "cockpit escalation POST to %s returned %s: %s",
-                    endpoint,
-                    resp.status_code,
-                    resp.text[:200],
-                )
-    except Exception:
-        logger.debug("cockpit escalation POST to %s failed", endpoint, exc_info=True)
+            logger.debug("cockpit escalation POST to %s failed", endpoint, exc_info=True)

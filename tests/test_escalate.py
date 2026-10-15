@@ -1,17 +1,19 @@
 """Tests for the escalate and blacklist tools.
 
-These tools are default tools registered in get_tools() and rely on
-module-level DYN state set by Bot.configure(). The tests verify:
+The tools are bound methods of :class:`EscalationState` registered in
+``get_tools()``; each bot wires its own state in ``Bot.configure()``. The
+tests verify:
 - escalate() persists (via EscalationStore) and fires callback
-- blacklist() modifies the bot's blacklist
+- add_to_blacklist() modifies the bot's blacklist
 - resolve_chat_id() works with explicit ID, ToolContext, and no context
-- list_escalations() and get_active_escalations() filter correctly
-- resolve_escalation() marks escalations as resolved
+- store listing/resolve helpers filter correctly
 - EscalationStore persists to disk and reloads
 - Tools are included in get_tools()
+- cockpit forwarding (including the bad-secret 401 warning)
 """
 
 from datetime import UTC, datetime
+from pathlib import Path
 
 import httpx
 import pytest
@@ -19,53 +21,24 @@ import respx
 
 from kai.agent.context import ToolContext
 from kai.agent.tools import get_tools
-from kai.agent.tools.escalate import (
-    DYN,
-    Escalation,
-    EscalationStore,
-    active_escalation_count,
-    blacklist,
-    clear_escalations,
-    escalate,
-    forward_to_cockpit,
-    get_active_escalations,
-    list_escalations,
-    resolve_escalation,
-    set_blacklist,
-    set_cockpit_url,
-    set_escalation_handler,
-    set_escalation_secret,
-    set_tool_context,
-)
+from kai.agent.tools.escalate import Escalation, EscalationState, EscalationStore
 
 
-# Reset module state before each test (setup, not just teardown) so a
-# file-based store left by another test file in the same xdist worker
-# (e.g. cockpit tests calling create_app() → set_escalation_store(path))
-# doesn't leak stale escalations into these tests.
-@pytest.fixture(autouse=True)
-def _reset_state():
-    _reset_dyn_state()
-    yield
-    _reset_dyn_state()
-
-
-def _reset_dyn_state() -> None:
-    """Reset all module-level DYN attributes to their defaults."""
-    DYN.on_escalation = None
-    DYN.blacklist = None
-    DYN.tool_context = None
-    DYN.cockpit_url = ""
-    DYN.cockpit_escalation_secret = ""
-    DYN.store = EscalationStore(None)
+def make_state(
+    chat_id: str | None = None,
+    **kwargs,
+) -> EscalationState:
+    """A fresh escalation state, optionally bound to a chat context."""
+    ctx = ToolContext(chat_id=chat_id) if chat_id is not None else None
+    return EscalationState(tool_context=ctx, **kwargs)
 
 
 class TestEscalate:
     @pytest.mark.asyncio
     async def test_records_escalation(self):
-        set_tool_context(ToolContext(chat_id="chat-1"))
-        result = await escalate("Customer wants a human", severity="high")
-        escalations = await list_escalations()
+        state = make_state(chat_id="chat-1")
+        result = await state.escalate("Customer wants a human", severity="high")
+        escalations = await state.store.list_all()
         assert len(escalations) == 1
         esc = escalations[0]
         assert esc.chat_id == "chat-1"
@@ -78,9 +51,9 @@ class TestEscalate:
 
     @pytest.mark.asyncio
     async def test_uses_default_severity(self):
-        set_tool_context(ToolContext(chat_id="chat-2"))
-        await escalate("Something happened")
-        esc = (await list_escalations())[0]
+        state = make_state(chat_id="chat-2")
+        await state.escalate("Something happened")
+        esc = (await state.store.list_all())[0]
         assert esc.severity == "medium"
 
     @pytest.mark.asyncio
@@ -90,9 +63,8 @@ class TestEscalate:
         async def handler(esc):
             received.append(esc)
 
-        set_escalation_handler(handler)
-        set_tool_context(ToolContext(chat_id="chat-3"))
-        await escalate("test escalation")
+        state = make_state(chat_id="chat-3", on_escalation=handler)
+        await state.escalate("test escalation")
         assert len(received) == 1
         assert received[0].chat_id == "chat-3"
 
@@ -101,58 +73,63 @@ class TestEscalate:
         async def bad_handler(esc):
             raise RuntimeError("bad handler")
 
-        set_escalation_handler(bad_handler)
-        set_tool_context(ToolContext(chat_id="chat-4"))
-        result = await escalate("still works")
+        state = make_state(chat_id="chat-4", on_escalation=bad_handler)
+        result = await state.escalate("still works")
         assert "still works" in result
 
     @pytest.mark.asyncio
     async def test_escalation_records_empty_chat_id_when_context_missing(self):
-        set_tool_context(ToolContext())
-        await escalate("no ctx")
-        esc = (await list_escalations())[0]
+        state = make_state()
+        await state.escalate("no ctx")
+        esc = (await state.store.list_all())[0]
         assert esc.chat_id == ""
 
     @pytest.mark.asyncio
     async def test_severity_critical(self):
-        set_tool_context(ToolContext(chat_id="chat-5"))
-        await escalate("Critical issue", severity="critical")
-        esc = (await list_escalations())[0]
+        state = make_state(chat_id="chat-5")
+        await state.escalate("Critical issue", severity="critical")
+        esc = (await state.store.list_all())[0]
         assert esc.severity == "critical"
 
     @pytest.mark.asyncio
     async def test_contains_summary(self):
-        set_tool_context(ToolContext(chat_id="chat-6"))
-        await escalate("test reason", severity="low", summary="test summary")
-        esc = (await list_escalations())[0]
+        state = make_state(chat_id="chat-6")
+        await state.escalate("test reason", severity="low", summary="test summary")
+        esc = (await state.store.list_all())[0]
         assert esc.summary == "test summary"
         assert esc.severity == "low"
 
     @pytest.mark.asyncio
     async def test_created_at_is_set(self):
-        set_tool_context(ToolContext(chat_id="chat-7"))
+        state = make_state(chat_id="chat-7")
         before = datetime.now(UTC)
-        await escalate("test")
-        esc = (await list_escalations())[0]
+        await state.escalate("test")
+        esc = (await state.store.list_all())[0]
         after = datetime.now(UTC)
         assert before <= esc.created_at <= after
 
     @pytest.mark.asyncio
     async def test_id_is_unique(self):
-        set_tool_context(ToolContext(chat_id="chat-8"))
-        await escalate("first")
-        await escalate("second")
-        escs = await list_escalations()
+        state = make_state(chat_id="chat-8")
+        await state.escalate("first")
+        await state.escalate("second")
+        escs = await state.store.list_all()
         assert escs[0].id != escs[1].id
+
+    @pytest.mark.asyncio
+    async def test_owner_slug_stamped_on_escalations(self):
+        state = make_state(chat_id="chat-9", owner_slug="david")
+        await state.escalate("owned")
+        esc = (await state.store.list_all())[0]
+        assert esc.user_id == "david"
 
 
 class TestBlacklistContact:
     @pytest.mark.asyncio
     async def test_adds_contact_to_blacklist(self):
         bl = ["existing@example.com"]
-        set_blacklist(bl)
-        set_tool_context(ToolContext(chat_id="new@example.com"))
-        result = await blacklist()
+        state = make_state(chat_id="new@example.com", blacklist=bl)
+        result = await state.add_to_blacklist()
         assert "new@example.com" in bl
         assert "blacklisted" in result
         assert "new@example.com" in result
@@ -160,57 +137,51 @@ class TestBlacklistContact:
     @pytest.mark.asyncio
     async def test_explicit_contact_id(self):
         bl = []
-        set_blacklist(bl)
-        result = await blacklist("someone@example.com")
+        state = make_state(blacklist=bl)
+        result = await state.add_to_blacklist("someone@example.com")
         assert "someone@example.com" in bl
         assert "someone@example.com" in result
 
     @pytest.mark.asyncio
     async def test_no_duplicate_blacklist_entry(self):
         bl = ["duplicated@example.com"]
-        set_blacklist(bl)
-        set_tool_context(ToolContext(chat_id="duplicated@example.com"))
-        await blacklist()
+        state = make_state(chat_id="duplicated@example.com", blacklist=bl)
+        await state.add_to_blacklist()
         assert bl.count("duplicated@example.com") == 1
 
     @pytest.mark.asyncio
     async def test_error_when_no_blacklist(self):
-        result = await blacklist("test@example.com")
+        state = make_state()
+        result = await state.add_to_blacklist("test@example.com")
         assert "Error" in result
         assert "not configured" in result
 
     @pytest.mark.asyncio
     async def test_error_when_no_chat_id(self):
-        bl = []
-        set_blacklist(bl)
-        set_tool_context(ToolContext())
-        result = await blacklist()
+        state = make_state(blacklist=[])
+        result = await state.add_to_blacklist()
         assert "Error" in result
 
     @pytest.mark.asyncio
     async def test_falls_back_to_tool_context(self):
         bl = []
-        set_blacklist(bl)
-        set_tool_context(ToolContext(chat_id="ctx-chat"))
-        await blacklist()
+        state = make_state(chat_id="ctx-chat", blacklist=bl)
+        await state.add_to_blacklist()
         assert "ctx-chat" in bl
 
     @pytest.mark.asyncio
     async def test_blacklist_persists_across_calls(self):
         bl = ["alpha@example.com"]
-        set_blacklist(bl)
-        set_tool_context(ToolContext(chat_id="beta@example.com"))
-        await blacklist()
+        state = make_state(chat_id="beta@example.com", blacklist=bl)
+        await state.add_to_blacklist()
         assert "alpha@example.com" in bl
         assert "beta@example.com" in bl
 
     @pytest.mark.asyncio
     async def test_blacklist_creates_escalation_record(self):
-        bl = []
-        set_blacklist(bl)
-        set_tool_context(ToolContext(chat_id="spammer@example.com"))
-        await blacklist()
-        escs = await list_escalations()
+        state = make_state(chat_id="spammer@example.com", blacklist=[])
+        await state.add_to_blacklist()
+        escs = await state.store.list_all()
         blacklist_esc = [e for e in escs if "blacklisted" in e.reason]
         assert len(blacklist_esc) == 1
         assert blacklist_esc[0].chat_id == "spammer@example.com"
@@ -222,119 +193,99 @@ class TestBlacklistContact:
         async def handler(esc):
             received.append(esc)
 
-        set_escalation_handler(handler)
-        bl = []
-        set_blacklist(bl)
-        set_tool_context(ToolContext(chat_id="handler-test@example.com"))
-        await blacklist()
+        state = make_state(
+            chat_id="handler-test@example.com",
+            blacklist=[],
+            on_escalation=handler,
+        )
+        await state.add_to_blacklist()
         assert len(received) == 1
         assert received[0].chat_id == "handler-test@example.com"
         assert "blacklisted" in received[0].reason
 
 
 class TestResolveChatId:
-    @pytest.mark.asyncio
-    async def test_tool_context_provides_chat_id(self):
-        set_tool_context(ToolContext(chat_id="from-context"))
-        set_blacklist([])
-        await blacklist()
-        escs = await list_escalations()
-        assert any(e.chat_id == "from-context" for e in escs)
+    def test_explicit_override_wins(self):
+        state = make_state(chat_id="from-context")
+        assert state.resolve_chat_id("explicit") == "explicit"
+
+    def test_tool_context_provides_chat_id(self):
+        state = make_state(chat_id="from-context")
+        assert state.resolve_chat_id() == "from-context"
+
+    def test_empty_when_no_context(self):
+        assert EscalationState().resolve_chat_id() == ""
 
     @pytest.mark.asyncio
     async def test_explicit_contact_id_refused_when_not_current_chat(self):
         # Prompt-injection guard: an explicit contact_id that doesn't match the
         # current chat is refused — the model can only blacklist the contact
         # it's currently talking to.
-        set_tool_context(ToolContext(chat_id="from-context"))
-        set_blacklist([])
-        result = await blacklist("explicit-contact")
+        state = make_state(chat_id="from-context", blacklist=[])
+        result = await state.add_to_blacklist("explicit-contact")
         assert "Error" in result
         assert "from-context" in result
-        escs = await list_escalations()
-        assert not any(e.chat_id == "explicit-contact" for e in escs)
+        assert not any(e.chat_id == "explicit-contact" for e in await state.store.list_all())
 
     @pytest.mark.asyncio
     async def test_explicit_contact_id_matching_current_chat_allowed(self):
         # An explicit contact_id that matches the current chat is redundant
         # but allowed.
-        set_tool_context(ToolContext(chat_id="same@example.com"))
-        bl = []
-        set_blacklist(bl)
-        result = await blacklist("same@example.com")
-        assert "same@example.com" in bl
+        state = make_state(chat_id="same@example.com", blacklist=[])
+        result = await state.add_to_blacklist("same@example.com")
+        assert state.blacklist is not None
+        assert "same@example.com" in state.blacklist
         assert "blacklisted" in result
 
 
-class TestInspectionHelpers:
+class TestEscalationStoreQueries:
     @pytest.mark.asyncio
-    async def test_list_escalations_empty_initially(self):
-        assert await list_escalations() == []
+    async def test_list_all_empty_initially(self):
+        assert await EscalationState().store.list_all() == []
 
     @pytest.mark.asyncio
-    async def test_get_active_escalations_empty_initially(self):
-        assert await get_active_escalations() == []
+    async def test_list_active_empty_initially(self):
+        assert await EscalationState().store.list_active() == []
 
     @pytest.mark.asyncio
     async def test_resolve_nonexistent_escalation(self):
-        assert await resolve_escalation("nonexistent") is False
+        assert await EscalationState().store.resolve("nonexistent") is False
 
     @pytest.mark.asyncio
     async def test_resolve_escalation_marks_as_resolved(self):
-        set_tool_context(ToolContext(chat_id="test-chat"))
-        await escalate("test reason")
-        escalations = await list_escalations()
+        state = make_state(chat_id="test-chat")
+        await state.escalate("test reason")
+        escalations = await state.store.list_all()
         assert len(escalations) == 1
         esc_id = escalations[0].id
-        assert await resolve_escalation(esc_id) is True
-        resolved_esc = (await list_escalations())[0]
+        assert await state.store.resolve(esc_id) is True
+        resolved_esc = (await state.store.list_all())[0]
         assert resolved_esc.resolved is True
         assert resolved_esc.resolved_at is not None
-        active = await get_active_escalations()
-        assert len(active) == 0
-        assert await resolve_escalation(esc_id) is False
+        assert len(await state.store.list_active()) == 0
+        assert await state.store.resolve(esc_id) is False
 
     @pytest.mark.asyncio
     async def test_resolve_escalation_records_resolved_by(self):
-        set_tool_context(ToolContext(chat_id="test-chat"))
-        await escalate("test reason")
-        esc_id = (await list_escalations())[0].id
-        assert await resolve_escalation(esc_id, resolved_by="operator@example.com") is True
-        resolved_esc = (await list_escalations())[0]
+        state = make_state(chat_id="test-chat")
+        await state.escalate("test reason")
+        esc_id = (await state.store.list_all())[0].id
+        ok = await state.store.resolve(esc_id, resolved_by="operator@example.com")
+        assert ok is True
+        resolved_esc = (await state.store.list_all())[0]
         assert resolved_esc.resolved_by == "operator@example.com"
 
     @pytest.mark.asyncio
-    async def test_clear_escalations_resets_all(self):
-        set_tool_context(ToolContext(chat_id="test"))
-        await escalate("one")
-        await escalate("two")
-        assert len(await list_escalations()) == 2
-        await clear_escalations()
-        assert len(await list_escalations()) == 0
-
-    @pytest.mark.asyncio
     async def test_active_vs_all_escalations(self):
-        set_tool_context(ToolContext(chat_id="test"))
-        await escalate("unresolved 1")
-        await escalate("unresolved 2")
-        await escalate("resolved one")
-        escs = await list_escalations()
+        state = make_state(chat_id="test")
+        await state.escalate("unresolved 1")
+        await state.escalate("unresolved 2")
+        await state.escalate("resolved one")
+        escs = await state.store.list_all()
         assert len(escs) == 3
-        await resolve_escalation(escs[2].id)
-        assert len(await list_escalations()) == 3
-        assert len(await get_active_escalations()) == 2
-
-    @pytest.mark.asyncio
-    async def test_resolve_sets_resolved_at_and_preserves_resolved(self):
-        set_tool_context(ToolContext(chat_id="test"))
-        await escalate("test")
-        esc = (await list_escalations())[0]
-        assert esc.resolved_at is None
-        assert esc.resolved_by is None
-        await resolve_escalation(esc.id)
-        resolved_esc = (await list_escalations())[0]
-        assert resolved_esc.resolved_at is not None
-        assert resolved_esc.resolved is True
+        await state.store.resolve(escs[2].id)
+        assert len(await state.store.list_all()) == 3
+        assert len(await state.store.list_active()) == 2
 
 
 class TestEscalationStorePersistence:
@@ -374,13 +325,12 @@ class TestEscalationStorePersistence:
         assert escs[0].resolved_by == "ops@example.com"
 
     @pytest.mark.asyncio
-    async def test_list_for_chat_filters(self, tmp_path):
+    async def test_list_for_user_excludes_unowned(self, tmp_path):
         store = EscalationStore(None)
-        await store.add(Escalation(id="esc-1", chat_id="chat-a", reason="a"))
+        await store.add(Escalation(id="esc-1", chat_id="chat-a", reason="a", user_id="david"))
         await store.add(Escalation(id="esc-2", chat_id="chat-b", reason="b"))
-        escs = await store.list_for_chat("chat-a")
-        assert len(escs) == 1
-        assert escs[0].id == "esc-1"
+        escs = await store.list_for_user("david")
+        assert [e.id for e in escs] == ["esc-1"]
 
     @pytest.mark.asyncio
     async def test_missing_file_starts_empty(self, tmp_path):
@@ -398,17 +348,17 @@ class TestEscalationStorePersistence:
 
 class TestDefaultToolsIncludeNewTools:
     def test_escalate_in_default_tools(self):
-        tools = get_tools()
+        tools = get_tools(EscalationState())
         names = [t.metadata.name for t in tools]
         assert "escalate" in names, "escalate should be in default tools"
 
     def test_blacklist_in_default_tools(self):
-        tools = get_tools()
+        tools = get_tools(EscalationState())
         names = [t.metadata.name for t in tools]
         assert "blacklist" in names, "blacklist must be in default tools"
 
     def test_original_default_tools_still_present(self):
-        tools = get_tools()
+        tools = get_tools(EscalationState())
         names = [t.metadata.name for t in tools]
         for expected in (
             "web_search",
@@ -420,41 +370,42 @@ class TestDefaultToolsIncludeNewTools:
             assert expected in names, f"{expected} should still be in default tools"
 
     def test_tool_count_includes_new_tools(self):
-        tools = get_tools()
+        tools = get_tools(EscalationState())
         # 5 original + escalate + blacklist = 7
         assert len(tools) == 7, f"Expected 7 tools, got {len(tools)}"
 
 
-class TestSetCockpitUrl:
+class TestCockpitUrlNormalization:
     def test_empty_url_disables_forwarding(self):
-        set_cockpit_url("")
-        assert DYN.cockpit_url == ""
+        assert EscalationState(cockpit_url="").cockpit_url == ""
 
     def test_strips_trailing_slash(self):
-        set_cockpit_url("http://cockpit:8080/")
-        assert DYN.cockpit_url == "http://cockpit:8080"
+        assert EscalationState(cockpit_url="http://cockpit:8080/").cockpit_url == (
+            "http://cockpit:8080"
+        )
 
     def test_keeps_url_without_trailing_slash(self):
-        set_cockpit_url("http://cockpit:8080")
-        assert DYN.cockpit_url == "http://cockpit:8080"
+        assert EscalationState(cockpit_url="http://cockpit:8080").cockpit_url == (
+            "http://cockpit:8080"
+        )
 
 
 class TestForwardToCockpit:
     @respx.mock
     @pytest.mark.asyncio
     async def test_noop_when_cockpit_url_empty(self):
-        set_cockpit_url("")
+        state = EscalationState(cockpit_url="")
         route = respx.post("http://cockpit:8080/api/escalations")
         esc = Escalation(id="esc-1", chat_id="c", reason="test")
 
-        await forward_to_cockpit(esc)
+        await state.forward_to_cockpit(esc)
 
         assert not route.called
 
     @respx.mock
     @pytest.mark.asyncio
     async def test_posts_escalation_to_cockpit(self):
-        set_cockpit_url("http://cockpit:8080")
+        state = EscalationState(cockpit_url="http://cockpit:8080")
         route = respx.post("http://cockpit:8080/api/escalations").mock(
             return_value=httpx.Response(201, json={"ok": True})
         )
@@ -465,7 +416,7 @@ class TestForwardToCockpit:
             severity="high",
             summary="context",
         )
-        await forward_to_cockpit(esc)
+        await state.forward_to_cockpit(esc)
         assert route.called
         import json
 
@@ -477,75 +428,73 @@ class TestForwardToCockpit:
     @respx.mock
     @pytest.mark.asyncio
     async def test_does_not_raise_on_http_error(self):
-        set_cockpit_url("http://cockpit:8080")
+        state = EscalationState(cockpit_url="http://cockpit:8080")
         route = respx.post("http://cockpit:8080/api/escalations").mock(
             side_effect=httpx.ConnectError("connection refused")
         )
         esc = Escalation(id="esc-1", chat_id="c", reason="test")
 
-        await forward_to_cockpit(esc)
+        await state.forward_to_cockpit(esc)
 
         assert route.called
 
     @respx.mock
     @pytest.mark.asyncio
     async def test_does_not_raise_on_4xx_response(self):
-        set_cockpit_url("http://cockpit:8080")
+        state = EscalationState(cockpit_url="http://cockpit:8080")
         route = respx.post("http://cockpit:8080/api/escalations").mock(
             return_value=httpx.Response(400, text="bad request")
         )
         esc = Escalation(id="esc-1", chat_id="c", reason="test")
 
-        await forward_to_cockpit(esc)
+        await state.forward_to_cockpit(esc)
 
         assert route.called
 
     @respx.mock
     @pytest.mark.asyncio
+    async def test_logs_warning_on_401(self, caplog):
+        state = EscalationState(
+            cockpit_url="http://cockpit:8080", cockpit_escalation_secret="s3cret"
+        )
+        respx.post("http://cockpit:8080/api/escalations").mock(
+            return_value=httpx.Response(401, text="unauthorized")
+        )
+        esc = Escalation(id="esc-1", chat_id="c", reason="test")
+        with caplog.at_level("WARNING", logger="kai.agent.tools.escalate"):
+            await state.forward_to_cockpit(esc)
+        assert any("bad secret" in r.message for r in caplog.records)
+
+    @respx.mock
+    @pytest.mark.asyncio
     async def test_sends_bearer_token_when_secret_set(self):
-        set_cockpit_url("http://cockpit:8080")
-        set_escalation_secret("s3cret")
+        state = EscalationState(
+            cockpit_url="http://cockpit:8080", cockpit_escalation_secret="s3cret"
+        )
         route = respx.post("http://cockpit:8080/api/escalations").mock(
             return_value=httpx.Response(201, json={"ok": True})
         )
         esc = Escalation(id="esc-1", chat_id="c", reason="test")
-        await forward_to_cockpit(esc)
+        await state.forward_to_cockpit(esc)
         assert route.called
         assert route.calls.last.request.headers["Authorization"] == "Bearer s3cret"
 
     @respx.mock
     @pytest.mark.asyncio
     async def test_no_auth_header_when_secret_unset(self):
-        set_cockpit_url("http://cockpit:8080")
-        # _reset_state sets DYN.cockpit_escalation_secret = "" (verify below)
+        state = EscalationState(cockpit_url="http://cockpit:8080")
         route = respx.post("http://cockpit:8080/api/escalations").mock(
             return_value=httpx.Response(201, json={"ok": True})
         )
         esc = Escalation(id="esc-1", chat_id="c", reason="test")
-        await forward_to_cockpit(esc)
+        await state.forward_to_cockpit(esc)
         assert route.called
         assert "Authorization" not in route.calls.last.request.headers
-
-    @respx.mock
-    @pytest.mark.asyncio
-    async def test_401_response_is_handled_without_raising(self):
-        set_cockpit_url("http://cockpit:8080")
-        set_escalation_secret("s3cret")
-        route = respx.post("http://cockpit:8080/api/escalations").mock(
-            return_value=httpx.Response(401, text="unauthorized")
-        )
-        esc = Escalation(id="esc-1", chat_id="c", reason="test")
-
-        await forward_to_cockpit(esc)
-
-        assert route.called
-        assert b"esc-1" in route.calls.last.request.content
 
 
 class TestActiveCount:
     def test_active_count_zero_initially(self):
-        store = EscalationStore(None)
-        assert store.active_count() == 0
+        assert EscalationState().store.active_count() == 0
 
     @pytest.mark.asyncio
     async def test_active_count_counts_unresolved(self):
@@ -562,39 +511,26 @@ class TestActiveCount:
         await store.resolve("e1")
         assert store.active_count() == 1
 
-    def test_active_escalation_count_reads_current_store(self):
-        # Module-level helper reads DYN.store (the default in-memory store
-        # from the _reset_state fixture).
-        assert active_escalation_count() == 0
-
 
 class TestBaseBotOnEscalation:
-    """The default BaseBot.on_escalation logs and forwards to the cockpit."""
+    """The default BaseBot.on_escalation logs and forwards via its state."""
 
     @pytest.mark.asyncio
-    async def test_forwards_to_cockpit(self, monkeypatch):
-        from pathlib import Path
-
+    async def test_forwards_to_cockpit(self):
         from kai.bots.base import BaseBot
-
-        forwarded: list = []
-        # forward_to_cockpit is imported at module level into base.py, so
-        # patch it there (where on_escalation looks it up).
-        monkeypatch.setattr(
-            "kai.bots.base.forward_to_cockpit",
-            lambda esc: (forwarded.append(esc), _async_noop())[-1],
-        )
 
         class _ConcreteBot(BaseBot):
             async def run(self) -> None:
                 pass
 
         bot = _ConcreteBot(Path("/tmp"))
+        forwarded: list = []
+
+        async def fake_forward(esc):
+            forwarded.append(esc)
+
+        bot.escalations.forward_to_cockpit = fake_forward  # type: ignore[method-assign]
         esc = Escalation(id="e1", chat_id="c", reason="r", severity="critical")
         await bot.on_escalation(esc)
         assert len(forwarded) == 1
         assert forwarded[0].id == "e1"
-
-
-async def _async_noop() -> None:
-    return None

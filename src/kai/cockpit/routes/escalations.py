@@ -19,14 +19,7 @@ from fastapi.responses import JSONResponse, RedirectResponse
 from pydantic import ValidationError
 from sqlalchemy.orm import Session
 
-from kai.agent.tools.escalate import (
-    Escalation,
-    EscalationStore,
-    get_active_escalations,
-    list_escalations,
-    list_escalations_for_user,
-    resolve_escalation,
-)
+from kai.agent.tools.escalate import Escalation, EscalationState
 from kai.cockpit.app import templates
 from kai.cockpit.auth import require_user
 from kai.cockpit.db import get_db
@@ -34,6 +27,11 @@ from kai.cockpit.models import User
 from kai.cockpit.settings import get_cockpit_settings
 
 router = APIRouter()
+
+
+def escalation_state(request: Request) -> EscalationState:
+    """The cockpit's escalation state created by ``create_app``."""
+    return request.app.state.escalations
 
 
 def check_escalation_secret(request: Request) -> JSONResponse | None:
@@ -56,7 +54,7 @@ def check_escalation_secret(request: Request) -> JSONResponse | None:
 @router.get("/escalations")
 async def dashboard(request: Request, user: User = Depends(require_user)):
     """Escalation dashboard: active escalations + resolved history (owner-scoped)."""
-    user_escs = await list_escalations_for_user(user.kai_slug)
+    user_escs = await escalation_state(request).store.list_for_user(user.kai_slug)
     active = [e for e in user_escs if not e.resolved]
     resolved = [e for e in user_escs if e.resolved]
     return templates.TemplateResponse(
@@ -67,25 +65,25 @@ async def dashboard(request: Request, user: User = Depends(require_user)):
 
 
 @router.get("/api/escalations")
-async def list_all() -> dict:
+async def list_all(request: Request) -> dict:
     """Return all escalation events (JSON).
 
     Bearer-authed ingestion endpoint — intentionally returns every escalation
     regardless of owner. Per-user scoping is enforced by the dashboard and
     resolve routes; this route is for the bot→cockpit webhook surface.
     """
-    escalations = await list_escalations()
+    escalations = await escalation_state(request).store.list_all()
     return {"escalations": [e.model_dump(mode="json") for e in escalations]}
 
 
 @router.get("/api/escalations/active")
-async def list_active() -> dict:
+async def list_active(request: Request) -> dict:
     """Return active (unresolved) escalation events (JSON).
 
     Bearer-authed ingestion endpoint — see ``list_all`` for the no-scoping
     rationale.
     """
-    active = await get_active_escalations()
+    active = await escalation_state(request).store.list_active()
     return {
         "escalations": [e.model_dump(mode="json") for e in active],
         "count": len(active),
@@ -119,7 +117,7 @@ async def ingest(request: Request) -> JSONResponse:
         escalation = Escalation.model_validate(payload)
     except (ValidationError, ValueError, TypeError) as exc:
         return JSONResponse({"ok": False, "error": f"invalid escalation: {exc}"}, status_code=400)
-    store: EscalationStore = escalation_store()
+    store = escalation_state(request).store
     await store.add(escalation)
     return JSONResponse({"ok": True, "escalation": escalation.to_dict()}, status_code=201)
 
@@ -127,6 +125,7 @@ async def ingest(request: Request) -> JSONResponse:
 @router.post("/escalations/{esc_id}/resolve")
 async def resolve(
     esc_id: str,
+    request: Request,
     user: User = Depends(require_user),
     db: Session = Depends(get_db),
 ):
@@ -135,7 +134,9 @@ async def resolve(
     Owner-scoped: refuses to resolve an escalation whose ``user_id`` is set
     to a different slug.
     """
-    ok = await resolve_escalation(esc_id, resolved_by=user.email, owner_slug=user.kai_slug)
+    ok = await escalation_state(request).store.resolve(
+        esc_id, resolved_by=user.email, owner_slug=user.kai_slug
+    )
     if not ok:
         return RedirectResponse(url="/escalations", status_code=303)
     return RedirectResponse(url="/escalations", status_code=303)
@@ -144,6 +145,7 @@ async def resolve(
 @router.post("/api/escalations/{esc_id}/resolve")
 async def resolve_api(
     esc_id: str,
+    request: Request,
     user: User = Depends(require_user),
     db: Session = Depends(get_db),
 ) -> dict:
@@ -152,14 +154,9 @@ async def resolve_api(
     Owner-scoped: refuses to resolve an escalation whose ``user_id`` is set
     to a different slug.
     """
-    ok = await resolve_escalation(esc_id, resolved_by=user.email, owner_slug=user.kai_slug)
+    ok = await escalation_state(request).store.resolve(
+        esc_id, resolved_by=user.email, owner_slug=user.kai_slug
+    )
     if not ok:
         return {"ok": False, "error": f"escalation {esc_id} not found or already resolved"}
     return {"ok": True, "escalation": esc_id}
-
-
-def escalation_store() -> EscalationStore:
-    """Return the cockpit's escalation store set up by ``create_app``."""
-    from kai.agent.tools.escalate import DYN
-
-    return DYN.store

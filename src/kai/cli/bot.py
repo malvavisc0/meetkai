@@ -317,7 +317,12 @@ def start_bot(
     if user:
         bot.instance = instance_id
 
-    agent = KaiAgent(settings=settings, goal_manager=GoalManager(), namespace=instance_id)
+    agent = KaiAgent(
+        settings=settings,
+        goal_manager=GoalManager(),
+        namespace=instance_id,
+        escalations=bot.escalations,
+    )
     if goal_text:
         agent.goal_manager.set_goal(goal_text)
 

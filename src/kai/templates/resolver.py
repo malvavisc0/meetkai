@@ -4,12 +4,13 @@ from dataclasses import dataclass, field
 from pydantic import BaseModel
 
 from kai.agent.tools import get_tools
+from kai.agent.tools.escalate import EscalationState
 from kai.templates.schema import TemplateDef
 
 logger = logging.getLogger(__name__)
 
 DEFAULT_TOOL_NAMES: frozenset[str] = frozenset(
-    tool.metadata.name for tool in get_tools() if tool.metadata.name
+    tool.metadata.name for tool in get_tools(EscalationState()) if tool.metadata.name
 )
 
 # Non-disableable defaults: safety tools that must stay available on every

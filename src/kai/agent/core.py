@@ -15,13 +15,14 @@ from llama_index.core.base.llms.types import ImageBlock, TextBlock, VideoBlock
 from llama_index.core.llms import ChatMessage, MessageRole
 from llama_index.core.tools import FunctionTool
 from llama_index.core.types import PydanticProgramMode
-from llama_index.llms.openai import utils as _openai_utils
+from llama_index.llms.openai import utils as openai_utils
 from llama_index.llms.openai_like import OpenAILike
 from pydantic import BaseModel, ConfigDict, Field
 
 from kai.agent.context import MessageContext
 from kai.agent.goal import GoalManager
 from kai.agent.tools import get_tool_instructions, get_tools
+from kai.agent.tools.escalate import EscalationState
 from kai.config.settings import Settings, get_settings
 
 # Upper bound on tool-calling rounds per turn. Sized for the
@@ -40,12 +41,14 @@ logger = logging.getLogger(__name__)
 # to_openai_message_dict emit the verified ``video_url`` shape for VideoBlock,
 # delegating all other block types to the original implementation.
 
-_orig_to_openai_message_dict = _openai_utils.to_openai_message_dict
+original_to_openai_message_dict = openai_utils.to_openai_message_dict
 
 
 def to_openai_message_dict(message, drop_none=False, model=None, store=False):
     if not any(isinstance(b, VideoBlock) for b in message.blocks):
-        return _orig_to_openai_message_dict(message, drop_none=drop_none, model=model, store=store)
+        return original_to_openai_message_dict(
+            message, drop_none=drop_none, model=model, store=store
+        )
     content: list = []
     content_txt = ""
     for block in message.blocks:
@@ -68,7 +71,7 @@ def append_block_to_content(block, message, content, drop_none, model, store) ->
     if isinstance(block, VideoBlock):
         content.append({"type": "video_url", "video_url": {"url": video_url(block)}})
         return ""
-    single = _orig_to_openai_message_dict(
+    single = original_to_openai_message_dict(
         type(message)(
             role=message.role,
             blocks=[block],
@@ -96,7 +99,7 @@ def video_url(block: VideoBlock) -> str:
     return f"data:{mt};base64,{vid.decode() if isinstance(vid, bytes) else vid}"
 
 
-_openai_utils.to_openai_message_dict = to_openai_message_dict
+openai_utils.to_openai_message_dict = to_openai_message_dict
 
 # Invoked on every tool call so a caller (e.g. a bot) can render tool usage
 # live. Receives (tool_name, tool_kwargs, result); the result string may be
@@ -256,11 +259,6 @@ def repair_json(text: str) -> str | None:
     return candidate
 
 
-# Control (non-delivery) actions that base-class recovery must never
-# rewrite into a deliverable turn.
-CONTROL_ACTIONS: frozenset[str] = frozenset({"silent", "sleep", "console"})
-
-
 def action_values(output_cls: type[ActionResult]) -> frozenset[str]:
     """Extract the allowed ``action`` enum values from a bot's ``output_cls``."""
     try:
@@ -280,6 +278,7 @@ class KaiAgent:
         settings: Settings | None = None,
         goal_manager: GoalManager | None = None,
         namespace: str | None = None,
+        escalations: EscalationState | None = None,
     ) -> None:
         self.settings = settings or get_settings()
         self.goal_manager = goal_manager or GoalManager()
@@ -293,7 +292,10 @@ class KaiAgent:
         self._max_history_chars: int = self.settings.agent_max_history_chars
         self._max_conversations: int = self.settings.agent_max_conversations
         self._save_lock: asyncio.Lock = asyncio.Lock()
-        self._tools = get_tools()
+        # Escalation wiring shared with the owning bot (see BaseBot). A bare
+        # agent (no bot, e.g. tests/scripts) gets a fresh in-memory state.
+        self.escalations = escalations or EscalationState()
+        self._tools = get_tools(self.escalations)
         self._tools_by_name = {tool.metadata.name: tool for tool in self._tools}
         self._tool_workflows: list[str] = []
         self._tool_instructions = get_tool_instructions(self._tools)
@@ -355,14 +357,6 @@ class KaiAgent:
             self._tools, workflow_preamble=self.tool_workflow
         )
 
-    def override_tool(self, name: str, tool: FunctionTool) -> None:
-        """Resolve ``name`` to ``tool`` without changing the registered tool list.
-
-        Injection seam for tests and extensions that need to swap a tool's
-        implementation while keeping ``get_tools()`` intact.
-        """
-        self._tools_by_name[name] = tool
-
     def clear_tools(self) -> None:
         """Drop all registered tools (defaults + bot-added).
 
@@ -391,13 +385,6 @@ class KaiAgent:
             self._tools, workflow_preamble=self.tool_workflow
         )
 
-    def clear_tool_workflows(self) -> None:
-        """Drop all previously added tool-workflow blocks."""
-        self._tool_workflows = []
-        self._tool_instructions = get_tool_instructions(
-            self._tools, workflow_preamble=self.tool_workflow
-        )
-
     @property
     def tool_workflow(self) -> str | None:
         """The combined workflow preamble from all added blocks, or ``None``."""
@@ -407,16 +394,6 @@ class KaiAgent:
 
     def get_tools(self) -> list:
         return list(self._tools)
-
-    @property
-    def tools_by_name(self) -> dict[str | None, FunctionTool]:
-        """Registered tools keyed by name (copy of the internal index)."""
-        return dict(self._tools_by_name)
-
-    @property
-    def tool_instructions(self) -> str:
-        """Combined instructions for the currently registered tools."""
-        return self._tool_instructions
 
     @property
     def timezone(self) -> str | None:

@@ -9,7 +9,8 @@ import respx
 from httpx import Response
 from llama_index.core.base.llms.types import TextBlock, VideoBlock
 from llama_index.core.llms import ChatMessage, ChatResponse, MessageRole
-from llama_index.llms.openai import utils as _openai_utils
+from llama_index.core.tools import FunctionTool
+from llama_index.llms.openai import utils as openai_utils
 from llama_index.llms.openai_like import OpenAILike
 
 from kai.agent.context import MessageContext
@@ -532,7 +533,6 @@ class TestKaiAgentContext:
         agent = KaiAgent(settings=None, goal_manager=GoalManager())
         ctx = MessageContext(
             sender_name="Juan Palotes",
-            sender_id="123456789012345@lid",
             conversation_id="123@g.us",
             multi_party=True,
         )
@@ -543,7 +543,6 @@ class TestKaiAgentContext:
         agent = KaiAgent(settings=None, goal_manager=GoalManager())
         ctx = MessageContext(
             sender_name="Juan Palotes",
-            sender_id="123456789012345@lid",
             conversation_id="123@g.us",
             multi_party=True,
             addressed_to_bot=True,
@@ -555,7 +554,6 @@ class TestKaiAgentContext:
         agent = KaiAgent(settings=None, goal_manager=GoalManager())
         ctx = MessageContext(
             sender_name="Lucerna",
-            sender_id="12345678901234@lid",
             conversation_id="12345678901234@lid",
             multi_party=False,
         )
@@ -592,7 +590,6 @@ class TestKaiAgentContext:
 
         ctx = MessageContext(
             sender_name="Lucerna",
-            sender_id="456@lid",
             conversation_id="456@lid",
             multi_party=False,
         )
@@ -621,6 +618,17 @@ class TestKaiAgentToolHistory:
         tc.tool_id = tool_id
         return tc
 
+    @staticmethod
+    def _stub_tool(name: str, result: object) -> FunctionTool:
+        """A tool registered under ``name`` returning ``result`` (or raising it)."""
+
+        async def fn(**kwargs):
+            if isinstance(result, Exception):
+                raise result
+            return result
+
+        return FunctionTool.from_defaults(fn=fn, name=name, description="stub")
+
     @pytest.mark.asyncio
     async def test_tool_calls_not_in_history(self, settings):
         agent = KaiAgent(settings=settings, goal_manager=GoalManager())
@@ -631,9 +639,9 @@ class TestKaiAgentToolHistory:
             message=ChatMessage(role=MessageRole.ASSISTANT, content="Here are the results")
         )
 
-        mock_tool = AsyncMock()
-        mock_tool.acall.return_value = MagicMock(content="[{'title': 'Result', 'url': 'http://x'}]")
-        agent.override_tool("web_search", mock_tool)
+        agent.register_tool(
+            self._stub_tool("web_search", "[{'title': 'Result', 'url': 'http://x'}]")
+        )
 
         mock_llm = MagicMock()
         mock_llm.achat_with_tools = AsyncMock(side_effect=[tool_response, final_response])
@@ -661,9 +669,7 @@ class TestKaiAgentToolHistory:
             message=ChatMessage(role=MessageRole.ASSISTANT, content="done")
         )
 
-        mock_tool = AsyncMock()
-        mock_tool.acall.return_value = MagicMock(content="result text")
-        agent.override_tool("web_search", mock_tool)
+        agent.register_tool(self._stub_tool("web_search", "result text"))
 
         mock_llm = MagicMock()
         mock_llm.achat_with_tools = AsyncMock(side_effect=[tool_response, final_response])
@@ -694,9 +700,7 @@ class TestKaiAgentToolHistory:
         final_response = ChatResponse(
             message=ChatMessage(role=MessageRole.ASSISTANT, content="done")
         )
-        mock_tool = AsyncMock()
-        mock_tool.acall.return_value = MagicMock(content="x")
-        agent.override_tool("web_search", mock_tool)
+        agent.register_tool(self._stub_tool("web_search", "x"))
         mock_llm = MagicMock()
         mock_llm.achat_with_tools = AsyncMock(side_effect=[tool_response, final_response])
         mock_llm.get_tool_calls_from_response = MagicMock(side_effect=[[tc], []])
@@ -715,9 +719,7 @@ class TestKaiAgentToolHistory:
         final_response = ChatResponse(
             message=ChatMessage(role=MessageRole.ASSISTANT, content="done")
         )
-        mock_tool = AsyncMock()
-        mock_tool.acall.return_value = MagicMock(content="x")
-        agent.override_tool("web_search", mock_tool)
+        agent.register_tool(self._stub_tool("web_search", "x"))
         mock_llm = MagicMock()
         mock_llm.achat_with_tools = AsyncMock(side_effect=[tool_response, final_response])
         mock_llm.get_tool_calls_from_response = MagicMock(side_effect=[[tc], []])
@@ -769,12 +771,8 @@ class TestKaiAgentToolHistory:
             message=ChatMessage(role=MessageRole.ASSISTANT, content="Combined answer")
         )
 
-        mock_tool_search = AsyncMock()
-        mock_tool_search.acall.return_value = MagicMock(content="[search results]")
-        mock_tool_fetch = AsyncMock()
-        mock_tool_fetch.acall.return_value = MagicMock(content="Page content")
-        agent.override_tool("web_search", mock_tool_search)
-        agent.override_tool("get_webpage_html", mock_tool_fetch)
+        agent.register_tool(self._stub_tool("web_search", "[search results]"))
+        agent.register_tool(self._stub_tool("get_webpage_html", "Page content"))
 
         mock_llm = MagicMock()
         mock_llm.achat_with_tools = AsyncMock(side_effect=[round1, round2, final])
@@ -798,9 +796,7 @@ class TestKaiAgentToolHistory:
         tc = self._make_tool_call()
         tool_response = ChatResponse(message=ChatMessage(role=MessageRole.ASSISTANT, content=None))
 
-        mock_tool = AsyncMock()
-        mock_tool.acall.return_value = MagicMock(content="result")
-        agent.override_tool("web_search", mock_tool)
+        agent.register_tool(self._stub_tool("web_search", "result"))
 
         mock_llm = MagicMock()
         mock_llm.achat_with_tools = AsyncMock(return_value=tool_response)
@@ -827,9 +823,7 @@ class TestKaiAgentToolHistory:
             message=ChatMessage(role=MessageRole.ASSISTANT, content="It's sunny")
         )
 
-        mock_tool = AsyncMock()
-        mock_tool.acall.return_value = MagicMock(content="Weather: 25°C, sunny")
-        agent.override_tool("web_search", mock_tool)
+        agent.register_tool(self._stub_tool("web_search", "Weather: 25°C, sunny"))
 
         mock_llm = MagicMock()
         mock_llm.achat_with_tools = AsyncMock(side_effect=[tool_response, final_response])
@@ -881,9 +875,7 @@ class TestKaiAgentToolHistory:
             message=ChatMessage(role=MessageRole.ASSISTANT, content="Had an issue")
         )
 
-        mock_tool = AsyncMock()
-        mock_tool.acall.side_effect = RuntimeError("Connection timeout")
-        agent.override_tool("web_search", mock_tool)
+        agent.register_tool(self._stub_tool("web_search", RuntimeError("Connection timeout")))
 
         mock_llm = MagicMock()
         mock_llm.achat_with_tools = AsyncMock(side_effect=[tool_response, final_response])
@@ -911,9 +903,7 @@ class TestKaiAgentToolHistory:
         final1 = ChatResponse(message=ChatMessage(role=MessageRole.ASSISTANT, content="answer one"))
         plain2 = ChatResponse(message=ChatMessage(role=MessageRole.ASSISTANT, content="answer two"))
 
-        mock_tool = AsyncMock()
-        mock_tool.acall.return_value = MagicMock(content="tool result")
-        agent.override_tool("web_search", mock_tool)
+        agent.register_tool(self._stub_tool("web_search", "tool result"))
 
         mock_llm = MagicMock()
         mock_llm.achat_with_tools = AsyncMock(side_effect=[tool_response, final1, plain2])
@@ -1050,31 +1040,31 @@ class TestAuditFixes:
 
         tool = FunctionTool.from_defaults(fn=custom_tool, name="custom_test")
         agent.register_tool(tool)
+        names = {t.metadata.name for t in agent.get_tools()}
         assert len(agent.get_tools()) == initial_count + 1
-        assert "custom_test" in agent.tools_by_name
+        assert "custom_test" in names
 
         agent.unregister_tool("custom_test")
+        names = {t.metadata.name for t in agent.get_tools()}
         assert len(agent.get_tools()) == initial_count
-        assert "custom_test" not in agent.tools_by_name
+        assert "custom_test" not in names
 
     def test_clear_tools_drops_defaults(self):
         agent = KaiAgent(settings=None, goal_manager=GoalManager())
         assert len(agent.get_tools()) > 0
         agent.clear_tools()
         assert agent.get_tools() == []
-        assert agent.tools_by_name == {}
-        assert agent.tool_instructions == ""
+        # No tool table is rendered into the prompt after clearing.
+        assert "# Tools" not in agent.get_system_prompt()
 
     def test_add_tool_workflow_appends_to_instructions(self):
         from kai.agent.tools import WEB_WORKFLOW_INSTRUCTIONS
 
         agent = KaiAgent(settings=None, goal_manager=GoalManager())
         # Default: clean slate, no chat-bot workflow baked in.
-        assert "fact-checking" not in agent.tool_instructions.lower()
+        assert "fact-checking" not in agent.get_system_prompt().lower()
         agent.add_tool_workflow(WEB_WORKFLOW_INSTRUCTIONS)
-        assert "fact-checking" in agent.tool_instructions
-        prompt = agent.get_system_prompt()
-        assert "fact-checking" in prompt
+        assert "fact-checking" in agent.get_system_prompt()
         # Turning it back off removes the workflow from the rendered prompt.
         agent.add_tool_workflow(None)
         assert "fact-checking" not in agent.get_system_prompt()
@@ -1091,9 +1081,10 @@ class TestAuditFixes:
         tool = FunctionTool.from_defaults(fn=docker_inspect, name="docker_inspect")
         agent.register_tool(tool)
         assert len(agent.get_tools()) == 1
-        # Only the registered tool appears in instructions; no web-search table rows.
-        assert "docker_inspect" in agent.tool_instructions
-        assert "web_search" not in agent.tool_instructions
+        # Only the registered tool appears in the prompt; no web-search table rows.
+        prompt = agent.get_system_prompt()
+        assert "docker_inspect" in prompt
+        assert "web_search" not in prompt
 
     def test_reply_style_appended(self):
         agent = KaiAgent(settings=None, goal_manager=GoalManager())
@@ -1440,7 +1431,7 @@ class TestVideoBlockShim:
                 VideoBlock(video=mp4, video_mimetype="video/mp4"),
             ],
         )
-        out = _openai_utils.to_openai_message_dict(message)
+        out = openai_utils.to_openai_message_dict(message)
         assert out["role"] == "user"
         content = out["content"]
         assert isinstance(content, list)
@@ -1454,7 +1445,7 @@ class TestVideoBlockShim:
         # A message with no VideoBlock must go through the original converter
         # unchanged (string content, not a content-block list).
         message = ChatMessage(role=MessageRole.USER, content="just text")
-        out = _openai_utils.to_openai_message_dict(message)
+        out = openai_utils.to_openai_message_dict(message)
         content = out.get("content")
         assert content == "just text"
 
@@ -1463,7 +1454,7 @@ class TestVideoBlockShim:
             role=MessageRole.USER,
             blocks=[VideoBlock(url="https://example.com/clip.mp4", video_mimetype="video/mp4")],
         )
-        out = _openai_utils.to_openai_message_dict(message)
+        out = openai_utils.to_openai_message_dict(message)
         content = out.get("content")
         assert isinstance(content, list)
         assert content[0] == {

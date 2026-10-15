@@ -16,15 +16,15 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.middleware.sessions import SessionMiddleware
 
 from kai.cockpit.auth import get_cockpit_secret, get_current_user
-from kai.cockpit.csrf import CSRFMiddleware, _csrf_token
+from kai.cockpit.csrf import CSRF_TOKEN, CSRFMiddleware
 from kai.cockpit.db import SessionLocal, run_migrations
 from kai.cockpit.settings import get_cockpit_settings
 from kai.observability import init_sentry
 
 templates = Jinja2Templates(directory=Path(__file__).parent / "templates")
-templates.env.globals["csrf_token"] = lambda: _csrf_token.get() or ""
+templates.env.globals["csrf_token"] = lambda: CSRF_TOKEN.get() or ""
 templates.env.globals["csrf_field"] = lambda: Markup(
-    f'<input type="hidden" name="_csrf" value="{_csrf_token.get() or ""}">'
+    f'<input type="hidden" name="_csrf" value="{CSRF_TOKEN.get() or ""}">'
 )
 logger = logging.getLogger(__name__)
 
@@ -72,14 +72,6 @@ def format_timestamp(timestamp: str | datetime | None) -> str:
 
 
 templates.env.globals["format_timestamp"] = format_timestamp
-
-# ``active_escalation_count`` reads ``DYN.store`` lazily at render time, so
-# registering it here (before ``create_app`` sets the cockpit store) is safe.
-# The cockpit's store is created inside ``create_app`` so per-test env
-# redirection of ``KAI_ESCALATIONS_PATH`` (see cockpit conftest) is respected.
-from kai.agent.tools.escalate import active_escalation_count  # noqa: E402
-
-templates.env.globals["active_escalation_count"] = active_escalation_count
 
 
 def reconcile_deployments_in_background() -> None:
@@ -161,10 +153,14 @@ def create_app() -> FastAPI:
     # Cockpit's aggregated escalation store. Bots POST to /api/escalations
     # and this store holds them so the dashboard + sidebar badge read a
     # single source of truth. Created here (not at module import) so per-test
-    # redirection of KAI_ESCALATIONS_PATH is respected.
-    from kai.agent.tools.escalate import EscalationStore, set_escalation_store
+    # redirection of KAI_ESCALATIONS_PATH is respected. The Jinja global is
+    # (re)bound here for the same reason — it renders the current app's store.
+    from kai.agent.tools.escalate import EscalationState, EscalationStore
 
-    set_escalation_store(EscalationStore(get_cockpit_settings().escalations_path))
+    app.state.escalations = EscalationState(
+        store=EscalationStore(get_cockpit_settings().escalations_path)
+    )
+    templates.env.globals["active_escalation_count"] = app.state.escalations.store.active_count
 
     from kai.cockpit.routes import (
         auth,

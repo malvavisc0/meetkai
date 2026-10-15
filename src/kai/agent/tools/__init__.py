@@ -7,7 +7,7 @@ from typing import Any
 from llama_index.core.tools import FunctionTool
 
 from kai.agent.tools.calculator import calculate
-from kai.agent.tools.escalate import blacklist, escalate
+from kai.agent.tools.escalate import EscalationState
 from kai.agent.tools.time import get_time_in_timezone, get_weather
 from kai.agent.tools.web import get_webpage_content, web_search
 
@@ -51,7 +51,12 @@ def logged(name: str, fn: Callable[..., Any]) -> Callable[..., Any]:
     return wrapper
 
 
-def get_tools() -> list[FunctionTool]:
+def get_tools(escalations: EscalationState) -> list[FunctionTool]:
+    """Build the default tool set around one escalation wiring.
+
+    The escalate/blacklist tools are bound methods of ``escalations``, so
+    the agent that owns them and the bot that configures them share state.
+    """
     specs: list[tuple[Callable[..., Any], str, str]] = [
         (
             web_search,
@@ -85,7 +90,7 @@ def get_tools() -> list[FunctionTool]:
             "arithmetic or unit conversion.",
         ),
         (
-            escalate,
+            escalations.escalate,
             "escalate",
             "Alert the operator that this conversation needs human attention. "
             "The bot can reply to the user AND escalate in the same turn. "
@@ -93,7 +98,7 @@ def get_tools() -> list[FunctionTool]:
             "threats or legal issues, or you cannot answer an important question.",
         ),
         (
-            blacklist,
+            escalations.add_to_blacklist,
             "blacklist",
             "Add the current chat's contact to the blacklist to prevent further "
             "messages. Use for spamming, abusive, or otherwise undesired contacts. "

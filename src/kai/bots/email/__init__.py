@@ -146,7 +146,7 @@ class Bot(BaseBot):
         if self.has_tool("record_note") or self.has_tool("get_conversation_messages"):
             register_conversation_tools(agent, tool_context=self._tool_context)
         self.setup_task_scheduler(agent, settings)
-        # Wire escalation and blacklist tools' module-level state to this bot.
+        # Wire escalation and blacklist tools' state to this bot.
         self.wire_escalation_tools(settings, self._config.blacklist)
         # SMTP settings for the reply path (KAI_SMTP_TOOL_* injected by the cockpit).
         self._smtp = get_smtp_settings()
@@ -273,7 +273,6 @@ class Bot(BaseBot):
 
         context = MessageContext(
             sender_name=source,
-            sender_id=source,
             conversation_id=source,
             multi_party=False,
             addressed_to_bot=True,
@@ -377,7 +376,6 @@ class Bot(BaseBot):
                 conversation_id="operator",
                 context=MessageContext(
                     sender_name="operator",
-                    sender_id="<operator>",
                     addressed_to_bot=True,
                 ),
                 extra_system_context=self._OPERATOR_TURN_CONTEXT,

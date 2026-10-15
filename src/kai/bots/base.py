@@ -9,17 +9,7 @@ from kai.agent.context import ToolContext
 from kai.agent.core import ActionResult, KaiAgent
 from kai.agent.scheduler import TaskScheduler, TaskStore, build_task_tools
 from kai.agent.tools.email import DEFAULT_DISPLAY_NAME
-from kai.agent.tools.escalate import (
-    EscalationStore,
-    forward_to_cockpit,
-    set_blacklist,
-    set_cockpit_url,
-    set_escalation_handler,
-    set_escalation_secret,
-    set_escalation_store,
-    set_owner_slug,
-    set_tool_context,
-)
+from kai.agent.tools.escalate import EscalationState, EscalationStore
 from kai.config.settings import Settings, get_settings
 from kai.observability import init_sentry
 from kai.templates.resolver import ToolResolution
@@ -86,6 +76,9 @@ class BaseBot(ABC):
     def __init__(self, bot_dir: Path) -> None:
         self.bot_dir = bot_dir
         self.instance: str = ""  # per-run instance id; empty = use self.name
+        # Escalation wiring shared with the agent: ``start`` hands this to
+        # KaiAgent so its tools are bound methods of the same state.
+        self.escalations = EscalationState()
         self._agent: KaiAgent | None = None
         self._task_store: TaskStore | None = None
         self._task_scheduler: TaskScheduler | None = None
@@ -205,11 +198,11 @@ class BaseBot(ABC):
         """Create the (JSON-persisted) escalation store for this bot.
 
         The store is created once (idempotent creation — a second call keeps
-        the existing store so escalations aren't lost). The module-level
-        ``DYN`` state is *re-published* on every call, so a re-``configure()``
-        after another bot overwrote the global restores this bot's store as
-        the active one. (Single-bot-per-process is the production model; the
-        re-publish keeps multi-bot tests and re-configuration correct.)
+        the existing store so escalations aren't lost). The escalation
+        state is *re-published* on every call, so a re-``configure()`` after
+        another bot overwrote it restores this bot's store as the active
+        one. (Single-bot-per-process is the production model; the re-publish
+        keeps multi-bot tests and re-configuration correct.)
 
         Mirrors :meth:`setup_task_scheduler`'s path resolution so escalations
         survive restarts the same way tasks do.
@@ -219,24 +212,23 @@ class BaseBot(ABC):
             store_path = folder / f"{self.instance_id}.escalations.json"
             store_path.parent.mkdir(parents=True, exist_ok=True)
             self._escalation_store = EscalationStore(store_path)
-        set_escalation_store(self._escalation_store)
-        set_cockpit_url(settings.cockpit_url)
-        set_escalation_secret(settings.cockpit_escalation_secret)
-        set_owner_slug(settings.owner_slug)
+        self.escalations.store = self._escalation_store
+        self.escalations.cockpit_url = (settings.cockpit_url or "").rstrip("/")
+        self.escalations.cockpit_escalation_secret = settings.cockpit_escalation_secret
+        self.escalations.owner_slug = settings.owner_slug
         logger.info("Escalation store wired for bot %s", self.name)
 
     def wire_escalation_tools(self, settings: Settings, blacklist: list[str]) -> None:
-        """Wire the escalate/blacklist tools' module-level state to this bot.
+        """Wire the escalate/blacklist tools' state to this bot.
 
-        Centralizes the ``setup_escalation_store`` + ``set_escalation_handler``
-        + ``set_blacklist`` + ``set_tool_context`` sequence both bots need, so
-        a wiring change lands in one place rather than drifting between bots
-        and email.
+        Centralizes the ``setup_escalation_store`` + handler + blacklist +
+        chat-context sequence both bots need, so a wiring change lands in
+        one place rather than drifting between bots and email.
         """
         self.setup_escalation_store(settings)
-        set_escalation_handler(self.on_escalation)
-        set_blacklist(blacklist)
-        set_tool_context(self._tool_context)
+        self.escalations.on_escalation = self.on_escalation
+        self.escalations.blacklist = blacklist
+        self.escalations.tool_context = self._tool_context
 
     def set_task_context(
         self, chat_id: str, owner_id: str = "", tz_hint: str | None = None
@@ -433,4 +425,4 @@ class BaseBot(ABC):
             escalation.chat_id,
             escalation.reason,
         )
-        await forward_to_cockpit(escalation)
+        await self.escalations.forward_to_cockpit(escalation)
