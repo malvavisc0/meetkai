@@ -47,6 +47,17 @@ jobs:
       - name: Pytest
         run: uv run pytest -q
 
+      # The json-file rotation contract is duplicated per compose file (YAML
+      # anchors cannot cross files) — keep all three blocks byte-identical.
+      - name: Compose x-logging consistency
+        run: |
+          extract() { sed -n "/^x-logging:/,/^[^[:space:]]/p" "$1" | sed '$d'; }
+          extract docker-compose.yml > /tmp/xl-base
+          extract docker-compose.override.yml > /tmp/xl-override
+          extract docker-compose.workers.yaml > /tmp/xl-workers
+          diff /tmp/xl-base /tmp/xl-override
+          diff /tmp/xl-base /tmp/xl-workers
+
   build:
     needs: quality
     runs-on: ubuntu-latest

@@ -1,4 +1,8 @@
-name: meetkai-dev
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: 10m
+    max-file: "3"
 
 services:
   cockpit:
@@ -13,12 +17,17 @@ services:
 
   mailpit:
     image: axllent/mailpit:v1.30
-    container_name: mailpit
-    hostname: mailpit
+    container_name: kai-mailpit
+    hostname: kai-mailpit
     restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
     expose:
       - 1025
+    # The web UI is an unauthenticated inbox that holds magic-link emails —
+    # bind it to localhost only, never publish it on the host network.
     ports:
-      - "8025:8025"
+      - "127.0.0.1:8025:8025"
+    logging: *logging
     networks:
       - odyssey

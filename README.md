@@ -225,8 +225,8 @@ stack's template to `.env` and fill in secrets.
 
 | Stack | Compose file | Services | Env template |
 |-------|--------------|----------|--------------|
-| Cockpit (main) | `docker-compose.yml` | `cockpit`, `kai-postgres` | `.env.example` |
-| Workers | `docker-compose.workers.yaml` | `morphik`, `morphik-postgres`, `crawl4ai`, `redis` | `.env.workers.example` |
+| Cockpit (main) | `docker-compose.yml` | `cockpit`, `database` | `.env.example` |
+| Workers | `docker-compose.workers.yaml` | `morphik`, `pgvector`, `crawl4ai`, `redis` | `.env.workers.example` |
 
 The cockpit reaches morphik/crawl4ai over the network via the `KAI_*`
 URLs, so those hostnames must resolve from the cockpit host. One secret must
@@ -235,9 +235,9 @@ be identical across hosts:
 
 Prerequisites: Docker + Docker Compose v2.
 
-> The `workers` stack defines a container named `redis`, so if you co-locate
-> it with another stack that also uses `redis`, rename one stack's `redis`
-> `container_name` first.
+> All container names are `kai-*`-prefixed (`kai-cockpit`, `kai-database`,
+> `kai-mailpit`, `kai-morphik`, `kai-redis`, …), so both stacks co-exist with
+> other postgres/redis/cockpit stacks on the same host.
 
 ### Cockpit box
 
@@ -250,9 +250,10 @@ docker compose up -d --build
 local dev gets:
 - the cockpit built from the working tree (`build: .`, image `meetkai-dev-cockpit`)
   instead of the published image
-- mailpit (SMTP catch + web UI on host port 8025)
+- mailpit (SMTP catch on the internal network + web UI on `localhost:8025`)
 - the cockpit published on host port 8080
-- a separate `meetkai-dev` compose project (isolated volumes)
+- one `kai` compose project for both dev and prod shapes (the override no
+  longer renames the project, so volumes are shared between invocations)
 
 Reach the cockpit at `http://localhost:8080` and mailpit at
 `http://localhost:8025`.
@@ -269,9 +270,14 @@ cp .env.workers.example .env
 docker compose -f docker-compose.workers.yaml up -d
 ```
 
-Publishes morphik on host port 8000. The morphik config lives inline in
-`docker-compose.workers.yaml` under `configs.morphik_config` (mounted at
-`/app/morphik.toml`); edit it there, not in a separate file.
+Publishes morphik on `localhost:8000` only (loopback-bind; proxy or republish
+deliberately for cross-host topologies). The crawl4ai service runs the stock
+`unclecode/crawl4ai:0.9` image — the 0.9 family tag deliberately floats across
+the security-patch line, and the base ships its own Playwright chromium. The morphik config lives inline in
+`docker-compose.workers.yaml` under `configs.morphik` (mounted at
+`/app/morphik.toml`); structure and size limits live there, while the model
+IDs come from the `MORPHIK_*` / `ROUTER_API_BASE` vars in `.env.workers`
+(compose substitutes them when rendering the file).
 
 Once morphik is healthy, mint the brain bearer token **once** and paste it into
 the cockpit box's `.env` as `KAI_BRAIN_MORPHIK_TOKEN` (the exact `curl` command

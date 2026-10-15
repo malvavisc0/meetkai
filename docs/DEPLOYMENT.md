@@ -257,8 +257,8 @@ cp .env.workers.example .env.workers   # fill in every secret, incl. ROUTER_API_
 
 ```bash
 docker compose -f docker-compose.workers.yaml --env-file .env.workers up -d
-curl -s http://localhost:8000/health | head -c 200    # morphik publishes 8000
-docker exec crawl4ai sh -c 'wget -qO- http://localhost:11235/health'   # crawl4ai publishes
+curl -s http://localhost:8000/health | head -c 200    # morphik publishes 8000 on 127.0.0.1
+docker exec kai-crawl4ai sh -c 'wget -qO- http://localhost:11235/health'     # crawl4ai publishes
                                                            # no host port — healthcheck runs in-container
 docker compose -f docker-compose.workers.yaml --env-file .env.workers ps   # all four: healthy
 ```
@@ -271,7 +271,7 @@ docker compose -f docker-compose.workers.yaml --env-file .env.workers ps   # all
   their own Postgres), so one attach is enough:
 
   ```bash
-  docker network connect kai-workers_odyssey cockpit   # cockpit reaches morphik/crawl4ai/redis
+  docker network connect kai-workers_odyssey kai-cockpit   # cockpit reaches morphik/crawl4ai/redis
   ```
 
   Compose **recreates** containers from their file settings (observed: an
@@ -283,13 +283,16 @@ docker compose -f docker-compose.workers.yaml --env-file .env.workers ps   # all
 
   The same bridge in one idempotent line — run it after **every** stack
   (re)creation instead of remembering the attaches at each of the three `up`
-  places in this doc (swap the two `_odyssey` names for the production project
-  names if you run the base file too):
+  places in this doc. The networks are `kai_odyssey` (cockpit stack, with or
+  without the dev override — one project name since the rename) and
+  `kai-workers_odyssey`:
 
   ```bash
-  for pair in "kai-workers_odyssey cockpit" \
-              "meetkai-dev_odyssey morphik" "meetkai-dev_odyssey crawl4ai"; do
-    set -- $pair; docker network connect "$1" "$2" 2>/dev/null && echo "attached $2" || true
+  for pair in "kai-workers_odyssey kai-cockpit" \
+              "kai_odyssey kai-morphik" "kai_odyssey kai-crawl4ai"; do
+    set -- $pair; docker network connect "$1" "$2" 2>/dev/null \
+      && echo "attached $2" \
+      || echo "NOTE: $2 not running (check the name) or already attached to $1"
   done
   ```
 
@@ -306,7 +309,8 @@ docker compose -f docker-compose.workers.yaml --env-file .env.workers ps   # all
   ```
 
 - **(c) Separate hosts** — set `KAI_BRAIN_BASE_URL=http://<worker-host>:8000`
-  (morphik *does* publish `8000`) and `KAI_BRAIN_CRAWLER_URL=http://<worker-host>:<port>`
+  (morphik binds `8000` to the workers host's loopback — reverse-proxy it or
+  republish deliberately) and `KAI_BRAIN_CRAWLER_URL=http://<worker-host>:<port>`
   — crawl4ai publishes nothing, so add a `ports:` mapping in your own override
   file or keep them on one host via (a)/(b).
 
@@ -336,9 +340,11 @@ Notes:
   router at `https://router.requesty.ai/v1` — set `ROUTER_API_KEY` in
   `.env.workers`. This is morphik's key only; the cockpit and its bots keep
   using the `KAI_LLM_*` values from step 2.
-- The workers stack defines a container named `redis` — if another local
-  stack already uses that name, rename one before starting both on the same
-  Docker host.
+- All containers are `kai-*`-prefixed (`kai-redis`, `kai-morphik`,
+  `kai-morphik-postgres`, `kai-crawl4ai` here; `kai-cockpit`/`kai-database`/
+  `kai-mailpit` in the cockpit stack), so co-locating the two stacks cannot
+  collide with each other or with other local stacks reusing those generic
+  names.
 - Teardown: `docker compose -f docker-compose.workers.yaml --env-file
   .env.workers down` stops the stack but **keeps** `kai-workers_*` volumes —
   indexed brain documents survive. Add `-v` only to wipe the Brain for real;
@@ -354,23 +360,56 @@ above leaks in:
 | | Development | Production |
 |---|---|---|
 | Compose file | `docker-compose.yml` + auto-merged `docker-compose.override.yml` | `docker-compose.yml` **only** |
-| Cockpit image | built from the working tree (`meetkai-dev-cockpit`, `pull_policy: never`) | published `ghcr.io/malvavisc0/meetkai-cockpit:${KAI_IMAGE_TAG:-latest}`, `pull_policy: always` |
+| Cockpit image | built from the working tree (`meetkai-dev-cockpit`, `pull_policy: never`) | published `ghcr.io/malvavisc0/meetkai-cockpit:${KAI_IMAGE_TAG:-latest}` |
 | SMTP | mailpit catch, links read from its UI | a real relay (`KAI_SMTP_USER`/`KAI_SMTP_PASSWORD`) — links are actually emailed |
 | Host port | published `8080:8080` by the override | not published: the service only `expose`s `8080` on the internal network |
-| Compose project | `meetkai-dev` | `kai-cockpit` (its own volumes) |
+| Compose project | `kai` | `kai` (same volumes; redeploying an older deployment needs the migration note below) |
 
 Start it on the target host:
 
 ```bash
-cp .env.example .env.production   # add KAI_IMAGE_TAG=<fixed release>; `latest` +
-                                  # `pull_policy: always` can move prod to a new
-                                  # build on any redeploy
+cp .env.example .env.production   # add KAI_IMAGE_TAG=<fixed release>: the tag defaults to `latest`, and
+                                  # with the default pull policy `up -d` reuses the cached image — pin
+                                  # (or run `docker compose pull`) to actually reach a new build
 # Generate every secret with step 2a — do NOT reuse values from a dev machine.
 docker compose --env-file .env.production -f docker-compose.yml up -d
 ```
 
 `docker compose` also reads the file named after the compose file
 (`docker-compose.yml.env`) if you prefer not to pass `--env-file`.
+
+### Upgrading an existing deployment (project rename)
+
+The cockpit compose project was renamed (`kai-cockpit` on a server,
+`meetkai-dev` on a dev box → `kai`). The workers stack keeps its
+`kai-workers` name, so its volume names are unaffected by the rename.
+Compose derives volume names from the project prefix, so on any host already
+running one of the old cockpit projects a plain redeploy creates fresh
+**empty** volumes and the stack comes up healthy on a blank database — the
+old volume set stays behind, orphaned and untouched (users, connection
+configs, escalations all invisible until migrated).
+
+On each such host, migrate **before** the first `up` with the new files:
+
+```bash
+docker volume ls | grep -E '^(kai-cockpit|meetkai-dev)_'   # what exists
+
+# Copy each old volume to its new name (example: production Postgres):
+docker volume create kai_postgres
+docker run --rm -v kai-cockpit_postgres:/from -v kai_postgres:/to \
+  alpine sh -c 'cp -a /from/. /to/'
+
+# Mapping: kai-cockpit_<v> / meetkai-dev_<v> -> kai_<v>
+# (storage, postgres, logs; some engines also accept
+#  `docker volume rename <old> <new>`)
+```
+
+Then bring the stack up, verify the data is there (login user, connection
+configs, escalations), and only afterwards delete the orphaned old volumes:
+
+```bash
+docker volume rm $(docker volume ls -q | grep -E '^(kai-cockpit|meetkai-dev)_')
+```
 
 ### Public ingress and TLS
 
@@ -434,7 +473,8 @@ docker compose --env-file .env.production -f docker-compose.yml \
 
 The Brain (step 5) is a second stack, usually on its own host: there the
 `KAI_BRAIN_BASE_URL`/`KAI_BRAIN_CRAWLER_URL` values must be host-published
-URLs (morphik publishes `8000`; crawl4ai publishes nothing until you add a
+URLs (morphik publishes `8000` bound to `127.0.0.1` (proxy or republish it for
+  cross-host use); crawl4ai publishes nothing until you add a
 `ports:` mapping — see step 5 option (c)), `KAI_BRAIN_CRAWL4AI_TOKEN` must be
 identical in both env files, and the morphik JWT is minted once and pasted
 into the cockpit env — same workflow as locally, just against the real hosts.

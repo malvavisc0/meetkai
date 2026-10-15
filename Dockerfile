@@ -1,4 +1,4 @@
-FROM python:3.13-slim AS base
+FROM python:3.13-slim
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
@@ -9,13 +9,6 @@ RUN apt-get update \
     && rm -rf /var/lib/apt/lists/*
 
 RUN pip install --no-cache-dir uv
-
-# Non-root runtime user. Docker enforces USER regardless of who runs
-# `docker compose up` on the host — Coolify SSHing in as root does NOT make
-# the container run as root. uid 1000 matches the dev bind-mount owner on
-# most Linux hosts (see docker-compose.dev.yml note).
-RUN groupadd -r appuser \
-    && useradd -r -g appuser -u 1000 -m -d /home/appuser appuser
 
 WORKDIR /app
 
@@ -28,17 +21,7 @@ COPY entrypoint.sh /entrypoint.sh
 
 RUN uv sync --frozen --no-dev && chmod +x /entrypoint.sh
 
-# Pre-create the writable runtime dirs and hand them to appuser. Named
-# volumes mounted on these paths in prod inherit the image's ownership on
-# first use, so appuser can write without a runtime chown.
-RUN mkdir -p /app/data/configs/cockpit /app/data/logs /tmp/kai \
-    && chown -R appuser:appuser /app/data /tmp/kai /home/appuser
-
-USER appuser
-
-ENV PATH="/app/.venv/bin:$PATH" \
-    HOME=/home/appuser \
-    UV_CACHE_DIR=/app/.uv-cache
+ENV PATH="/app/.venv/bin:$PATH"
 
 EXPOSE 8080
 

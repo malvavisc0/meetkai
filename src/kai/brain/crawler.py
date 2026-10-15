@@ -4,9 +4,11 @@ Two methods, both POST with ``Authorization: Bearer``:
 - ``extract_markdown(url)`` → ``POST /md`` (returns markdown as a string)
 - ``crawl(url)`` → ``POST /crawl`` (returns full result incl. internal links)
 
-The whole-site BFS is **not** in this client: crawl4ai 0.9.0 rejects
-``deep_crawl_strategy`` over HTTP, so kai orchestrates the BFS using
-``crawl()``'s returned links.
+The whole-site BFS is **not** in this client: the crawl4ai Docker server
+refuses ``deep_crawl_strategy`` by default (opt-in server-side since 0.9.5
+via ``CRAWL4AI_ALLOW_DEEP_CRAWL``), so kai orchestrates the BFS using
+``crawl()``'s returned links — keeping depth/page budgets under kai's own
+``BrainSettings`` instead of the server's config.
 """
 
 import logging

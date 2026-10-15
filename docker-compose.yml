@@ -1,4 +1,10 @@
-name: kai-cockpit
+name: kai
+
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: 10m
+    max-file: "3"
 
 networks:
   odyssey:
@@ -11,9 +17,11 @@ volumes:
 services:
   database:
     image: postgres:18-alpine
-    container_name: database
-    hostname: database
+    container_name: kai-database
+    hostname: kai-database
     restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
     environment:
       TZ: ${TZ}
       POSTGRES_USER: ${KAI_POSTGRES_USER}
@@ -28,17 +36,24 @@ services:
       timeout: 5s
       retries: 10
       start_period: 10s
+    logging: *logging
     networks:
       - odyssey
 
   cockpit:
     image: ghcr.io/malvavisc0/meetkai-cockpit:${KAI_IMAGE_TAG:-latest}
-    pull_policy: always
-    user: appuser
-    container_name: cockpit
-    hostname: cockpit
+    container_name: kai-cockpit
+    hostname: kai-cockpit
     restart: unless-stopped
     command: kai cockpit serve --host 0.0.0.0 --port 8080
+    # The container runs as root (no dedicated runtime user). no-new-privileges
+    # plus dropping every Linux capability is the compensating containment: the
+    # app is a plain Python web process on a high port with root-owned files,
+    # so it needs no capabilities at all.
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
     expose:
       - "8080"
     volumes:
@@ -116,5 +131,6 @@ services:
       timeout: 5s
       retries: 10
       start_period: 60s
+    logging: *logging
     networks:
       - odyssey

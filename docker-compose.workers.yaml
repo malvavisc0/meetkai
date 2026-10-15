@@ -1,5 +1,11 @@
 name: kai-workers
 
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: 10m
+    max-file: "3"
+
 networks:
   odyssey:
 
@@ -9,13 +15,14 @@ volumes:
   morphik-postgres-data:
 
 configs:
-  morphik_config:
+  morphik:
     content: |
       # Morphik core config — mounted at /app/morphik.toml.
-      # Based on the image's /app/morphik.toml.default, with the completion and
-      # embedding models repointed at the OpenAI-compatible router (one
-      # provider, one key — see ROUTER_API_KEY in .env.workers.example) and the
-      # reranker disabled.
+      # Based on the image's /app/morphik.toml.default: all models go through
+      # one OpenAI-compatible router (ROUTER_API_BASE + ROUTER_API_KEY in
+      # .env.workers), the model IDs themselves come from the MORPHIK_* vars
+      # there (compose substitutes the placeholders below at config time),
+      # and the reranker is disabled.
 
       [api]
       host = "0.0.0.0"
@@ -33,17 +40,27 @@ configs:
       dev_user_id = "dev_user"
 
       #### Registered models
+      # Role-keyed so the sections below never change when models swap; the
+      # IDs come from .env.workers, which compose substitutes into the
+      # placeholders in this block at config time (unset vars render empty
+      # with a visible compose warning). Keys beyond model_name/api_base are
+      # copied verbatim into the litellm call: the embedding entry's
+      # extra_body.dimensions reaches the router as a Qwen3 MRL truncation —
+      # it must ride in extra_body because litellm only lets bare
+      # "dimensions" through for text-embedding-3 models.
       [registered_models]
-      router_granite_8b = { model_name = "nemotron-lightning-3.5-30b-a3b", api_base = "https://router.requesty.ai/v1" }
-      router_qwen_vl = { model_name = "nemotron-3-nano-omni-30b-a3b-reasoning", api_base = "https://router.requesty.ai/v1" }
-      router_embed_3_small = { model_name = "azure/openai/text-embedding-3-small@francecentral", api_base = "https://router.requesty.ai/v1" }
+      completion = { model_name = "${MORPHIK_COMPLETION_MODEL}", api_base = "${ROUTER_API_BASE}" }
+      vision = { model_name = "${MORPHIK_VISION_MODEL}", api_base = "${ROUTER_API_BASE}" }
+      embedding = { model_name = "${MORPHIK_EMBEDDING_MODEL}", api_base = "${ROUTER_API_BASE}", extra_body = { dimensions = 1984 } }
 
       #### Component configurations ####
 
       [completion]
-      model = "router_granite_8b"
-      default_max_tokens = "262144"
-      default_temperature = 0.3
+      model = "completion"
+      # Cap, not allocation: ingestion-side generations (analysis, captions)
+      # land well under 1k tokens; 8192 bounds a runaway call while leaving
+      # headroom for reasoning-heavy models.
+      default_max_tokens = "8192"
 
       [database]
       provider = "postgres"
@@ -56,15 +73,20 @@ configs:
       retry_delay = 1.0
 
       [embedding]
-      model = "router_embed_3_small"
-      dimensions = 1536
+      model = "embedding"
+      # Must stay <= 2000 (pgvector's hnsw/ivfflat index cap — morphik also
+      # hard-caps the column) and a multiple of 32 (Qwen3 MRL truncation);
+      # 1984 is the largest valid size and matches the truncation requested
+      # in the registered embedding entry. Changing this requires the §4
+      # wipe/re-ingest/re-mint-token procedure.
+      dimensions = 1984
       similarity_metric = "cosine"
 
       [parser]
       chunk_size = 6000
       chunk_overlap = 300
       use_contextual_chunking = false
-      contextual_chunking_model = "router_granite_8b"
+      contextual_chunking_model = "completion"
 
       [parser.xml]
       max_tokens = 350
@@ -72,10 +94,10 @@ configs:
       ignore_tags = ["TOC", "INDEX"]
 
       [document_analysis]
-      model = "router_granite_8b"
+      model = "completion"
 
       [parser.vision]
-      model = "router_qwen_vl"
+      model = "vision"
       frame_sample_rate = -1
 
       [reranker]
@@ -130,9 +152,12 @@ configs:
 services:
   redis:
     image: redis/redis-stack-server:7.4.0-v8
-    container_name: redis
-    hostname: redis
+    container_name: kai-redis
+    hostname: kai-redis
     restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    logging: *logging
     environment:
       TZ: ${TZ}
     volumes:
@@ -147,39 +172,48 @@ services:
       - odyssey
 
   morphik:
-    image: ghcr.io/morphik-org/morphik-core:2026-07-23
-    container_name: morphik
-    hostname: morphik
+    image: ghcr.io/morphik-org/morphik-core:2026-10-14
+    container_name: kai-morphik
+    hostname: kai-morphik
     restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    logging: *logging
+    # Loopback-only: everything using this port (token mint, health curls)
+    # runs on this host. Cross-host topologies must reverse-proxy it or
+    # republish deliberately.
     ports:
-      - "8000:8000"
+      - "127.0.0.1:8000:8000"
     environment:
       TZ: ${TZ}
-      JWT_SECRET_KEY: ${KAI_BRAIN_MORPHIK_JWT_SECRET}
-      LOCAL_URI_PASSWORD: ${KAI_BRAIN_MORPHIK_LOCAL_PASSWORD}
-      ADMIN_SERVICE_SECRET: ${KAI_BRAIN_MORPHIK_ADMIN_SECRET}
-      POSTGRES_URI: postgresql+asyncpg://${MORPHIK_POSTGRES_USER}:${MORPHIK_POSTGRES_PASSWORD}@morphik-postgres:5432/${MORPHIK_POSTGRES_DB}
-      PGPASSWORD: ${MORPHIK_POSTGRES_PASSWORD}
-      PGHOST: morphik-postgres
+      # Required secrets — :? guards so a broken .env.workers fails `up`
+      # loudly instead of running an empty JWT signing key / open endpoints.
+      # An empty JWT_SECRET_KEY would make morphik's HS256 tokens forgeable.
+      JWT_SECRET_KEY: ${KAI_BRAIN_MORPHIK_JWT_SECRET:?set in .env.workers}
+      LOCAL_URI_PASSWORD: ${KAI_BRAIN_MORPHIK_LOCAL_PASSWORD:?set in .env.workers}
+      ADMIN_SERVICE_SECRET: ${KAI_BRAIN_MORPHIK_ADMIN_SECRET:?set in .env.workers}
+      POSTGRES_URI: postgresql+asyncpg://${MORPHIK_POSTGRES_USER:?set in .env.workers}:${MORPHIK_POSTGRES_PASSWORD:?set in .env.workers}@pgvector:5432/${MORPHIK_POSTGRES_DB:?set in .env.workers}
+      PGPASSWORD: ${MORPHIK_POSTGRES_PASSWORD:?set in .env.workers}
+      PGHOST: pgvector
       PGPORT: "5432"
-      PGUSER: ${MORPHIK_POSTGRES_USER}
-      PGDATABASE: ${MORPHIK_POSTGRES_DB}
+      PGUSER: ${MORPHIK_POSTGRES_USER:?set in .env.workers}
+      PGDATABASE: ${MORPHIK_POSTGRES_DB:?set in .env.workers}
       REDIS_HOST: redis
       REDIS_PORT: "6379"
       # OPENAI_API_KEY is read by morphik.toml's openai completion/embedding
       # providers via the standard litellm env path; the router speaks the same
       # Bearer scheme, so one key works for both.
-      OPENAI_API_KEY: ${ROUTER_API_KEY}
+      OPENAI_API_KEY: ${ROUTER_API_KEY:?set in .env.workers}
     volumes:
       - morphik-storage:/app/storage
     configs:
-      - source: morphik_config
+      - source: morphik
         target: /app/morphik.toml
     depends_on:
-      morphik-postgres:
+      pgvector:
         condition: service_healthy
       redis:
-        condition: service_started
+        condition: service_healthy
     healthcheck:
       test: ["CMD-SHELL", "/app/.venv/bin/python3 -c \"import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8000/health').status==200 else 1)\""]
       interval: 15s
@@ -189,46 +223,66 @@ services:
     networks:
       - odyssey
 
-  morphik-postgres:
+  pgvector:
     image: pgvector/pgvector:pg18
-    container_name: postgres
-    hostname: postgres
+    container_name: kai-morphik-postgres
+    hostname: kai-morphik-postgres
     restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    logging: *logging
     environment:
       TZ: ${TZ}
-      POSTGRES_USER: ${MORPHIK_POSTGRES_USER}
-      POSTGRES_PASSWORD: ${MORPHIK_POSTGRES_PASSWORD}
-      POSTGRES_DB: ${MORPHIK_POSTGRES_DB}
+      POSTGRES_USER: ${MORPHIK_POSTGRES_USER:?set in .env.workers}
+      POSTGRES_PASSWORD: ${MORPHIK_POSTGRES_PASSWORD:?set in .env.workers}
+      POSTGRES_DB: ${MORPHIK_POSTGRES_DB:?set in .env.workers}
       PGDATA: /var/lib/postgresql/data/pgdata
     volumes:
       - morphik-postgres-data:/var/lib/postgresql/data
+    networks:
+      odyssey:
+        # The morphik image's entrypoint hardcodes `pg_isready -h postgres`;
+        # this alias satisfies it without renaming the container.
+        aliases:
+          - postgres
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${MORPHIK_POSTGRES_USER} -d ${MORPHIK_POSTGRES_DB}"]
       interval: 10s
       timeout: 5s
       retries: 10
       start_period: 10s
-    networks:
-      - odyssey
 
   crawl4ai:
-    image: unclecode/crawl4ai:0
-    container_name: crawl4ai
-    hostname: crawl4ai
+    # Stock upstream image on the `0.9` family tag — deliberately floating
+    # across the 0.9.x security-patch line (currently 0.9.5, which fixed the
+    # Docker-server SSRF/ReDoS/injection paths). The base ships its own
+    # Playwright chromium and its CMD boots the server, so there is nothing
+    # to build and no per-start install wrapper needed.
+    image: unclecode/crawl4ai:0.9
+    container_name: kai-crawl4ai
+    hostname: kai-crawl4ai
     restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    logging: *logging
     shm_size: "2g"
     expose:
       - 11235
-    command: >-
-      bash -c "python -m playwright install chromium && exec bash entrypoint.sh"
+    # Loopback-only host publish: the host-run dev cockpit (bare `uv run`)
+    # reaches the crawler through KAI_BRAIN_CRAWLER_URL=http://localhost:11235;
+    # containerized setups use the service name instead.
+    ports:
+      - "127.0.0.1:11235:11235"
     environment:
       TZ: ${TZ}
-      CRAWL4AI_API_TOKEN: ${KAI_BRAIN_CRAWL4AI_TOKEN}
+      CRAWL4AI_API_TOKEN: ${KAI_BRAIN_CRAWL4AI_TOKEN:?set in .env.workers}
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://localhost:11235/health >/dev/null 2>&1 || exit 1"]
       interval: 15s
       timeout: 5s
       retries: 10
-      start_period: 60s
+      # Headroom for the crawler server's first boot (browsers ship inside
+      # the base image — nothing downloads at start).
+      start_period: 120s
     networks:
       - odyssey
