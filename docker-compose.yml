@@ -6,12 +6,16 @@ x-logging: &logging
     max-size: 10m
     max-file: "3"
 
+# Shared external network: both compose stacks attach here so service names
+# (kai-morphik, kai-crawl4ai, …) resolve across them. Create once per host:
+#   docker network create odyssey
 networks:
   odyssey:
+    external: true
 
 volumes:
   storage:
-  postgres:
+  database:
   logs:
 
 services:
@@ -29,7 +33,7 @@ services:
       POSTGRES_DB: ${KAI_POSTGRES_DB}
       PGDATA: /var/lib/postgresql/data/pgdata
     volumes:
-      - postgres:/var/lib/postgresql/data
+      - database:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${KAI_POSTGRES_USER} -d ${KAI_POSTGRES_DB}"]
       interval: 10s
@@ -92,6 +96,7 @@ services:
       KAI_LLM_API_KEY: ${KAI_LLM_API_KEY}
       KAI_LLM_MODEL: ${KAI_LLM_MODEL}
       # KAI_LLM_ENABLE_THINKING: ${KAI_LLM_ENABLE_THINKING}
+      KAI_LLM_REASONING_EFFORT: ${KAI_LLM_REASONING_EFFORT:-}
       # KAI_LLM_MAX_TOKENS: ${KAI_LLM_MAX_TOKENS}
       # Agent + scheduler (KAI_AGENT_*/KAI_TASKS_*/KAI_ESCALATIONS_* — Settings)
       KAI_AGENT_HISTORY_FOLDER: ${KAI_AGENT_HISTORY_FOLDER}

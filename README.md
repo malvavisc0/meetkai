@@ -233,7 +233,13 @@ URLs, so those hostnames must resolve from the cockpit host. One secret must
 be identical across hosts:
 - `KAI_BRAIN_CRAWL4AI_TOKEN` (cockpit stack == workers stack)
 
-Prerequisites: Docker + Docker Compose v2.
+Prerequisites: Docker + Docker Compose v2, plus a shared external network
+both stacks attach to (create once per host):
+```bash
+docker network create odyssey
+```
+Without it, `docker compose up` fails fast (`network odyssey declared as
+external, but could not be found`).
 
 > All container names are `kai-*`-prefixed (`kai-cockpit`, `kai-database`,
 > `kai-mailpit`, `kai-morphik`, `kai-redis`, …), so both stacks co-exist with

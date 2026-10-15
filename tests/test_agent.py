@@ -462,6 +462,23 @@ class TestKaiAgentChat:
             llm.additional_kwargs["extra_body"]["chat_template_kwargs"]["enable_thinking"] is True
         )
 
+    def test_build_llm_omits_reasoning_effort_by_default(self, settings):
+        agent = KaiAgent(settings=settings, goal_manager=GoalManager())
+        llm = agent._build_llm()
+        assert "reasoning_effort" not in llm.additional_kwargs["extra_body"]
+
+    def test_build_llm_sets_reasoning_effort_when_configured(self):
+        settings = Settings.for_test(
+            llm_api_base="http://localhost:8080/v1",
+            llm_api_key="test-key",
+            llm_model="test-model",
+            agent_history_folder=None,
+            llm_reasoning_effort="high",
+        )
+        agent = KaiAgent(settings=settings, goal_manager=GoalManager())
+        llm = agent._build_llm()
+        assert llm.additional_kwargs["extra_body"]["reasoning_effort"] == "high"
+
     @pytest.mark.asyncio
     async def test_chat_persists_history(self, tmp_path, settings):
         settings.agent_history_folder = tmp_path

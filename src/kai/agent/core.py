@@ -431,12 +431,18 @@ class KaiAgent:
         self._tool_call_callback = callback
 
     def _build_llm(self, async_http_client: httpx.AsyncClient | None = None) -> OpenAILike:
-        additional_kwargs = {
-            "extra_body": {
-                "chat_template_kwargs": {
-                    "enable_thinking": self.settings.llm_enable_thinking,
-                }
+        extra_body: dict[str, Any] = {
+            "chat_template_kwargs": {
+                "enable_thinking": self.settings.llm_enable_thinking,
             }
+        }
+        # reasoning_effort is a plain top-level request field on OpenAI-compatible
+        # routers (low/medium/high). Only sent when configured so the provider
+        # default applies otherwise.
+        if self.settings.llm_reasoning_effort:
+            extra_body["reasoning_effort"] = self.settings.llm_reasoning_effort
+        additional_kwargs = {
+            "extra_body": extra_body,
         }
         return OpenAILike(
             model=self.settings.llm_model,

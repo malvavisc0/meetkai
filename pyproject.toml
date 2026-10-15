@@ -80,5 +80,5 @@ dev = [
     "respx",
     "ruff",
     "httpx2",
-    "pytest-xdist>=3.8.0",
+    "pytest-xdist",
 ]

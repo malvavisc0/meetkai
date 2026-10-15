@@ -26,6 +26,13 @@ class Settings(BaseSettings):
         default=False,
         description="Enable thinking/reasoning blocks in LLM responses",
     )
+    llm_reasoning_effort: str = Field(
+        default="",
+        description=(
+            "Reasoning effort for reasoning models (low/medium/high). Sent as the "
+            "top-level reasoning_effort request field. Empty = provider default."
+        ),
+    )
     llm_max_tokens: int = Field(
         default=2048,
         gt=0,

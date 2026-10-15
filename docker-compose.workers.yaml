@@ -6,8 +6,11 @@ x-logging: &logging
     max-size: 10m
     max-file: "3"
 
+# Shared external network: both compose stacks attach here so service names
+# resolve across them. Create once per host: docker network create odyssey
 networks:
   odyssey:
+    external: true
 
 volumes:
   redis-data:

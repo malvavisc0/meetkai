@@ -18,6 +18,8 @@ setup or test against real Postgres. Steps 1-2 apply to all three paths.
 - Python 3.13+
 - [uv](https://docs.astral.sh/uv/getting-started/installation/)
 - Docker + Docker Compose v2 (only for the Docker path)
+- A shared external Docker network both stacks attach to — create once per
+  host: `docker network create odyssey` (compose fails if it is missing)
 - An OpenAI-compatible LLM endpoint (API base + key + model)
 
 ## 1. Clone and install
@@ -168,7 +170,12 @@ cockpit is **built from the working tree** (not the published image),
 [mailpit](https://mailpit.axllent.com/) catches all outbound SMTP, and the
 cockpit is published on host port 8080.
 
+Both stacks attach to a shared external `odyssey` network so the cockpit can
+resolve the worker service names. Create it once on the host before the first
+`up`:
+
 ```bash
+docker network create odyssey   # once per host (idempotent guard: || true)
 cp .env.example .env   # then edit .env — see below
 docker compose up -d --build
 ```
@@ -389,18 +396,21 @@ running one of the old cockpit projects a plain redeploy creates fresh
 old volume set stays behind, orphaned and untouched (users, connection
 configs, escalations all invisible until migrated).
 
+The cockpit DB volume key was also renamed `postgres` → `database` (so the
+new volume is `kai_database`, not `kai_postgres`) to match its service name.
+
 On each such host, migrate **before** the first `up` with the new files:
 
 ```bash
 docker volume ls | grep -E '^(kai-cockpit|meetkai-dev)_'   # what exists
 
 # Copy each old volume to its new name (example: production Postgres):
-docker volume create kai_postgres
-docker run --rm -v kai-cockpit_postgres:/from -v kai_postgres:/to \
+docker volume create kai_database
+docker run --rm -v kai-cockpit_postgres:/from -v kai_database:/to \
   alpine sh -c 'cp -a /from/. /to/'
 
 # Mapping: kai-cockpit_<v> / meetkai-dev_<v> -> kai_<v>
-# (storage, postgres, logs; some engines also accept
+# (storage, database [was postgres], logs; some engines also accept
 #  `docker volume rename <old> <new>`)
 ```
 
