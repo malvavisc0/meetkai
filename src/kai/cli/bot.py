@@ -29,13 +29,21 @@ from kai.cli.style import (
     card,
     console,
     err_line,
-    relative,
     soft_table,
     uptime_seconds,
 )
 from kai.config.settings import Settings, get_settings
 from kai.logging.logger import setup_logging
-from kai.runs import RunRecord, RunRegistry, generate_run_id, runs_path
+from kai.runs import (
+    RunRecord,
+    RunRegistry,
+    generate_run_id,
+    proc_start_time,
+    runs_path,
+    sanitize_instance_id,
+)
+from kai.templates.resolver import ToolResolution
+from kai.templates.schema import TemplateDef
 from kai.utils.common import compute_hmac, now_iso
 
 logger = logging.getLogger(__name__)
@@ -47,7 +55,8 @@ def runs_registry(bot_name: str, settings: Settings) -> RunRegistry:
 
 def bot_instance_id(bot_name: str, user: str = "") -> str:
     """Per-user instance id matching what `start` registers under."""
-    return f"{bot_name}-{user}" if user else bot_name
+    raw = f"{bot_name}-{user}" if user else bot_name
+    return sanitize_instance_id(raw)
 
 
 def parse_tool_list(raw: str) -> list[str]:
@@ -68,7 +77,7 @@ def fail_on_errors(errors: list[str]) -> bool:
     return True
 
 
-def fail_on_tool_resolution(tool_resolution) -> bool:
+def fail_on_tool_resolution(tool_resolution: ToolResolution) -> bool:
     """Print tool-resolution errors and return True if any were found."""
     had_errors = False
     for err in tool_resolution.missing_required:
@@ -83,16 +92,55 @@ def fail_on_tool_resolution(tool_resolution) -> bool:
     return had_errors
 
 
+def load_startup_template(
+    bot_name: str,
+    template_name: str,
+    enable_tools: str,
+    disable_tools: str,
+) -> tuple[TemplateDef, ToolResolution]:
+    """Resolve the start template and its final tool set, or exit on error.
+
+    Boot guards fail fast on templates declaring required tools without
+    configured env vars, transport-invalid actions, disabled default/required
+    tools, or typos in ``--enable-tools``.
+    """
+    from kai.templates import TemplateRegistry
+    from kai.templates.resolver import resolve_tools, validate_actions
+
+    transport = bot_name
+    tmpl_name = template_name or "general"
+    registry = TemplateRegistry.bundled()
+    try:
+        tmpl = registry.get(transport, tmpl_name)
+    except FileNotFoundError:
+        err_line(f"template not found: {transport}/{tmpl_name}")
+        raise typer.Exit(1)
+    except ValueError as exc:
+        err_line(f"invalid template {transport}/{tmpl_name}: {exc}")
+        raise typer.Exit(1) from exc
+
+    if fail_on_errors(validate_actions(tmpl)):
+        raise typer.Exit(1)
+
+    tool_resolution = resolve_tools(
+        tmpl, parse_tool_list(enable_tools), parse_tool_list(disable_tools)
+    )
+    if fail_on_tool_resolution(tool_resolution):
+        raise typer.Exit(1)
+    return tmpl, tool_resolution
+
+
 def resolve_run(bot_name: str, run_id: str, user: str = "") -> RunRecord:
-    """Resolve a run_id to a live RunRecord or exit with an error panel."""
+    """Resolve a run_id to the live RunRecord or exit with an error panel."""
     settings = get_settings()
     setup_logging()
     instance_id = bot_instance_id(bot_name, user)
-    registry = runs_registry(instance_id, settings)
-    record = registry.active().get(run_id)
-    if record is None:
-        hint = f"kai runs {bot_name}" + (f" --user {user}" if user else "")
-        err_line(f"unknown or stale run: {run_id}", hint=f"check `{hint}` for active run_ids")
+    record = runs_registry(instance_id, settings).get()
+    if record is None or record.run_id != run_id:
+        err_line(
+            f"unknown or stale run: {run_id}",
+            hint=f"check the run id printed by `kai bot start {bot_name}`",
+        )
         raise typer.Exit(1)
     return record
 
@@ -194,6 +242,10 @@ def format_caps_lines(caps: dict | None) -> list[str]:
 
 def render_tell(data: dict) -> None:
     """Render a TellResult dict as a compact, styled summary."""
+    if not isinstance(data, dict):
+        err_line("unexpected reply from bot (expected a JSON object)")
+        return
+
     ok = data.get("ok", False)
     reply = data.get("reply", "") or "(no reply)"
 
@@ -285,31 +337,10 @@ def start_bot(
         raise typer.Exit(1) from exc
 
     # Resolve the template + the final tool set. ``general`` is the default
-    # and reproduces today's behavior. Boot guards fail fast on templates
-    # declaring required tools without configured env vars, transport-invalid
-    # actions, disabled default/required tools, or typos in --enable-tools.
-    from kai.templates import TemplateRegistry
-    from kai.templates.resolver import resolve_tools, validate_actions
-
-    transport = bot_name
-    tmpl_name = template_name or "general"
-
-    registry = TemplateRegistry.bundled()
-    try:
-        tmpl = registry.get(transport, tmpl_name)
-    except FileNotFoundError:
-        err_line(f"template not found: {transport}/{tmpl_name}")
-        raise typer.Exit(1)
-
-    if fail_on_errors(validate_actions(tmpl)):
-        raise typer.Exit(1)
-
-    operator_enable = parse_tool_list(enable_tools)
-    operator_disable = parse_tool_list(disable_tools)
-
-    tool_resolution = resolve_tools(tmpl, operator_enable, operator_disable)
-    if fail_on_tool_resolution(tool_resolution):
-        raise typer.Exit(1)
+    # and reproduces today's behavior.
+    tmpl, tool_resolution = load_startup_template(
+        bot_name, template_name, enable_tools, disable_tools
+    )
 
     # Instance namespace: when --user is provided, isolate files per user.
     instance_id = bot_instance_id(bot_name, user)
@@ -329,7 +360,7 @@ def start_bot(
     console.print(
         f"[bold magenta]kai[/bold magenta] [{DIM}]v0.0.1[/{DIM}]  {GL_ARROW} "
         f"[{DIM}]starting[/{DIM}] [bold]{bot.name}[/bold]  "
-        f"[{DIM}]{transport}/{tmpl_name}[/{DIM}]"
+        f"[{DIM}]{tmpl.transport}/{tmpl.name}[/{DIM}]"
     )
 
     async def main() -> int:
@@ -435,27 +466,29 @@ def start_bot(
             except Exception:
                 logger.exception("failed to register calcom tools; continuing without it")
 
-        # Register a run_id so `kai tell` can target this instance.
+        # Register a run_id so `kai bot tell` can target this instance.
         # Bots that opt out of tell return None from tell_endpoint().
         endpoint = bot.tell_endpoint()
         if endpoint is not None:
             run_id = generate_run_id()
             registry = runs_registry(instance_id, settings)
             registry.replace(
-                run_id,
                 RunRecord(
+                    run_id=run_id,
                     endpoint=endpoint,
                     hmac_key=bot.tell_hmac_key() or "",
                     hmac_algorithm=bot.tell_hmac_algorithm(),
                     pid=os.getpid(),
+                    pid_start=proc_start_time(os.getpid()),
                     started_at=now_iso(),
                 ),
             )
             print(f"KAI_RUN_ID={run_id}", flush=True)
+            tell_cmd = f"kai bot tell {bot_name}" + (f" --user {user}" if user else "")
             card(
                 "[bold]run id[/bold]",
-                f"[bold yellow]{run_id}[/bold yellow]\n"
-                f'[{DIM}]use:[/{DIM}] kai tell {instance_id} --run {run_id} -m "..."',
+                f"[bold yellow]{run_id}[/bold yellow]\n[{DIM}]use:[/{DIM}] "
+                f'{tell_cmd} --run {run_id} -m "..."',
                 border=WARN,
             )
 
@@ -476,8 +509,11 @@ def start_bot(
                 run_task.cancel()
 
         def on_stop_done(task: asyncio.Task):
-            if task.exception() and not task.cancelled():
-                logger.error("bot.stop() raised: %s", task.exception())
+            if task.cancelled():
+                return
+            exc = task.exception()
+            if exc:
+                logger.error("bot.stop() raised: %s", exc)
 
         for sig in (signal.SIGINT, signal.SIGTERM):
             loop.add_signal_handler(sig, request_shutdown)
@@ -512,7 +548,7 @@ def start_bot(
                     logger.debug("sql_engine.dispose() raised during shutdown", exc_info=True)
             if run_id is not None:
                 try:
-                    runs_registry(instance_id, settings).remove(run_id)
+                    runs_registry(instance_id, settings).remove()
                 except Exception:
                     logger.debug("failed to unregister run %s", run_id, exc_info=True)
             console.print(f"{GL_IDLE} [{DIM}]kai stopped[/{DIM}]")
@@ -543,8 +579,8 @@ def status_bot(
 ) -> None:
     """Show a running bot's transport/session status.
 
-    Targets a specific run (from `kai start` output), not a bot name: it GETs
-    the run's ``/status`` route and renders the snapshot the bot returns.
+    Targets a specific run (from `kai bot start` output), not a bot name: it
+    GETs the run's ``/status`` route and renders the snapshot the bot returns.
     """
     record = resolve_run(bot_name, run_id, user=user)
 
@@ -582,7 +618,7 @@ def tell_bot(
 ) -> None:
     """Send an instruction to a running bot via its /tell route.
 
-    Targets a specific run (from `kai start` output), not a bot name. The
+    Targets a specific run (from `kai bot start` output), not a bot name. The
     CLI is bot-agnostic: it forwards ``{message, persist}`` verbatim and
     prints the structured ``TellResult`` the bot returns.
     """
@@ -605,7 +641,8 @@ def tell_bot(
         data.setdefault("ok", False)
 
     render_tell(data)
-    if status_code != 200 or not data.get("ok"):
+    ok = isinstance(data, dict) and data.get("ok")
+    if status_code != 200 or not ok:
         raise typer.Exit(1)
 
 
@@ -721,11 +758,11 @@ def stop_bot(
 ) -> None:
     """Stop a running bot instance.
 
-    Resolves a ``run_id`` (from `kai start`) to its process and sends it a
+    Resolves a ``run_id`` (from `kai bot start`) to its process and sends it a
     signal: SIGTERM by default, which the bot's signal handler turns into a
     graceful shutdown (flushes history, unregisters the run). ``--force``
-    sends SIGKILL — use only if the bot is wedged, as its run record is
-    pruned lazily on the next `kai runs` rather than cleaned up by the bot.
+    sends SIGKILL — use only if the bot is wedged; the bot can't unregister
+    its run record then, so it is pruned here instead.
     """
     instance_id = bot_instance_id(bot_name, user)
     record = resolve_run(bot_name, run_id, user=user)
@@ -734,8 +771,8 @@ def stop_bot(
     try:
         os.kill(record.pid, sig)
     except ProcessLookupError:
-        # Already gone — prune the stale record so `kai runs` is accurate.
-        runs_registry(instance_id, get_settings()).remove(run_id)
+        # Already gone — drop the stale record so it can't be reused.
+        runs_registry(instance_id, get_settings()).remove()
         console.print(
             f"[{WARN}]\u25cf[/{WARN}] [{WARN}]stopped[/{WARN}]  run {run_id} was already gone"
         )
@@ -751,34 +788,26 @@ def stop_bot(
     )
 
 
-def list_runs(
-    bot_name: str,
-    user: str,
-) -> None:
-    """List active runs for a bot (recovers a forgotten run_id)."""
-    settings = get_settings()
-    instance_id = bot_instance_id(bot_name, user)
-    registry = runs_registry(instance_id, settings)
-    active = registry.active()
-    if not active:
-        console.print(f"[{DIM}]{instance_id}[/{DIM}]  [{DIM}]no active runs[/{DIM}]")
-        return
-    console.print(f"[bold]{instance_id}[/bold]  [{DIM}]active runs[/{DIM}]")
-    table = soft_table(
-        ("run id", "bold yellow"),
-        ("endpoint", ACCENT),
-        ("pid", DIM),
-        ("started", DIM),
+def build_app() -> typer.Typer:
+    """Build the ``bot`` sub-app with all lifecycle commands registered."""
+    bot_app = typer.Typer(
+        name="bot",
+        no_args_is_help=True,
+        help="Start, inspect, and stop bot instances.",
     )
-    for rid, record in active.items():
-        table.add_row(rid, record.endpoint, str(record.pid), relative(record.started_at))
-    console.print(table)
+    add_commands(bot_app)
+    return bot_app
 
 
-def register(app: typer.Typer) -> None:
-    """Register all bot lifecycle commands on the given typer app."""
+def add_commands(bot_app: typer.Typer, *, hidden: bool = False) -> None:
+    """Register the bot lifecycle commands on the given typer app.
 
-    @app.command()
+    Called for the ``kai bot`` sub-app and again with ``hidden=True`` for the
+    hidden top-level aliases (``kai start`` etc.) kept for back-compat. A
+    fresh call re-creates each command's option objects.
+    """
+
+    @bot_app.command("start", hidden=hidden)
     def start(
         bot_name: str = typer.Argument(..., help="Bot to start, e.g. email"),
         goal_text: str = typer.Option("", "--goal", "-g", help="Goal to give the bot at startup"),
@@ -819,15 +848,15 @@ def register(app: typer.Typer) -> None:
             disable_tools,
         )
 
-    @app.command(name="list")
+    @bot_app.command("list", hidden=hidden)
     def list_cmd():
         """List the bots you can start."""
         list_available_bots()
 
-    @app.command()
+    @bot_app.command("status", hidden=hidden)
     def status(
         bot_name: str = typer.Argument(..., help="Bot to query, e.g. email"),
-        run_id: str = typer.Option(..., "--run", help="Run id printed by `kai start`"),
+        run_id: str = typer.Option(..., "--run", help="Run id printed by `kai bot start`"),
         user: str = typer.Option(
             "",
             "--user",
@@ -835,14 +864,14 @@ def register(app: typer.Typer) -> None:
             help="User email the instance was started with",
         ),
     ):
-        """Show what a running bot is doing (needs its run id)."""
+        """Show what a running bot is doing."""
         status_bot(bot_name, run_id, user)
 
-    @app.command()
+    @bot_app.command("tell", hidden=hidden)
     def tell(
         bot_name: str = typer.Argument(..., help="Bot to instruct, e.g. email"),
-        run_id: str = typer.Option(..., "--run", help="Run id printed by `kai start`"),
         message: str = typer.Option(..., "--message", "-m", help="Instruction to send"),
+        run_id: str = typer.Option(..., "--run", help="Run id printed by `kai bot start`"),
         persist: bool = typer.Option(
             False,
             "--persist",
@@ -858,10 +887,10 @@ def register(app: typer.Typer) -> None:
         """Send one instruction to a running bot."""
         tell_bot(bot_name, run_id, message, persist, user)
 
-    @app.command()
+    @bot_app.command("chat", hidden=hidden)
     def chat(
         bot_name: str = typer.Argument(..., help="Bot to chat with, e.g. email"),
-        run_id: str = typer.Option(..., "--run", help="Run id printed by `kai start`"),
+        run_id: str = typer.Option(..., "--run", help="Run id printed by `kai bot start`"),
         persist: bool = typer.Option(
             False, "--persist", help="Allow messages that change saved state"
         ),
@@ -875,10 +904,10 @@ def register(app: typer.Typer) -> None:
         """Chat with a running bot in your terminal."""
         chat_bot(bot_name, run_id, persist, user)
 
-    @app.command()
+    @bot_app.command("stop", hidden=hidden)
     def stop(
         bot_name: str = typer.Argument(..., help="Bot to stop, e.g. email"),
-        run_id: str = typer.Option(..., "--run", help="Run id printed by `kai start`"),
+        run_id: str = typer.Option(..., "--run", help="Run id printed by `kai bot start`"),
         force: bool = typer.Option(
             False, "--force", help="Kill immediately instead of shutting down gracefully"
         ),
@@ -892,15 +921,8 @@ def register(app: typer.Typer) -> None:
         """Stop a running bot (SIGTERM, or SIGKILL with --force)."""
         stop_bot(bot_name, run_id, force, user)
 
-    @app.command(name="runs")
-    def runs_cmd(
-        bot_name: str = typer.Argument(..., help="Bot whose runs to list, e.g. email"),
-        user: str = typer.Option(
-            "",
-            "--user",
-            "-u",
-            help="User email the instance was started with",
-        ),
-    ):
-        """List a bot's past runs."""
-        list_runs(bot_name, user)
+
+def register(app: typer.Typer) -> None:
+    """Attach the ``bot`` sub-app plus hidden top-level aliases (back-compat)."""
+    app.add_typer(build_app(), name="bot")
+    add_commands(app, hidden=True)

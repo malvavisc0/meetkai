@@ -57,7 +57,12 @@ class TestStopCommand:
         from kai.runs import RunRecord
 
         record = RunRecord(
-            endpoint="http://x", hmac_key="k", hmac_algorithm="sha512", pid=12345, started_at="t"
+            run_id="deadbeef",
+            endpoint="http://x",
+            hmac_key="k",
+            hmac_algorithm="sha512",
+            pid=12345,
+            started_at="t",
         )
         monkeypatch.setattr(cli_mod, "resolve_run", lambda bot, run, user="": record)
 
@@ -74,7 +79,12 @@ class TestStopCommand:
         from kai.runs import RunRecord
 
         record = RunRecord(
-            endpoint="http://x", hmac_key="k", hmac_algorithm="sha512", pid=12345, started_at="t"
+            run_id="deadbeef",
+            endpoint="http://x",
+            hmac_key="k",
+            hmac_algorithm="sha512",
+            pid=12345,
+            started_at="t",
         )
         monkeypatch.setattr(cli_mod, "resolve_run", lambda bot, run, user="": record)
 
@@ -91,18 +101,21 @@ class TestStopCommand:
         from kai.runs import RunRecord
 
         record = RunRecord(
-            endpoint="http://x", hmac_key="k", hmac_algorithm="sha512", pid=12345, started_at="t"
+            run_id="deadbeef",
+            endpoint="http://x",
+            hmac_key="k",
+            hmac_algorithm="sha512",
+            pid=12345,
+            started_at="t",
         )
         monkeypatch.setattr(cli_mod, "resolve_run", lambda bot, run, user="": record)
         monkeypatch.setattr(cli_mod.os, "kill", self._raise_not_found)
         removed = []
-        monkeypatch.setattr(
-            cli_mod.RunRegistry, "remove", lambda self, run_id: removed.append(run_id)
-        )
+        monkeypatch.setattr(cli_mod.RunRegistry, "remove", lambda self: removed.append(True))
 
         result = runner.invoke(app, ["stop", "email", "--run", "deadbeef"])
         assert result.exit_code == 0
-        assert removed == ["deadbeef"]
+        assert removed == [True]
         assert "already gone" in result.stdout
 
     @staticmethod
@@ -133,7 +146,12 @@ class TestChatCommand:
         from kai.runs import RunRecord
 
         record = RunRecord(
-            endpoint="http://x", hmac_key="k", hmac_algorithm="sha512", pid=1, started_at="t"
+            run_id="deadbeef",
+            endpoint="http://x",
+            hmac_key="k",
+            hmac_algorithm="sha512",
+            pid=1,
+            started_at="t",
         )
         monkeypatch.setattr(cli_mod, "resolve_run", lambda bot, run, user="": record)
 
@@ -156,7 +174,12 @@ class TestChatCommand:
         from kai.runs import RunRecord
 
         record = RunRecord(
-            endpoint="http://x", hmac_key="k", hmac_algorithm="sha512", pid=1, started_at="t"
+            run_id="deadbeef",
+            endpoint="http://x",
+            hmac_key="k",
+            hmac_algorithm="sha512",
+            pid=1,
+            started_at="t",
         )
         monkeypatch.setattr(cli_mod, "resolve_run", lambda bot, run, user="": record)
 
@@ -173,7 +196,12 @@ class TestChatCommand:
         from kai.runs import RunRecord
 
         record = RunRecord(
-            endpoint="http://x", hmac_key="k", hmac_algorithm="sha512", pid=1, started_at="t"
+            run_id="deadbeef",
+            endpoint="http://x",
+            hmac_key="k",
+            hmac_algorithm="sha512",
+            pid=1,
+            started_at="t",
         )
         monkeypatch.setattr(cli_mod, "resolve_run", lambda bot, run, user="": record)
 
@@ -197,7 +225,12 @@ class TestChatCommand:
         from kai.runs import RunRecord
 
         record = RunRecord(
-            endpoint="http://x", hmac_key="k", hmac_algorithm="sha512", pid=1, started_at="t"
+            run_id="deadbeef",
+            endpoint="http://x",
+            hmac_key="k",
+            hmac_algorithm="sha512",
+            pid=1,
+            started_at="t",
         )
         monkeypatch.setattr(cli_mod, "resolve_run", lambda bot, run, user="": record)
 

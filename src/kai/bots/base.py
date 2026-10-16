@@ -37,7 +37,7 @@ class TellResult(BaseModel):
     """Structured envelope returned by an operator ``/tell`` turn.
 
     The framework relays this verbatim as the ``/tell`` HTTP response; the
-    ``kai tell`` CLI reads it and prints a human summary. It is built by the
+    ``kai bot tell`` CLI reads it and prints a human summary. It is built by the
     bot's ``_build_tell_result`` from a :class:`ChatResult`:
 
     - ``actions`` mirrors ``ChatResult.tool_calls`` (the side-effecting tool
@@ -302,10 +302,10 @@ class BaseBot(ABC):
     # no route wired).
 
     def tell_endpoint(self) -> str | None:
-        """Return the HTTP endpoint a ``kai tell`` CLI should POST to.
+        """Return the HTTP endpoint a ``kai bot tell`` CLI should POST to.
 
         ``None`` means this bot does not support the operator ``/tell``
-        surface. Returning a URL opts in: ``kai start`` registers a run_id
+        surface. Returning a URL opts in: ``kai bot start`` registers a run_id
         for it and the framework wires the ``/tell`` route. Implementations
         should normalize a wildcard bind (``0.0.0.0``) to a loopback address
         the local CLI can actually reach.
@@ -313,7 +313,7 @@ class BaseBot(ABC):
         return None
 
     def tell_hmac_key(self) -> str | None:
-        """HMAC key ``kai tell`` must sign requests with for this bot."""
+        """HMAC key ``kai bot tell`` must sign requests with for this bot."""
         return None
 
     def tell_hmac_algorithm(self) -> str:

@@ -96,10 +96,10 @@ Use these variables for dynamic substitution:
 
 ```bash
 # Preview the filled prompt without starting a bot
-kai templates render email/customer-support
+kai template render email/customer-support
 
 # Start a bot with the template
-kai start email --template customer-support --goal "test"
+kai bot start email --template customer-support --goal "test"
 ```
 
 The cockpit also provides a preview endpoint at `/deployments/new/preview?bot_type=email&template=customer-support`.

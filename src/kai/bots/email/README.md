@@ -173,8 +173,8 @@ no separate send tool and no `to` field on the request:
 ## CLI
 
 ```bash
-uv run kai start email
-uv run kai status email
+uv run kai bot start email
+uv run kai bot status email
 ```
 
 `start` loads config + prompt, binds the control server, and serves until

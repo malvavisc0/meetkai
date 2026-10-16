@@ -1,6 +1,7 @@
 """SQLAlchemy engine, session factory, and helpers for the cockpit database."""
 
 from collections.abc import Generator
+from pathlib import Path
 
 from fastapi import Request
 from sqlalchemy import create_engine
@@ -50,6 +51,21 @@ def run_migrations() -> None:
     from alembic import command
     from alembic.config import Config
 
-    cfg = Config("alembic.ini")
+    cfg = Config(str(alembic_ini_path()))
     cfg.set_main_option("sqlalchemy.url", get_cockpit_settings().cockpit_db)
     command.upgrade(cfg, "head")
+
+
+def alembic_ini_path() -> Path:
+    """Locate ``alembic.ini`` regardless of the current working directory.
+
+    Prefers the CWD copy (dev checkouts run from the repo root), then falls
+    back to the repo root resolved from this file's location (packaged or
+    container installs). Raises when neither candidate exists."""
+    cwd = Path("alembic.ini")
+    if cwd.is_file():
+        return cwd
+    repo_root = Path(__file__).resolve().parents[3] / "alembic.ini"
+    if not repo_root.is_file():
+        raise FileNotFoundError("alembic.ini not found in the CWD or the repo root")
+    return repo_root

@@ -27,7 +27,7 @@ from kai.cockpit.bots import (
     BotType,
 )
 from kai.cockpit.models import Connection, Deployment, User
-from kai.runs import RunRegistry, pid_alive, runs_path
+from kai.runs import RunRecord, RunRegistry, record_is_live, runs_path, sanitize_instance_id
 from kai.utils.common import compute_hmac, now_iso
 
 logger = logging.getLogger(__name__)
@@ -94,7 +94,7 @@ def attention_reason(dep: Deployment, status_data: dict | None) -> str | None:
 
 
 def instance_id_for(bot_type: str, email: str) -> str:
-    return f"{bot_type}-{email}"
+    return sanitize_instance_id(f"{bot_type}-{email}")
 
 
 def tool_enabled(value: dict) -> bool:
@@ -224,11 +224,22 @@ class DeploymentsService:
         instance_id = self.deployment_instance_id(deployment, user=user)
         return RunRegistry(runs_path(settings.agent_history_folder, instance_id))
 
-    def resolve_run(self, deployment: Deployment):
+    def resolve_run(self, deployment: Deployment) -> RunRecord | None:
+        """Return the deployment's live RunRecord, or None when there is none.
+
+        ``RunRegistry.get`` only hands out live records (it prunes stale and
+        PID-reused ones), so every caller — status probes, event forwarding,
+        the duplicate-start guard — shares one liveness regime with the CLI.
+        None also covers a live record whose ``run_id`` differs (a manually
+        started bot on this instance): the registry entry is not ours to act
+        on.
+        """
         if not deployment.run_id:
             return None
-        registry = self.run_registry(deployment)
-        return registry.get(deployment.run_id)
+        record = self.run_registry(deployment).get()
+        if record is None or record.run_id != deployment.run_id:
+            return None
+        return record
 
     def sign_body(self, record, body: bytes) -> str:
         return compute_hmac(record.hmac_key, body, record.hmac_algorithm)
@@ -281,6 +292,24 @@ class DeploymentsService:
 
     def list_for_user(self, user_id: int) -> list[Deployment]:
         return self.db.query(Deployment).filter(Deployment.user_id == user_id).all()
+
+    def stop_all_for_user(self, user_id: int) -> int:
+        """Stop every deployment of a user; return how many were stopped.
+
+        Used when an operator is disabled: bot subprocesses run independently
+        of the web session gate, so disabling must also stop their bots.
+        A failure to stop one deployment is logged and skipped.
+        """
+        stopped = 0
+        for dep in self.list_for_user(user_id):
+            if dep.status != "running" and not dep.run_id:
+                continue
+            try:
+                self.stop(dep)
+                stopped += 1
+            except Exception:
+                logger.exception("could not stop deployment %s", dep.id)
+        return stopped
 
     def get_for_user_and_type(self, user_id: int, bot_type: str) -> Deployment | None:
         return (
@@ -447,6 +476,14 @@ class DeploymentsService:
         user = self.user_for(deployment)
         instance_id = self.deployment_instance_id(deployment, user=user)
 
+        # Refuse to spawn a second bot on top of a live one: a duplicate would
+        # handle the same inbox and orphan the first process (its run record
+        # gets overwritten). Reconcile only calls start() for dead bots, so
+        # this guard is safe there too. ``resolve_run`` returns live records
+        # only, so non-None means a bot is up.
+        if self.resolve_run(deployment) is not None:
+            raise DeploymentStartupError(f"deployment {deployment.id} is already running")
+
         required_conns = self.resolve_required_connections(bt, user)
         brain_conn = self.find_connection(user, "morphik")
 
@@ -486,6 +523,7 @@ class DeploymentsService:
     def build_spawn_argv(self, deployment: Deployment, user: User) -> list[str]:
         argv = [
             *kai_argv_prefix(),
+            "bot",
             "start",
             deployment.bot_type,
             "--user",
@@ -675,7 +713,8 @@ class DeploymentsService:
         registry = self.run_registry(deployment, user=user)
         deadline = time.time() + 10
         while time.time() < deadline:
-            if registry.get(run_id) is not None:
+            record = registry.get()
+            if record is not None and record.run_id == run_id:
                 return
             time.sleep(0.5)
         raise DeploymentStartupError(f"Run {run_id} not found in registry")
@@ -696,27 +735,30 @@ class DeploymentsService:
             self.db.commit()
             return
 
-        registry = self.run_registry(deployment)
-        record = registry.get(deployment.run_id)
+        record = self.resolve_run(deployment)
 
-        if record and pid_alive(record.pid):
+        # A None record was already pruned (dead process) — or belongs to a
+        # different run_id (e.g. a manually started bot on this instance),
+        # whose registry entry must not be touched. Only a record this
+        # deployment owns is stopped and removed.
+        if record is not None:
+            registry = self.run_registry(deployment)
             try:
                 os.kill(record.pid, signal.SIGTERM)
             except ProcessLookupError:
                 pass
             for _ in range(20):
-                if not pid_alive(record.pid):
+                if not record_is_live(record):
                     break
                 time.sleep(0.5)
             else:
-                if pid_alive(record.pid):
+                if record_is_live(record):
                     try:
                         os.kill(record.pid, signal.SIGKILL)
                     except ProcessLookupError:
                         pass
                     time.sleep(0.5)
-
-        registry.remove(deployment.run_id)
+            registry.remove()
         deployment.run_id = None
         deployment.status = "stopped"
         deployment.desired_state = "stopped"

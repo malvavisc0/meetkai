@@ -1,5 +1,6 @@
 """Tests for argv passed when spawning a bot subprocess with template/tool overrides."""
 
+import os
 import subprocess
 from collections.abc import Callable
 
@@ -46,7 +47,7 @@ def _setup_popen(monkeypatch, tmp_path, dep_db, dep_user) -> tuple[list[str], Ca
     monkeypatch.setattr(subprocess, "Popen", fake_popen)
 
     from kai.config.settings import Settings
-    from kai.runs import RunRecord, RunRegistry, runs_path
+    from kai.runs import RunRecord, RunRegistry, proc_start_time, runs_path
 
     fake_settings = Settings.for_test(agent_history_folder=str(tmp_path))
     monkeypatch.setattr("kai.config.settings.get_settings", lambda: fake_settings)
@@ -54,12 +55,13 @@ def _setup_popen(monkeypatch, tmp_path, dep_db, dep_user) -> tuple[list[str], Ca
     instance_id = f"email-{dep_user.email}"
     registry = RunRegistry(runs_path(fake_settings.agent_history_folder, instance_id))
     registry.replace(
-        "deadbeef",
         RunRecord(
+            run_id="deadbeef",
             endpoint="http://x",
             hmac_key="k",
             hmac_algorithm="sha512",
-            pid=1,
+            pid=os.getpid(),
+            pid_start=proc_start_time(os.getpid()),  # live-looking seed
             started_at="t",
         ),
     )

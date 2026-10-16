@@ -6,6 +6,7 @@ env, ``Deployment.settings["control_port"]`` is set on start and cleared on
 stop.
 """
 
+import os
 import subprocess
 from datetime import UTC, datetime
 
@@ -37,15 +38,20 @@ class _FakeProc:
 
 def _setup_run_registry(monkeypatch, tmp_path, instance_id: str):
     from kai.config.settings import Settings
-    from kai.runs import RunRecord, RunRegistry, runs_path
+    from kai.runs import RunRecord, RunRegistry, proc_start_time, runs_path
 
     fake_settings = Settings.for_test(agent_history_folder=str(tmp_path))
     monkeypatch.setattr("kai.config.settings.get_settings", lambda: fake_settings)
     registry = RunRegistry(runs_path(fake_settings.agent_history_folder, instance_id))
     registry.replace(
-        "deadbeef",
         RunRecord(
-            endpoint="http://x", hmac_key="k", hmac_algorithm="sha512", pid=1, started_at="t"
+            run_id="deadbeef",
+            endpoint="http://x",
+            hmac_key="k",
+            hmac_algorithm="sha512",
+            pid=os.getpid(),
+            pid_start=proc_start_time(os.getpid()),  # live-looking seed
+            started_at="t",
         ),
     )
     return fake_settings

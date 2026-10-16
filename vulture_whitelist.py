@@ -25,7 +25,8 @@ new hits without a comment-level justification like the above.
 
 # typer commands (dispatched by the typer app)
 list_cmd
-runs_cmd
+show_cmd
+render_cmd
 cockpit_serve
 cockpit_migrate
 cockpit_rotate_credential_key

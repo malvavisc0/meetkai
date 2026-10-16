@@ -5,18 +5,53 @@ from kai.config.prompts import load_system_prompt
 from kai.templates import TemplateRegistry, escalation_prompt_section
 from kai.templates.schema import TemplateDef
 
-app = typer.Typer(help="Look at the bundled bot templates and preview their prompts.")
-
 REGISTRY = TemplateRegistry.bundled()
 
 
-@app.command()
-def list(
-    transport: str | None = typer.Option(
-        None, help="Only show templates for this transport (email)"
-    ),
-):
-    """List the bot templates bundled with Kai."""
+def build_app() -> typer.Typer:
+    """Build the templates sub-app.
+
+    Called twice at import: once as ``kai template`` (primary) and once as the
+    hidden ``kai templates`` alias kept for back-compat. A fresh app per call
+    gives each registration its own option objects.
+    """
+    app = typer.Typer(
+        name="template",
+        no_args_is_help=True,
+        help="Inspect the bundled bot templates: list, show, and preview prompts.",
+    )
+
+    @app.command("list")
+    def list_cmd(
+        transport: str | None = typer.Option(
+            None, help="Only show templates for this transport (email)"
+        ),
+    ):
+        """List the bot templates bundled with Kai."""
+        list_templates(transport)
+
+    @app.command("show")
+    def show_cmd(
+        template_id: str = typer.Argument(..., help="Template identifier (e.g. email/general)"),
+    ):
+        """Show a template's tools, settings, and escalation rules."""
+        show_template(template_id)
+
+    @app.command("render")
+    def render_cmd(
+        template_id: str = typer.Argument(..., help="Template identifier (e.g. email/general)"),
+        goal: str = typer.Option("", "--goal", "-g", help="Goal to fill in for the preview"),
+        language: str = typer.Option(
+            "", "--language", "-l", help="Language to fill in for the preview"
+        ),
+    ):
+        """Print a template's system prompt so you can preview it."""
+        render_prompt(template_id, goal, language)
+
+    return app
+
+
+def list_templates(transport: str | None) -> None:
     templates = REGISTRY.list(transport)
     if not templates:
         if transport:
@@ -35,36 +70,30 @@ def list(
     rich.console.Console().print(table)
 
 
-@app.command(name="show")
-def show(
-    template_id: str = typer.Argument(..., help="Template identifier (e.g. email/general)"),
-):
-    """Show a template's tools, settings, and escalation rules."""
+def show_template(template_id: str) -> None:
     parts = parse_id(template_id)
     try:
         tmpl = REGISTRY.get(parts.transport, parts.name)
     except FileNotFoundError:
         typer.echo(f"Template not found: {template_id}")
         raise typer.Exit(1)
+    except ValueError as exc:
+        typer.echo(f"Invalid template {template_id}: {exc}")
+        raise typer.Exit(1) from exc
 
     render_template(tmpl)
 
 
-@app.command()
-def render(
-    template_id: str = typer.Argument(..., help="Template identifier (e.g. email/general)"),
-    goal: str = typer.Option("", "--goal", "-g", help="Goal to fill in for the preview"),
-    language: str = typer.Option(
-        "", "--language", "-l", help="Language to fill in for the preview"
-    ),
-):
-    """Print a template's system prompt so you can preview it."""
+def render_prompt(template_id: str, goal: str, language: str) -> None:
     parts = parse_id(template_id)
     try:
         tmpl = REGISTRY.get(parts.transport, parts.name)
     except FileNotFoundError:
         typer.echo(f"Template not found: {template_id}")
         raise typer.Exit(1)
+    except ValueError as exc:
+        typer.echo(f"Invalid template {template_id}: {exc}")
+        raise typer.Exit(1) from exc
 
     prompt_path = REGISTRY.prompt_path(parts.transport, parts.name)
     if prompt_path is None:

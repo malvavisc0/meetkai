@@ -40,7 +40,7 @@ HMAC-authenticated webhooks and pydantic-settings config under the
 uv sync                                # install deps
 uv run kai --help                      # CLI surface
 uv run kai cockpit serve               # run the cockpit
-uv run kai start <bot> […]             # run a bot
+uv run kai bot start <bot> […]         # run a bot
 uv run ruff check --fix .              # lint
 uv run ruff format .                   # format
 uv run pyright                         # type check

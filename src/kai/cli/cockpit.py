@@ -116,6 +116,14 @@ def cockpit_user_create(
         )
         raise typer.Exit(1)
 
+    from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
+
+    try:
+        ZoneInfo(timezone)
+    except (ZoneInfoNotFoundError, ValueError):
+        console.print(f"[{WARN}]\u25cf unknown timezone '{timezone}'[/{WARN}]")
+        raise typer.Exit(1)
+
     db = SessionLocal()
     try:
         existing = db.query(User).filter(User.email == email).first()
@@ -199,7 +207,17 @@ def cockpit_user_disable(
             raise typer.Exit(1)
         user.is_disabled = True
         db.commit()
+
+        # Disabling must also stop any bots the user is running: the bot
+        # subprocess is independent of the web session gate and would keep
+        # handling inbound events otherwise.
+        from kai.cockpit.deployments import DeploymentsService
+
+        stopped = DeploymentsService(db).stop_all_for_user(user.id)
+
         console.print(f"{GL_OK} [{OK}]disabled user[/{OK}]  {email}")
+        if stopped:
+            console.print(f"[{DIM}]stopped {stopped} running deployment(s)[/{DIM}]")
     finally:
         db.close()
 
@@ -324,6 +342,9 @@ def cockpit_request_approve(
         user = db.query(User).filter(User.email == email).first()
         if not user:
             err_line(f"user '{email}' not found")
+            raise typer.Exit(1)
+        if user.is_disabled:
+            err_line(f"user '{email}' is disabled")
             raise typer.Exit(1)
 
         # Mint via the shared AuthProvider seam so a single mint path handles

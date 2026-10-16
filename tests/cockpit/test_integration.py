@@ -1,5 +1,6 @@
 """End-to-end integration test"""
 
+import os
 import subprocess
 
 import pytest
@@ -94,7 +95,7 @@ class TestFullDeploymentFlow:
 
         import kai.cockpit.deployments as dep_mod
         from kai.config.settings import Settings
-        from kai.runs import RunRecord, RunRegistry, runs_path
+        from kai.runs import RunRecord, RunRegistry, proc_start_time, runs_path
 
         fake_settings = Settings.for_test(agent_history_folder=str(tmp_path))
         monkeypatch.setattr("kai.config.settings.get_settings", lambda: fake_settings)
@@ -102,12 +103,13 @@ class TestFullDeploymentFlow:
         instance_id = f"{dep.bot_type}-{bob.email}"
         registry = RunRegistry(runs_path(fake_settings.agent_history_folder, instance_id))
         registry.replace(
-            "cafef00d",
             RunRecord(
+                run_id="cafef00d",
                 endpoint="http://127.0.0.1:9999",
                 hmac_key="k",
                 hmac_algorithm="sha512",
-                pid=1,
+                pid=os.getpid(),
+                pid_start=proc_start_time(os.getpid()),  # live-looking seed
                 started_at="t",
             ),
         )
@@ -158,7 +160,12 @@ class TestFullDeploymentFlow:
         assert "restart" in r.text.lower()
 
         # 14. POST /deployments/{id}/stop -> stopped
-        monkeypatch.setattr("kai.cockpit.deployments.pid_alive", lambda pid: False)
+        # The seeded record is live-looking (the test process itself), so
+        # stub the kill: stop() would otherwise SIGTERM this pytest worker.
+        monkeypatch.setattr(
+            "kai.cockpit.deployments.os.kill", lambda pid, sig: killed.append((pid, sig))
+        )
+        killed: list = []
         r = csrf_post(client, f"/deployments/{dep.id}/stop", follow_redirects=False)
         assert r.status_code == 302
         db.refresh(dep)

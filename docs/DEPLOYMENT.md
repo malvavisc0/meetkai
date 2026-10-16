@@ -146,11 +146,11 @@ still sends the link over SMTP — it does not print it anywhere.
 Run a bot directly (without the cockpit) instead:
 
 ```bash
-uv run kai list
-uv run kai start email \
+uv run kai bot list
+uv run kai bot start email \
   --goal "Answer support questions grounded in the Brain. Be helpful and concise." \
   --language English
-uv run kai status email
+uv run kai bot status email
 ```
 
 ### Tests and lint

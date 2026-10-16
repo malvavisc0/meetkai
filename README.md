@@ -105,15 +105,15 @@ KAI_LOG_DIR=/tmp/kai/logs
 ## Run A Bot
 
 ```bash
-uv run kai list
-uv run kai start email \
+uv run kai bot list
+uv run kai bot start email \
   --goal "Answer support questions grounded in the Brain. Be helpful and concise." \
   --language English
-uv run kai status email
+uv run kai bot status email
 ```
 
-`start` runs until SIGINT or SIGTERM. A second signal forces exit. `status`
-delegates to the selected bot.
+`bot start` runs until SIGINT or SIGTERM; a second signal forces exit.
+`bot status` reads live state of the run id printed by `bot start`.
 
 ## Run The Cockpit
 

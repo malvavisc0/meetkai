@@ -1,5 +1,6 @@
 """Tests for per-deployment Brain policy (brain_mandatory / brain_instruction)."""
 
+import os
 import subprocess
 
 import pytest
@@ -122,7 +123,7 @@ class _StartBrainPolicyBase:
         monkeypatch.setattr(subprocess, "Popen", fake_popen)
 
         from kai.config.settings import Settings
-        from kai.runs import RunRecord, RunRegistry, runs_path
+        from kai.runs import RunRecord, RunRegistry, proc_start_time, runs_path
 
         fake_settings = Settings.for_test(agent_history_folder=str(tmp_path))
         monkeypatch.setattr("kai.config.settings.get_settings", lambda: fake_settings)
@@ -130,9 +131,14 @@ class _StartBrainPolicyBase:
         instance_id = f"{dep.bot_type}-{user.email}"
         registry = RunRegistry(runs_path(fake_settings.agent_history_folder, instance_id))
         registry.replace(
-            "deadbeef",
             RunRecord(
-                endpoint="http://x", hmac_key="k", hmac_algorithm="sha512", pid=1, started_at="t"
+                run_id="deadbeef",
+                endpoint="http://x",
+                hmac_key="k",
+                hmac_algorithm="sha512",
+                pid=os.getpid(),
+                pid_start=proc_start_time(os.getpid()),  # live-looking seed
+                started_at="t",
             ),
         )
 

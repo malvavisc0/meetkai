@@ -23,6 +23,7 @@ def deployment_create(
     bot_type: str = typer.Option(..., "--bot", help="Bot type, for example email"),
     goal: str = typer.Option(..., "--goal", help="What the bot should do"),
     language: str = typer.Option(..., "--language", help="Bot language"),
+    template: str = typer.Option("general", "--template", "-t", help="Template to start from"),
 ):
     """Create a new deployment for a user."""
     from kai.cockpit.db import SessionLocal
@@ -40,7 +41,7 @@ def deployment_create(
             raise typer.Exit(1)
         svc = DeploymentsService(db)
         try:
-            dep = svc.create(db_user, bot_type, goal, language)
+            dep = svc.create(db_user, bot_type, goal, language, template)
         except ConnectionRequiredError as exc:
             err_line(str(exc))
             raise typer.Exit(1) from exc
@@ -178,6 +179,12 @@ def deployment_edit(
             return
         svc.edit(dep, **fields)
         console.print(f"{GL_OK} [{OK}]updated deployment[/{OK}]  {deployment_id}")
+        if dep.status == "running" and dep.needs_restart:
+            console.print(
+                f"[{WARN}]\u25cf restart needed to apply: "
+                f"kai deployment stop {deployment_id} && "
+                f"kai deployment start {deployment_id}[/{WARN}]"
+            )
     finally:
         db.close()
 
