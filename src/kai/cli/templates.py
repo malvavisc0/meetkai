@@ -5,15 +5,18 @@ from kai.config.prompts import load_system_prompt
 from kai.templates import TemplateRegistry, escalation_prompt_section
 from kai.templates.schema import TemplateDef
 
-app = typer.Typer(help="Bot templates")
+app = typer.Typer(help="Look at the bundled bot templates and preview their prompts.")
 
 REGISTRY = TemplateRegistry.bundled()
 
 
 @app.command()
 def list(
-    transport: str | None = typer.Option(None, help="Filter by transport (email)"),
+    transport: str | None = typer.Option(
+        None, help="Only show templates for this transport (email)"
+    ),
 ):
+    """List the bot templates bundled with Kai."""
     templates = REGISTRY.list(transport)
     if not templates:
         if transport:
@@ -36,6 +39,7 @@ def list(
 def show(
     template_id: str = typer.Argument(..., help="Template identifier (e.g. email/general)"),
 ):
+    """Show a template's tools, settings, and escalation rules."""
     parts = parse_id(template_id)
     try:
         tmpl = REGISTRY.get(parts.transport, parts.name)
@@ -49,9 +53,12 @@ def show(
 @app.command()
 def render(
     template_id: str = typer.Argument(..., help="Template identifier (e.g. email/general)"),
-    goal: str = typer.Option("", "--goal", "-g", help="Goal to inject for preview"),
-    language: str = typer.Option("", "--language", "-l", help="Language to inject"),
+    goal: str = typer.Option("", "--goal", "-g", help="Goal to fill in for the preview"),
+    language: str = typer.Option(
+        "", "--language", "-l", help="Language to fill in for the preview"
+    ),
 ):
+    """Print a template's system prompt so you can preview it."""
     parts = parse_id(template_id)
     try:
         tmpl = REGISTRY.get(parts.transport, parts.name)

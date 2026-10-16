@@ -13,16 +13,16 @@ from kai.cli.style import (
 deployment_app = typer.Typer(
     name="deployment",
     no_args_is_help=True,
-    help="Admin CRUD over deployments (calls the same service as the web).",
+    help="Create, list, start, stop, edit, and delete deployments.",
 )
 
 
 @deployment_app.command("create")
 def deployment_create(
     user: str = typer.Option(..., "--user", help="User email"),
-    bot_type: str = typer.Option(..., "--bot", help="Bot type (e.g. email)"),
-    goal: str = typer.Option(..., "--goal", help="Bot goal (required)"),
-    language: str = typer.Option(..., "--language", help="Bot language (required)"),
+    bot_type: str = typer.Option(..., "--bot", help="Bot type, for example email"),
+    goal: str = typer.Option(..., "--goal", help="What the bot should do"),
+    language: str = typer.Option(..., "--language", help="Bot language"),
 ):
     """Create a new deployment for a user."""
     from kai.cockpit.db import SessionLocal
@@ -59,7 +59,7 @@ def deployment_create(
 def deployment_list(
     user: str = typer.Option(..., "--user", help="User email"),
 ):
-    """List deployments for a user."""
+    """List a user's deployments."""
     from kai.cockpit.db import SessionLocal
     from kai.cockpit.deployments import DeploymentsService
     from kai.cockpit.models import User
@@ -100,7 +100,7 @@ def deployment_list(
 
 @deployment_app.command("start")
 def deployment_start(
-    deployment_id: int = typer.Argument(...),
+    deployment_id: int = typer.Argument(..., help="Deployment id"),
 ):
     """Start a deployment."""
     from kai.cockpit.db import SessionLocal
@@ -132,7 +132,7 @@ def deployment_start(
 
 @deployment_app.command("stop")
 def deployment_stop(
-    deployment_id: int = typer.Argument(...),
+    deployment_id: int = typer.Argument(..., help="Deployment id"),
 ):
     """Stop a deployment."""
     from kai.cockpit.db import SessionLocal
@@ -153,11 +153,11 @@ def deployment_stop(
 
 @deployment_app.command("edit")
 def deployment_edit(
-    deployment_id: int = typer.Argument(...),
-    goal: str = typer.Option(None, "--goal"),
-    language: str = typer.Option(None, "--language"),
+    deployment_id: int = typer.Argument(..., help="Deployment id"),
+    goal: str = typer.Option(None, "--goal", help="New goal (leave unset to keep)"),
+    language: str = typer.Option(None, "--language", help="New language (leave unset to keep)"),
 ):
-    """Edit deployment fields (partial update)."""
+    """Change a deployment's goal or language."""
     from kai.cockpit.db import SessionLocal
     from kai.cockpit.deployments import DeploymentsService
 
@@ -184,10 +184,10 @@ def deployment_edit(
 
 @deployment_app.command("delete")
 def deployment_delete(
-    deployment_id: int = typer.Argument(...),
+    deployment_id: int = typer.Argument(..., help="Deployment id"),
     yes: bool = typer.Option(False, "--yes", "-y", help="Skip confirmation prompt"),
 ):
-    """Delete a deployment (stops it first if running)."""
+    """Delete a deployment, stopping it first if it's running."""
     from kai.cockpit.db import SessionLocal
     from kai.cockpit.deployments import DeploymentsService
 

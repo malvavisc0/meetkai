@@ -17,30 +17,30 @@ from kai.cli.style import (
 cockpit_app = typer.Typer(
     name="cockpit",
     no_args_is_help=True,
-    help="Run and manage the kai cockpit web app + its operators.",
+    help="Run the cockpit web app and administer its users.",
 )
 
 cockpit_user_app = typer.Typer(
     name="user",
     no_args_is_help=True,
-    help="Create, list, and disable cockpit operators (admin only).",
+    help="Create, list, and disable cockpit users (admin only).",
 )
 cockpit_app.add_typer(cockpit_user_app, name="user")
 
 cockpit_request_app = typer.Typer(
     name="request",
     no_args_is_help=True,
-    help="List, create, and approve magic-link login requests (admin only).",
+    help="Create, list, and approve magic-link login requests (admin only).",
 )
 cockpit_app.add_typer(cockpit_request_app, name="request")
 
 
 @cockpit_app.command("serve")
 def cockpit_serve(
-    host: str = typer.Option("127.0.0.1", "--host"),
-    port: int = typer.Option(8080, "--port"),
+    host: str = typer.Option("127.0.0.1", "--host", help="Network interface to listen on"),
+    port: int = typer.Option(8080, "--port", help="Port to listen on"),
 ):
-    """Launch the cockpit web UI (uvicorn)."""
+    """Start the cockpit web app."""
     import uvicorn
 
     from kai.logging.logger import setup_logging
@@ -53,7 +53,7 @@ def cockpit_serve(
 
 @cockpit_app.command("migrate")
 def cockpit_migrate():
-    """Apply Alembic migrations to the cockpit DB (idempotent at head)."""
+    """Update the cockpit database schema (safe to run again)."""
     from kai.cockpit.db import run_migrations
     from kai.logging.logger import setup_logging
 
@@ -64,11 +64,11 @@ def cockpit_migrate():
 
 @cockpit_app.command("rotate-credential-key")
 def cockpit_rotate_credential_key():
-    """Rotate the credential encryption key (run on demand).
+    """Rotate the credential encryption key.
 
-    Bumps ``KAI_CREDENTIAL_KEY_VERSION``, re-encrypts every stored credential
-    Connection under the new derived key, and updates ``.env``. The root
-    secret (``KAI_CREDENTIAL_ENCRYPTION_KEY``) is never touched.
+    Re-encrypts every stored credential with a new key and updates ``.env``.
+    Bumps ``KAI_CREDENTIAL_KEY_VERSION``. The root secret
+    (``KAI_CREDENTIAL_ENCRYPTION_KEY``) is left untouched.
     """
     from kai.cockpit.db import SessionLocal
     from kai.cockpit.key_rotation import rotate_credential_key
@@ -96,8 +96,10 @@ def cockpit_rotate_credential_key():
 @cockpit_user_app.command("create")
 def cockpit_user_create(
     email: str = typer.Argument(..., help="Email or username"),
-    language: str = typer.Option(..., "--language", help="Default language for deployments"),
-    timezone: str = typer.Option(..., "--timezone", help="IANA timezone (e.g. Europe/Berlin)"),
+    language: str = typer.Option(
+        ..., "--language", help="Default language for this user's deployments"
+    ),
+    timezone: str = typer.Option(..., "--timezone", help="Timezone, for example Europe/Berlin"),
 ):
     """Create a new cockpit user."""
     import secrets
@@ -145,7 +147,7 @@ def cockpit_user_create(
 
 @cockpit_user_app.command("list")
 def cockpit_user_list():
-    """List all cockpit users."""
+    """List cockpit users."""
     from kai.cockpit.db import SessionLocal
     from kai.cockpit.models import User
 
@@ -183,9 +185,9 @@ def cockpit_user_list():
 
 @cockpit_user_app.command("disable")
 def cockpit_user_disable(
-    email: str = typer.Argument(...),
+    email: str = typer.Argument(..., help="User email"),
 ):
-    """Disable a cockpit user."""
+    """Disable a cockpit user so they can no longer log in."""
     from kai.cockpit.db import SessionLocal
     from kai.cockpit.models import User
 
@@ -212,11 +214,11 @@ def cockpit_user_flags(
     sso: bool = typer.Option(None, "--sso/--no-sso", help="Toggle SSO login"),
     show: bool = typer.Option(False, "--show", help="Only print current flags, change nothing"),
 ):
-    """Grant or revoke feature-flag entitlements for a user.
+    """Turn features on or off for a user.
 
-    Flags default to OFF on user creation. Pass ``--image`` to enable,
-    ``--no-image`` to disable. Omitting a flag leaves it unchanged. With
-    ``--show`` the current entitlements are printed without modifying.
+    Flags start off when a user is created. Pass ``--image`` to enable and
+    ``--no-image`` to disable; a flag you omit is left as it is. With
+    ``--show`` nothing changes, the current flags are just printed.
     """
     from kai.cockpit.db import SessionLocal
     from kai.cockpit.models import User
@@ -271,9 +273,9 @@ def cockpit_request_list():
 
 @cockpit_request_app.command("create")
 def cockpit_request_create(
-    email: str = typer.Argument(...),
+    email: str = typer.Argument(..., help="User email"),
 ):
-    """Admin: seed a login request for a user (no browser needed)."""
+    """Create a pending login request for a user, without the browser."""
     from kai.cockpit.db import SessionLocal
     from kai.cockpit.models import LoginRequest, User
 
@@ -308,9 +310,9 @@ def cockpit_request_create(
 
 @cockpit_request_app.command("approve")
 def cockpit_request_approve(
-    email: str = typer.Argument(...),
+    email: str = typer.Argument(..., help="User email"),
 ):
-    """Approve a pending login request and mint a magic link token."""
+    """Approve a login request and send the user a magic link."""
     from kai.cockpit.auth_backends import MagicLinkProvider
     from kai.cockpit.cli_helpers import build_magic_link_url
     from kai.cockpit.db import SessionLocal

@@ -10,7 +10,7 @@ from kai.cli.style import (
 connection_app = typer.Typer(
     name="connection",
     no_args_is_help=True,
-    help="List account-level integrations for a user.",
+    help="Show a user's connected integrations.",
 )
 
 
@@ -18,7 +18,7 @@ connection_app = typer.Typer(
 def connection_list(
     user: str = typer.Option(..., "--user", help="User email"),
 ):
-    """List a user's connections."""
+    """List the integrations a user has connected."""
     from kai.cockpit.connections.service import ConnectionsService
     from kai.cockpit.db import SessionLocal
     from kai.cockpit.models import User

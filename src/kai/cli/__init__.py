@@ -10,7 +10,11 @@ from kai.observability import init_sentry
 
 init_sentry("cli")
 
-app = typer.Typer(name="kai", no_args_is_help=True)
+app = typer.Typer(
+    name="kai",
+    no_args_is_help=True,
+    help="Run Kai bots, manage deployments, and operate the cockpit.",
+)
 
 _register_bot_commands(app)
 app.add_typer(cockpit_app, name="cockpit")

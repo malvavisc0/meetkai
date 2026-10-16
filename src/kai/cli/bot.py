@@ -780,27 +780,35 @@ def register(app: typer.Typer) -> None:
 
     @app.command()
     def start(
-        bot_name: str = typer.Argument(..., help="Bot to start (e.g. 'email')"),
-        goal_text: str = typer.Option("", "--goal", "-g", help="Runtime goal"),
-        language: str = typer.Option("", "--language", "-l", help="Override bot language"),
-        user: str = typer.Option("", "--user", "-u", help="User email (per-instance namespace)"),
+        bot_name: str = typer.Argument(..., help="Bot to start, e.g. email"),
+        goal_text: str = typer.Option("", "--goal", "-g", help="Goal to give the bot at startup"),
+        language: str = typer.Option("", "--language", "-l", help="Language override"),
+        user: str = typer.Option(
+            "", "--user", "-u", help="User email; keeps each user's runs separate"
+        ),
         template: str = typer.Option(
             "general",
             "--template",
             "-t",
-            help="Template to use (default: general)",
+            help="Template to start from (default: general)",
         ),
         enable_tools: str = typer.Option(
             "",
             "--enable-tools",
-            help="Comma-separated tools to force-enable beyond the template",
+            help="Extra tools to turn on, comma-separated",
         ),
         disable_tools: str = typer.Option(
             "",
             "--disable-tools",
-            help="Comma-separated tools to disable from the template",
+            help="Tools to turn off, comma-separated",
         ),
     ):
+        """Start a bot and serve its webhook endpoint.
+
+        It resolves the template and tool set, then keeps running until you
+        stop it. Pass the printed run id to the status, tell, chat, and stop
+        commands.
+        """
         start_bot(
             bot_name,
             goal_text,
@@ -813,76 +821,86 @@ def register(app: typer.Typer) -> None:
 
     @app.command(name="list")
     def list_cmd():
+        """List the bots you can start."""
         list_available_bots()
 
     @app.command()
     def status(
-        bot_name: str = typer.Argument(..., help="Bot to query (e.g. 'email')"),
-        run_id: str = typer.Option(..., "--run", help="run_id of the target `kai start` instance"),
+        bot_name: str = typer.Argument(..., help="Bot to query, e.g. email"),
+        run_id: str = typer.Option(..., "--run", help="Run id printed by `kai start`"),
         user: str = typer.Option(
             "",
             "--user",
             "-u",
-            help="User email the instance was started with (--user on `kai start`)",
+            help="User email the instance was started with",
         ),
     ):
+        """Show what a running bot is doing (needs its run id)."""
         status_bot(bot_name, run_id, user)
 
     @app.command()
     def tell(
-        bot_name: str = typer.Argument(..., help="Bot to instruct (e.g. 'email')"),
-        run_id: str = typer.Option(..., "--run", help="run_id of the target `kai start` instance"),
-        message: str = typer.Option(..., "--message", "-m", help="Instruction text for the bot"),
+        bot_name: str = typer.Argument(..., help="Bot to instruct, e.g. email"),
+        run_id: str = typer.Option(..., "--run", help="Run id printed by `kai start`"),
+        message: str = typer.Option(..., "--message", "-m", help="Instruction to send"),
         persist: bool = typer.Option(
-            False, "--persist", help="Allow permanent changes (e.g. set_goal)"
+            False,
+            "--persist",
+            help="Allow changes that persist, for example setting the goal",
         ),
         user: str = typer.Option(
             "",
             "--user",
             "-u",
-            help="User email the instance was started with (--user on `kai start`)",
+            help="User email the instance was started with",
         ),
     ):
+        """Send one instruction to a running bot."""
         tell_bot(bot_name, run_id, message, persist, user)
 
     @app.command()
     def chat(
-        bot_name: str = typer.Argument(..., help="Bot to chat with (e.g. 'email')"),
-        run_id: str = typer.Option(..., "--run", help="run_id of the target `kai start` instance"),
-        persist: bool = typer.Option(False, "--persist", help="Allow permanent changes"),
+        bot_name: str = typer.Argument(..., help="Bot to chat with, e.g. email"),
+        run_id: str = typer.Option(..., "--run", help="Run id printed by `kai start`"),
+        persist: bool = typer.Option(
+            False, "--persist", help="Allow messages that change saved state"
+        ),
         user: str = typer.Option(
             "",
             "--user",
             "-u",
-            help="User email the instance was started with (--user on `kai start`)",
+            help="User email the instance was started with",
         ),
     ):
+        """Chat with a running bot in your terminal."""
         chat_bot(bot_name, run_id, persist, user)
 
     @app.command()
     def stop(
-        bot_name: str = typer.Argument(..., help="Bot to stop (e.g. 'email')"),
-        run_id: str = typer.Option(..., "--run", help="run_id of the target `kai start` instance"),
+        bot_name: str = typer.Argument(..., help="Bot to stop, e.g. email"),
+        run_id: str = typer.Option(..., "--run", help="Run id printed by `kai start`"),
         force: bool = typer.Option(
-            False, "--force", help="Send SIGKILL instead of SIGTERM (no graceful shutdown)"
+            False, "--force", help="Kill immediately instead of shutting down gracefully"
         ),
         user: str = typer.Option(
             "",
             "--user",
             "-u",
-            help="User email the instance was started with (--user on `kai start`)",
+            help="User email the instance was started with",
         ),
     ):
+        """Stop a running bot (SIGTERM, or SIGKILL with --force)."""
         stop_bot(bot_name, run_id, force, user)
 
     @app.command(name="runs")
     def runs_cmd(
-        bot_name: str = typer.Argument(..., help="Bot whose runs to list (e.g. 'email')"),
+        bot_name: str = typer.Argument(..., help="Bot whose runs to list, e.g. email"),
         user: str = typer.Option(
             "",
             "--user",
             "-u",
-            help="User email the instance was started with (--user on `kai start`)",
+            help="User email the instance was started with",
         ),
     ):
+        """List a bot's past runs."""
         list_runs(bot_name, user)
