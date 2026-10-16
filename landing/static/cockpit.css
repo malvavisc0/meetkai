@@ -709,8 +709,8 @@
     font-weight: 400;
   }
 
-  .landing-example__note {
-    margin: var(--space-lg) 0 0;
+  .landing-example__tagline {
+    margin: var(--space-md) 0 0;
     color: var(--color-stage-muted);
     font-size: var(--text-xs);
   }
@@ -851,6 +851,13 @@
     font-size: var(--text-lg);
     font-weight: 500;
     line-height: 1.5;
+  }
+
+  .landing-template__note {
+    margin: 0;
+    color: var(--color-muted);
+    font-size: var(--text-sm);
+    line-height: 1.65;
   }
 
   /* --- Brain (shared knowledge) --- */

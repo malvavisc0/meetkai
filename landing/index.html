@@ -61,7 +61,7 @@
                   </div>
                   <p class="landing-invite muted">Private beta. Email <a href="mailto:hello@meetk.ai">hello@meetk.ai</a> with the job you want to hand off. We'll help you get set up.</p>
                </div>
-               <figure class="landing-example" id="examples" data-example aria-labelledby="example-caption" aria-describedby="example-note" tabindex="-1">
+                <figure class="landing-example" id="examples" data-example aria-labelledby="example-caption" aria-describedby="example-tagline" tabindex="-1">
                   <figcaption class="landing-example__caption">
                      <span class="landing-example__mark" aria-hidden="true">k</span>
                      <span id="example-caption">From request to result</span>
@@ -78,7 +78,7 @@
                            <span class="landing-example__label">You ask</span>
                            <p>Send me a summary of the orders that still need attention.</p>
                         </div>
-                        <div class="landing-example__tools" role="group" aria-label="Tools required for this example"><span>Database &middot; read-only</span><span>Email</span></div>
+                         <div class="landing-example__tools" role="group" aria-label="Tools required for this example"><span>Connected database &middot; read-only</span><span>Email</span></div>
                         <div class="landing-example__output">
                            <span class="landing-example__output-label">Sample email result</span>
                            <p class="landing-example__output-title">Open-order summary</p>
@@ -115,68 +115,69 @@
                            <span class="landing-example__label">You ask</span>
                            <p>Book a 30-minute product demo on Tuesday afternoon.</p>
                         </div>
-                        <div class="landing-example__tools" role="group" aria-label="Tools required for this example"><span>Cal.com</span><span>Email</span></div>
-                        <div class="landing-example__output">
-                           <span class="landing-example__output-label">Sample calendar event</span>
-                           <p class="landing-example__output-title">Product demo</p>
-                           <div class="landing-example__booking">
-                              <span>Tuesday</span>
-                              <strong>14:00-14:30 <small>UTC</small></strong>
-                              <span>30 minutes &middot; Cal.com</span>
-                           </div>
-                           <p>Confirmation details go back by email.</p>
-                           <p class="landing-example__output-note">An appointment, not another scheduling thread.</p>
-                        </div>
+                         <div class="landing-example__tools" role="group" aria-label="Tools required for this example"><span>Calendar</span><span>Email</span></div>
+                         <div class="landing-example__output">
+                            <span class="landing-example__output-label">Sample calendar event</span>
+                            <p class="landing-example__output-title">Product demo</p>
+                            <div class="landing-example__booking">
+                               <span>Tuesday</span>
+                               <strong>14:00-14:30 <small>UTC</small></strong>
+                               <span>30 minutes</span>
+                            </div>
+                            <p>Confirmation details go back by email.</p>
+                            <p class="landing-example__output-note">Works with Cal.com, Calendly, Google Calendar, or similar. An appointment, not another scheduling thread.</p>
+                         </div>
                      </div>
                   </div>
-                  <p class="landing-example__note" id="example-note">Illustrative examples with sample data. No live actions.</p>
-               </figure>
+                    <p class="landing-example__tagline" id="example-tagline">Same agent, different job. You define the rules and the tools.</p>
+                </figure>
             </div>
          </section>
          <section class="landing-section landing-templates" id="templates" aria-labelledby="roles-title">
             <div class="landing-section__intro">
                <p class="landing-eyebrow">Available in the beta</p>
-               <h2 id="roles-title" class="landing-section__title">Start with a template.</h2>
-               <p class="landing-section__copy">For straightforward Q&amp;A, there's a basic agent too. Describe other workflows when you request access.</p>
+                <h2 id="roles-title" class="landing-section__title">Start with a template.</h2>
+                <p class="landing-section__copy">For straightforward Q&amp;A, there's a basic agent too.</p>
+                 <p class="landing-template__note">Templates are starting points, not the whole menu. If you can describe a recurring workflow with the tools you already use, we can set it up. Just mention it when you request access.</p>
             </div>
             <ul class="landing-templates__list">
                <li>
                   <details name="starter-templates" open>
                      <summary><span class="landing-template__number" aria-hidden="true">01</span><span class="landing-template__title">Lead nurture</span><span class="landing-template__toggle" aria-hidden="true"></span></summary>
-                     <div class="landing-template__body">
-                        <p>Keep sales conversations moving without chasing every reply yourself.</p>
-                        <p>Your agent follows up using each lead's stage and conversation history, schedules the next touch, and flags buying interest for your team.</p>
-                     </div>
-                  </details>
-               </li>
-               <li>
-                  <details name="starter-templates">
-                     <summary><span class="landing-template__number" aria-hidden="true">02</span><span class="landing-template__title">Bookings</span><span class="landing-template__toggle" aria-hidden="true"></span></summary>
-                     <div class="landing-template__body">
-                        <p>Cut the back-and-forth of finding a meeting time.</p>
-                        <p>Let your agent find slots, book, reschedule, or cancel through Cal.com. Confirmations and reminders go back by email.</p>
-                     </div>
-                  </details>
-               </li>
-               <li>
-                  <details name="starter-templates">
-                     <summary><span class="landing-template__number" aria-hidden="true">03</span><span class="landing-template__title">Orders</span><span class="landing-template__toggle" aria-hidden="true"></span></summary>
-                     <div class="landing-template__body">
-                        <p>Keep routine order questions from turning into manual lookups.</p>
-                        <p>Your agent checks status and tracking in your database, then turns those records into a clear email update.</p>
-                     </div>
-                  </details>
-               </li>
-               <li>
-                  <details name="starter-templates">
-                     <summary><span class="landing-template__number" aria-hidden="true">04</span><span class="landing-template__title">Support</span><span class="landing-template__toggle" aria-hidden="true"></span></summary>
-                     <div class="landing-template__body">
-                        <p>Free your team from answering the same product and policy questions.</p>
-                        <p>Answers draw on your company knowledge and conversation history. Cases that need a person are flagged, so your team can focus on the exceptions.</p>
-                     </div>
-                  </details>
-               </li>
-            </ul>
+                      <div class="landing-template__body">
+                         <p>Follow up on inbound leads using stage and history.</p>
+                         <p>Schedules next touches and flags buying signals. Works with any email provider or CRM/database.</p>
+                      </div>
+                   </details>
+                </li>
+                <li>
+                   <details name="starter-templates">
+                      <summary><span class="landing-template__number" aria-hidden="true">02</span><span class="landing-template__title">Bookings</span><span class="landing-template__toggle" aria-hidden="true"></span></summary>
+                      <div class="landing-template__body">
+                         <p>Handle scheduling requests, check availability, and confirm or reschedule.</p>
+                         <p>Works with Cal.com, Calendly, Google Calendar, or similar.</p>
+                      </div>
+                   </details>
+                </li>
+                <li>
+                   <details name="starter-templates">
+                      <summary><span class="landing-template__number" aria-hidden="true">03</span><span class="landing-template__title">Orders</span><span class="landing-template__toggle" aria-hidden="true"></span></summary>
+                      <div class="landing-template__body">
+                         <p>Answer status questions, summarize open orders, and escalate issues from your database.</p>
+                         <p>No live changes unless you allow them.</p>
+                      </div>
+                   </details>
+                </li>
+                <li>
+                   <details name="starter-templates">
+                      <summary><span class="landing-template__number" aria-hidden="true">04</span><span class="landing-template__title">Support</span><span class="landing-template__toggle" aria-hidden="true"></span></summary>
+                      <div class="landing-template__body">
+                         <p>Reply to common questions using your docs and past tickets.</p>
+                         <p>Escalate when needed. Works across email or other inbound channels.</p>
+                      </div>
+                   </details>
+                </li>
+             </ul>
          </section>
          <section class="landing-section landing-brain" id="knowledge" aria-labelledby="brain-title">
             <div class="landing-section__intro">
@@ -207,8 +208,8 @@
          <section class="landing-section landing-connections" id="connections" aria-labelledby="connections-title">
             <div class="landing-section__intro landing-section__intro--wide">
                <p class="landing-eyebrow">Connections</p>
-               <h2 id="connections-title" class="landing-section__title">Connect email, databases, and calendars.</h2>
-               <p class="landing-section__copy">Receive email through Resend and send mail over SMTP. Add a database for read-only lookups or Cal.com for bookings.</p>
+                <h2 id="connections-title" class="landing-section__title">Connect the tools you already use.</h2>
+                <p class="landing-section__copy">Inbound email (Resend, SendGrid, or any webhook/SMTP), outbound via SMTP, read-only databases, and calendars (Cal.com, Calendly, Google Calendar, etc.). Agents work with whatever you connect.</p>
                <div class="landing-connections__summary">
                   <p>Review conversations and flagged cases from the cockpit. Give your agent instructions as the work changes.</p>
                </div>
@@ -220,7 +221,7 @@
                               <rect width="20" height="16" x="2" y="4" rx="2" />
                               <path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7" />
                            </svg>
-                           <strong>Receive email</strong><small>Resend</small>
+                            <strong>Receive email</strong><small>Resend, SendGrid, webhook</small>
                         </span>
                      </li>
                      <li>
@@ -248,7 +249,7 @@
                               <circle cx="12" cy="12" r="9" />
                               <path d="M12 7v5l3 2" />
                            </svg>
-                           <strong>Manage bookings</strong><small>Cal.com</small>
+                            <strong>Manage bookings</strong><small>Cal.com, Calendly, Google Calendar</small>
                         </span>
                      </li>
             </ul>
