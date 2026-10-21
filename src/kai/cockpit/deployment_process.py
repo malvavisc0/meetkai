@@ -2,6 +2,7 @@
 
 import logging
 import os
+import shutil
 import signal
 import subprocess
 import threading
@@ -214,6 +215,9 @@ def purge_bot_state(svc: "DeploymentsService", deployment: Deployment) -> None:
                 (history_folder / suffix).unlink(missing_ok=True)
             except OSError:
                 pass
+        history_dir = history_folder / f"{instance_id}.history"
+        if history_dir.is_dir():
+            shutil.rmtree(history_dir, ignore_errors=True)
         try:
             runs_path(settings.agent_history_folder, instance_id).unlink(missing_ok=True)
         except OSError:

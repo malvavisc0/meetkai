@@ -93,14 +93,14 @@ def clear_history(svc: "DeploymentsService", deployment: Deployment) -> dict:
 
 
 def history(svc: "DeploymentsService", deployment: Deployment) -> dict[str, list[dict]]:
-    """Load the per-bot history file and return ``{chat_id: [messages]}``.
+    """Load per-bot history and return ``{chat_id: [messages]}``.
 
-    Each message is ``{"role": str, "content": str, "ts": str | None}``.
-    ``ts`` is the ISO-8601 UTC timestamp recorded when the message was
-    stored; older history files (pre-timestamp) have ``None``. Returns
-    ``{}`` when the file is missing or unreadable. The history file is
-    written atomically by the bot process (a ``.tmp`` replace), so
-    reading it from the cockpit is safe.
+    Merges per-conversation files in ``<instance>.history/`` with the legacy
+    ``<instance>.json`` file and returns ``{}`` when neither exists. Each
+    message is ``{"role": str, "content": str, "ts": str | None}``; ``ts`` is
+    the ISO-8601 UTC timestamp recorded when the message was stored, and
+    older history files (pre-timestamp) have ``None``. Files are written
+    atomically by the bot process (``.tmp`` replace), so reading is safe.
 
     On-disk keys are namespaced as ``{instance_id}:{conversation_id}``
     (see :meth:`KaiAgent.history_key``); the returned dict strips the
@@ -117,17 +117,28 @@ def history(svc: "DeploymentsService", deployment: Deployment) -> dict[str, list
     return svc.normalize_history(history_data, instance_id)
 
 
-def load_history_raw(
-    svc: "DeploymentsService", deployment: Deployment, instance_id: str | None = None
-) -> object:
-    """Read the raw history JSON for a deployment instance."""
-    from kai.config.settings import get_settings
+def read_history_dir(history_dir: Path) -> dict[str, list] | None:
+    """Merge per-conversation history files; None when the directory is absent."""
+    if not history_dir.is_dir():
+        return None
+    merged: dict[str, list] = {}
+    for path in sorted(history_dir.glob("*.json")):
+        try:
+            raw = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            logger.warning("failed to read history file %s", path)
+            continue
+        if not isinstance(raw, dict):
+            continue
+        key = raw.get("key")
+        messages = raw.get("messages")
+        if isinstance(key, str) and isinstance(messages, list):
+            merged[key] = messages
+    return merged
 
-    folder = get_settings().agent_history_folder
-    if folder is None:
-        return {}
-    iid = instance_id or svc.deployment_instance_id(deployment)
-    path = Path(folder) / f"{iid}.json"
+
+def read_history_file(path: Path) -> object:
+    """Read a legacy single-file history JSON, or return {} when absent."""
     if not path.exists():
         return {}
     try:
@@ -135,6 +146,43 @@ def load_history_raw(
     except (OSError, json.JSONDecodeError):
         logger.warning("failed to read history file %s", path)
         return {}
+
+
+def history_mapping(raw: object) -> dict[str, list]:
+    """Extract a validated ``{conversation: messages}`` mapping from raw JSON."""
+    if not isinstance(raw, dict):
+        return {}
+    data = raw.get("history", raw)
+    if not isinstance(data, dict):
+        return {}
+    return {
+        key: messages
+        for key, messages in data.items()
+        if isinstance(key, str) and isinstance(messages, list)
+    }
+
+
+def load_history_raw(
+    svc: "DeploymentsService", deployment: Deployment, instance_id: str | None = None
+) -> object:
+    """Read the raw history for a deployment instance.
+
+    Merges the per-conversation ``<instance>.history/`` directory with the
+    legacy ``<instance>.json`` file. Directory entries win per conversation,
+    so a crash during migration or a rollback to the old layout never hides
+    either source.
+    """
+    from kai.config.settings import get_settings
+
+    folder = get_settings().agent_history_folder
+    if folder is None:
+        return {}
+    iid = instance_id or svc.deployment_instance_id(deployment)
+    merged = history_mapping(read_history_file(Path(folder) / f"{iid}.json"))
+    dir_data = read_history_dir(Path(folder) / f"{iid}.history")
+    if dir_data:
+        merged.update(dir_data)
+    return {"history": merged} if merged else {}
 
 
 def normalize_history(history_data: dict, instance_id: str) -> dict[str, list[dict]]:

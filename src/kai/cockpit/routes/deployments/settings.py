@@ -303,7 +303,6 @@ async def deployment_settings(
 
     edit_fields = build_edit_fields(
         bt,
-        dep,
         goal,
         language,
         timezone,
@@ -324,7 +323,6 @@ async def deployment_settings(
 
 def build_edit_fields(
     bt: BotType | None,
-    dep: Deployment,
     goal: str,
     language: str,
     timezone: str,

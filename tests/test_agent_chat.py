@@ -1,4 +1,5 @@
 import json
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 import respx
@@ -9,10 +10,26 @@ from llama_index.llms.openai_like import OpenAILike
 from kai.agent.core import DEFAULT_SYSTEM_PROMPT, ActionResult, KaiAgent
 from kai.agent.goal import GoalManager
 from kai.config.settings import Settings
-from tests.agent_test_helpers import _mock_llm, _TestAction
+from tests.agent_test_helpers import _mock_llm, _structured_response, _TestAction
 
 
 class TestKaiAgentChat:
+    @pytest.mark.asyncio
+    async def test_compliant_loop_response_skips_terminal_llm_call(self, settings):
+        agent = KaiAgent(settings=settings, goal_manager=GoalManager())
+        llm = _mock_llm()
+        llm.achat_with_tools = AsyncMock(
+            return_value=_structured_response(_TestAction(action="reply", text="done"))
+        )
+        llm.get_tool_calls_from_response = MagicMock(return_value=[])
+        llm.achat = AsyncMock(side_effect=AssertionError("terminal call should be skipped"))
+        agent.llm = llm
+
+        result = await agent.chat("hi", output_cls=_TestAction)
+
+        assert result.reply == "done"
+        llm.achat.assert_not_awaited()
+
     @pytest.mark.asyncio
     async def test_chat_returns_reply(self, settings):
         agent = KaiAgent(settings=settings, goal_manager=GoalManager())

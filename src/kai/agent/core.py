@@ -99,6 +99,7 @@ class KaiAgent(HistoryStoreMixin, ToolLoopMixin):
         self._namespace = namespace or ""
         self._system_prompt: str | None = None
         self._history_file = self.resolve_history_file()
+        self._history_dir = self.resolve_history_dir()
         self._goal_file: Path | None = (
             Path(f"{self._history_file}.goal") if self._history_file else None
         )
@@ -106,6 +107,7 @@ class KaiAgent(HistoryStoreMixin, ToolLoopMixin):
         self._max_history_chars: int = self.settings.agent_max_history_chars
         self._max_conversations: int = self.settings.agent_max_conversations
         self._save_lock: asyncio.Lock = asyncio.Lock()
+        self._write_lock: asyncio.Lock = asyncio.Lock()
         # Escalation wiring shared with the owning bot (see BaseBot). A bare
         # agent (no bot, e.g. tests/scripts) gets a fresh in-memory state.
         self.escalations = escalations or EscalationState()
@@ -124,10 +126,11 @@ class KaiAgent(HistoryStoreMixin, ToolLoopMixin):
         self.llm = self.build_llm(async_http_client=self._http)
         self._history: OrderedDict[str, list[ChatMessage]] = OrderedDict()
         self._timestamps: OrderedDict[str, list[str | None]] = OrderedDict()
+        self._dirty: bool = False
+        self._dirty_keys: set[str] = set()
+        self._flush_task: asyncio.Task | None = None
         self.load_history_state()
         self.load_goal()
-        self._dirty: bool = False
-        self._flush_task: asyncio.Task | None = None
         self._timezone: str | None = None
         # Per-call temperature override (see set_temperature). When a Brain is
         # mandatory, bot.py lowers this to steer the model toward calling
@@ -381,7 +384,7 @@ class KaiAgent(HistoryStoreMixin, ToolLoopMixin):
             )
             self._timestamps.setdefault(self.history_key(conversation_id), []).append(self.now_ts())
             self.trim_history(conversation_id)
-        self.mark_dirty()
+        self.mark_dirty(self.history_key(conversation_id))
 
     def history_placeholder(
         self,
@@ -416,7 +419,7 @@ class KaiAgent(HistoryStoreMixin, ToolLoopMixin):
             )
             self._timestamps.setdefault(key, []).append(self.now_ts())
             self.trim_history(conversation_id)
-        self.mark_dirty()
+        self.mark_dirty(key)
 
     async def chat(
         self,
@@ -511,7 +514,7 @@ class KaiAgent(HistoryStoreMixin, ToolLoopMixin):
                 history.append(ChatMessage(role=MessageRole.ASSISTANT, content=reply_text))
                 ts_list.append(self.now_ts())
             self.trim_history(conversation_id)
-        self.mark_dirty()
+        self.mark_dirty(self.history_key(conversation_id))
         await asyncio.to_thread(self.save_goal)
 
     @staticmethod

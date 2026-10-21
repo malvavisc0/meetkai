@@ -287,7 +287,7 @@ class MorphikClient:
         the token's scope already restricts it. We pass it as a query param
         for defense-in-depth — Morphik ignores unknown query params.
         """
-        resp = await self._client.delete(f"/documents/{doc_id}")
+        resp = await self._client.delete(f"/documents/{doc_id}", params={"end_user_id": workspace})
         resp.raise_for_status()
         return resp.json().get("status", "")
 

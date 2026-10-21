@@ -121,7 +121,7 @@ def email_ready_user(user, db):
 
 
 @pytest.fixture
-def client(db, monkeypatch):
+def client(db):
     """A Starlette TestClient wired to the isolated ``db`` session.
 
     Overrides the ``get_db`` FastAPI dependency so every route in the app

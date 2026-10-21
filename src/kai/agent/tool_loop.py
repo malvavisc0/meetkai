@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import logging
+from functools import cache
 from typing import TYPE_CHECKING, Any
 
 from llama_index.core.llms import ChatMessage, MessageRole
@@ -48,10 +49,10 @@ class ToolLoopMixin:
 
         Returns ``(action, tool_calls)`` where ``action`` is an instance of
         the bot-declared ``output_cls`` and ``tool_calls`` records every
-        side-effecting tool invocation. The terminal step issues a JSON-mode
-        ``self.llm.achat`` call with the action schema, then validates the
-        reply through ``PydanticOutputParser`` and
-        ``parse_structured_text`` recovery.
+        side-effecting tool invocation. The action schema is included in the
+        loop prompt, so a compliant final message is parsed directly; a
+        separate JSON-mode ``self.llm.achat`` call is only made when that
+        parse fails.
         """
         active_tools = tools if tools is not None else self._tools
         active_by_name = {t.metadata.name: t for t in active_tools} if tools is not None else None
@@ -65,10 +66,17 @@ class ToolLoopMixin:
         if self._temperature is not None:
             llm_kwargs["temperature"] = self._temperature
 
+        from llama_index.core.output_parsers.pydantic import PydanticOutputParser
+
+        json_instruction = self.structured_output_instruction(output_cls)
+        loop_messages = self.build_predict_messages(messages, [], json_instruction)
+        parser = PydanticOutputParser(output_cls=output_cls)
+        final_text: str | None = None
+
         for _ in range(MAX_TOOL_ROUNDS):
             response = await self.llm.achat_with_tools(
                 tools=active_tools,
-                chat_history=[*messages, *scratchpad],
+                chat_history=[*loop_messages, *scratchpad],
                 **llm_kwargs,
             )
 
@@ -79,26 +87,46 @@ class ToolLoopMixin:
             scratchpad.append(response.message)
 
             if not tool_calls:
+                final_text = response.message.content
                 break
 
             for tc in tool_calls:
-                action = self.maybe_resolve_action_tool_call(
-                    tc, output_cls, allowed_values, tool_call_records
-                )
+                action = self.maybe_resolve_action_tool_call(tc, output_cls, allowed_values)
                 if action is not None:
                     return action, tool_call_records
                 result, ok = await self.execute_tool_call(tc, active_by_name)
                 self.record_tool_call(tc, result, ok, tool_call_records, scratchpad)
 
-        action = await self.resolve_terminal_action(messages, scratchpad, output_cls, llm_kwargs)
+        action = self.parse_final_action(final_text, output_cls, parser)
+        if action is None:
+            action = await self.resolve_terminal_action(
+                messages, scratchpad, output_cls, llm_kwargs
+            )
         return normalize_action_text(action), tool_call_records
+
+    def parse_final_action(
+        self,
+        final_text: str | None,
+        output_cls: type[ActionResult],
+        parser: Any,
+    ) -> ActionResult | None:
+        """Parse the loop's final message as the terminal action when valid."""
+        if not isinstance(final_text, str) or not final_text:
+            return None
+        try:
+            raw_text = strip_reasoning_channels(final_text)
+            if not raw_text.strip():
+                return None
+            return self.parse_structured_text(raw_text, output_cls, parser)
+        except Exception:
+            logger.debug("Final loop message was not a structured action")
+            return None
 
     def maybe_resolve_action_tool_call(
         self,
         tc: Any,
         output_cls: type[ActionResult],
         action_values: frozenset[str],
-        tool_call_records: list[ToolCallRecord],
     ) -> ActionResult | None:
         """If the model called an action-value name as a tool, resolve it."""
         if tc.tool_name not in action_values or tc.tool_name in self._tools_by_name:
@@ -168,6 +196,22 @@ class ToolLoopMixin:
             )
         )
 
+    @staticmethod
+    @cache
+    def structured_output_instruction(output_cls: type[ActionResult]) -> str:
+        """Return the mandatory JSON output instruction for an action schema."""
+        schema = json.dumps(
+            output_cls.model_json_schema(), ensure_ascii=False, separators=(",", ":")
+        )
+        return (
+            "\n\n## Output format (mandatory)\n"
+            "Respond with ONLY a single JSON object matching this schema — "
+            "no prose, no markdown, no code fences, no `key: value` lines. "
+            "Choose the action and fill its fields; the whole response must "
+            "be that one JSON object.\n\n"
+            f"Schema: {schema}"
+        )
+
     async def resolve_terminal_action(
         self,
         messages: list[ChatMessage],
@@ -179,15 +223,7 @@ class ToolLoopMixin:
         from llama_index.core.output_parsers.pydantic import PydanticOutputParser
 
         parser = PydanticOutputParser(output_cls=output_cls)
-        schema = json.dumps(output_cls.model_json_schema(), ensure_ascii=False)
-        json_instruction = (
-            "\n\n## Output format (mandatory)\n"
-            "Respond with ONLY a single JSON object matching this schema — "
-            "no prose, no markdown, no code fences, no `key: value` lines. "
-            "Choose the action and fill its fields; the whole response must "
-            "be that one JSON object.\n\n"
-            f"Schema: {schema}"
-        )
+        json_instruction = self.structured_output_instruction(output_cls)
         predict_messages = self.build_predict_messages(messages, scratchpad, json_instruction)
 
         for attempt in range(2):
@@ -272,7 +308,7 @@ class ToolLoopMixin:
                 pass
 
         # 4. Base-class recovery for out-of-scope actions.
-        action = ToolLoopMixin.recover_base_action(text, output_cls, repaired, kv)
+        action = ToolLoopMixin.recover_base_action(output_cls, repaired, kv)
         if action is not None:
             return normalize_action_text(action)
 
@@ -280,15 +316,14 @@ class ToolLoopMixin:
 
     @staticmethod
     def recover_base_action(
-        text: str,
         output_cls: type[ActionResult],
         repaired: str | None,
         kv: dict[str, Any] | None,
     ) -> ActionResult | None:
+        """Recover a valid base action from out-of-scope structured output."""
         # Control actions (silent / sleep / console) are excluded — recovering
         # them would ghost the user. A payload failing for any other reason
         # continues to raise so malformed output isn't silently accepted.
-        """Recover a valid base action from out-of-scope structured output."""
         from kai.agent.core import ActionResult
 
         control_actions = frozenset({"silent", "sleep", "console"})

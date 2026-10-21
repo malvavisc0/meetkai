@@ -71,7 +71,6 @@ async def db_delete(
 @router.post("/connections/database/test")
 def db_test(
     request: Request,
-    label: str = Form(""),
     url: str = Form(""),
     user: User = Depends(require_user),
     db: Session = Depends(get_db),

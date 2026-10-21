@@ -59,6 +59,7 @@ __all__ = [
 class DeploymentsService:
     def __init__(self, db: Session) -> None:
         self.db = db
+        self._run_cache: dict[tuple[int, str | None], RunRecord | None] = {}
 
     def user_for(self, deployment: Deployment) -> User:
         """Return the deployment's owning Operator."""
@@ -73,7 +74,7 @@ class DeploymentsService:
             user = self.user_for(deployment)
         return instance_id_for(deployment.bot_type, user.email)
 
-    def allocate_control_port(self, db: Session, user: User) -> int:
+    def allocate_control_port(self, db: Session) -> int:
         """Pick a free control port from 8200-8299."""
         used: set[int] = set()
         for dep in db.query(Deployment).filter(Deployment.status == "running").all():
@@ -105,9 +106,14 @@ class DeploymentsService:
         """
         if not deployment.run_id:
             return None
+        cache_key = (deployment.id, deployment.run_id)
+        if cache_key in self._run_cache:
+            return self._run_cache[cache_key]
         record = self.run_registry(deployment).get()
         if record is None or record.run_id != deployment.run_id:
+            self._run_cache[cache_key] = None
             return None
+        self._run_cache[cache_key] = record
         return record
 
     def sign_body(self, record: RunRecord, body: bytes) -> str:
@@ -302,6 +308,7 @@ class DeploymentsService:
 
     def start(self, deployment: Deployment) -> None:
         """Start a deployment: check connection, write config, spawn subprocess."""
+        self._run_cache.clear()
         bt = BOT_TYPES.get(deployment.bot_type)
         if bt is None:
             raise ValueError(f"unknown bot type: {deployment.bot_type}")
@@ -448,10 +455,12 @@ class DeploymentsService:
 
     def stop(self, deployment: Deployment) -> None:
         """Stop the bot process and mark the deployment stopped."""
+        self._run_cache.clear()
         deployment_process.stop(self, deployment, kill=os.kill)
 
     def delete(self, deployment: Deployment) -> None:
         """Delete a deployment: stop if running, purge per-bot state, remove row."""
+        self._run_cache.clear()
         deployment_process.delete(self, deployment)
 
     def purge_bot_state(self, deployment: Deployment) -> None:
@@ -475,28 +484,14 @@ class DeploymentsService:
         return deployment_chat.clear_history(self, deployment)
 
     def history(self, deployment: Deployment) -> dict[str, list[dict]]:
-        """Load the per-bot history file and return ``{chat_id: [messages]}``.
-
-        Each message is ``{"role": str, "content": str, "ts": str | None}``.
-        ``ts`` is the ISO-8601 UTC timestamp recorded when the message was
-        stored; older history files (pre-timestamp) have ``None``. Returns
-        ``{}`` when the file is missing or unreadable. The history file is
-        written atomically by the bot process (a ``.tmp`` replace), so
-        reading it from the cockpit is safe.
-
-        On-disk keys are namespaced as ``{instance_id}:{conversation_id}``
-        (see :meth:`KaiAgent.history_key``); the returned dict strips the
-        instance prefix so the cockpit surfaces the raw conversation id
-        (e.g. ``operator``, ``1809...@g.us``).
-        """
+        """Load the deployment's merged history (see deployment_chat.history)."""
         return deployment_chat.history(self, deployment)
 
     def load_history_raw(self, deployment: Deployment, instance_id: str | None = None) -> object:
-        """Read the raw history JSON for a deployment instance."""
+        """Read the merged per-conversation and legacy history sources."""
         return deployment_chat.load_history_raw(self, deployment, instance_id)
 
-    @staticmethod
-    def normalize_history(history_data: dict, instance_id: str) -> dict[str, list[dict]]:
+    def normalize_history(self, history_data: dict, instance_id: str) -> dict[str, list[dict]]:
         """Strip the instance prefix and normalize stored messages."""
         return deployment_chat.normalize_history(history_data, instance_id)
 

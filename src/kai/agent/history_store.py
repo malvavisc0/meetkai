@@ -1,9 +1,11 @@
 import asyncio
+import hashlib
 import json
 import logging
 from collections import OrderedDict
 from datetime import UTC, datetime
 from pathlib import Path
+from uuid import uuid4
 
 from llama_index.core.llms import ChatMessage, MessageRole
 
@@ -27,20 +29,36 @@ class HistoryStoreMixin:
     _history: OrderedDict[str, list[ChatMessage]]
     _timestamps: OrderedDict[str, list[str | None]]
     _history_file: Path | None
+    _history_dir: Path | None
     _max_history: int
     _max_history_chars: int
     _max_conversations: int
     _save_lock: asyncio.Lock
+    _write_lock: asyncio.Lock
     _dirty: bool
+    _dirty_keys: set[str]
     _flush_task: asyncio.Task | None
 
     def resolve_history_file(self) -> Path | None:
-        """Return this agent's history file path, or None when persistence is off."""
+        """Return the legacy single-file path, or None when persistence is off."""
         folder = self.settings.agent_history_folder
         if folder is None:
             return None
         name = self._namespace or "default"
         return Path(folder) / f"{name}.json"
+
+    def resolve_history_dir(self) -> Path | None:
+        """Return this agent's per-conversation history directory."""
+        folder = self.settings.agent_history_folder
+        if folder is None:
+            return None
+        name = self._namespace or "default"
+        return Path(folder) / f"{name}.history"
+
+    @staticmethod
+    def conversation_filename(key: str) -> str:
+        """Return a filesystem-safe filename for a conversation key."""
+        return f"{hashlib.sha256(key.encode('utf-8')).hexdigest()[:24]}.json"
 
     @staticmethod
     def now_ts() -> str:
@@ -59,17 +77,83 @@ class HistoryStoreMixin:
         return key
 
     def load_history_state(self) -> None:
-        """Populate ``_history`` and ``_timestamps`` from the history file.
+        """Populate ``_history`` and ``_timestamps`` from disk.
 
-        Timestamps are optional: a missing or non-string ``ts`` field is
-        recorded as ``None`` so the parallel-list invariant (one timestamp
-        entry per message) is preserved across loads of old files.
+        Reads the per-conversation directory when present, falling back to
+        the legacy single-file layout. Timestamps are optional: a missing or
+        non-string ``ts`` field is recorded as ``None`` so the parallel-list
+        invariant (one timestamp entry per message) is preserved across loads
+        of old files.
         """
         self._history.clear()
         self._timestamps.clear()
-        if self._history_file is None:
+        if self._history_dir is None:
             return
 
+        if self._history_dir.is_dir():
+            self.load_conversation_dir()
+        # Merge the legacy file even when the directory exists: a crash during
+        # migration leaves both formats, and the directory may only hold the
+        # conversations written before the crash.
+        self.load_legacy_history_file()
+        self.evict_excess_conversations()
+
+    def load_conversation_dir(self) -> bool:
+        """Load conversations from the per-conversation directory."""
+        if self._history_dir is None:
+            return False
+        try:
+            paths = sorted(
+                self._history_dir.glob("*.json"),
+                key=lambda p: p.stat().st_mtime,
+            )
+        except OSError as exc:
+            logger.warning("Failed to list agent history in %s: %s", self._history_dir, exc)
+            return False
+
+        loaded = False
+        for path in self.cap_history_paths(paths):
+            parsed = self.read_conversation_file(path)
+            if parsed is None:
+                continue
+            key, messages = parsed
+            self._history[key], self._timestamps[key] = messages
+            loaded = True
+        return loaded
+
+    def cap_history_paths(self, paths: list[Path]) -> list[Path]:
+        """Delete the oldest files beyond the conversation cap."""
+        if len(paths) <= self._max_conversations:
+            return paths
+        keep = paths[-self._max_conversations :] if self._max_conversations > 0 else []
+        for path in paths[: len(paths) - len(keep)]:
+            try:
+                path.unlink(missing_ok=True)
+            except OSError:
+                logger.debug("Failed to delete stale history file %s", path)
+        return keep
+
+    def read_conversation_file(
+        self, path: Path
+    ) -> tuple[str, tuple[list[ChatMessage], list[str | None]]] | None:
+        """Parse one conversation file, returning None when it is invalid."""
+        try:
+            raw = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError, TypeError, ValueError) as exc:
+            logger.warning("Skipping unreadable history file %s: %s", path, exc)
+            return None
+        if not isinstance(raw, dict):
+            return None
+        key = raw.get("key")
+        messages = raw.get("messages")
+        if not isinstance(key, str) or not isinstance(messages, list):
+            return None
+        return key, self.parse_history_messages(messages)
+
+    def load_legacy_history_file(self) -> None:
+        """Load the legacy single-file history layout."""
+        if self._history_file is None:
+            return
         try:
             if not self._history_file.exists():
                 return
@@ -84,6 +168,8 @@ class HistoryStoreMixin:
 
             for key, messages in history_data.items():
                 if not isinstance(key, str) or not isinstance(messages, list):
+                    continue
+                if key in self._history:
                     continue
                 self._history[key], self._timestamps[key] = self.parse_history_messages(messages)
         except (OSError, json.JSONDecodeError, TypeError, ValueError) as exc:
@@ -136,11 +222,21 @@ class HistoryStoreMixin:
         else:
             self._history[key] = []
             self._timestamps[key] = []
-            while len(self._history) > self._max_conversations:
-                evicted_key, _ = self._history.popitem(last=False)
-                self._timestamps.pop(evicted_key, None)
-                logger.debug("Evicted conversation from history cache: %s", evicted_key)
+            self.evict_excess_conversations()
         return self._history[key]
+
+    def evict_excess_conversations(self) -> None:
+        """Drop the oldest conversations beyond the cap and delete their files."""
+        while len(self._history) > self._max_conversations:
+            evicted_key, _ = self._history.popitem(last=False)
+            self._timestamps.pop(evicted_key, None)
+            if self._history_dir is not None:
+                path = self._history_dir / self.conversation_filename(evicted_key)
+                try:
+                    path.unlink(missing_ok=True)
+                except OSError:
+                    logger.debug("Failed to delete evicted history file %s", path)
+            logger.debug("Evicted conversation from history cache: %s", evicted_key)
 
     def history_within_limits(self, history: list[ChatMessage]) -> bool:
         """Return True when history fits both the message and character limits."""
@@ -196,7 +292,7 @@ class HistoryStoreMixin:
         async with self._save_lock:
             self._history[key] = []
             self._timestamps[key] = []
-        self.mark_dirty()
+        self.mark_dirty(key)
 
     def get_conversation_history(self, conversation_id: str | None = None) -> list[ChatMessage]:
         """Return the stored messages for a conversation (read-only).
@@ -228,38 +324,82 @@ class HistoryStoreMixin:
         results.reverse()
         return results
 
+    def write_conversation_file(
+        self,
+        key: str,
+        messages: list[ChatMessage],
+        timestamps: dict[str, list[str | None]],
+    ) -> str | None:
+        """Write one conversation file; return its filename, or None if removed."""
+        if self._history_dir is None:
+            return None
+        path = self._history_dir / self.conversation_filename(key)
+        if not messages:
+            path.unlink(missing_ok=True)
+            return None
+        ts_list = timestamps.get(key, [])
+        items = [
+            self.serialize_history_message(message, ts_list[i] if i < len(ts_list) else None)
+            for i, message in enumerate(messages)
+        ]
+        temp_path = Path(f"{path}.{uuid4().hex}.tmp")
+        temp_path.write_text(
+            json.dumps({"key": key, "messages": items}, ensure_ascii=False),
+            encoding="utf-8",
+        )
+        temp_path.replace(path)
+        return path.name
+
+    def prune_conversation_files(self, written: set[str]) -> None:
+        """Delete conversation files not in the latest full snapshot."""
+        if self._history_dir is None:
+            return
+        for path in self._history_dir.glob("*.json"):
+            if path.name not in written:
+                path.unlink(missing_ok=True)
+
     def save_from_snapshot(
         self,
         snapshot: dict[str, list[ChatMessage]],
         timestamps: dict[str, list[str | None]] | None = None,
-    ) -> None:
-        """Write a history snapshot to disk."""
-        if self._history_file is None:
-            return
+        *,
+        replace: bool = True,
+    ) -> bool:
+        """Write conversations to the per-conversation history directory.
+
+        ``replace`` also removes files for conversations absent from the
+        snapshot; partial flushes pass ``replace=False`` and only rewrite
+        the dirty conversations. Returns False when the write failed.
+        """
+        if self._history_dir is None:
+            return False
         if timestamps is None:
             timestamps = self._timestamps
         try:
-            self._history_file.parent.mkdir(parents=True, exist_ok=True)
-            serialized: dict[str, list[dict]] = {}
+            self._history_dir.mkdir(parents=True, exist_ok=True)
+            written: set[str] = set()
             for key, messages in snapshot.items():
-                ts_list = timestamps.get(key, [])
-                items = []
-                for i, message in enumerate(messages):
-                    ts = ts_list[i] if i < len(ts_list) else None
-                    items.append(self.serialize_history_message(message, ts))
-                serialized[key] = items
-            data = {"history": serialized}
-            temp_path = Path(f"{self._history_file}.tmp")
-            temp_path.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
-            temp_path.replace(self._history_file)
+                name = self.write_conversation_file(key, messages, timestamps)
+                if name is not None:
+                    written.add(name)
+            if replace:
+                self.prune_conversation_files(written)
+            if self._history_file is not None:
+                self._history_file.unlink(missing_ok=True)
         except OSError as exc:
-            logger.warning("Failed to save agent history to %s: %s", self._history_file, exc)
+            logger.warning("Failed to save agent history to %s: %s", self._history_dir, exc)
+            return False
+        return True
 
-    def mark_dirty(self) -> None:
+    def mark_dirty(self, key: str | None = None) -> None:
         """Mark history as modified and schedule a debounced flush."""
-        if self._history_file is None:
+        if self._history_dir is None:
             return
         self._dirty = True
+        if key is None:
+            self._dirty_keys.update(self._history)
+        else:
+            self._dirty_keys.add(key)
         if self._flush_task is None or self._flush_task.done():
             self._flush_task = asyncio.ensure_future(self.flush_after_delay())
 
@@ -272,14 +412,45 @@ class HistoryStoreMixin:
             await self.flush_now()
 
     async def flush_now(self) -> None:
-        """Flush pending history changes immediately when dirty."""
+        """Flush pending history changes, serializing concurrent writers."""
+        async with self._write_lock:
+            await self.flush_once()
+
+    async def flush_once(self) -> None:
+        """Take a snapshot and write pending history changes when dirty."""
         async with self._save_lock:
-            if not self._dirty:
-                return
-            snapshot = {k: list(v) for k, v in self._history.items()}
-            ts_snapshot = {k: list(v) for k, v in self._timestamps.items()}
+            plan = self.snapshot_for_flush()
+        if plan is None:
+            return
+        snapshot, ts_snapshot, keys, migrating = plan
+        saved = await asyncio.to_thread(
+            self.save_from_snapshot, snapshot, ts_snapshot, replace=migrating
+        )
+        async with self._save_lock:
+            if saved:
+                for key in keys:
+                    self._dirty_keys.discard(key)
+                self._dirty = bool(self._dirty_keys)
+            else:
+                self._dirty_keys.update(keys)
+                self._dirty = True
+        if saved and self._dirty:
+            self._flush_task = asyncio.ensure_future(self.flush_after_delay())
+
+    def snapshot_for_flush(
+        self,
+    ) -> tuple[dict[str, list[ChatMessage]], dict[str, list[str | None]], list[str], bool] | None:
+        """Capture the dirty conversations to write; None when there is nothing."""
+        if not self._dirty:
+            return None
+        migrating = self._history_file is not None and self._history_file.exists()
+        keys = list(self._history) if migrating else list(self._dirty_keys)
+        if not keys and not migrating:
             self._dirty = False
-        await asyncio.to_thread(self.save_from_snapshot, snapshot, ts_snapshot)
+            return None
+        snapshot = {k: list(self._history.get(k, [])) for k in keys}
+        ts_snapshot = {k: list(self._timestamps.get(k, [])) for k in keys}
+        return snapshot, ts_snapshot, keys, migrating
 
     async def flush(self) -> None:
         """Persist any pending history changes immediately."""

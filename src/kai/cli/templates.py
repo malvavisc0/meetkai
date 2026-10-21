@@ -105,6 +105,7 @@ def render_prompt(template_id: str, goal: str, language: str) -> None:
         raise typer.Exit(1)
 
     variables = {
+        "goal": goal or tmpl.config.get("goal") or "",
         "language": language or tmpl.config.get("language") or "English",
         "display_name": tmpl.display_name,
     }

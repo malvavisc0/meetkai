@@ -17,12 +17,10 @@ payload is a plain escalation record (no credentials).
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import JSONResponse, RedirectResponse, Response
 from pydantic import ValidationError
-from sqlalchemy.orm import Session
 
 from kai.agent.tools.escalate import Escalation, EscalationState
 from kai.cockpit.app import templates
 from kai.cockpit.auth import require_user
-from kai.cockpit.db import get_db
 from kai.cockpit.models import User
 from kai.cockpit.settings import get_cockpit_settings
 
@@ -127,7 +125,6 @@ async def resolve(
     esc_id: str,
     request: Request,
     user: User = Depends(require_user),
-    db: Session = Depends(get_db),
 ) -> RedirectResponse:
     """Mark an escalation as resolved. Requires auth (mutates state).
 
@@ -147,7 +144,6 @@ async def resolve_api(
     esc_id: str,
     request: Request,
     user: User = Depends(require_user),
-    db: Session = Depends(get_db),
 ) -> dict:
     """Mark an escalation as resolved (JSON). Requires auth (mutates state).
 

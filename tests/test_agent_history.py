@@ -426,16 +426,140 @@ class TestHistoryEdits:
     @pytest.mark.asyncio
     async def test_debounced_save_flushed_on_flush(self, tmp_path, settings):
         settings.agent_history_folder = tmp_path
-        history_file = tmp_path / "default.json"
+        history_dir = tmp_path / "default.history"
         agent = KaiAgent(settings=settings, goal_manager=GoalManager())
         agent.llm = _mock_llm("stored")
 
         await agent.chat("remember me", output_cls=_TestAction, conversation_id="chat-1")
         # Before flush, the debounced write may not have landed yet.
         await agent.flush()
-        assert history_file.exists()
-        data = json.loads(history_file.read_text())
-        assert any("remember me" in m["content"] for m in data["history"]["chat-1"])
+        assert history_dir.is_dir()
+        files = list(history_dir.glob("*.json"))
+        assert len(files) == 1
+        data = json.loads(files[0].read_text())
+        assert data["key"] == "chat-1"
+        assert any("remember me" in m["content"] for m in data["messages"])
+
+    @pytest.mark.asyncio
+    async def test_flush_writes_only_the_dirty_conversation(self, tmp_path, settings):
+        settings.agent_history_folder = tmp_path
+        agent = KaiAgent(settings=settings, goal_manager=GoalManager())
+
+        await agent.observe("first", conversation_id="a")
+        await agent.flush()
+        history_dir = tmp_path / "default.history"
+        a_file = next(p for p in history_dir.glob("*.json") if '"a"' in p.read_text())
+        a_before = a_file.read_bytes()
+
+        await agent.observe("second", conversation_id="b")
+        await agent.flush()
+
+        assert a_file.read_bytes() == a_before
+        keys = {json.loads(p.read_text())["key"] for p in history_dir.glob("*.json")}
+        assert keys == {"a", "b"}
+
+    @pytest.mark.asyncio
+    async def test_legacy_history_file_migrates_to_per_conversation_files(self, tmp_path, settings):
+        settings.agent_history_folder = tmp_path
+        legacy = tmp_path / "default.json"
+        legacy.write_text(
+            json.dumps(
+                {
+                    "history": {
+                        "chat-1": [{"role": "user", "content": "old message", "ts": "t"}],
+                    }
+                }
+            )
+        )
+        agent = KaiAgent(settings=settings, goal_manager=GoalManager())
+
+        assert agent.get_history("chat-1")[0].content == "old message"
+        await agent.observe("new message", conversation_id="chat-2")
+        await agent.flush()
+
+        assert not legacy.exists()
+        files = list((tmp_path / "default.history").glob("*.json"))
+        by_key = {json.loads(p.read_text())["key"]: json.loads(p.read_text()) for p in files}
+        assert set(by_key) == {"chat-1", "chat-2"}
+        assert by_key["chat-1"]["messages"][0]["content"] == "old message"
+        assert by_key["chat-1"]["messages"][0]["ts"] == "t"
+        assert by_key["chat-2"]["messages"][0]["content"] == "new message"
+
+    @pytest.mark.asyncio
+    async def test_evicting_a_conversation_deletes_its_file(self, tmp_path, settings):
+        settings.agent_history_folder = tmp_path
+        settings.agent_max_conversations = 2
+        agent = KaiAgent(settings=settings, goal_manager=GoalManager())
+
+        for conversation_id in ("a", "b", "c"):
+            await agent.observe(conversation_id, conversation_id=conversation_id)
+        await agent.flush()
+
+        history_dir = tmp_path / "default.history"
+        keys = {json.loads(p.read_text())["key"] for p in history_dir.glob("*.json")}
+        assert keys == {"b", "c"}
+
+    @pytest.mark.asyncio
+    async def test_failed_flush_is_retried(self, tmp_path, settings, monkeypatch):
+        settings.agent_history_folder = tmp_path
+        agent = KaiAgent(settings=settings, goal_manager=GoalManager())
+        original = agent.write_conversation_file
+        calls = {"n": 0}
+
+        def flaky(*args, **kwargs):
+            calls["n"] += 1
+            if calls["n"] == 1:
+                raise OSError("disk full")
+            return original(*args, **kwargs)
+
+        monkeypatch.setattr(agent, "write_conversation_file", flaky)
+        await agent.observe("survive", conversation_id="a")
+
+        await agent.flush()  # fails; the conversation stays dirty
+        await agent.flush()  # retries and succeeds
+
+        files = list((tmp_path / "default.history").glob("*.json"))
+        assert len(files) == 1
+        assert "survive" in files[0].read_text()
+
+    @pytest.mark.asyncio
+    async def test_partial_history_dir_merges_legacy_on_load(self, tmp_path, settings):
+        """A crash mid-migration leaves both sources; neither may be lost."""
+        settings.agent_history_folder = tmp_path
+        (tmp_path / "default.json").write_text(
+            json.dumps(
+                {
+                    "history": {
+                        "chat-1": [{"role": "user", "content": "legacy", "ts": "t1"}],
+                    }
+                }
+            )
+        )
+        history_dir = tmp_path / "default.history"
+        history_dir.mkdir()
+        (history_dir / KaiAgent.conversation_filename("chat-2")).write_text(
+            json.dumps(
+                {
+                    "key": "chat-2",
+                    "messages": [{"role": "user", "content": "new", "ts": "t2"}],
+                }
+            )
+        )
+        agent = KaiAgent(settings=settings, goal_manager=GoalManager())
+
+        assert agent.get_history("chat-1")[0].content == "legacy"
+        assert agent.get_history("chat-2")[0].content == "new"
+
+        await agent.observe("extra", conversation_id="chat-2")
+        await agent.flush()
+
+        assert not (tmp_path / "default.json").exists()
+        by_key = {
+            json.loads(p.read_text())["key"]: json.loads(p.read_text())
+            for p in history_dir.glob("*.json")
+        }
+        assert set(by_key) == {"chat-1", "chat-2"}
+        assert by_key["chat-1"]["messages"][0]["ts"] == "t1"
 
     @pytest.mark.asyncio
     async def test_observe_empty_with_images_stored(self, settings):

@@ -112,7 +112,7 @@ def build_spawn_env(
     brain_conn: Connection | None,
     *,
     db: Session,
-    allocate_control_port: Callable[[Session, User], int],
+    allocate_control_port: Callable[[Session], int],
     inject_connection: Callable[[dict[str, str], str, Connection], bool],
     inject_brain: Callable[[dict[str, str], Deployment, Connection], None],
     inject_optional: Callable[[dict[str, str], Deployment, BotType, User], None],
@@ -144,7 +144,7 @@ def build_spawn_env(
     # in Deployment.settings["control_port"] (JSON, no migration) and
     # cleared on stop(). This is the generic path — the next webhook bot
     # needs zero cockpit changes.
-    control_port = allocate_control_port(db, user)
+    control_port = allocate_control_port(db)
     env["KAI_BOT_CONTROL_PORT"] = str(control_port)
     env["KAI_BOT_CONTROL_HOST"] = "0.0.0.0"
     env["KAI_BOT_HMAC_KEY"] = user.hmac_key

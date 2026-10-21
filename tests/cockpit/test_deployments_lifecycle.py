@@ -1,9 +1,9 @@
 """Tests for kai.cockpit.deployments.DeploymentsService."""
 
-import os
 import subprocess
 
 import pytest
+from tests.cockpit.helpers import make_fake_proc, seed_run_registry
 
 from kai.cockpit.deployments import (
     ConnectionRequiredError,
@@ -39,47 +39,15 @@ def _start_with_morphik_connection(db, user, monkeypatch, tmp_path) -> dict:
 
     captured_env: dict = {}
 
-    class FakeProc:
-        returncode = None
-
-        def __init__(self):
-            self._lines = iter(["starting...\n", "KAI_RUN_ID=deadbeef\n"])
-
-        @property
-        def stdout(self):
-            return self
-
-        def readline(self):
-            return next(self._lines, "")
-
-        def poll(self):
-            return self.returncode
-
     def fake_popen(*args, **kwargs):
         captured_env.update(kwargs.get("env") or {})
-        return FakeProc()
+        return make_fake_proc()
 
     monkeypatch.setattr(subprocess, "Popen", fake_popen)
 
-    from kai.config.settings import Settings
-    from kai.runs import RunRecord, RunRegistry, proc_start_time, runs_path
-
-    fake_settings = Settings.for_test(agent_history_folder=str(tmp_path))
-    monkeypatch.setattr("kai.config.settings.get_settings", lambda: fake_settings)
-
     instance_id = f"{dep.bot_type}-{user.email}"
-    registry = RunRegistry(runs_path(fake_settings.agent_history_folder, instance_id))
-    registry.replace(
-        RunRecord(
-            run_id="deadbeef",
-            endpoint="http://x",
-            hmac_key="k",
-            hmac_algorithm="sha512",
-            pid=os.getpid(),
-            pid_start=proc_start_time(os.getpid()),  # live-looking seed
-            started_at="t",
-        ),
-    )
+    fake_settings, _ = seed_run_registry(tmp_path, instance_id)
+    monkeypatch.setattr("kai.config.settings.get_settings", lambda: fake_settings)
 
     svc.start(dep)
 
@@ -106,43 +74,11 @@ class TestStart:
 
         monkeypatch.setattr("kai.cockpit.config_writer.write_config", lambda dep, instance_id: None)
 
-        class FakeProc:
-            returncode = None
-
-            def __init__(self):
-                self._lines = iter(["starting...\n", "KAI_RUN_ID=deadbeef\n"])
-
-            @property
-            def stdout(self):
-                return self
-
-            def readline(self):
-                return next(self._lines, "")
-
-            def poll(self):
-                return self.returncode
-
-        monkeypatch.setattr(subprocess, "Popen", lambda *a, **k: FakeProc())
-
-        from kai.config.settings import Settings
-        from kai.runs import RunRecord, RunRegistry, proc_start_time, runs_path
-
-        fake_settings = Settings.for_test(agent_history_folder=str(tmp_path))
-        monkeypatch.setattr("kai.config.settings.get_settings", lambda: fake_settings)
+        monkeypatch.setattr(subprocess, "Popen", lambda *a, **k: make_fake_proc())
 
         instance_id = f"{dep.bot_type}-{user.email}"
-        registry = RunRegistry(runs_path(fake_settings.agent_history_folder, instance_id))
-        registry.replace(
-            RunRecord(
-                run_id="deadbeef",
-                endpoint="http://x",
-                hmac_key="k",
-                hmac_algorithm="sha512",
-                pid=os.getpid(),
-                pid_start=proc_start_time(os.getpid()),  # live-looking seed
-                started_at="t",
-            ),
-        )
+        fake_settings, _ = seed_run_registry(tmp_path, instance_id)
+        monkeypatch.setattr("kai.config.settings.get_settings", lambda: fake_settings)
 
         svc.start(dep)
 
@@ -169,47 +105,15 @@ class TestStart:
 
         captured_env: dict = {}
 
-        class FakeProc:
-            returncode = None
-
-            def __init__(self):
-                self._lines = iter(["starting...\n", "KAI_RUN_ID=deadbeef\n"])
-
-            @property
-            def stdout(self):
-                return self
-
-            def readline(self):
-                return next(self._lines, "")
-
-            def poll(self):
-                return self.returncode
-
         def fake_popen(*args, **kwargs):
             captured_env.update(kwargs.get("env") or {})
-            return FakeProc()
+            return make_fake_proc()
 
         monkeypatch.setattr(subprocess, "Popen", fake_popen)
 
-        from kai.config.settings import Settings
-        from kai.runs import RunRecord, RunRegistry, proc_start_time, runs_path
-
-        fake_settings = Settings.for_test(agent_history_folder=str(tmp_path))
-        monkeypatch.setattr("kai.config.settings.get_settings", lambda: fake_settings)
-
         instance_id = f"{dep.bot_type}-{user.email}"
-        registry = RunRegistry(runs_path(fake_settings.agent_history_folder, instance_id))
-        registry.replace(
-            RunRecord(
-                run_id="deadbeef",
-                endpoint="http://x",
-                hmac_key="k",
-                hmac_algorithm="sha512",
-                pid=os.getpid(),
-                pid_start=proc_start_time(os.getpid()),  # live-looking seed
-                started_at="t",
-            ),
-        )
+        fake_settings, _ = seed_run_registry(tmp_path, instance_id)
+        monkeypatch.setattr("kai.config.settings.get_settings", lambda: fake_settings)
 
         svc.start(dep)
 
@@ -221,20 +125,11 @@ class TestStart:
 
         monkeypatch.setattr("kai.cockpit.config_writer.write_config", lambda dep, instance_id: None)
 
-        class FakeProc:
-            returncode = 1
-
-            @property
-            def stdout(self):
-                return self
-
-            def readline(self):
-                return ""
-
-            def poll(self):
-                return self.returncode
-
-        monkeypatch.setattr(subprocess, "Popen", lambda *a, **k: FakeProc())
+        monkeypatch.setattr(
+            subprocess,
+            "Popen",
+            lambda *a, **k: make_fake_proc(lines=[], returncode=1),
+        )
 
         with pytest.raises(DeploymentStartupError):
             svc.start(dep)
@@ -265,31 +160,15 @@ class TestStop:
         assert dep.status == "stopped"
         assert dep.desired_state == "stopped"
 
-    def test_stop_sends_sigterm_to_live_pid(self, db, user, monkeypatch, tmp_path):
+    def test_stop_with_dead_record_does_not_kill(self, db, user, monkeypatch, tmp_path):
         svc = DeploymentsService(db)
         dep = svc.create(user, "email", "goal", "English")
         dep.run_id = "deadbeef"
         db.commit()
 
-        from kai.config.settings import Settings
-        from kai.runs import RunRecord, RunRegistry, runs_path
-
-        fake_settings = Settings.for_test(agent_history_folder=str(tmp_path))
-        monkeypatch.setattr("kai.config.settings.get_settings", lambda: fake_settings)
-
         instance_id = f"{dep.bot_type}-{user.email}"
-        registry = RunRegistry(runs_path(fake_settings.agent_history_folder, instance_id))
-        registry.replace(
-            RunRecord(
-                run_id="deadbeef",
-                endpoint="http://x",
-                hmac_key="k",
-                hmac_algorithm="sha512",
-                pid=os.getpid(),
-                pid_start=1,  # mismatched start tick: record is dead, no real kill
-                started_at="t",
-            ),
-        )
+        fake_settings, _ = seed_run_registry(tmp_path, instance_id, pid_start=1)
+        monkeypatch.setattr("kai.config.settings.get_settings", lambda: fake_settings)
 
         killed = []
         monkeypatch.setattr(
@@ -300,6 +179,7 @@ class TestStop:
 
         assert dep.status == "stopped"
         assert dep.run_id is None
+        assert killed == []
 
     def test_stop_leaves_foreign_live_record_intact(self, db, user, monkeypatch, tmp_path):
         """A live registry record belonging to a different run_id (e.g. a
@@ -310,25 +190,9 @@ class TestStop:
         dep.run_id = "ours"
         db.commit()
 
-        from kai.config.settings import Settings
-        from kai.runs import RunRecord, RunRegistry, proc_start_time, runs_path
-
-        fake_settings = Settings.for_test(agent_history_folder=str(tmp_path))
-        monkeypatch.setattr("kai.config.settings.get_settings", lambda: fake_settings)
-
         instance_id = f"{dep.bot_type}-{user.email}"
-        registry = RunRegistry(runs_path(fake_settings.agent_history_folder, instance_id))
-        registry.replace(
-            RunRecord(
-                run_id="theirs",
-                endpoint="http://x",
-                hmac_key="k",
-                hmac_algorithm="sha512",
-                pid=os.getpid(),
-                pid_start=proc_start_time(os.getpid()),  # live-looking foreign record
-                started_at="t",
-            ),
-        )
+        fake_settings, registry = seed_run_registry(tmp_path, instance_id, run_id="theirs")
+        monkeypatch.setattr("kai.config.settings.get_settings", lambda: fake_settings)
 
         killed = []
         monkeypatch.setattr(
@@ -362,25 +226,9 @@ class TestDelete:
         dep.status = "running"
         db.commit()
 
-        from kai.config.settings import Settings
-        from kai.runs import RunRecord, RunRegistry, runs_path
-
-        fake_settings = Settings.for_test(agent_history_folder=str(tmp_path))
-        monkeypatch.setattr("kai.config.settings.get_settings", lambda: fake_settings)
-
         instance_id = f"{dep.bot_type}-{user.email}"
-        registry = RunRegistry(runs_path(fake_settings.agent_history_folder, instance_id))
-        registry.replace(
-            RunRecord(
-                run_id="deadbeef",
-                endpoint="http://x",
-                hmac_key="k",
-                hmac_algorithm="sha512",
-                pid=os.getpid(),
-                pid_start=1,  # mismatched start tick: record is dead, no real kill
-                started_at="t",
-            ),
-        )
+        fake_settings, registry = seed_run_registry(tmp_path, instance_id, pid_start=1)
+        monkeypatch.setattr("kai.config.settings.get_settings", lambda: fake_settings)
 
         svc.delete(dep)
 
@@ -448,6 +296,9 @@ class TestDelete:
             path = data_dir / suffix
             path.write_text("{}")
             files.append(path)
+        history_dir = data_dir / f"{instance_id}.history"
+        history_dir.mkdir()
+        (history_dir / "conversation.json").write_text('{"key": "chat", "messages": []}')
         config_path = configs_dir / f"{instance_id}.json"
         assert config_path.exists()
         files.append(config_path)
@@ -456,4 +307,5 @@ class TestDelete:
 
         for path in files:
             assert not path.exists(), f"State file not purged: {path}"
+        assert not history_dir.exists(), "History directory not purged"
         assert svc.get(dep.id) is None

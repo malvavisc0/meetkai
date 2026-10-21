@@ -156,3 +156,56 @@ class TestGetAndList:
         svc = DeploymentsService(db)
         svc.create(user, "email", "goal", "English")
         assert len(svc.list_for_user(user.id)) == 1
+
+    def test_resolve_run_caches_registry_lookup(self, db, user, monkeypatch):
+        from unittest.mock import MagicMock
+
+        from kai.runs import RunRecord
+
+        svc = DeploymentsService(db)
+        dep = svc.create(user, "email", "goal", "English")
+        dep.run_id = "run-1"
+        record = RunRecord(
+            run_id="run-1",
+            endpoint="http://x",
+            hmac_key="k",
+            hmac_algorithm="sha512",
+            pid=1,
+            pid_start=1,
+            started_at="t",
+        )
+        registry = MagicMock()
+        registry.get.return_value = record
+        monkeypatch.setattr(svc, "run_registry", lambda deployment, user=None: registry)
+
+        assert svc.resolve_run(dep) is record
+        assert svc.resolve_run(dep) is record
+        registry.get.assert_called_once()
+
+    def test_resolve_run_cache_cleared_on_stop(self, db, user, monkeypatch):
+        from unittest.mock import MagicMock
+
+        from kai.cockpit import deployment_process
+        from kai.runs import RunRecord
+
+        svc = DeploymentsService(db)
+        dep = svc.create(user, "email", "goal", "English")
+        dep.run_id = "run-1"
+        record = RunRecord(
+            run_id="run-1",
+            endpoint="http://x",
+            hmac_key="k",
+            hmac_algorithm="sha512",
+            pid=1,
+            pid_start=1,
+            started_at="t",
+        )
+        registry = MagicMock()
+        registry.get.side_effect = [record, None]
+        monkeypatch.setattr(svc, "run_registry", lambda deployment, user=None: registry)
+        monkeypatch.setattr(deployment_process, "stop", lambda *args, **kwargs: None)
+
+        assert svc.resolve_run(dep) is record
+        svc.stop(dep)
+        assert svc.resolve_run(dep) is None
+        assert registry.get.call_count == 2

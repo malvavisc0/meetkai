@@ -1,11 +1,16 @@
 """End-to-end integration test"""
 
-import os
 import subprocess
 from dataclasses import dataclass
 
 import pytest
-from tests.cockpit.helpers import _connect_email, _connect_smtp, csrf_post
+from tests.cockpit.helpers import (
+    _connect_email,
+    _connect_smtp,
+    csrf_post,
+    make_fake_proc,
+    seed_run_registry,
+)
 
 from kai.cockpit import tokens
 from kai.cockpit.auth_backends import MagicLinkProvider
@@ -81,43 +86,13 @@ def started_deployment(client, db, bob, monkeypatch, tmp_path):
     # 10. POST /deployments/{id}/start -> (mock subprocess) -> running
     monkeypatch.setattr("kai.cockpit.config_writer.write_config", lambda d, instance_id: None)
 
-    class FakeProc:
-        returncode = None
-
-        @property
-        def stdout(self):
-            return self
-
-        def __init__(self):
-            self._lines = iter(["KAI_RUN_ID=cafef00d\n"])
-
-        def readline(self):
-            return next(self._lines, "")
-
-        def poll(self):
-            return self.returncode
-
-    monkeypatch.setattr(subprocess, "Popen", lambda *a, **k: FakeProc())
-
-    from kai.config.settings import Settings
-    from kai.runs import RunRecord, RunRegistry, proc_start_time, runs_path
-
-    fake_settings = Settings.for_test(agent_history_folder=str(tmp_path))
-    monkeypatch.setattr("kai.config.settings.get_settings", lambda: fake_settings)
+    monkeypatch.setattr(subprocess, "Popen", lambda *a, **k: make_fake_proc("cafef00d"))
 
     instance_id = f"{dep.bot_type}-{bob.email}"
-    registry = RunRegistry(runs_path(fake_settings.agent_history_folder, instance_id))
-    registry.replace(
-        RunRecord(
-            run_id="cafef00d",
-            endpoint="http://127.0.0.1:9999",
-            hmac_key="k",
-            hmac_algorithm="sha512",
-            pid=os.getpid(),
-            pid_start=proc_start_time(os.getpid()),  # live-looking seed
-            started_at="t",
-        ),
+    fake_settings, _ = seed_run_registry(
+        tmp_path, instance_id, run_id="cafef00d", endpoint="http://127.0.0.1:9999"
     )
+    monkeypatch.setattr("kai.config.settings.get_settings", lambda: fake_settings)
 
     r = csrf_post(client, f"/deployments/{dep.id}/start", follow_redirects=False)
     assert r.status_code == 302

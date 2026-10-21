@@ -65,7 +65,7 @@ class _StubAgent(KaiAgent):
     def trim_history(self, conversation_id=None):
         pass
 
-    def mark_dirty(self):
+    def mark_dirty(self, key=None):
         pass
 
     def save_goal(self):

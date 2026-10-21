@@ -10,6 +10,66 @@ from datetime import UTC, datetime
 from typing import Any
 
 
+def make_fake_proc(
+    run_id: str = "deadbeef",
+    *,
+    lines: list[str] | None = None,
+    returncode: int | None = None,
+):
+    """Return a Popen stand-in that streams a KAI_RUN_ID line on stdout."""
+    startup_lines = lines if lines is not None else ["starting...\n", f"KAI_RUN_ID={run_id}\n"]
+
+    class FakeProc:
+        def __init__(self) -> None:
+            self._lines = iter(startup_lines)
+            self.returncode = returncode
+
+        @property
+        def stdout(self):
+            return self
+
+        def readline(self) -> str:
+            return next(self._lines, "")
+
+        def poll(self):
+            return self.returncode
+
+    return FakeProc()
+
+
+def seed_run_registry(
+    tmp_path,
+    instance_id: str,
+    *,
+    run_id: str = "deadbeef",
+    endpoint: str = "http://x",
+    pid_start: int | None = None,
+):
+    """Seed a run registry entry and return ``(settings, registry)``.
+
+    ``pid_start`` defaults to the current process's start tick (a live-looking
+    record); pass ``1`` for a PID-reused/dead record.
+    """
+    import os
+
+    from kai.config.settings import Settings
+    from kai.runs import RunRecord, RunRegistry, proc_start_time, runs_path
+
+    settings = Settings.for_test(agent_history_folder=str(tmp_path))
+    registry = RunRegistry(runs_path(settings.agent_history_folder, instance_id))
+    record = RunRecord(
+        run_id=run_id,
+        endpoint=endpoint,
+        hmac_key="k",
+        hmac_algorithm="sha512",
+        pid=os.getpid(),
+        pid_start=proc_start_time(os.getpid()) if pid_start is None else pid_start,
+        started_at="t",
+    )
+    registry.replace(record)
+    return settings, registry
+
+
 def _connect_email(db, user, status: str = "connected"):
     """Create (or update) an email/Resend ``Connection`` row for ``user``.
 

@@ -69,7 +69,7 @@ class TestAuditFixes:
     @pytest.mark.asyncio
     async def test_goal_persisted_separately(self, tmp_path, settings):
         settings.agent_history_folder = tmp_path
-        history_file = tmp_path / "default.json"
+        history_dir = tmp_path / "default.history"
         gm = GoalManager()
         gm.set_goal("Test goal")
         agent = KaiAgent(settings=settings, goal_manager=gm)
@@ -86,7 +86,10 @@ class TestAuditFixes:
         data = json.loads(goal_file.read_text())
         assert data["goal"] == "Test goal"
 
-        history_data = json.loads(history_file.read_text())
+        files = list(history_dir.glob("*.json"))
+        assert len(files) == 1
+        history_data = json.loads(files[0].read_text())
+        assert history_data["key"] == "default"
         assert "goal" not in history_data
 
     @pytest.mark.asyncio

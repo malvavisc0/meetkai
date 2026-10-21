@@ -1,10 +1,10 @@
 """Tests for argv passed when spawning a bot subprocess with template/tool overrides."""
 
-import os
 import subprocess
 from collections.abc import Callable
 
 import pytest
+from tests.cockpit.helpers import make_fake_proc, seed_run_registry
 
 from kai.cockpit.deployments import DeploymentsService
 
@@ -22,44 +22,13 @@ def _setup_popen(monkeypatch, tmp_path, dep_db, dep_user) -> tuple[list[str], Ca
 
     def fake_popen(argv, env=None, **kwargs):
         captured[:] = argv
-
-        class FakeProc:
-            returncode = None
-            _lines = iter(["starting...\n", "KAI_RUN_ID=deadbeef\n"])
-
-            @property
-            def stdout(self):
-                return self
-
-            def readline(self):
-                return next(self._lines, "")
-
-            def poll(self):
-                return self.returncode
-
-        return FakeProc()
+        return make_fake_proc()
 
     monkeypatch.setattr(subprocess, "Popen", fake_popen)
 
-    from kai.config.settings import Settings
-    from kai.runs import RunRecord, RunRegistry, proc_start_time, runs_path
-
-    fake_settings = Settings.for_test(agent_history_folder=str(tmp_path))
-    monkeypatch.setattr("kai.config.settings.get_settings", lambda: fake_settings)
-
     instance_id = f"email-{dep_user.email}"
-    registry = RunRegistry(runs_path(fake_settings.agent_history_folder, instance_id))
-    registry.replace(
-        RunRecord(
-            run_id="deadbeef",
-            endpoint="http://x",
-            hmac_key="k",
-            hmac_algorithm="sha512",
-            pid=os.getpid(),
-            pid_start=proc_start_time(os.getpid()),  # live-looking seed
-            started_at="t",
-        ),
-    )
+    fake_settings, _ = seed_run_registry(tmp_path, instance_id)
+    monkeypatch.setattr("kai.config.settings.get_settings", lambda: fake_settings)
 
     def deploy_and_start(template: str = "general", tool_overrides: dict | None = None):
         svc = DeploymentsService(dep_db)
