@@ -362,3 +362,65 @@ class TestHostValidation:
         stream.get_extra_info.return_value = ("8.8.8.8", 443)
         resp.extensions = {"network_stream": stream}
         assert peer_is_public(resp) is True
+
+    @pytest.mark.asyncio
+    async def test_host_is_public_accepts_all_global_addresses(self, monkeypatch):
+        from kai.bots.email.attachments import host_is_public
+
+        def resolve(*args, **kwargs):
+            return [
+                (2, 1, 6, "", ("8.8.8.8", 443)),
+                (2, 1, 6, "", ("1.1.1.1", 443)),
+            ]
+
+        monkeypatch.setattr("kai.bots.email.attachments.socket.getaddrinfo", resolve)
+        assert await host_is_public("example.com") is True
+
+    @pytest.mark.asyncio
+    async def test_host_is_public_rejects_mixed_public_and_private(self, monkeypatch):
+        from kai.bots.email.attachments import host_is_public
+
+        def resolve(*args, **kwargs):
+            return [
+                (2, 1, 6, "", ("8.8.8.8", 443)),
+                (2, 1, 6, "", ("127.0.0.1", 443)),
+            ]
+
+        monkeypatch.setattr("kai.bots.email.attachments.socket.getaddrinfo", resolve)
+        assert await host_is_public("example.com") is False
+
+    @pytest.mark.asyncio
+    async def test_host_is_public_rejects_empty_resolution(self, monkeypatch):
+        from kai.bots.email.attachments import host_is_public
+
+        monkeypatch.setattr("kai.bots.email.attachments.socket.getaddrinfo", lambda *a, **k: [])
+        assert await host_is_public("example.com") is False
+
+    @pytest.mark.asyncio
+    async def test_read_capped_body_aborts_when_over_limit(self):
+        from kai.bots.email.attachments import read_capped_body
+
+        resp = MagicMock()
+
+        async def aiter_bytes():
+            yield b"123"
+            yield b"456"
+
+        resp.aiter_bytes = aiter_bytes
+        assert await read_capped_body(resp, max_bytes=4) is None
+
+    def test_peer_is_public_fails_closed_without_stream(self):
+        from kai.bots.email.attachments import peer_is_public
+
+        resp = MagicMock()
+        resp.extensions = {}
+        assert peer_is_public(resp) is False
+
+    def test_peer_is_public_fails_closed_without_address(self):
+        from kai.bots.email.attachments import peer_is_public
+
+        resp = MagicMock()
+        stream = MagicMock()
+        stream.get_extra_info.return_value = None
+        resp.extensions = {"network_stream": stream}
+        assert peer_is_public(resp) is False

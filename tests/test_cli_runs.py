@@ -4,6 +4,7 @@ import types
 import pytest
 import typer
 
+from kai import runs as runs_mod
 from kai.cli import bot as cli_bot
 from kai.runs import RunRecord, RunRegistry, proc_start_time, record_is_live, sanitize_instance_id
 
@@ -90,3 +91,66 @@ class TestResolveRun:
         self._patch(monkeypatch, tmp_path, lambda reg: None)
         with pytest.raises(typer.Exit):
             cli_bot.resolve_run("email", "deadbeef")
+
+
+class TestPidHelpers:
+    def test_nonpositive_pid_is_dead(self):
+        assert runs_mod.pid_alive(0) is False
+
+    def test_missing_process_is_dead(self, monkeypatch):
+        def missing(pid, sig):
+            raise ProcessLookupError
+
+        monkeypatch.setattr(runs_mod.os, "kill", missing)
+        assert runs_mod.pid_alive(123) is False
+
+    def test_permission_error_means_alive(self, monkeypatch):
+        def denied(pid, sig):
+            raise PermissionError
+
+        monkeypatch.setattr(runs_mod.os, "kill", denied)
+        assert runs_mod.pid_alive(123) is True
+
+    def test_other_oserror_is_dead(self, monkeypatch):
+        def broken(pid, sig):
+            raise OSError
+
+        monkeypatch.setattr(runs_mod.os, "kill", broken)
+        assert runs_mod.pid_alive(123) is False
+
+    def test_successful_signal_zero_means_alive(self, monkeypatch):
+        monkeypatch.setattr(runs_mod.os, "kill", lambda pid, sig: None)
+        assert runs_mod.pid_alive(123) is True
+
+    def test_proc_start_time_missing_process(self):
+        assert runs_mod.proc_start_time(-1) is None
+
+    def test_record_without_start_tick_uses_pid_liveness(self, monkeypatch):
+        monkeypatch.setattr(runs_mod, "pid_alive", lambda pid: True)
+        record = _record(None)
+        assert runs_mod.record_is_live(record) is True
+
+    def test_record_with_unreadable_start_tick_falls_back_to_pid(self, monkeypatch):
+        monkeypatch.setattr(runs_mod, "proc_start_time", lambda pid: None)
+        monkeypatch.setattr(runs_mod, "pid_alive", lambda pid: True)
+        assert runs_mod.record_is_live(_record(123)) is True
+
+
+class TestRunRegistryCorruption:
+    def test_invalid_json_returns_none(self, tmp_path):
+        registry = RunRegistry(tmp_path / "email.runs.json")
+        registry.path.write_text("{not-json")
+        assert registry.get() is None
+        assert registry.path.exists()
+
+    def test_non_object_json_is_ignored(self, tmp_path):
+        registry = RunRegistry(tmp_path / "email.runs.json")
+        registry.path.write_text("[1, 2, 3]")
+        assert registry.load() is None
+        assert registry.get() is None
+
+    def test_default_runs_path_uses_data_folder(self):
+        assert (
+            runs_mod.runs_path(None, "email-alice@ex.com")
+            == runs_mod.Path("data") / "email-alice@ex.com.runs.json"
+        )

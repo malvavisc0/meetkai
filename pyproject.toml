@@ -160,6 +160,7 @@ dev = [
 
 [tool.coverage.run]
 source = ["src/kai"]
+branch = true
 
 [tool.coverage.report]
 fail_under = 80
