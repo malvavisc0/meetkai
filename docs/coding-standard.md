@@ -45,12 +45,14 @@ uv run ruff check --fix .              # lint
 uv run ruff format .                   # format
 uv run pyright                         # type check
 uv run pytest                          # test suite (-n auto, xdist)
+uv run pytest -q --cov=src/kai          # tests + coverage gate (80% floor)
 uvx radon cc src -s | grep -E '-\s(C|D|E|F)\s'   # complexity gate (must be empty)
 uvx vulture                           # dead code (config in pyproject.toml)
 find src tests -name '*.py' -exec wc -l {} + | awk '$1 > 600 && $2 != "total"' | sort -rn   # file-size offenders
 ```
 Run `ruff check`, `ruff format --check`, `pyright`, and the relevant
-tests after every change.
+tests after every change; full-suite runs use `--cov=src/kai` so the
+80% coverage floor is enforced.
 
 ## Complexity budget
 `radon cc` (cyclomatic complexity) must report **no block ranked C or

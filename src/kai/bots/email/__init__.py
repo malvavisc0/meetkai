@@ -374,6 +374,9 @@ class Bot(BaseBot):
         email via SMTP (unless already delivered by the tool) and records it
         in the target's history; ``console`` returns the reply to the
         operator only; ``silent`` is a no-op.
+
+        ``persist`` is accepted for the shared ``/tell`` contract but has no
+        effect here: email has no ``set_goal`` tool wiring.
         """
         if self.agent is None:
             return TellResult(ok=False, reply="bot has no agent")

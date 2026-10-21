@@ -88,6 +88,7 @@ include = ["src", "tests"]
 venvPath = "."
 venv = ".venv"
 pythonVersion = "3.13"
+reportUnnecessaryTypeIgnoreComment = true
 
 [tool.vulture]
 paths = ["src"]
@@ -154,4 +155,12 @@ dev = [
     "ruff",
     "httpx2",
     "pytest-xdist",
+    "pytest-cov",
 ]
+
+[tool.coverage.run]
+source = ["src/kai"]
+
+[tool.coverage.report]
+fail_under = 80
+show_missing = true

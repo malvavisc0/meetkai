@@ -30,13 +30,9 @@ from typing import Any, Literal, Union, get_args, get_origin, get_type_hints
 
 import pytest
 from pydantic import BaseModel, ValidationError
+from pydantic_settings import BaseSettings
 
 import kai
-
-try:
-    from pydantic_settings import BaseSettings
-except Exception:  # pragma: no cover - pydantic_settings is a hard dep
-    BaseSettings = None  # type: ignore[assignment,misc]
 
 
 def _qid(model: type[BaseModel]) -> str:
@@ -166,7 +162,7 @@ def _hints(model: type[BaseModel]) -> dict[str, Any]:
 
 
 def _is_settings(model: type[BaseModel]) -> bool:
-    return BaseSettings is not None and issubclass(model, BaseSettings)
+    return issubclass(model, BaseSettings)
 
 
 def _enum_fields(model: type[BaseModel]) -> dict[str, list[Any]]:

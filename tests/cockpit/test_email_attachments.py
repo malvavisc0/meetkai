@@ -17,6 +17,9 @@ class TestAttachments:
     def _stream_cm(self, content: bytes, *, redirect_to: str | None = None):
         """Build an async context manager that mimics ``client.stream``."""
         resp = MagicMock()
+        peer = MagicMock()
+        peer.get_extra_info.return_value = ("8.8.8.8", 443)
+        resp.extensions = {"network_stream": peer}
         resp.is_redirect = redirect_to is not None
         resp.headers = {"location": redirect_to} if redirect_to else {}
         resp.raise_for_status = MagicMock()
@@ -338,7 +341,24 @@ class TestHostValidation:
 
         assert await host_is_public("missing.invalid") is False
 
+    # ---------------------------------------------------------------------------
+    # handle_operator — agent decides via structured action
+    # ---------------------------------------------------------------------------
 
-# ---------------------------------------------------------------------------
-# handle_operator — agent decides via structured action
-# ---------------------------------------------------------------------------
+    def test_peer_is_public_rejects_private_address(self):
+        from kai.bots.email.attachments import peer_is_public
+
+        resp = MagicMock()
+        stream = MagicMock()
+        stream.get_extra_info.return_value = ("127.0.0.1", 443)
+        resp.extensions = {"network_stream": stream}
+        assert peer_is_public(resp) is False
+
+    def test_peer_is_public_accepts_global_address(self):
+        from kai.bots.email.attachments import peer_is_public
+
+        resp = MagicMock()
+        stream = MagicMock()
+        stream.get_extra_info.return_value = ("8.8.8.8", 443)
+        resp.extensions = {"network_stream": stream}
+        assert peer_is_public(resp) is True

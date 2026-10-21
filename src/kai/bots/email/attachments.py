@@ -58,6 +58,24 @@ async def validate_fetch_url(url: str, cache: dict[str, bool] | None = None) -> 
     return True
 
 
+def peer_is_public(resp: httpx.Response) -> bool:
+    """True when the connected peer address is globally routable.
+
+    This is checked after the connection is established, so it also catches
+    DNS rebinding between the pre-flight lookup and the actual connect.
+    """
+    stream = resp.extensions.get("network_stream")
+    if stream is None:
+        return False
+    address = stream.get_extra_info("server_addr")
+    if not address:
+        return False
+    try:
+        return ipaddress.ip_address(address[0]).is_global
+    except (ValueError, TypeError):
+        return False
+
+
 async def read_capped_body(resp: httpx.Response, max_bytes: int) -> bytes | None:
     """Read a streamed body, returning None once it exceeds ``max_bytes``."""
     chunks: list[bytes] = []
@@ -76,11 +94,11 @@ async def download_attachment(url: str, max_bytes: int) -> bytes | None:
 
     Only HTTPS URLs whose hosts resolve exclusively to public addresses are
     fetched. Redirects are followed manually (at most ``MAX_REDIRECTS``) and
-    revalidated, so a provider or CDN redirect cannot target loopback,
-    link-local, or RFC1918 services. This is a check-before-connect guard
-    (not DNS pinning): a resolver that changes answers between validation
-    and connection could still rebind. The body is streamed and abandoned
-    as soon as ``max_bytes`` is exceeded.
+    revalidated, and the connected peer address is re-checked after connect,
+    so a provider or CDN redirect cannot target loopback, link-local, or
+    RFC1918 services and a rebinding resolver is rejected before any body is
+    read. The body is streamed and abandoned as soon as ``max_bytes`` is
+    exceeded.
     """
     current = url
     validated: dict[str, bool] = {}
@@ -90,6 +108,9 @@ async def download_attachment(url: str, max_bytes: int) -> bytes | None:
                 if not await validate_fetch_url(current, validated):
                     return None
                 async with client.stream("GET", current) as resp:
+                    if not peer_is_public(resp):
+                        logger.warning("Attachment peer address rejected")
+                        return None
                     if resp.is_redirect:
                         location = resp.headers.get("location")
                         if not location:

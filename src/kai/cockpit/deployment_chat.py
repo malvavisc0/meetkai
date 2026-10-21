@@ -197,9 +197,41 @@ def normalize_history(history_data: dict, instance_id: str) -> dict[str, list[di
     return result
 
 
+def read_history_counts(history_dir: Path) -> dict[str, int] | None:
+    """Count messages per conversation without normalizing payloads."""
+    if not history_dir.is_dir():
+        return None
+    counts: dict[str, int] = {}
+    for path in history_dir.glob("*.json"):
+        try:
+            raw = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            logger.warning("failed to read history file %s", path)
+            continue
+        if not isinstance(raw, dict):
+            continue
+        key = raw.get("key")
+        messages = raw.get("messages")
+        if isinstance(key, str) and isinstance(messages, list):
+            counts[key] = len(messages)
+    return counts
+
+
 def interaction_summary(svc: "DeploymentsService", deployment: Deployment) -> tuple[int, int]:
     """Return ``(conversation count, message count)`` from on-disk history."""
-    history_data = svc.history(deployment)
-    conversation_count = len(history_data)
-    message_count = sum(len(msgs) for msgs in history_data.values())
-    return conversation_count, message_count
+    from kai.config.settings import get_settings
+
+    folder = get_settings().agent_history_folder
+    if folder is None:
+        return 0, 0
+    iid = svc.deployment_instance_id(deployment)
+    counts = {
+        key: len(messages)
+        for key, messages in history_mapping(
+            read_history_file(Path(folder) / f"{iid}.json")
+        ).items()
+    }
+    dir_counts = read_history_counts(Path(folder) / f"{iid}.history")
+    if dir_counts:
+        counts.update(dir_counts)
+    return len(counts), sum(counts.values())

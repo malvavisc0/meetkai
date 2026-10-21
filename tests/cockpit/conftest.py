@@ -72,7 +72,8 @@ def _isolated_db_engine(monkeypatch):
     factory = sessionmaker(bind=eng)
 
     monkeypatch.setattr(cockpit_db, "open_session", lambda: factory())
-    return eng
+    yield eng
+    eng.dispose()
 
 
 @pytest.fixture

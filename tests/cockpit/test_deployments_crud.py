@@ -209,3 +209,40 @@ class TestGetAndList:
         svc.stop(dep)
         assert svc.resolve_run(dep) is None
         assert registry.get.call_count == 2
+
+    def test_interaction_summary_counts_both_history_layouts(self, db, user, tmp_path, monkeypatch):
+        import json
+
+        from kai.config.settings import Settings
+
+        settings = Settings.for_test(agent_history_folder=str(tmp_path))
+        monkeypatch.setattr("kai.config.settings.get_settings", lambda: settings)
+        svc = DeploymentsService(db)
+        dep = svc.create(user, "email", "goal", "English")
+        instance_id = svc.deployment_instance_id(dep)
+
+        (tmp_path / f"{instance_id}.json").write_text(
+            json.dumps(
+                {
+                    "history": {
+                        "chat-1": [{"role": "user", "content": "one"}],
+                        "chat-2": [{"role": "user", "content": "two"}],
+                    }
+                }
+            )
+        )
+        history_dir = tmp_path / f"{instance_id}.history"
+        history_dir.mkdir()
+        (history_dir / "chat-3.json").write_text(
+            json.dumps(
+                {
+                    "key": "chat-3",
+                    "messages": [
+                        {"role": "user", "content": "three"},
+                        {"role": "assistant", "content": "four"},
+                    ],
+                }
+            )
+        )
+
+        assert svc.interaction_summary(dep) == (3, 4)

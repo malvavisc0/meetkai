@@ -69,7 +69,10 @@ class ToolLoopMixin:
         from llama_index.core.output_parsers.pydantic import PydanticOutputParser
 
         json_instruction = self.structured_output_instruction(output_cls)
-        loop_messages = self.build_predict_messages(messages, [], json_instruction)
+        # Keep the first tool-selection call free of the JSON-only instruction;
+        # add it once tools have been used, so later rounds can terminate with
+        # a parseable action without biasing the model away from tool calls.
+        loop_messages = messages
         parser = PydanticOutputParser(output_cls=output_cls)
         final_text: str | None = None
 
@@ -96,6 +99,7 @@ class ToolLoopMixin:
                     return action, tool_call_records
                 result, ok = await self.execute_tool_call(tc, active_by_name)
                 self.record_tool_call(tc, result, ok, tool_call_records, scratchpad)
+            loop_messages = self.build_predict_messages(messages, [], json_instruction)
 
         action = self.parse_final_action(final_text, output_cls, parser)
         if action is None:
@@ -204,11 +208,12 @@ class ToolLoopMixin:
             output_cls.model_json_schema(), ensure_ascii=False, separators=(",", ":")
         )
         return (
-            "\n\n## Output format (mandatory)\n"
-            "Respond with ONLY a single JSON object matching this schema — "
-            "no prose, no markdown, no code fences, no `key: value` lines. "
-            "Choose the action and fill its fields; the whole response must "
-            "be that one JSON object.\n\n"
+            "\n\n## Final output format\n"
+            "Use the available tools whenever they are needed. Once you are "
+            "done, respond with ONLY a single JSON object matching this "
+            "schema — no prose, no markdown, no code fences, no `key: value` "
+            "lines. Choose the action and fill its fields; the whole response "
+            "must be that one JSON object.\n\n"
             f"Schema: {schema}"
         )
 

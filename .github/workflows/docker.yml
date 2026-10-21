@@ -64,8 +64,8 @@ jobs:
       - name: Vulture dead code
         run: uvx vulture
 
-      - name: Pytest
-        run: uv run pytest -q
+      - name: Pytest + coverage
+        run: uv run pytest -q --cov=src/kai
 
       # The json-file rotation contract is duplicated per compose file (YAML
       # anchors cannot cross files) — keep all three blocks byte-identical.

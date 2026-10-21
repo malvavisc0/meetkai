@@ -4,7 +4,7 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 import respx
 from httpx import Response
-from llama_index.core.llms import MessageRole
+from llama_index.core.llms import ChatMessage, ChatResponse, MessageRole
 from llama_index.llms.openai_like import OpenAILike
 
 from kai.agent.core import DEFAULT_SYSTEM_PROMPT, ActionResult, KaiAgent
@@ -18,10 +18,17 @@ class TestKaiAgentChat:
     async def test_compliant_loop_response_skips_terminal_llm_call(self, settings):
         agent = KaiAgent(settings=settings, goal_manager=GoalManager())
         llm = _mock_llm()
+        tool_call = MagicMock()
+        tool_call.tool_name = "unknown_tool"
+        tool_call.tool_kwargs = {}
+        tool_response = ChatResponse(message=ChatMessage(role=MessageRole.ASSISTANT, content=None))
         llm.achat_with_tools = AsyncMock(
-            return_value=_structured_response(_TestAction(action="reply", text="done"))
+            side_effect=[
+                tool_response,
+                _structured_response(_TestAction(action="reply", text="done")),
+            ]
         )
-        llm.get_tool_calls_from_response = MagicMock(return_value=[])
+        llm.get_tool_calls_from_response = MagicMock(side_effect=[[tool_call], []])
         llm.achat = AsyncMock(side_effect=AssertionError("terminal call should be skipped"))
         agent.llm = llm
 
@@ -29,6 +36,10 @@ class TestKaiAgentChat:
 
         assert result.reply == "done"
         llm.achat.assert_not_awaited()
+        first_prompt = llm.achat_with_tools.call_args_list[0].kwargs["chat_history"][0]
+        second_prompt = llm.achat_with_tools.call_args_list[1].kwargs["chat_history"][0]
+        assert "Final output format" not in str(first_prompt.content)
+        assert "Final output format" in str(second_prompt.content)
 
     @pytest.mark.asyncio
     async def test_chat_returns_reply(self, settings):
