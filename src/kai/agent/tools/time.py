@@ -36,6 +36,7 @@ def get_time_in_timezone(timezone: str | None = None) -> dict[str, str]:
 
 
 def get_weather(location: str, timeout: float = 15.0) -> str | None:
+    """Fetch a concise current-weather summary, or None on failure."""
     try:
         with httpx.Client(timeout=timeout, follow_redirects=True) as client:
             resp = client.get(

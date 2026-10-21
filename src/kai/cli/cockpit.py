@@ -39,7 +39,7 @@ cockpit_app.add_typer(cockpit_request_app, name="request")
 def cockpit_serve(
     host: str = typer.Option("127.0.0.1", "--host", help="Network interface to listen on"),
     port: int = typer.Option(8080, "--port", help="Port to listen on"),
-):
+) -> None:
     """Start the cockpit web app."""
     import uvicorn
 
@@ -52,7 +52,7 @@ def cockpit_serve(
 
 
 @cockpit_app.command("migrate")
-def cockpit_migrate():
+def cockpit_migrate() -> None:
     """Update the cockpit database schema (safe to run again)."""
     from kai.cockpit.db import run_migrations
     from kai.logging.logger import setup_logging
@@ -63,7 +63,7 @@ def cockpit_migrate():
 
 
 @cockpit_app.command("rotate-credential-key")
-def cockpit_rotate_credential_key():
+def cockpit_rotate_credential_key() -> None:
     """Rotate the credential encryption key.
 
     Re-encrypts every stored credential with a new key and updates ``.env``.
@@ -100,7 +100,7 @@ def cockpit_user_create(
         ..., "--language", help="Default language for this user's deployments"
     ),
     timezone: str = typer.Option(..., "--timezone", help="Timezone, for example Europe/Berlin"),
-):
+) -> None:
     """Create a new cockpit user."""
     import secrets
 
@@ -154,7 +154,7 @@ def cockpit_user_create(
 
 
 @cockpit_user_app.command("list")
-def cockpit_user_list():
+def cockpit_user_list() -> None:
     """List cockpit users."""
     from kai.cockpit.db import SessionLocal
     from kai.cockpit.models import User
@@ -194,7 +194,7 @@ def cockpit_user_list():
 @cockpit_user_app.command("disable")
 def cockpit_user_disable(
     email: str = typer.Argument(..., help="User email"),
-):
+) -> None:
     """Disable a cockpit user so they can no longer log in."""
     from kai.cockpit.db import SessionLocal
     from kai.cockpit.models import User
@@ -231,7 +231,7 @@ def cockpit_user_flags(
     image: bool = typer.Option(None, "--image/--no-image", help="Toggle image interpretation"),
     sso: bool = typer.Option(None, "--sso/--no-sso", help="Toggle SSO login"),
     show: bool = typer.Option(False, "--show", help="Only print current flags, change nothing"),
-):
+) -> None:
     """Turn features on or off for a user.
 
     Flags start off when a user is created. Pass ``--image`` to enable and
@@ -268,7 +268,7 @@ def cockpit_user_flags(
 
 
 @cockpit_request_app.command("list")
-def cockpit_request_list():
+def cockpit_request_list() -> None:
     """List pending login requests."""
     from kai.cockpit.db import SessionLocal
     from kai.cockpit.models import LoginRequest, User
@@ -292,7 +292,7 @@ def cockpit_request_list():
 @cockpit_request_app.command("create")
 def cockpit_request_create(
     email: str = typer.Argument(..., help="User email"),
-):
+) -> None:
     """Create a pending login request for a user, without the browser."""
     from kai.cockpit.db import SessionLocal
     from kai.cockpit.models import LoginRequest, User
@@ -329,7 +329,7 @@ def cockpit_request_create(
 @cockpit_request_app.command("approve")
 def cockpit_request_approve(
     email: str = typer.Argument(..., help="User email"),
-):
+) -> None:
     """Approve a login request and send the user a magic link."""
     from kai.cockpit.auth_backends import MagicLinkProvider
     from kai.cockpit.cli_helpers import build_magic_link_url

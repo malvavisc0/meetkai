@@ -26,6 +26,7 @@ BODY_RE = re.compile(r"<body\b[^>]*>(.*?)</body>", re.IGNORECASE | re.DOTALL)
 
 
 def web_search(query: str, max_results: int = 15) -> list[dict[str, str]]:
+    """Search the web and return title, URL, and snippet result dicts."""
     results: list[dict[str, str]] = []
     try:
         raw_results = DDGS().text(query, max_results=max_results)
@@ -54,6 +55,7 @@ def web_search(query: str, max_results: int = 15) -> list[dict[str, str]]:
 
 
 def strip_boilerplate(html: str) -> str:
+    """Strip boilerplate tags and return the HTML body."""
     for pattern in BOILERPLATE_TAG_RE.values():
         html = pattern.sub("", html)
     match = BODY_RE.search(html)
@@ -61,6 +63,7 @@ def strip_boilerplate(html: str) -> str:
 
 
 def truncate(text: str, max_chars: int) -> str:
+    """Truncate text at a word boundary within the character limit."""
     if len(text) <= max_chars:
         return text
     cut = text.rfind(" ", 0, max_chars)
@@ -70,6 +73,7 @@ def truncate(text: str, max_chars: int) -> str:
 
 
 def get_webpage_content(url: str, timeout: float = 20.0, max_chars: int = WEBPAGE_MAX_CHARS) -> str:
+    """Fetch a webpage and return truncated Markdown content."""
     headers = {
         "User-Agent": (
             "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "

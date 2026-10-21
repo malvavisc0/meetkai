@@ -119,6 +119,7 @@ class Task(BaseModel):
     occurrences: int = 0
 
     def to_dict(self) -> dict[str, Any]:
+        """Serialize the task to a JSON-compatible dict."""
         d = self.model_dump()
         d["due_at"] = to_iso(self.due_at)
         d["created_at"] = to_iso(self.created_at)
@@ -130,6 +131,7 @@ class Task(BaseModel):
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> "Task":
+        """Build a task from a persisted dict."""
         goal = str(data.get("goal") or data.get("message") or "")
         weekdays_data = data.get("weekdays")
         weekdays = tuple(weekdays_data) if weekdays_data else None
@@ -165,6 +167,7 @@ def compute_next_due(task: Task) -> datetime | None:
 
 
 def advance_recurrence(task: Task) -> datetime:
+    """Return the next occurrence after the task's due time."""
     interval = max(1, task.interval)
     next_dt = task.due_at
     if task.repeat == "daily":
@@ -177,6 +180,7 @@ def advance_recurrence(task: Task) -> datetime:
 
 
 def advance_weekly(next_dt: datetime, interval: int, weekdays: tuple[int, ...] | None) -> datetime:
+    """Advance to the next matching weekday, or one interval ahead."""
     if not weekdays:
         return next_dt + timedelta(weeks=interval)
     for _ in range(7 * interval + 1):
@@ -187,6 +191,7 @@ def advance_weekly(next_dt: datetime, interval: int, weekdays: tuple[int, ...] |
 
 
 def advance_monthly(next_dt: datetime, interval: int) -> datetime:
+    """Advance by whole months, clamping the day to the month length."""
     year = next_dt.year
     month = next_dt.month + interval
     while month > 12:
@@ -210,11 +215,13 @@ class TaskStore:
         self.load()
 
     def lock_for(self) -> asyncio.Lock:
+        """Return the store's lazily created async lock."""
         if self._lock is None:
             self._lock = asyncio.Lock()
         return self._lock
 
     def load(self) -> None:
+        """Load persisted tasks into memory."""
         if self._path is None or not self._path.exists():
             return
         try:
@@ -230,6 +237,7 @@ class TaskStore:
             logger.warning("Failed to load tasks from %s: %s", self._path, exc)
 
     def save_locked(self) -> None:
+        """Write tasks atomically; the caller must hold the lock."""
         if self._path is None:
             return
         try:
@@ -242,6 +250,7 @@ class TaskStore:
             logger.warning("Failed to save tasks to %s: %s", self._path, exc)
 
     async def add(self, task: Task) -> None:
+        """Persist a task."""
         async with self.lock_for():
             self._tasks[task.id] = task
             self.save_locked()
@@ -263,6 +272,7 @@ class TaskStore:
             return True
 
     async def list_for(self, chat_id: str | None = None, owner_id: str | None = None) -> list[Task]:
+        """Return tasks ordered by due time, filtered by chat and owner."""
         async with self.lock_for():
             tasks = list(self._tasks.values())
         tasks.sort(key=lambda t: t.due_at)
@@ -300,6 +310,7 @@ class TaskStore:
 
     @staticmethod
     def new_id() -> str:
+        """Return a new short task id."""
         return uuid.uuid4().hex[:12]
 
 
@@ -330,10 +341,12 @@ class TaskScheduler:
         self._task: asyncio.Task[None] | None = None
 
     def start(self) -> None:
+        """Start the background polling loop."""
         if self._task is None or self._task.done():
             self._task = asyncio.ensure_future(self.run())
 
     async def stop(self) -> None:
+        """Stop the polling loop and await it."""
         if self._task is None:
             return
         self._task.cancel()
@@ -344,6 +357,7 @@ class TaskScheduler:
         self._task = None
 
     async def run(self) -> None:
+        """Poll and execute due tasks until cancelled."""
         logger.info("Task scheduler started (poll=%.1fs)", self._poll_interval)
         while True:
             try:
@@ -355,6 +369,7 @@ class TaskScheduler:
             await asyncio.sleep(self._poll_interval)
 
     async def tick(self) -> None:
+        """Execute tasks that are currently due."""
         due = await self._store.pop_due()
         if not due:
             return
@@ -387,6 +402,7 @@ class TaskScheduler:
         until: datetime | None = None,
         count: int | None = None,
     ) -> Task:
+        """Create and persist a scheduled task."""
         task = Task(
             id=TaskStore.new_id(),
             chat_id=chat_id,
@@ -405,9 +421,11 @@ class TaskScheduler:
         return task
 
     async def cancel(self, task_id: str, *, chat_id: str) -> bool:
+        """Cancel a task owned by the given chat."""
         return await self._store.cancel(task_id, chat_id=chat_id)
 
     async def list_for(self, chat_id: str | None = None, owner_id: str | None = None) -> list[Task]:
+        """List tasks filtered by chat and owner."""
         return await self._store.list_for(chat_id=chat_id, owner_id=owner_id)
 
 

@@ -4,27 +4,27 @@ from kai.config.prompts import load_system_prompt
 
 
 class TestLoadSystemPrompt:
-    def test_md_file(self, tmp_path):
+    def test_loads_markdown_file(self, tmp_path):
         f = tmp_path / "prompt.md"
         f.write_text("# System Prompt\nBe helpful.")
         assert "# System Prompt" in load_system_prompt(f)
 
-    def test_strips_whitespace(self, tmp_path):
+    def test_strips_surrounding_whitespace(self, tmp_path):
         f = tmp_path / "prompt.txt"
         f.write_text("  \n  Hello  \n  ")
         assert load_system_prompt(f) == "Hello"
 
-    def test_not_found(self, tmp_path):
+    def test_missing_prompt_raises_file_not_found(self, tmp_path):
         with pytest.raises(FileNotFoundError, match="not found"):
             load_system_prompt(tmp_path / "nonexistent.txt")
 
-    def test_unsupported_extension(self, tmp_path):
+    def test_unsupported_extension_raises_value_error(self, tmp_path):
         f = tmp_path / "prompt.json"
         f.write_text("{}")
         with pytest.raises(ValueError, match="Unsupported"):
             load_system_prompt(f)
 
-    def test_empty_file(self, tmp_path):
+    def test_empty_prompt_file_raises_value_error(self, tmp_path):
         f = tmp_path / "prompt.txt"
         f.write_text("")
         with pytest.raises(ValueError, match="empty"):
@@ -36,25 +36,25 @@ class TestLoadSystemPrompt:
         with pytest.raises(ValueError, match="empty"):
             load_system_prompt(f)
 
-    def test_directory_path(self, tmp_path):
+    def test_directory_path_raises_value_error(self, tmp_path):
         d = tmp_path / "subdir"
         d.mkdir()
         with pytest.raises(ValueError, match="not a file"):
             load_system_prompt(d)
 
-    def test_binary_file(self, tmp_path):
+    def test_non_utf8_file_raises_value_error(self, tmp_path):
         f = tmp_path / "prompt.txt"
         f.write_bytes(b"\x80\x81\x82\x83")
         with pytest.raises(ValueError, match="UTF-8"):
             load_system_prompt(f)
 
-    def test_unicode_content(self, tmp_path):
+    def test_preserves_unicode_content(self, tmp_path):
         f = tmp_path / "prompt.txt"
         f.write_text("Tú eres un asistente útil. 你好")
         result = load_system_prompt(f)
         assert "你好" in result
 
-    def test_large_file(self, tmp_path):
+    def test_loads_large_prompt_file(self, tmp_path):
         f = tmp_path / "prompt.txt"
         content = "A" * 100_000
         f.write_text(content)

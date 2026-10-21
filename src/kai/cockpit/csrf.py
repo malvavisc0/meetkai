@@ -31,6 +31,7 @@ class CSRFMiddleware:
             await self.handle_unsafe(scope, receive, send, session)
 
     async def handle_safe(self, scope: Scope, receive: Receive, send: Send, session: dict) -> None:
+        """Mint the session token if absent and pass the request through."""
         # Ensure a token exists for templates to embed; mint one on first
         # visit so the very first form render already carries a valid token.
         token = session.get("csrf_token")
@@ -42,6 +43,7 @@ class CSRFMiddleware:
     async def handle_unsafe(
         self, scope: Scope, receive: Receive, send: Send, session: dict
     ) -> None:
+        """Verify the submitted token, rejecting unsafe requests without a match."""
         token = session.get("csrf_token")
         context_token = token if isinstance(token, str) else None
         if self.is_exempt(scope["path"]):
@@ -68,6 +70,7 @@ class CSRFMiddleware:
         send: Send,
         token: str | None,
     ) -> None:
+        """Run the app with the CSRF token exposed to templates."""
         marker = CSRF_TOKEN.set(token)
         try:
             await self.app(scope, receive, send)
@@ -76,6 +79,7 @@ class CSRFMiddleware:
 
     @staticmethod
     def is_exempt(path: str) -> bool:
+        """Report whether a path skips CSRF checks (machine ingress)."""
         # /webhook/{workspace_slug}/{type_name} is HMAC-verified machine
         # ingress (routes/connections/webhooks.py). The trailing slash after
         # "webhook" ensures we match the full prefix, not e.g. /webhookfoo.
@@ -83,6 +87,7 @@ class CSRFMiddleware:
 
     @staticmethod
     def header_token(scope: Scope) -> str | None:
+        """Read the CSRF token from the request headers, if present."""
         for name, value in scope["headers"]:
             if name.lower() == b"x-csrf-token":
                 return value.decode("latin-1")
@@ -90,6 +95,7 @@ class CSRFMiddleware:
 
     @staticmethod
     async def read_body(receive: Receive) -> bytes:
+        """Read and buffer the full request body."""
         chunks: list[bytes] = []
         while True:
             message = await receive()
@@ -102,6 +108,7 @@ class CSRFMiddleware:
 
     @classmethod
     async def form_token(cls, scope: Scope, body: bytes) -> str | None:
+        """Read the CSRF token from the submitted form body, if present."""
         request = Request(scope, cls.replay_body(body))
         try:
             form = await request.form()
@@ -112,6 +119,7 @@ class CSRFMiddleware:
 
     @staticmethod
     def matches(expected: object, submitted: str | None) -> bool:
+        """Compare tokens in constant time, requiring both to be non-empty."""
         return (
             isinstance(expected, str)
             and bool(expected)
@@ -127,6 +135,7 @@ class CSRFMiddleware:
         send: Send,
         token: str | None,
     ) -> None:
+        """Send a 403 response for a missing or mismatched token."""
         response = (
             JSONResponse({"detail": "CSRF token invalid"}, status_code=403)
             if scope["path"].startswith("/api/")
@@ -140,9 +149,11 @@ class CSRFMiddleware:
 
     @staticmethod
     def replay_body(body: bytes) -> Receive:
+        """Return a receive callable that replays the buffered body once."""
         sent = False
 
         async def receive() -> Message:
+            """Replay the buffered request body exactly once."""
             nonlocal sent
             if sent:
                 return {"type": "http.disconnect"}

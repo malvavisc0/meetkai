@@ -29,18 +29,18 @@ class TestLoadBot:
 
 
 class TestEmailBotType:
-    def test_required_connections(self):
+    def test_email_bot_requires_resend_and_smtp(self):
         bt = BOT_TYPES["email"]
         assert bt.required_connections == ["resend", "smtp"]
 
-    def test_supported_connections(self):
+    def test_email_bot_supports_database_and_calcom(self):
         bt = BOT_TYPES["email"]
         assert bt.supported_connections == ["database", "calcom"]
 
-    def test_feature_flags(self):
+    def test_email_bot_enables_image_flag(self):
         bt = BOT_TYPES["email"]
         assert bt.feature_flags == ["image"]
 
-    def test_required_settings(self):
+    def test_email_bot_requires_language_setting(self):
         bt = BOT_TYPES["email"]
         assert "language" in bt.required_settings

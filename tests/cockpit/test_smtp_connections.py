@@ -80,7 +80,7 @@ class TestSave:
 
 
 class TestDecryptConfig:
-    def test_round_trips(self, db, user):
+    def test_decrypt_config_returns_saved_values(self, db, user):
         from kai.cockpit.connections.smtp import SmtpConnectionsService
 
         svc = SmtpConnectionsService(db)

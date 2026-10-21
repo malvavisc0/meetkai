@@ -102,7 +102,7 @@ class TestSave:
 
 
 class TestDecryptApiKey:
-    def test_round_trips(self, db, user):
+    def test_saved_api_key_decrypts(self, db, user):
         from kai.cockpit.connections.calcom import CalcomConnectionsService
         from kai.cockpit.connections.secrets import decrypt_config
 
@@ -152,7 +152,7 @@ class TestProbe:
 
 
 class TestTest:
-    def test_adhoc_key(self, db, user, monkeypatch):
+    def test_adhoc_api_key_returns_ok(self, db, user, monkeypatch):
         import httpx
 
         monkeypatch.setattr(httpx, "get", lambda *a, **kw: _fake_resp(200))

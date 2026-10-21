@@ -22,6 +22,7 @@ HOME_REDIRECT = RedirectResponse("/console", status_code=302)
 def get_deployment(
     svc: DeploymentsService, dep_id: int, user: User
 ) -> tuple[DeploymentsService, Deployment] | RedirectResponse:
+    """Fetch a deployment and verify ownership; return a redirect on failure."""
     dep = svc.get(dep_id)
     if not dep or dep.user_id != user.id:
         return HOME_REDIRECT
@@ -35,7 +36,8 @@ async def chat_send(
     message: str = Form(...),
     user: User = Depends(require_user),
     db: Session = Depends(get_db),
-):
+) -> RedirectResponse:
+    """Send an operator message to the deployment's bot."""
     svc = DeploymentsService(db)
     result = get_deployment(svc, dep_id, user)
     if isinstance(result, RedirectResponse):
@@ -68,7 +70,8 @@ async def chat_clear(
     dep_id: int,
     user: User = Depends(require_user),
     db: Session = Depends(get_db),
-):
+) -> RedirectResponse:
+    """Clear the deployment's conversation history."""
     svc = DeploymentsService(db)
     result = get_deployment(svc, dep_id, user)
     if isinstance(result, RedirectResponse):

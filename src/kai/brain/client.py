@@ -51,15 +51,18 @@ class DocumentRecord(BaseModel):
     @field_validator("content_length", mode="before")
     @classmethod
     def default_none(cls, v: int | None) -> int:
+        """Normalize a missing content length to zero."""
         return v or 0
 
     @field_validator("metadata", mode="before")
     @classmethod
     def default_metadata(cls, v: dict[str, Any] | None) -> dict[str, Any]:
+        """Normalize missing metadata to an empty mapping."""
         return v or {}
 
     @property
     def is_terminal(self) -> bool:
+        """Report whether the document has reached a terminal status."""
         return self.status in TERMINAL_STATUSES
 
     @classmethod
@@ -102,6 +105,7 @@ class IngestResult(BaseModel):
 
     @classmethod
     def from_response(cls, data: dict[str, Any]) -> "IngestResult":
+        """Build an ingest result from a Morphik document payload."""
         # Morphik returns the Document object on ingest; its external_id is
         # the handle used to poll /documents/{id}/status.
         return cls(
@@ -129,6 +133,7 @@ class QueryResult(BaseModel):
 
     @classmethod
     def from_response(cls, data: dict[str, Any]) -> "QueryResult":
+        """Build a query result from a Morphik /query payload."""
         # Morphik /query returns {completion, sources[]} where each source has
         # document_id + chunk_number. filename isn't on the source; we keep
         # file_path as document_id for traceability.
@@ -162,6 +167,7 @@ class MorphikClient:
         )
 
     async def close(self) -> None:
+        """Close the underlying HTTP client."""
         await self._client.aclose()
 
     # ------------------------------------------------------------------

@@ -43,14 +43,20 @@ class _BrainQueryClient(Protocol):
         query: str,
         workspace: str,
         mode: QueryMode = ...,
-    ) -> QueryResult: ...
+    ) -> QueryResult:
+        """Query the Brain and return its result."""
+        ...
 
 
 @runtime_checkable
 class _BrainToolAgent(Protocol):
-    def register_tool(self, tool: FunctionTool) -> None: ...
+    def register_tool(self, tool: FunctionTool) -> None:
+        """Register a tool on the agent."""
+        ...
 
-    def add_tool_workflow(self, workflow: str | None) -> None: ...
+    def add_tool_workflow(self, workflow: str | None) -> None:
+        """Append a tool workflow prompt block."""
+        ...
 
 
 def make_brain_query_tool(
@@ -90,7 +96,7 @@ def make_brain_query_tool(
         resolved_mode = mode if mode in VALID_MODES else default_mode
         try:
             result = await client.query(query=q, workspace=workspace, mode=resolved_mode)
-        except Exception as exc:  # noqa: BLE001 - surfaced to the model as a tool result, not raised
+        except Exception as exc:  # surfaced to the model as a tool result, not raised
             logger.exception("brain_query failed")
             return f"Error: brain query failed ({exc})"
 

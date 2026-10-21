@@ -50,6 +50,7 @@ logger = logging.getLogger(__name__)
 
 
 def runs_registry(bot_name: str, settings: Settings) -> RunRegistry:
+    """Open the run registry for a bot instance."""
     return RunRegistry(runs_path(settings.agent_history_folder, bot_name))
 
 
@@ -194,6 +195,7 @@ def render_status(data: dict, *, uptime: int | None = None) -> None:
 
 
 def format_uptime_line(uptime: int) -> str:
+    """Format an uptime in seconds as a single status line."""
     days, rem = divmod(uptime, 86400)
     hours, rem = divmod(rem, 3600)
     minutes, seconds = divmod(rem, 60)
@@ -209,6 +211,7 @@ def format_uptime_line(uptime: int) -> str:
 
 
 def format_tasks_lines(tasks: dict | None) -> list[str]:
+    """Format the status task summary and its first five items."""
     if not tasks:
         return []
     pending = tasks.get("pending", 0)
@@ -232,6 +235,7 @@ def format_tasks_lines(tasks: dict | None) -> list[str]:
 
 
 def format_caps_lines(caps: dict | None) -> list[str]:
+    """Format the status capability flags as a single line."""
     if not caps:
         return []
     flags = []
@@ -269,7 +273,8 @@ def render_tell(data: dict) -> None:
     console.print(table)
 
 
-def render_tell_row(a: dict) -> tuple:
+def render_tell_row(a: dict) -> tuple[str, str, str, str, str]:
+    """Render one TellResult action as a table row tuple."""
     name = a.get("tool", "?")
     a_ok = a.get("ok", False)
     mark = GL_OK if a_ok else GL_ERR
@@ -282,6 +287,7 @@ def render_tell_row(a: dict) -> tuple:
 
 
 def first_nonempty(a: dict, keys: tuple[str, ...]) -> str:
+    """Return the first non-empty value among the given keys."""
     for key in keys:
         val = a.get(key)
         if val:
@@ -290,6 +296,7 @@ def first_nonempty(a: dict, keys: tuple[str, ...]) -> str:
 
 
 def first_other_arg(a: dict) -> str:
+    """Return the first non-empty action value that is not a known field."""
     for key, val in a.items():
         if key in ("tool", "ok", "target", "chat_id"):
             continue
@@ -300,6 +307,7 @@ def first_other_arg(a: dict) -> str:
 
 
 def truncate(text: str, limit: int) -> str:
+    """Truncate text to the limit, replacing the tail with an ellipsis."""
     return text[: limit - 3] + "..." if len(text) > limit else text
 
 
@@ -364,6 +372,7 @@ def start_bot(
     )
 
     async def main() -> int:
+        """Configure, run, and tear down one bot instance; return its exit code."""
         stop_task: asyncio.Task | None = None
         run_id: str | None = None
         brain_client: MorphikClient | None = None
@@ -497,7 +506,8 @@ def start_bot(
         force_quit = asyncio.Event()
         run_task = asyncio.ensure_future(bot.run())
 
-        def request_shutdown():
+        def request_shutdown() -> None:
+            """Request a graceful stop, forcing exit on a second signal."""
             if not shutdown_requested.is_set():
                 shutdown_requested.set()
                 nonlocal stop_task
@@ -508,7 +518,8 @@ def start_bot(
                 err_line("forcing exit")
                 run_task.cancel()
 
-        def on_stop_done(task: asyncio.Task):
+        def on_stop_done(task: asyncio.Task) -> None:
+            """Log an exception raised by the bot's stop coroutine."""
             if task.cancelled():
                 return
             exc = task.exception()
@@ -695,7 +706,7 @@ def chat_bot(
             render_tell(data)
 
 
-def post_and_clean_tell(record, message: str, persist: bool) -> dict | None:
+def post_and_clean_tell(record: RunRecord, message: str, persist: bool) -> dict | None:
     """POST a /tell and return cleaned data, or None on failure."""
     try:
         with console.status(f"[{DIM}]thinking...[/{DIM}]", spinner="dots"):
@@ -714,12 +725,13 @@ def post_and_clean_tell(record, message: str, persist: bool) -> dict | None:
 
 
 def persist_tag(local_persist: bool) -> str:
+    """Render the chat prompt tag showing the persist toggle state."""
     if local_persist:
         return "[bold green]\u25cfpersist[/bold green]"
     return f"[{DIM}]\u25cb[/{DIM}]"
 
 
-def handle_slash(message: str, local_persist: bool, record) -> bool:
+def handle_slash(message: str, local_persist: bool, record: RunRecord) -> bool:
     """Handle a slash command (except /quit, handled by the caller).
     Returns the (possibly toggled) ``local_persist`` value."""
     if message == "/help":
@@ -735,7 +747,8 @@ def handle_slash(message: str, local_persist: bool, record) -> bool:
     return local_persist
 
 
-def do_clear(record) -> None:
+def do_clear(record: RunRecord) -> None:
+    """Clear the remote run's operator conversation history."""
     try:
         status_code, data = post_clear(record)
     except httpx.HTTPError as exc:
@@ -831,7 +844,7 @@ def add_commands(bot_app: typer.Typer, *, hidden: bool = False) -> None:
             "--disable-tools",
             help="Tools to turn off, comma-separated",
         ),
-    ):
+    ) -> None:
         """Start a bot and serve its webhook endpoint.
 
         It resolves the template and tool set, then keeps running until you
@@ -849,7 +862,7 @@ def add_commands(bot_app: typer.Typer, *, hidden: bool = False) -> None:
         )
 
     @bot_app.command("list", hidden=hidden)
-    def list_cmd():
+    def list_cmd() -> None:
         """List the bots you can start."""
         list_available_bots()
 
@@ -863,7 +876,7 @@ def add_commands(bot_app: typer.Typer, *, hidden: bool = False) -> None:
             "-u",
             help="User email the instance was started with",
         ),
-    ):
+    ) -> None:
         """Show what a running bot is doing."""
         status_bot(bot_name, run_id, user)
 
@@ -883,7 +896,7 @@ def add_commands(bot_app: typer.Typer, *, hidden: bool = False) -> None:
             "-u",
             help="User email the instance was started with",
         ),
-    ):
+    ) -> None:
         """Send one instruction to a running bot."""
         tell_bot(bot_name, run_id, message, persist, user)
 
@@ -900,7 +913,7 @@ def add_commands(bot_app: typer.Typer, *, hidden: bool = False) -> None:
             "-u",
             help="User email the instance was started with",
         ),
-    ):
+    ) -> None:
         """Chat with a running bot in your terminal."""
         chat_bot(bot_name, run_id, persist, user)
 
@@ -917,7 +930,7 @@ def add_commands(bot_app: typer.Typer, *, hidden: bool = False) -> None:
             "-u",
             help="User email the instance was started with",
         ),
-    ):
+    ) -> None:
         """Stop a running bot (SIGTERM, or SIGKILL with --force)."""
         stop_bot(bot_name, run_id, force, user)
 

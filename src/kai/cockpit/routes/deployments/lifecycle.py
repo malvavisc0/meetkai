@@ -28,7 +28,8 @@ async def deployment_start(
     dep_id: int,
     user: User = Depends(require_user),
     db: Session = Depends(get_db),
-):
+) -> RedirectResponse:
+    """Start the deployment after checking its required connections."""
     svc = DeploymentsService(db)
     result = get_deployment(svc, dep_id, user)
     if isinstance(result, RedirectResponse):
@@ -51,7 +52,8 @@ async def deployment_stop(
     dep_id: int,
     user: User = Depends(require_user),
     db: Session = Depends(get_db),
-):
+) -> RedirectResponse:
+    """Stop the deployment."""
     svc = DeploymentsService(db)
     result = get_deployment(svc, dep_id, user)
     if isinstance(result, RedirectResponse):
@@ -67,7 +69,8 @@ async def deployment_restart(
     dep_id: int,
     user: User = Depends(require_user),
     db: Session = Depends(get_db),
-):
+) -> RedirectResponse:
+    """Restart the deployment, flashing any startup failure."""
     svc = DeploymentsService(db)
     result = get_deployment(svc, dep_id, user)
     if isinstance(result, RedirectResponse):
@@ -91,7 +94,8 @@ async def deployment_delete(
     dep_id: int,
     user: User = Depends(require_user),
     db: Session = Depends(get_db),
-):
+) -> RedirectResponse:
+    """Delete the deployment and its per-bot state."""
     svc = DeploymentsService(db)
     result = get_deployment(svc, dep_id, user)
     if isinstance(result, RedirectResponse):

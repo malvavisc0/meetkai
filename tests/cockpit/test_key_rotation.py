@@ -52,7 +52,7 @@ class TestRotateCredentialKey:
         assert decrypt_config("database", conn.config)["url"] == "postgresql://u:p@h/db"
         assert conn.config["label"] == "x"
 
-    def test_consecutive_rotations(self, db, user):
+    def test_consecutive_rotations_increment_version(self, db, user):
         conn = _db_conn(
             user.id, "database", encrypt_config("database", {"url": "secret-url", "label": "p"})
         )

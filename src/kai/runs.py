@@ -110,6 +110,7 @@ class RunRegistry:
         self.path = Path(path)
 
     def load(self) -> dict | None:
+        """Load the raw run record dict, or None when missing or unreadable."""
         if not self.path.is_file():
             return None
         try:
@@ -120,6 +121,7 @@ class RunRegistry:
         return raw if isinstance(raw, dict) else None
 
     def save(self, record: RunRecord) -> None:
+        """Atomically write ``record`` to the registry file."""
         self.path.parent.mkdir(parents=True, exist_ok=True)
         tmp = self.path.with_suffix(self.path.suffix + ".tmp")
         tmp.write_text(record.model_dump_json(indent=2), encoding="utf-8")
@@ -164,6 +166,7 @@ class RunRegistry:
         return record
 
     def remove(self) -> None:
+        """Delete the run record file, ignoring a missing file."""
         self.path.unlink(missing_ok=True)
 
 

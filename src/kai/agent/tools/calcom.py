@@ -32,20 +32,27 @@ class CalcomSettings(BaseSettings):
 
     @property
     def calcom_enabled(self) -> bool:
+        """True when a Cal.com API key is configured."""
         return bool(self.api_key)
 
 
 def get_calcom_settings() -> CalcomSettings:
+    """Load Cal.com tool settings from the environment."""
     return CalcomSettings()
 
 
 class _CalcomToolAgent(Protocol):
-    def register_tool(self, tool: FunctionTool) -> None: ...
+    def register_tool(self, tool: FunctionTool) -> None:
+        """Register a tool on the agent."""
+        ...
 
-    def add_tool_workflow(self, workflow: str | None) -> None: ...
+    def add_tool_workflow(self, workflow: str | None) -> None:
+        """Append a tool workflow prompt block."""
+        ...
 
 
 def auth_headers(api_key: str, version: str) -> dict[str, str]:
+    """Build authorization headers for a Cal.com API version."""
     return {"Authorization": f"Bearer {api_key}", "cal-api-version": version}
 
 
@@ -72,13 +79,13 @@ def request(
             json=json_body,
             timeout=TIMEOUT,
         )
-    except Exception as exc:  # noqa: BLE001 - surfaced to the model as a tool result
+    except Exception as exc:  # surfaced to the model as a tool result
         return None, f"could not reach Cal.com API: {exc}"
     if resp.status_code >= 400:
         return None, error_detail(resp)
     try:
         return resp.json(), None
-    except Exception as exc:  # noqa: BLE001 - surfaced to the model as a tool result
+    except Exception as exc:  # surfaced to the model as a tool result
         return None, f"Cal.com API returned a non-JSON response: {exc}"
 
 
@@ -96,7 +103,7 @@ def error_detail(resp: httpx.Response) -> str:
     base = f"Cal.com API returned {resp.status_code}"
     try:
         body = resp.json()
-    except Exception:  # noqa: BLE001 - non-JSON error body
+    except Exception:  # non-JSON error body
         text = (resp.text or "").strip()
         if not text:
             return base
@@ -194,6 +201,7 @@ def make_calcom_tools(api_key: str, base_url: str) -> list[FunctionTool]:
         items = payload.get("data", []) if isinstance(payload, dict) else []
 
         def compact_fields(fields: list | None) -> list[dict]:
+            """Project booking fields to the fields the agent needs."""
             out = []
             for bf in fields or []:
                 if not isinstance(bf, dict) or not bf.get("slug"):

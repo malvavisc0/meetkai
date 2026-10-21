@@ -1,7 +1,7 @@
 import hmac
 import logging
 from collections.abc import Awaitable, Callable
-from typing import Protocol
+from typing import Any, Protocol
 
 from fastapi import FastAPI, HTTPException, Request
 
@@ -27,6 +27,7 @@ MAX_BODY_BYTES = 1 * 1024 * 1024
 
 
 def verify_signature(hmac_key: str, hmac_algorithm: str, body: bytes, signature: str) -> bool:
+    """Verify an HMAC signature over the request body."""
     algo = HMAC_ALGORITHMS.get(hmac_algorithm.lower(), HMAC_ALGORITHMS["sha512"])
     expected = hmac.new(hmac_key.encode(), body, algo).hexdigest()
     return bool(signature) and hmac.compare_digest(signature, expected)
@@ -58,11 +59,13 @@ def create_webhook_app(
     app = FastAPI(title="kai webhook")
 
     @app.get("/health")
-    async def health():
+    async def health() -> dict[str, str]:
+        """Return a liveness response."""
         return {"status": "ok"}
 
     @app.post(webhook_path)
-    async def webhook(request: Request):
+    async def webhook(request: Request) -> dict[str, str]:
+        """Receive and verify an inbound webhook event."""
         body = await request.body()
 
         if len(body) > MAX_BODY_BYTES:
@@ -98,7 +101,7 @@ def create_webhook_app(
         return {"status": "ok"}
 
     @app.post("/tell")
-    async def tell(request: Request):
+    async def tell(request: Request) -> dict[str, Any]:
         """Operator control route.
 
         HMAC-verified with the same key as the inbound webhook. The body is
@@ -144,7 +147,7 @@ def create_webhook_app(
         return result
 
     @app.post("/ingest")
-    async def ingest(request: Request):
+    async def ingest(request: Request) -> dict[str, Any]:
         """Forwarded-event route for the cockpit's centralized webhook ingress.
 
         HMAC-verified with the same key as the inbound webhook. The body is a
@@ -177,7 +180,7 @@ def create_webhook_app(
             raise HTTPException(status_code=500, detail="ingest failed")
 
     @app.get("/status")
-    async def status(request: Request):
+    async def status(request: Request) -> dict[str, Any]:
         """Operator status route.
 
         HMAC-verified with the same key as the inbound webhook. There is no
@@ -200,7 +203,7 @@ def create_webhook_app(
             raise HTTPException(status_code=500, detail="status failed")
 
     @app.post("/clear")
-    async def clear(request: Request):
+    async def clear(request: Request) -> dict[str, Any]:
         """Operator history-reset route.
 
         HMAC-verified with the same key as the inbound webhook, over an empty

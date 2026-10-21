@@ -111,7 +111,7 @@ class _FakeRequest(Request):
 
 
 class TestVerifyResend:
-    def test_resend_registered(self):
+    def test_resend_webhook_type_is_registered(self):
         assert "resend" in WEBHOOK_TYPES
         assert WEBHOOK_TYPES["resend"].nonce_header == "svix-id"
 
@@ -252,7 +252,7 @@ class TestParseResend:
         msg = parse_resend(self._payload(), {"api_key": "re_test"})
         assert msg.text == ""
 
-    def test_metadata_fields(self, monkeypatch):
+    def test_parse_resend_maps_metadata_fields(self, monkeypatch):
         import kai.cockpit.connections.webhooks as webhooks_mod
 
         monkeypatch.setattr(

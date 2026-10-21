@@ -42,7 +42,7 @@ class TestSave:
 
 
 class TestDecryptUrl:
-    def test_round_trips(self, db, user):
+    def test_decrypt_url_returns_saved_url(self, db, user):
         from kai.cockpit.connections.database import DatabaseConnectionsService
 
         svc = DatabaseConnectionsService(db)
@@ -57,7 +57,7 @@ class TestDecryptUrl:
 
 
 class TestTest:
-    def test_sqlite_succeeds(self, db, user):
+    def test_sqlite_connection_test_succeeds(self, db, user):
         from kai.cockpit.connections.database import DatabaseConnectionsService
 
         svc = DatabaseConnectionsService(db)
@@ -66,7 +66,7 @@ class TestTest:
         assert ok is True
         assert msg == "ok"
 
-    def test_adhoc_url(self, db, user):
+    def test_adhoc_url_overrides_saved_url(self, db, user):
         """test() with an explicit url tests that value, not the persisted one."""
         from kai.cockpit.connections.database import DatabaseConnectionsService
 

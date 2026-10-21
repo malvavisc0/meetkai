@@ -86,7 +86,7 @@ class _StartBase:
 
 
 class TestWebhookConnectionCatalog:
-    def test_resend_registered(self):
+    def test_resend_webhook_type_is_registered(self):
         assert "resend" in WEBHOOK_CONNECTION_TYPES
 
     def test_resend_service_and_webhook_type(self):
@@ -94,7 +94,7 @@ class TestWebhookConnectionCatalog:
         assert wt.service == "resend"
         assert wt.webhook_type == "resend"
 
-    def test_resend_label(self):
+    def test_resend_webhook_type_has_label(self):
         assert WEBHOOK_CONNECTION_TYPES["resend"].label == "Email Inbox (Resend)"
 
     def test_resend_secret_fields(self):

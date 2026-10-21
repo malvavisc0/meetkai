@@ -27,4 +27,5 @@ class EmailSettings(BaseSettings):
 
 
 def get_email_settings() -> EmailSettings:
+    """Load email transport settings from the environment."""
     return EmailSettings()  # type: ignore[call-args]

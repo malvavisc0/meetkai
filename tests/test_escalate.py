@@ -9,7 +9,7 @@ tests verify:
 - store listing/resolve helpers filter correctly
 - EscalationStore persists to disk and reloads
 - Tools are included in get_tools()
-- cockpit forwarding (including the bad-secret 401 warning)
+- cockpit forwarding (including non-2xx responses)
 """
 
 from datetime import UTC, datetime
@@ -35,7 +35,7 @@ def make_state(
 
 class TestEscalate:
     @pytest.mark.asyncio
-    async def test_records_escalation(self):
+    async def test_escalate_persists_escalation_record(self):
         state = make_state(chat_id="chat-1")
         result = await state.escalate("Customer wants a human", severity="high")
         escalations = await state.store.list_all()
@@ -57,7 +57,7 @@ class TestEscalate:
         assert esc.severity == "medium"
 
     @pytest.mark.asyncio
-    async def test_fires_callback(self):
+    async def test_escalate_fires_callback(self):
         received = []
 
         async def handler(esc):
@@ -85,14 +85,14 @@ class TestEscalate:
         assert esc.chat_id == ""
 
     @pytest.mark.asyncio
-    async def test_severity_critical(self):
+    async def test_escalate_accepts_critical_severity(self):
         state = make_state(chat_id="chat-5")
         await state.escalate("Critical issue", severity="critical")
         esc = (await state.store.list_all())[0]
         assert esc.severity == "critical"
 
     @pytest.mark.asyncio
-    async def test_contains_summary(self):
+    async def test_escalate_records_summary(self):
         state = make_state(chat_id="chat-6")
         await state.escalate("test reason", severity="low", summary="test summary")
         esc = (await state.store.list_all())[0]
@@ -440,30 +440,17 @@ class TestForwardToCockpit:
 
     @respx.mock
     @pytest.mark.asyncio
-    async def test_does_not_raise_on_4xx_response(self):
+    @pytest.mark.parametrize("status", [400, 401])
+    async def test_does_not_raise_on_4xx_response(self, status):
         state = EscalationState(cockpit_url="http://cockpit:8080")
         route = respx.post("http://cockpit:8080/api/escalations").mock(
-            return_value=httpx.Response(400, text="bad request")
+            return_value=httpx.Response(status, text="rejected")
         )
         esc = Escalation(id="esc-1", chat_id="c", reason="test")
 
         await state.forward_to_cockpit(esc)
 
         assert route.called
-
-    @respx.mock
-    @pytest.mark.asyncio
-    async def test_logs_warning_on_401(self, caplog):
-        state = EscalationState(
-            cockpit_url="http://cockpit:8080", cockpit_escalation_secret="s3cret"
-        )
-        respx.post("http://cockpit:8080/api/escalations").mock(
-            return_value=httpx.Response(401, text="unauthorized")
-        )
-        esc = Escalation(id="esc-1", chat_id="c", reason="test")
-        with caplog.at_level("WARNING", logger="kai.agent.tools.escalate"):
-            await state.forward_to_cockpit(esc)
-        assert any("bad secret" in r.message for r in caplog.records)
 
     @respx.mock
     @pytest.mark.asyncio

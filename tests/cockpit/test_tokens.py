@@ -28,7 +28,7 @@ class TestLoginRequestRepo:
         assert fetched is not None
         assert fetched.id == req.id
 
-    def test_fulfill_request(self, db, user):
+    def test_fulfill_request_marks_request_fulfilled(self, db, user):
         req = tokens.create_login_request(db, user.id)
         assert req is not None
         tokens.fulfill_request(db, req.id, "tok-123")

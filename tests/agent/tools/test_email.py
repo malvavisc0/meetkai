@@ -28,7 +28,7 @@ class TestValidRecipient:
             "user+tag@gmail.com",
         ],
     )
-    def test_accepts_valid(self, addr):
+    def test_accepts_valid_recipient_addresses(self, addr):
         assert valid_recipient(addr) is True
 
     @pytest.mark.parametrize(
@@ -46,7 +46,7 @@ class TestValidRecipient:
             "user@.com",
         ],
     )
-    def test_rejects_invalid(self, addr):
+    def test_rejects_invalid_recipient_addresses(self, addr):
         assert valid_recipient(addr) is False
 
 
@@ -63,7 +63,7 @@ class TestSendEmailRejects:
         result = _call_tool(email_tool, to="not-an-email", subject="x", body="x")
         assert result.startswith("Error: invalid recipient address:")
 
-    def test_rejects_empty(self, email_tool):
+    def test_rejects_empty_recipient_address(self, email_tool):
         result = _call_tool(email_tool, to="", subject="x", body="x")
         assert result.startswith("Error: invalid recipient address:")
 
@@ -76,7 +76,7 @@ class TestSendEmailConnectionError:
 
 
 class TestSendEmailSuccess:
-    def test_send_called(self):
+    def test_sends_email_via_smtp_with_starttls(self):
         tool = make_send_email_tool("smtp.test.com", 587, "user", "pass", "from@test.com")
         with patch("kai.agent.tools.email.smtplib.SMTP") as mock_smtp:
             mock_server = MagicMock()

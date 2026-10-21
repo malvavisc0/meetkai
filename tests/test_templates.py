@@ -12,7 +12,7 @@ class TestPostProcessingConfig:
         cfg = PostProcessingConfig()
         assert cfg.profile == "none"
 
-    def test_default_cleanup(self):
+    def test_default_cleanup_profile_is_accepted(self):
         cfg = PostProcessingConfig(profile="default_cleanup")
         assert cfg.profile == "default_cleanup"
 
@@ -50,7 +50,7 @@ class TestPostProcessingConfig:
 
 
 class TestTemplateRegistry:
-    def test_list_all(self):
+    def test_list_returns_bundled_templates(self):
         reg = TemplateRegistry.bundled()
         templates = reg.list()
         names = [f"{t.transport}/{t.name}" for t in templates]
@@ -72,7 +72,7 @@ class TestTemplateRegistry:
         path = reg.prompt_path("email", "nonexistent")
         assert path is None
 
-    def test_custom_dir(self, tmp_path):
+    def test_loads_template_from_custom_directory(self, tmp_path):
         tmpl_dir = tmp_path / "email" / "mybot"
         tmpl_dir.mkdir(parents=True)
         (tmpl_dir / "template.yaml").write_text(

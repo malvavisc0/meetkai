@@ -7,6 +7,7 @@ SUPPORTED_EXTENSIONS = {".txt", ".md", ".prompt"}
 
 
 def load_system_prompt(filepath: str | Path, variables: dict[str, str] | None = None) -> str:
+    """Load a system prompt file and substitute ``{{variable}}`` placeholders."""
     path = Path(filepath).resolve()
 
     if not path.exists():

@@ -53,10 +53,12 @@ class EncryptionSettings(BaseSettings):
 
 
 def get_encryption_settings() -> EncryptionSettings:
+    """Load credential-encryption settings from the environment."""
     return EncryptionSettings()
 
 
 def root_key_material() -> bytes:
+    """Return the root key bytes, failing when the secret is unset."""
     settings = get_encryption_settings()
     if not settings.credential_encryption_key:
         raise RuntimeError(
@@ -67,6 +69,7 @@ def root_key_material() -> bytes:
 
 
 def active_version() -> str:
+    """Return the key version used for new encryptions."""
     if KEY_STATE.active_version_override is not None:
         return KEY_STATE.active_version_override
     settings = get_encryption_settings()

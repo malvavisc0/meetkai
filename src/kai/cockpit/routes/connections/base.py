@@ -1,6 +1,7 @@
 """Connection routes: the shared /connections page."""
 
 from fastapi import APIRouter, Depends, Request
+from fastapi.responses import Response
 from sqlalchemy.orm import Session
 
 from kai.cockpit.app import templates
@@ -20,7 +21,8 @@ async def connections_page(
     request: Request,
     user: User = Depends(require_user),
     db: Session = Depends(get_db),
-):
+) -> Response:
+    """Render the shared connections overview page."""
     db_conn = DatabaseConnectionsService(db).get(user)
     has_database = bool(db_conn and db_conn.config.get("url"))
     smtp_conn = SmtpConnectionsService(db).get(user)

@@ -22,7 +22,7 @@ class TestCreateBrain:
         assert brain.config["instruction"] == ""
         assert "mandatory" not in brain.config
 
-    def test_idempotent(self, db, user):
+    def test_create_brain_twice_reuses_row(self, db, user):
         svc = BrainsService(db)
         first = svc.create_brain(user)
         second = svc.create_brain(user)
@@ -41,7 +41,7 @@ class TestUpdateInstruction:
         with pytest.raises(ValueError):
             svc.update_instruction(user, instruction="ask about pricing")
 
-    def test_saves_instruction(self, db, user):
+    def test_update_instruction_persists_value(self, db, user):
         svc = BrainsService(db)
         svc.create_brain(user)
         updated = svc.update_instruction(user, instruction="how to do X from section Y")

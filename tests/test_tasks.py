@@ -38,7 +38,7 @@ class TestTaskStore:
         assert len(asyncio.run(store.list_for(chat_id="c1"))) == 1
         assert len(asyncio.run(store.list_for(chat_id="c2"))) == 1
 
-    def test_cancel(self, tmp_path: Path):
+    def test_cancel_removes_pending_task(self, tmp_path: Path):
         store = TaskStore(tmp_path / "tasks.json")
         asyncio.run(store.add(_make_task()))
         assert asyncio.run(store.cancel("abc123", chat_id="c1")) is True
@@ -184,7 +184,7 @@ class TestTaskTools:
         out = asyncio.run(tool.acall(**kwargs))
         return out.raw_output
 
-    def test_schedule_relative(self, tmp_path: Path):
+    def test_schedule_task_accepts_relative_time(self, tmp_path: Path):
         sched, tools = self._tools(tmp_path)
         goal = "water the plants on the windowsill thoroughly"
         res = self._call(tools["schedule_task"], when="in 5m", goal=goal)
@@ -242,7 +242,7 @@ class TestTaskTools:
         res = self._call(tools["cancel_task"], task_id="nope")
         assert "error" in res
 
-    def test_iso_timestamp(self, tmp_path: Path):
+    def test_schedule_task_accepts_iso_timestamp(self, tmp_path: Path):
         sched, tools = self._tools(tmp_path)
         future = (datetime.now(UTC) + timedelta(hours=2)).strftime("%Y-%m-%dT%H:%MZ")
         goal = "go through the pull requests queue"
@@ -310,7 +310,7 @@ class TestTaskTools:
 
 
 class TestRecurringTasks:
-    def test_daily_recurring(self, tmp_path: Path):
+    def test_daily_task_reschedules_after_execution(self, tmp_path: Path):
         store = TaskStore(tmp_path / "tasks.json")
         executed: list[Task] = []
 
@@ -363,7 +363,7 @@ class TestRecurringTasks:
         next_task = asyncio.run(store.list_for())[0]
         assert next_task.due_at.weekday() in (0, 2, 4)
 
-    def test_count_limit(self, tmp_path: Path):
+    def test_recurring_task_stops_after_count_limit(self, tmp_path: Path):
         store = TaskStore(tmp_path / "tasks.json")
         executed: list[Task] = []
 
@@ -393,7 +393,7 @@ class TestRecurringTasks:
         assert len(executed) == 2
         assert asyncio.run(store.list_for()) == []
 
-    def test_until_limit(self, tmp_path: Path):
+    def test_recurring_task_retains_until_limit(self, tmp_path: Path):
         store = TaskStore(tmp_path / "tasks.json")
         executed: list[Task] = []
 

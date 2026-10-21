@@ -11,6 +11,7 @@ def should_process_chat_message(
     whitelist: set[str],
     blacklist: set[str],
 ) -> bool:
+    """Return whether a chat message passes the blacklist and whitelist filters."""
     chat_id = chat_id.strip() if isinstance(chat_id, str) else ""
     author = author.strip() if isinstance(author, str) else ""
     is_group = GROUP_ID_PATTERN in chat_id

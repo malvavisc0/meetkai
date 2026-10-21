@@ -11,12 +11,17 @@ from typing import Any
 from zoneinfo import ZoneInfo
 
 import httpx
-from llama_index.core.base.llms.types import ImageBlock, TextBlock, VideoBlock
+from llama_index.core.base.llms.types import ContentBlock, ImageBlock, TextBlock, VideoBlock
 from llama_index.core.llms import ChatMessage, MessageRole
 from llama_index.core.tools import FunctionTool
 from llama_index.core.types import PydanticProgramMode
 from llama_index.llms.openai import utils as openai_utils
 from llama_index.llms.openai_like import OpenAILike
+from openai.types.chat import (
+    ChatCompletionContentPartParam,
+    ChatCompletionContentPartRefusalParam,
+    ChatCompletionMessageParam,
+)
 from pydantic import BaseModel, ConfigDict, Field
 
 from kai.agent.context import MessageContext
@@ -43,13 +48,23 @@ logger = logging.getLogger(__name__)
 
 original_to_openai_message_dict = openai_utils.to_openai_message_dict
 
+ContentPart = (
+    dict[str, Any] | ChatCompletionContentPartParam | ChatCompletionContentPartRefusalParam
+)
 
-def to_openai_message_dict(message, drop_none=False, model=None, store=False):
+
+def to_openai_message_dict(
+    message: ChatMessage,
+    drop_none: bool = False,
+    model: str | None = None,
+    store: bool = False,
+) -> dict[str, Any] | ChatCompletionMessageParam:
+    """Serialize a chat message, adding OpenAI video block support."""
     if not any(isinstance(b, VideoBlock) for b in message.blocks):
         return original_to_openai_message_dict(
             message, drop_none=drop_none, model=model, store=store
         )
-    content: list = []
+    content: list[ContentPart] = []
     content_txt = ""
     for block in message.blocks:
         txt = append_block_to_content(block, message, content, drop_none, model, store)
@@ -63,7 +78,14 @@ def to_openai_message_dict(message, drop_none=False, model=None, store=False):
     }
 
 
-def append_block_to_content(block, message, content, drop_none, model, store) -> str:
+def append_block_to_content(
+    block: ContentBlock,
+    message: ChatMessage,
+    content: list[ContentPart],
+    drop_none: bool,
+    model: str | None,
+    store: bool,
+) -> str:
     """Append one block's OpenAI representation to ``content``; return text added."""
     if isinstance(block, TextBlock):
         content.append({"type": "text", "text": block.text})
@@ -92,6 +114,7 @@ def append_block_to_content(block, message, content, drop_none, model, store) ->
 
 
 def video_url(block: VideoBlock) -> str:
+    """Return a video block's URL, inlining local data as base64."""
     if block.url:
         return str(block.url)
     vid = block.resolve_video(as_base64=True).read()
@@ -321,6 +344,7 @@ class KaiAgent:
         self._temperature: float | None = None
 
     def resolve_history_file(self) -> Path | None:
+        """Return this agent's history file path, or None when persistence is off."""
         folder = self.settings.agent_history_folder
         if folder is None:
             return None
@@ -333,6 +357,7 @@ class KaiAgent:
         return datetime.now(UTC).isoformat()
 
     def set_system_prompt(self, prompt: str, *, clear_history: bool = False) -> None:
+        """Set the system prompt, optionally clearing history when it changes."""
         changed = prompt != self._system_prompt
         self._system_prompt = prompt
         logger.info("System prompt set (%d chars)", len(prompt))
@@ -342,6 +367,7 @@ class KaiAgent:
             self.save_history()
 
     def register_tool(self, tool: FunctionTool) -> None:
+        """Register or replace a tool by name and refresh tool instructions."""
         name = tool.metadata.name
         self._tools_by_name[name] = tool
         self._tools = [t for t in self._tools if t.metadata.name != name]
@@ -351,6 +377,7 @@ class KaiAgent:
         )
 
     def unregister_tool(self, name: str) -> None:
+        """Remove a tool by name and refresh the tool instructions."""
         self._tools_by_name.pop(name, None)
         self._tools = [t for t in self._tools if t.metadata.name != name]
         self._tool_instructions = get_tool_instructions(
@@ -393,6 +420,7 @@ class KaiAgent:
         return "\n\n".join(self._tool_workflows)
 
     def get_tools(self) -> list:
+        """Return a copy of the agent's registered tools."""
         return list(self._tools)
 
     @property
@@ -431,6 +459,7 @@ class KaiAgent:
         self._tool_call_callback = callback
 
     def build_llm(self, async_http_client: httpx.AsyncClient | None = None) -> OpenAILike:
+        """Build the OpenAI-compatible LLM from the agent settings."""
         extra_body: dict[str, Any] = {
             "chat_template_kwargs": {
                 "enable_thinking": self.settings.llm_enable_thinking,
@@ -459,6 +488,7 @@ class KaiAgent:
         )
 
     def history_key(self, conversation_id: str | None = None) -> str:
+        """Return the namespaced history key for a conversation."""
         if not conversation_id:
             logger.debug("conversation_id not provided; using 'default' bucket")
             key = "default"
@@ -503,6 +533,7 @@ class KaiAgent:
 
     @staticmethod
     def parse_history_messages(messages: list) -> tuple[list[ChatMessage], list[str | None]]:
+        """Parse persisted message dicts into chat messages and timestamps."""
         msgs: list[ChatMessage] = []
         ts_list: list[str | None] = []
         for item in messages:
@@ -517,6 +548,7 @@ class KaiAgent:
         return msgs, ts_list
 
     def load_goal(self) -> None:
+        """Load the persisted goal, if any."""
         if self._goal_file is None or not self._goal_file.exists():
             return
         try:
@@ -528,6 +560,7 @@ class KaiAgent:
             logger.warning("Failed to load goal from %s: %s", self._goal_file, exc)
 
     def save_history(self) -> None:
+        """Persist the current history snapshot."""
         if self._history_file is None:
             return
         self.save_from_snapshot(self._history, self._timestamps)
@@ -541,6 +574,7 @@ class KaiAgent:
         return item
 
     def save_goal(self) -> None:
+        """Persist the current goal, if persistence is enabled."""
         if self._goal_file is None:
             return
         try:
@@ -559,6 +593,7 @@ class KaiAgent:
         extra_context: str | None = None,
         reply_style: str | None = None,
     ) -> str:
+        """Render the system prompt with goal, tools, context, and time."""
         prompt = overrides or self._system_prompt or DEFAULT_SYSTEM_PROMPT
         prompt += self.goal_prompt_section()
         if extra_context:
@@ -571,6 +606,7 @@ class KaiAgent:
         return prompt
 
     def goal_prompt_section(self) -> str:
+        """Render the current-goal prompt section."""
         if not self.goal_manager.has_goal():
             return ""
         goal = self.goal_manager.get_goal()
@@ -579,6 +615,7 @@ class KaiAgent:
         return ""
 
     def time_prompt_section(self) -> str:
+        """Render the current date and time prompt section."""
         now = datetime.now(UTC)
         try:
             local = now.astimezone(ZoneInfo(self._timezone)) if self._timezone else now.astimezone()
@@ -592,6 +629,7 @@ class KaiAgent:
         )
 
     def get_history(self, conversation_id: str | None = None) -> list[ChatMessage]:
+        """Return the message list for a conversation, creating it if needed."""
         key = self.history_key(conversation_id)
         if key in self._history:
             self._history.move_to_end(key)
@@ -621,6 +659,7 @@ class KaiAgent:
         extra_system_context: str | None = None,
         reply_style: str | None = None,
     ) -> list[ChatMessage]:
+        """Build the system, history, and user messages for a turn."""
         system = self.get_system_prompt(
             overrides=system_prompt,
             extra_context=extra_system_context,
@@ -641,6 +680,7 @@ class KaiAgent:
         return messages
 
     def trim_history(self, conversation_id: str | None = None) -> None:
+        """Trim a conversation to the configured message and character limits."""
         key = self.history_key(conversation_id)
         history = self._history.get(key, [])
         ts_list = self._timestamps.get(key, [])
@@ -738,6 +778,7 @@ class KaiAgent:
         images: list[bytes] | None,
         videos: list[bytes] | None = None,
     ) -> str:
+        """Append a media summary to a stored message body."""
         media = []
         if images:
             media.append(f"{len(images)} image(s), {sum(len(b) for b in images) // 1024} KB")
@@ -781,6 +822,7 @@ class KaiAgent:
         tools: list[FunctionTool] | None = None,
         is_delegated_action: Callable[[ActionResult], bool] | None = None,
     ) -> ChatResult:
+        """Run one agent turn and return its structured result."""
         formatted = self.format_user_message(message, context)
         messages = self.build_messages(
             formatted,
@@ -826,6 +868,7 @@ class KaiAgent:
         images: list[bytes] | None = None,
         videos: list[bytes] | None = None,
     ) -> None:
+        """Persist a completed turn's user and assistant messages."""
         reply_text = action.text or ""
 
         # ``is_delegated_action`` marks actions whose text targets a
@@ -862,6 +905,7 @@ class KaiAgent:
 
     @staticmethod
     def chat_error(exc: Exception, error_tag: str, message: str) -> ChatResult:
+        """Build a failed chat result for an exception."""
         if error_tag == "timeout":
             logger.warning("Agent chat timeout: %s", exc)
         return ChatResult(
@@ -962,6 +1006,7 @@ class KaiAgent:
     async def execute_tool_call(
         self, tc: Any, active_by_name: dict[str | None, FunctionTool] | None
     ) -> tuple[str, bool]:
+        """Execute one model tool call and return its result and success flag."""
         tool = self.resolve_tool(tc.tool_name, active_by_name)
         if tool is None:
             return f"Error: unknown tool '{tc.tool_name}'", False
@@ -975,6 +1020,7 @@ class KaiAgent:
     def resolve_tool(
         self, name: str, active_by_name: dict[str | None, FunctionTool] | None
     ) -> FunctionTool | None:
+        """Return the tool named name from the active or default set."""
         if active_by_name is not None:
             found = active_by_name.get(name)
             if found is not None:
@@ -990,6 +1036,7 @@ class KaiAgent:
         tool_call_records: list[ToolCallRecord],
         scratchpad: list[ChatMessage],
     ) -> None:
+        """Record a tool call, fire its callback, and add its scratchpad result."""
         logger.info("Tool call: %s(%s)", tc.tool_name, tc.tool_kwargs)
         logger.info(
             "Tool result: %s -> %s (%d chars)",
@@ -1020,6 +1067,7 @@ class KaiAgent:
         output_cls: type[ActionResult],
         llm_kwargs: dict,
     ) -> ActionResult:
+        """Resolve the turn's terminal typed action from the model."""
         from llama_index.core.output_parsers.pydantic import PydanticOutputParser
 
         parser = PydanticOutputParser(output_cls=output_cls)
@@ -1067,6 +1115,7 @@ class KaiAgent:
     def build_predict_messages(
         messages: list[ChatMessage], scratchpad: list[ChatMessage], json_instruction: str
     ) -> list[ChatMessage]:
+        """Build prompt messages for the final structured prediction."""
         sys_msg = messages[0]
         if sys_msg.role == MessageRole.SYSTEM:
             augmented = ChatMessage(
@@ -1131,6 +1180,7 @@ class KaiAgent:
         # Control actions (silent / sleep / console) are excluded — recovering
         # them would ghost the user. A payload failing for any other reason
         # continues to raise so malformed output isn't silently accepted.
+        """Recover a valid base action from out-of-scope structured output."""
         control_actions = frozenset({"silent", "sleep", "console"})
         allowed = action_values(output_cls)
         payload = KaiAgent.extract_payload(repaired, kv)
@@ -1159,6 +1209,7 @@ class KaiAgent:
 
     @staticmethod
     def extract_payload(repaired: str | None, kv: dict[str, Any] | None) -> dict[str, Any] | None:
+        """Extract a JSON payload from repaired text or key/value lines."""
         if repaired:
             try:
                 return json.loads(repaired)
@@ -1185,6 +1236,7 @@ class KaiAgent:
             return None
 
     def format_user_message(self, message: str, context: MessageContext | None = None) -> str:
+        """Prefix a user message with its speaker header."""
         if context is None:
             return message
         suffix = " (addressing you)" if context.multi_party and context.addressed_to_bot else ""
@@ -1201,6 +1253,7 @@ class KaiAgent:
         snapshot: dict[str, list[ChatMessage]],
         timestamps: dict[str, list[str | None]] | None = None,
     ) -> None:
+        """Write a history snapshot to disk."""
         if self._history_file is None:
             return
         if timestamps is None:
@@ -1231,6 +1284,7 @@ class KaiAgent:
             self._flush_task = asyncio.ensure_future(self.flush_after_delay())
 
     async def flush_after_delay(self) -> None:
+        """Flush history after the debounce delay."""
         try:
             await asyncio.sleep(FLUSH_DELAY)
             await self.flush_now()
@@ -1238,6 +1292,7 @@ class KaiAgent:
             await self.flush_now()
 
     async def flush_now(self) -> None:
+        """Flush pending history changes immediately when dirty."""
         async with self._save_lock:
             if not self._dirty:
                 return

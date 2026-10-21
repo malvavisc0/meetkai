@@ -66,6 +66,7 @@ def send_magic_link(user_email: str, magic_url: str) -> None:
 
 
 def smtp_server(host: str, port: int, user: str, password: str) -> smtplib.SMTP:
+    """Open an SMTP connection, using implicit TLS on port 465."""
     if port == 465:
         server = smtplib.SMTP_SSL(host, port)
         try:

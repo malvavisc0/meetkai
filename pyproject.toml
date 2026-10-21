@@ -13,6 +13,7 @@ dependencies = [
     "uvicorn",
     "httpx",
     "llama-index-llms-openai-like",
+    "openai",
     "pydantic",
     "rich",
     "pydantic-settings",
@@ -56,9 +57,6 @@ packages = ["src/kai"]
 [tool.ruff]
 line-length = 100
 src = ["src"]
-# vulture_whitelist.py holds bare name references for the dead-code gate,
-# not real code — type checkers and linters must skip it.
-extend-exclude = ["vulture_whitelist.py"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "N", "W", "UP"]
@@ -71,10 +69,65 @@ pythonpath = ["."]
 
 [tool.pyright]
 include = ["src", "tests"]
-exclude = ["vulture_whitelist.py"]
 venvPath = "."
 venv = ".venv"
 pythonVersion = "3.13"
+
+[tool.vulture]
+paths = ["src"]
+min_confidence = 60
+# Framework-dispatched registrations: typer commands, FastAPI routes and
+# handlers, pydantic validators/serializers, pytest fixtures. Never called
+# by name from our code, so the decorator is the reference.
+ignore_decorators = [
+  "@*.command",
+  "@*.get",
+  "@*.post",
+  "@*.put",
+  "@*.patch",
+  "@*.delete",
+  "@*.exception_handler",
+  "@field_validator",
+  "@model_validator",
+  "@field_serializer",
+  "@model_serializer",
+  "@computed_field",
+  "@pytest.*",
+]
+# Names static analysis cannot resolve, grouped by reason.
+ignore_names = [
+  # pydantic config and pydantic/SQLAlchemy/dataclass fields populated from
+  # external data, rendered by templates or the DB layer
+  "model_config",
+  "updated_at",
+  "fulfilled_at",
+  "error_msg",
+  "icon",
+  "help",
+  "testable",
+  "webhook_type",
+  "min_version",
+  "markdown_with_citations",
+  "references_markdown",
+  # agent/bot plugin API called by bot packages, not in-tree
+  "observe",
+  "unregister_tool",
+  "clear_tools",
+  "set_tool_call_callback",
+  "clear_goal",
+  "revision",
+  "post_processing_profile",
+  # bot subclass storage
+  "_template",
+  "_settings",
+  # uvicorn / rich object configuration
+  "should_exit",
+  "header_style",
+  # test seams that reset module state between tests
+  "reset_logging",
+  "clear_key_cache",
+  "clear_seen_nonces",
+]
 
 [dependency-groups]
 dev = [

@@ -43,7 +43,7 @@ class TestSqlQueryRejects:
         result = _call_tool(query_tool, query=stmt)
         assert result.startswith("Error: only SELECT")
 
-    def test_rejects_empty(self, query_tool):
+    def test_rejects_empty_query(self, query_tool):
         assert _call_tool(query_tool, query="") == "Error: query must not be empty"
         assert _call_tool(query_tool, query="   ") == "Error: query must not be empty"
 
@@ -55,11 +55,11 @@ class TestSqlQueryAccepts:
         yield query_tool
         engine.dispose()
 
-    def test_select_1(self, query_tool):
+    def test_select_constant_returns_row(self, query_tool):
         result = _call_tool(query_tool, query="SELECT 1")
         assert json.loads(result) == [{"1": 1}]
 
-    def test_with_cte(self, query_tool):
+    def test_cte_query_returns_rows(self, query_tool):
         result = _call_tool(query_tool, query="WITH x AS (SELECT 1) SELECT * FROM x")
         assert json.loads(result) == [{"1": 1}]
 
@@ -67,7 +67,7 @@ class TestSqlQueryAccepts:
         result = _call_tool(query_tool, query="select 1")
         assert json.loads(result) == [{"1": 1}]
 
-    def test_trailing_semicolon(self, query_tool):
+    def test_accepts_query_with_trailing_semicolon(self, query_tool):
         result = _call_tool(query_tool, query="SELECT 1;")
         assert json.loads(result) == [{"1": 1}]
 

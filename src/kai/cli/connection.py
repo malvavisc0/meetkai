@@ -17,7 +17,7 @@ connection_app = typer.Typer(
 @connection_app.command("list")
 def connection_list(
     user: str = typer.Option(..., "--user", help="User email"),
-):
+) -> None:
     """List the integrations a user has connected."""
     from kai.cockpit.connections.service import ConnectionsService
     from kai.cockpit.db import SessionLocal

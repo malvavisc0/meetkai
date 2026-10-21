@@ -1,6 +1,7 @@
 """Dependencies route: /dependencies — live service-health probes."""
 
 from fastapi import APIRouter, Depends, Request
+from fastapi.responses import Response
 
 from kai.cockpit.app import templates
 from kai.cockpit.auth import require_user
@@ -14,7 +15,8 @@ router = APIRouter()
 async def dependencies_page(
     request: Request,
     user: User = Depends(require_user),
-):
+) -> Response:
+    """Render live service-health probes."""
     service_health = await check_service_health()
 
     return templates.TemplateResponse(

@@ -73,17 +73,23 @@ class SqlSettings(BaseSettings):
 
     @property
     def sql_enabled(self) -> bool:
+        """True when a database DSN is configured."""
         return bool(self.dsn)
 
 
 def get_sql_settings() -> SqlSettings:
+    """Load SQL tool settings from the environment."""
     return SqlSettings()
 
 
 class _SqlToolAgent(Protocol):
-    def register_tool(self, tool: FunctionTool) -> None: ...
+    def register_tool(self, tool: FunctionTool) -> None:
+        """Register a tool on the agent."""
+        ...
 
-    def add_tool_workflow(self, workflow: str | None) -> None: ...
+    def add_tool_workflow(self, workflow: str | None) -> None:
+        """Append a tool workflow prompt block."""
+        ...
 
 
 def build_sql_workflow_instruction(instruction: str) -> str:
@@ -140,7 +146,7 @@ def make_describe_database_tool(engine: sa.Engine) -> FunctionTool:
                     }
                 )
             return json.dumps({"table": table, "columns": cols}, default=str)
-        except Exception as exc:  # noqa: BLE001 - surfaced to the model as a tool result
+        except Exception as exc:  # surfaced to the model as a tool result
             logger.exception("describe_database failed")
             return f"Error: could not describe database ({exc})"
 
@@ -197,7 +203,7 @@ def make_sql_query_tool(
             if truncated:
                 text += f"\n(truncated at {row_limit} rows)"
             return text
-        except Exception as exc:  # noqa: BLE001 - surfaced to the model as a tool result
+        except Exception as exc:  # surfaced to the model as a tool result
             logger.exception("sql_query failed")
             return f"Error: query failed ({exc})"
 

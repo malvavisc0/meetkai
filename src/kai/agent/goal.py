@@ -28,20 +28,24 @@ class GoalManager:
         self._revision: int = 0
 
     def set_goal(self, description: str) -> Goal:
+        """Set the current goal and bump the revision."""
         self._current = Goal(description=description)
         self._revision += 1
         logger.info("Goal set: %s", description)
         return self._current
 
     def restore_goal(self, description: str) -> Goal:
+        """Restore a persisted goal without bumping the revision."""
         self._current = Goal(description=description)
         logger.info("Goal restored: %s", description)
         return self._current
 
     def get_goal(self) -> Goal | None:
+        """Return the current goal, if any."""
         return self._current
 
     def clear_goal(self) -> None:
+        """Clear the current goal and bump the revision."""
         if self._current is None:
             return
         logger.info("Goal cleared")
@@ -49,8 +53,10 @@ class GoalManager:
         self._revision += 1
 
     def has_goal(self) -> bool:
+        """Return whether a goal is currently set."""
         return self._current is not None
 
     @property
     def revision(self) -> int:
+        """Number of goal changes since construction."""
         return self._revision

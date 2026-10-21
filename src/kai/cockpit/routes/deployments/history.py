@@ -1,7 +1,7 @@
 """Conversation history page: ``GET /deployments/{dep_id}/history``."""
 
 from fastapi import APIRouter, Depends, Request
-from fastapi.responses import RedirectResponse
+from fastapi.responses import RedirectResponse, Response
 from sqlalchemy.orm import Session
 
 from kai.cockpit.app import templates
@@ -32,7 +32,8 @@ async def deployment_history(
     dep_id: int,
     user: User = Depends(require_user),
     db: Session = Depends(get_db),
-):
+) -> Response:
+    """Render the deployment's conversation history page."""
     svc = DeploymentsService(db)
     result = get_deployment(svc, dep_id, user)
     if isinstance(result, RedirectResponse):

@@ -22,6 +22,8 @@ from kai.cockpit.bots import BOT_TYPES
 from kai.cockpit.connections.secrets import decrypt_config
 from kai.cockpit.connections.webhooks import (
     WEBHOOK_TYPES,
+    NormalizedMessage,
+    WebhookType,
     WebhookUpstreamError,
     is_nonce_seen,
     record_nonce,
@@ -39,7 +41,8 @@ async def webhook_ingest(
     type_name: str,
     request: Request,
     db: Session = Depends(get_db),
-):
+) -> JSONResponse:
+    """Verify, dedupe, and forward a provider webhook to its bot."""
     body = await read_capped_body(request)
     wh_type, user, cfg = resolve_webhook(db, workspace_slug, type_name, request, body)
 
@@ -67,7 +70,7 @@ async def webhook_ingest(
 
 def resolve_webhook(
     db: Session, workspace_slug: str, type_name: str, request: Request, body: bytes
-):
+) -> tuple[WebhookType, User, dict]:
     """Resolve webhook type, user, connection, and verify the signature."""
     wh_type = WEBHOOK_TYPES.get(type_name)
     if wh_type is None:
@@ -103,7 +106,7 @@ async def read_capped_body(request: Request) -> bytes:
     return body
 
 
-def parse_payload(wh_type, body: bytes, cfg: dict):
+def parse_payload(wh_type: WebhookType, body: bytes, cfg: dict) -> NormalizedMessage:
     """Parse and normalize the webhook payload."""
     try:
         payload = json.loads(body) if body else {}

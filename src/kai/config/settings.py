@@ -90,6 +90,7 @@ class Settings(BaseSettings):
     @field_validator("tasks_folder", "escalations_folder")
     @classmethod
     def validate_store_folder_absolute(cls, v: Path) -> Path:
+        """Reject store folders that are not absolute paths."""
         if not v.is_absolute():
             raise ValueError(
                 f"{v} is not an absolute path. KAI_TASKS_FOLDER and "
@@ -130,6 +131,7 @@ class Settings(BaseSettings):
     @field_validator("llm_api_base")
     @classmethod
     def validate_llm_api_base(cls, v: str) -> str:
+        """Require an http(s) LLM base URL with a host and strip trailing slashes."""
         parsed = urlparse(v)
         if parsed.scheme not in ("http", "https"):
             raise ValueError(f"llm_api_base must start with http:// or https://, got: {v}")
@@ -140,6 +142,7 @@ class Settings(BaseSettings):
     @field_validator("agent_max_history_messages")
     @classmethod
     def validate_agent_max_history_messages(cls, v: int) -> int:
+        """Reject a negative message history limit."""
         if v < 0:
             raise ValueError(f"agent_max_history_messages must be >= 0, got: {v}")
         return v
@@ -147,6 +150,7 @@ class Settings(BaseSettings):
     @field_validator("agent_max_history_chars")
     @classmethod
     def validate_agent_max_history_chars(cls, v: int) -> int:
+        """Reject a negative character history limit."""
         if v < 0:
             raise ValueError(f"agent_max_history_chars must be >= 0, got: {v}")
         return v
@@ -162,8 +166,10 @@ class Settings(BaseSettings):
 
     @classmethod
     def for_test(cls, **overrides: object) -> "Settings":
+        """Build settings from explicit overrides, ignoring any .env file."""
         return cls(_env_file=None, **overrides)  # type: ignore[call-arg]
 
 
 def get_settings() -> Settings:
+    """Construct core settings from the environment."""
     return Settings()

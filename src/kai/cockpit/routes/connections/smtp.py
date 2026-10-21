@@ -1,7 +1,7 @@
 """SMTP connection routes: /connections/smtp — CRUD + test."""
 
 from fastapi import APIRouter, Depends, Form, Request
-from fastapi.responses import RedirectResponse
+from fastapi.responses import RedirectResponse, Response
 from sqlalchemy.orm import Session
 
 from kai.cockpit.app import templates
@@ -19,7 +19,8 @@ async def smtp_page(
     request: Request,
     user: User = Depends(require_user),
     db: Session = Depends(get_db),
-):
+) -> Response:
+    """Render the SMTP connection form."""
     svc = SmtpConnectionsService(db)
     conn = svc.get(user)
     has_password = bool(conn and conn.config.get("password"))
@@ -47,7 +48,8 @@ def smtp_save(
     use_tls: str = Form(""),
     user: User = Depends(require_user),
     db: Session = Depends(get_db),
-):
+) -> RedirectResponse:
+    """Save the SMTP connection."""
     svc = SmtpConnectionsService(db)
     try:
         conn = svc.save(
@@ -60,7 +62,7 @@ def smtp_save(
             use_tls=use_tls == "true",
         )
         flash_connection_save(request, "SMTP", conn)
-    except Exception as exc:  # noqa: BLE001 - surfaced to the operator
+    except Exception as exc:  # surfaced to the operator
         flash(request, "error", f"Could not save: {exc}")
     return RedirectResponse("/connections/smtp", status_code=302)
 
@@ -70,7 +72,8 @@ async def smtp_delete(
     request: Request,
     user: User = Depends(require_user),
     db: Session = Depends(get_db),
-):
+) -> RedirectResponse:
+    """Delete the SMTP connection."""
     svc = SmtpConnectionsService(db)
     svc.delete(user)
     flash(request, "success", "SMTP connection removed.")
@@ -87,7 +90,7 @@ def smtp_test(
     use_tls: str = Form(""),
     user: User = Depends(require_user),
     db: Session = Depends(get_db),
-):
+) -> RedirectResponse:
     """Test the SMTP connection. Accepts the same form fields as save,
     so the operator can test a freshly-typed config before saving it.
     Ad-hoc mode is gated on the password field only — the template

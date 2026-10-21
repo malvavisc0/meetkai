@@ -18,7 +18,7 @@ class TestGoalManager:
         assert goal.description == "Be a support bot"
         assert gm.revision == 1
 
-    def test_overwrite_goal(self):
+    def test_set_goal_replaces_previous_goal(self):
         gm = GoalManager()
         gm.set_goal("First goal")
         gm.set_goal("Second goal")
@@ -26,7 +26,7 @@ class TestGoalManager:
         assert current is not None
         assert current.description == "Second goal"
 
-    def test_clear_goal(self):
+    def test_clear_goal_removes_goal_and_bumps_revision(self):
         gm = GoalManager()
         gm.set_goal("Something")
         gm.clear_goal()

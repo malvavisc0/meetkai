@@ -27,6 +27,7 @@ class CalcomConnectionsService:
         self.db = db
 
     def get(self, user: User) -> Connection | None:
+        """Return the operator's Cal.com connection, or None when unset."""
         return (
             self.db.query(Connection)
             .filter(Connection.user_id == user.id, Connection.service == "calcom")
@@ -34,6 +35,7 @@ class CalcomConnectionsService:
         )
 
     def save(self, user: User, *, api_key: str, base_url: str) -> Connection:
+        """Create or update the Cal.com connection and probe the saved credentials."""
         existing = self.get(user)
         config: dict = {"base_url": base_url.strip()}
         if api_key:
@@ -74,6 +76,7 @@ class CalcomConnectionsService:
         return conn
 
     def delete(self, user: User) -> None:
+        """Remove the operator's Cal.com connection if it exists."""
         conn = self.get(user)
         if conn is not None:
             self.db.delete(conn)

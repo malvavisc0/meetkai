@@ -34,7 +34,7 @@ def get_db(request: Request) -> Generator[Session]:
         db.close()
 
 
-def create_all():
+def create_all() -> None:
     """Create all tables. Idempotent. Used by tests (in-memory StaticPool);
     production schema is managed by Alembic via ``run_migrations``.
     """

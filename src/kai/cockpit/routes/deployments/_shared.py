@@ -37,7 +37,7 @@ TOOLS_WITH_INSTRUCTION = frozenset({"database", "smtp", "calcom"})
 HOME_REDIRECT = RedirectResponse("/console", status_code=302)
 
 
-def build_tools_update(supported_svcs: list[str], form_fields: dict) -> dict[str, dict]:
+def build_tools_update(supported_svcs: list[str], form_fields: dict[str, str]) -> dict[str, dict]:
     """Build the ``settings["tools"]`` dict from the submitted form.
 
     Every service stores the same ``{"enabled": bool, "instruction": str}``
@@ -62,6 +62,7 @@ def get_deployment(
 
 
 def uptime_str(seconds: int) -> str:
+    """Render a duration in seconds as a compact uptime string."""
     days, rem = divmod(seconds, 86400)
     hours, rem = divmod(rem, 3600)
     minutes, secs = divmod(rem, 60)

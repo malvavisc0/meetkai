@@ -75,6 +75,7 @@ class BrainSettings(BaseSettings):
     @field_validator("base_url", "crawler_url")
     @classmethod
     def validate_url(cls, v: str) -> str:
+        """Require an http(s) URL with a host and strip trailing slashes."""
         if not v:
             return v  # empty allowed — validate_startup warns
         parsed = urlparse(v)
@@ -87,6 +88,7 @@ class BrainSettings(BaseSettings):
     @field_validator("crawl_max_depth")
     @classmethod
     def validate_max_depth(cls, v: int) -> int:
+        """Reject a negative crawl depth."""
         if v < 0:
             raise ValueError(f"crawl_max_depth must be >= 0, got {v}")
         return v
@@ -94,6 +96,7 @@ class BrainSettings(BaseSettings):
     @field_validator("crawl_max_pages")
     @classmethod
     def validate_max_pages(cls, v: int) -> int:
+        """Reject a crawl page cap below one."""
         if v < 1:
             raise ValueError(f"crawl_max_pages must be >= 1, got: {v}")
         return v
@@ -126,6 +129,7 @@ class BrainSettings(BaseSettings):
 
     @classmethod
     def for_test(cls, **overrides: object) -> "BrainSettings":
+        """Build settings from explicit overrides, ignoring any .env file."""
         return cls(_env_file=None, **overrides)  # type: ignore[call-arg]
 
 

@@ -116,10 +116,10 @@ class TestCatalogData:
     def test_calcom_secret_fields(self):
         assert CREDENTIAL_TYPES["calcom"].secret_fields == ["api_key"]
 
-    def test_calcom_testable(self):
+    def test_calcom_credential_type_is_testable(self):
         assert CREDENTIAL_TYPES["calcom"].testable is True
 
-    def test_database_testable(self):
+    def test_database_credential_type_is_testable(self):
         assert CREDENTIAL_TYPES["database"].testable is True
 
 
@@ -294,13 +294,18 @@ class TestSupportedInjectionLoop(_StartBase):
         dep = svc.create(user, "email", "goal", "English")
         svc.edit(dep, settings={"tools": {"database": {"enabled": True, "instruction": ""}}})
 
+        called: list[str] = []
+
         def boom(_env, service, _conn):
+            called.append(service)
             if service == "database":
                 raise NotImplementedError(service)
 
         monkeypatch.setattr("kai.cockpit.deployments.inject_connection_env", boom)
 
         self._run_start(svc, dep, monkeypatch, tmp_path, user)
+
+        assert "database" not in called
 
     def test_toggle_on_and_connection_present_injects_sql_env(
         self, db, user, monkeypatch, tmp_path

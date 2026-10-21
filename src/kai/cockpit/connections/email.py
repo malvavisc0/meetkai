@@ -30,6 +30,7 @@ class EmailConnectionsService:
         self.db = db
 
     def get(self, user: User) -> Connection | None:
+        """Return the operator's Resend connection, or None when unset."""
         return (
             self.db.query(Connection)
             .filter(Connection.user_id == user.id, Connection.service == "resend")
@@ -37,6 +38,7 @@ class EmailConnectionsService:
         )
 
     def save(self, user: User, *, signing_secret: str, api_key: str) -> Connection:
+        """Create or update the Resend connection and probe the saved credentials."""
         existing = self.get(user)
         secrets = {}
         if signing_secret:
@@ -69,12 +71,14 @@ class EmailConnectionsService:
         return conn
 
     def delete(self, user: User) -> None:
+        """Remove the operator's Resend connection if it exists."""
         conn = self.get(user)
         if conn is not None:
             self.db.delete(conn)
             self.db.commit()
 
     def decrypt_secret(self, user: User) -> str | None:
+        """Return the operator's decrypted Resend signing secret, or None."""
         conn = self.get(user)
         if conn is None:
             return None
@@ -108,7 +112,7 @@ class EmailConnectionsService:
                 params={"limit": 1},
                 timeout=10,
             )
-        except Exception as exc:  # noqa: BLE001 - surfaced to the operator
+        except Exception as exc:  # surfaced to the operator
             return False, f"could not reach Resend API: {exc}", True
         if resp.status_code in (401, 403):
             return False, f"Resend API rejected the key ({resp.status_code})", False
@@ -179,6 +183,7 @@ class EmailConnectionsService:
 def post_loopback(
     base_url: str, slug: str, body: bytes, svix_id: str, ts: int, signature: str
 ) -> httpx.Response | tuple[bool, str]:
+    """POST a signed sample payload to the operator's Resend webhook ingress."""
     webhook_url = f"{base_url.rstrip('/')}/webhook/{slug}/resend"
     try:
         return httpx.post(
@@ -192,11 +197,12 @@ def post_loopback(
             },
             timeout=10,
         )
-    except Exception as exc:  # noqa: BLE001 - surfaced to the operator
+    except Exception as exc:  # surfaced to the operator
         return False, f"could not reach ingress: {exc}"
 
 
 def interpret_loopback_status(resp: httpx.Response) -> tuple[bool, str]:
+    """Map the loopback webhook response to a pass/fail operator message."""
     if resp.status_code == 202:
         return True, "ok — webhook verified and forwarded"
     if resp.status_code == 401:

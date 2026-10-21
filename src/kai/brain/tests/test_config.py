@@ -5,7 +5,7 @@ from kai.brain.config import BRAIN_TOOL_NAME, BrainSettings, build_brain_workflo
 
 
 class TestBrainSettings:
-    def test_defaults(self):
+    def test_for_test_provides_default_settings(self):
         s = BrainSettings.for_test()
         assert s.base_url == ""
         assert s.morphik_token == ""

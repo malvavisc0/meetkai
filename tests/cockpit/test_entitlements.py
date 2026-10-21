@@ -104,7 +104,7 @@ class TestUserFlagsCli:
         assert "image" in result.output
         assert "on" in result.output
 
-    def test_flags_toggle(self, db, bob):
+    def test_sso_flag_enables_sso(self, db, bob):
         from typer.testing import CliRunner
 
         from kai.cli import cockpit_user_app
@@ -118,7 +118,7 @@ class TestUserFlagsCli:
         assert bob.feature_flags["sso"] is True
         assert bob.feature_flags.get("image") is not True
 
-    def test_flags_revoke(self, db, bob):
+    def test_no_image_flag_disables_image(self, db, bob):
         from typer.testing import CliRunner
 
         from kai.cli import cockpit_user_app

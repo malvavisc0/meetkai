@@ -51,7 +51,9 @@ class ToolContext:
         self._default = ChatContext(chat_id=chat_id, owner_id=owner_id, tz_hint=tz_hint)
 
     def set(self, chat_id: str, owner_id: str = "", tz_hint: str | None = None) -> None:
+        """Set the current chat context for this task."""
         self._var.set(ChatContext(chat_id=chat_id, owner_id=owner_id, tz_hint=tz_hint))
 
     def current(self) -> ChatContext:
+        """Return the current chat context, or the default."""
         return self._var.get(self._default)

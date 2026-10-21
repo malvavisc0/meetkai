@@ -20,6 +20,7 @@ class PostProcessingConfig(BaseModel):
 
     @model_validator(mode="after")
     def reject_dead_config(self) -> "PostProcessingConfig":
+        """Reject step fields that the selected non-custom profile ignores."""
         if self.profile == "custom":
             return self
 

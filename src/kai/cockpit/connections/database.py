@@ -24,6 +24,7 @@ class DatabaseConnectionsService:
         self.db = db
 
     def get(self, user: User) -> Connection | None:
+        """Return the operator's database connection, or None when unset."""
         return (
             self.db.query(Connection)
             .filter(Connection.user_id == user.id, Connection.service == "database")
@@ -31,6 +32,7 @@ class DatabaseConnectionsService:
         )
 
     def save(self, user: User, *, label: str, url: str) -> Connection:
+        """Create or update the database connection and probe the saved DSN."""
         existing = self.get(user)
         if existing is None:
             config: dict = {"label": label}
@@ -66,12 +68,14 @@ class DatabaseConnectionsService:
         return conn
 
     def delete(self, user: User) -> None:
+        """Remove the operator's database connection if it exists."""
         conn = self.get(user)
         if conn is not None:
             self.db.delete(conn)
             self.db.commit()
 
     def decrypt_url(self, user: User) -> str | None:
+        """Return the operator's decrypted DSN, or None when unset."""
         conn = self.get(user)
         if conn is None:
             return None

@@ -27,6 +27,7 @@ def load_mandatory_block() -> str:
 
 
 def short_repr(value: Any, limit: int = LOG_REPR_LIMIT) -> str:
+    """Render a value for logs, truncated to the given character limit."""
     text = repr(value)
     if len(text) <= limit:
         return text
@@ -34,8 +35,11 @@ def short_repr(value: Any, limit: int = LOG_REPR_LIMIT) -> str:
 
 
 def logged(name: str, fn: Callable[..., Any]) -> Callable[..., Any]:
+    """Wrap a function to log its arguments and result."""
+
     @functools.wraps(fn)
     def wrapper(*args: Any, **kwargs: Any) -> Any:
+        """Log and forward one wrapped tool call."""
         call_args = ", ".join(
             [short_repr(a) for a in args] + [f"{k}={short_repr(v)}" for k, v in kwargs.items()]
         )

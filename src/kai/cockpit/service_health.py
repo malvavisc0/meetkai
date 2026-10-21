@@ -54,10 +54,12 @@ async def probe(
 
 
 def config_error(label: str, exc: Exception) -> HealthCheck:
+    """Build a failed check describing a configuration error."""
     return HealthCheck(label=label, ok=False, detail=f"config error: {type(exc).__name__}")
 
 
 async def check_llm(client: httpx.AsyncClient) -> HealthCheck:
+    """Probe the configured LLM provider's models endpoint."""
     settings = get_settings()
     if not settings.llm_api_key:
         return HealthCheck(label="LLM API", detail="no API key configured")
@@ -67,12 +69,14 @@ async def check_llm(client: httpx.AsyncClient) -> HealthCheck:
 
 
 async def check_morphik(client: httpx.AsyncClient, base_url: str, token: str) -> HealthCheck:
+    """Probe the Morphik service health endpoint."""
     headers = {"Authorization": f"Bearer {token}"} if token else None
     ok, detail = await probe(client, f"{base_url.rstrip('/')}/health", headers=headers)
     return HealthCheck(label="RAG Server", ok=ok, detail=detail)
 
 
 async def check_crawl4ai(client: httpx.AsyncClient, crawler_url: str, token: str) -> HealthCheck:
+    """Probe the crawl4ai service health endpoint."""
     headers = {"Authorization": f"Bearer {token}"} if token else None
     ok, detail = await probe(client, f"{crawler_url.rstrip('/')}/health", headers=headers)
     return HealthCheck(label="Crawler", ok=ok, detail=detail)
@@ -88,7 +92,7 @@ async def check_crawler_health() -> HealthCheck | None:
     """
     try:
         bs = get_brain_settings()
-    except Exception:  # noqa: BLE001 - brain not configured
+    except Exception:  # brain not configured
         return None
     if not bs.crawler_url:
         return None
@@ -97,6 +101,7 @@ async def check_crawler_health() -> HealthCheck | None:
 
 
 async def gather_probes(probes: list[Awaitable[HealthCheck]]) -> list[HealthCheck]:
+    """Run probes concurrently, converting exceptions into failed checks."""
     results = await asyncio.gather(*probes, return_exceptions=True)
     checks: list[HealthCheck] = []
     for r in results:
@@ -126,7 +131,7 @@ async def check_service_health() -> list[HealthCheck]:
                 probes.append(check_morphik(client, bs.base_url, bs.morphik_token))
             if bs.crawler_url:
                 probes.append(check_crawl4ai(client, bs.crawler_url, bs.crawl4ai_token))
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:  # configuration error is reported as a failing check
             checks.append(config_error("Brain", exc))
 
         checks.extend(await gather_probes(probes))

@@ -1,7 +1,7 @@
 """Email (Resend) Inbox connection routes: /connections/resend — CRUD + test."""
 
 from fastapi import APIRouter, Depends, Form, Request
-from fastapi.responses import RedirectResponse
+from fastapi.responses import RedirectResponse, Response
 from sqlalchemy.orm import Session
 
 from kai.cockpit.app import templates
@@ -20,7 +20,8 @@ async def resend_page(
     request: Request,
     user: User = Depends(require_user),
     db: Session = Depends(get_db),
-):
+) -> Response:
+    """Render the email connection form and its webhook URL."""
     svc = EmailConnectionsService(db)
     conn = svc.get(user)
     has_secret = bool(conn and conn.config.get("signing_secret"))
@@ -50,12 +51,13 @@ def resend_save(
     api_key: str = Form(""),
     user: User = Depends(require_user),
     db: Session = Depends(get_db),
-):
+) -> RedirectResponse:
+    """Save the email connection."""
     svc = EmailConnectionsService(db)
     try:
         conn = svc.save(user, signing_secret=signing_secret.strip(), api_key=api_key.strip())
         flash_connection_save(request, "Email", conn)
-    except Exception as exc:  # noqa: BLE001 - surfaced to the operator
+    except Exception as exc:  # surfaced to the operator
         flash(request, "error", f"Could not save: {exc}")
     return RedirectResponse("/connections/resend", status_code=302)
 
@@ -65,7 +67,8 @@ async def resend_delete(
     request: Request,
     user: User = Depends(require_user),
     db: Session = Depends(get_db),
-):
+) -> RedirectResponse:
+    """Delete the email connection."""
     svc = EmailConnectionsService(db)
     svc.delete(user)
     flash(request, "success", "Email connection removed.")
@@ -78,7 +81,7 @@ def resend_test(
     signing_secret: str = Form(""),
     user: User = Depends(require_user),
     db: Session = Depends(get_db),
-):
+) -> RedirectResponse:
     """Test: sign a sample payload and POST to our
     own ingress. Sync def because ``svc.test()``
     blocks the event loop.

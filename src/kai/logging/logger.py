@@ -4,6 +4,7 @@ from pathlib import Path
 
 
 def has_console_handler(root: logging.Logger) -> bool:
+    """Report whether a non-file stream handler is already attached."""
     return any(
         isinstance(h, logging.StreamHandler) and not isinstance(h, logging.FileHandler)
         for h in root.handlers
@@ -11,6 +12,7 @@ def has_console_handler(root: logging.Logger) -> bool:
 
 
 def has_file_handler(root: logging.Logger, log_dir: Path) -> bool:
+    """Report whether a file handler for ``log_dir`` is already attached."""
     return any(
         isinstance(h, logging.FileHandler) and Path(h.baseFilename).parent == log_dir
         for h in root.handlers
@@ -18,6 +20,7 @@ def has_file_handler(root: logging.Logger, log_dir: Path) -> bool:
 
 
 def silence_noisy_loggers() -> None:
+    """Raise third-party loggers to WARNING to keep output readable."""
     for name in ("httpx", "httpcore", "uvicorn.access"):
         logging.getLogger(name).setLevel(logging.WARNING)
 

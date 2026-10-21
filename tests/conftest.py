@@ -13,7 +13,7 @@ def _clean_kai_env(monkeypatch):
     .env *file* loading — it does NOT stop real exported env vars from
     overriding Field defaults. A shell that sourced the project .env (or a
     prior ``kai start``) leaks KAI_LLM_API_BASE into the test
-    process, making ``test_valid_defaults`` assert against leaked values
+    process, making ``test_for_test_uses_default_settings`` assert against leaked values
     instead of the intended defaults.
 
     After clearing, KAI_LOG_DIR is explicitly redirected to /tmp/kai so

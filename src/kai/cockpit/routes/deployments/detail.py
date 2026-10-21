@@ -3,7 +3,7 @@
 from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends, Request
-from fastapi.responses import RedirectResponse
+from fastapi.responses import RedirectResponse, Response
 from sqlalchemy.orm import Session
 
 from kai.cockpit.app import templates
@@ -27,7 +27,8 @@ async def deployment_detail(
     dep_id: int,
     user: User = Depends(require_user),
     db: Session = Depends(get_db),
-):
+) -> Response:
+    """Render the deployment detail page with status and chat."""
     svc = DeploymentsService(db)
     result = get_deployment(svc, dep_id, user)
     if isinstance(result, RedirectResponse):

@@ -1,7 +1,7 @@
 """Deploy wizard routes: ``GET``/``POST /deployments/new``."""
 
 from fastapi import APIRouter, Depends, Form, HTTPException, Request
-from fastapi.responses import RedirectResponse
+from fastapi.responses import RedirectResponse, Response
 from sqlalchemy.orm import Session
 
 from kai.cockpit.app import templates
@@ -20,11 +20,12 @@ from kai.cockpit.routes.deployments._shared import (
 )
 from kai.templates import TemplateRegistry
 from kai.templates.resolver import tool_configured_map, validate_tools
+from kai.templates.schema import TemplateDef
 
 router = APIRouter()
 
 
-def templates_for(bot_type: str) -> list:
+def templates_for(bot_type: str) -> list[TemplateDef]:
     """Bundled templates for a transport, sorted by display name."""
     templates_list = TemplateRegistry.bundled().list(transport=bot_type)
     templates_list.sort(key=lambda t: t.display_name.lower())
@@ -40,7 +41,7 @@ def wizard_context(
     db: Session,
     user: User,
     error: str | None = None,
-):
+) -> Response:
     """Re-render the wizard form with the given values and an optional error."""
     bt = BOT_TYPES.get(bot_type)
     wizard_template = WIZARD_TEMPLATES.get(bot_type, WIZARD_TEMPLATES["default"])
@@ -69,7 +70,8 @@ async def deploy_new_get(
     bot_type: str = "email",
     user: User = Depends(require_user),
     db: Session = Depends(get_db),
-):
+) -> Response:
+    """Render the deploy wizard, or redirect to an existing deployment."""
     bt = BOT_TYPES.get(bot_type)
     if bt is None:
         return RedirectResponse("/console", status_code=302)
@@ -99,7 +101,8 @@ async def deploy_new_post(
     template: str = Form("general"),
     user: User = Depends(require_user),
     db: Session = Depends(get_db),
-):
+) -> Response:
+    """Create a deployment from the wizard, or re-render it with an error."""
     svc = DeploymentsService(db)
 
     # Defense-in-depth: reject a hand-crafted POST with a template for the
@@ -143,7 +146,7 @@ async def template_preview(
     bot_type: str,
     template: str,
     user: User = Depends(require_user),
-):
+) -> Response:
     """AJAX endpoint: render a template preview card for the wizard picker."""
     try:
         tmpl = TemplateRegistry.bundled().get(bot_type, template)

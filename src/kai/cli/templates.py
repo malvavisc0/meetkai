@@ -1,4 +1,5 @@
 import typer
+from rich.console import Console
 
 from kai.cli.style import DIM, WARN, soft_table
 from kai.config.prompts import load_system_prompt
@@ -26,14 +27,14 @@ def build_app() -> typer.Typer:
         transport: str | None = typer.Option(
             None, help="Only show templates for this transport (email)"
         ),
-    ):
+    ) -> None:
         """List the bot templates bundled with Kai."""
         list_templates(transport)
 
     @app.command("show")
     def show_cmd(
         template_id: str = typer.Argument(..., help="Template identifier (e.g. email/general)"),
-    ):
+    ) -> None:
         """Show a template's tools, settings, and escalation rules."""
         show_template(template_id)
 
@@ -44,7 +45,7 @@ def build_app() -> typer.Typer:
         language: str = typer.Option(
             "", "--language", "-l", help="Language to fill in for the preview"
         ),
-    ):
+    ) -> None:
         """Print a template's system prompt so you can preview it."""
         render_prompt(template_id, goal, language)
 
@@ -52,6 +53,7 @@ def build_app() -> typer.Typer:
 
 
 def list_templates(transport: str | None) -> None:
+    """List the bundled templates, optionally filtered by transport."""
     templates = REGISTRY.list(transport)
     if not templates:
         if transport:
@@ -71,6 +73,7 @@ def list_templates(transport: str | None) -> None:
 
 
 def show_template(template_id: str) -> None:
+    """Print a template's tools, settings, and escalation rules."""
     parts = parse_id(template_id)
     try:
         tmpl = REGISTRY.get(parts.transport, parts.name)
@@ -85,6 +88,7 @@ def show_template(template_id: str) -> None:
 
 
 def render_prompt(template_id: str, goal: str, language: str) -> None:
+    """Print a template's rendered system prompt."""
     parts = parse_id(template_id)
     try:
         tmpl = REGISTRY.get(parts.transport, parts.name)
@@ -121,12 +125,13 @@ class TemplateParts:
     transport: str
     name: str
 
-    def __init__(self, transport: str, name: str):
+    def __init__(self, transport: str, name: str) -> None:
         self.transport = transport
         self.name = name
 
 
 def parse_id(template_id: str) -> TemplateParts:
+    """Parse a ``transport/name`` template id or exit with an error."""
     parts = template_id.split("/")
     if len(parts) != 2:
         typer.echo(
@@ -142,8 +147,7 @@ def parse_id(template_id: str) -> TemplateParts:
 
 
 def render_template(tmpl: TemplateDef) -> None:
-    from rich.console import Console
-
+    """Print a template's header, tools, config, and prompt sections."""
     c = Console()
 
     c.print(f"[bold]{tmpl.display_name}[/bold]  [{DIM}]{tmpl.transport}/{tmpl.name}[/{DIM}]")
@@ -157,7 +161,8 @@ def render_template(tmpl: TemplateDef) -> None:
     render_template_sections(c, tmpl)
 
 
-def render_template_tools(c, tmpl: TemplateDef) -> None:
+def render_template_tools(c: Console, tmpl: TemplateDef) -> None:
+    """Print a template's actions and required/optional tools."""
     if tmpl.actions:
         c.print("\n  [bold]actions[/bold]  " + ", ".join(tmpl.actions))
     if tmpl.tools.required:
@@ -166,7 +171,8 @@ def render_template_tools(c, tmpl: TemplateDef) -> None:
         c.print("  [bold]optional tools[/bold]  " + ", ".join(tmpl.tools.optional))
 
 
-def render_template_config(c, tmpl: TemplateDef) -> None:
+def render_template_config(c: Console, tmpl: TemplateDef) -> None:
+    """Print a template's configured temperature and language."""
     if not tmpl.config:
         return
     c.print("\n  [bold]config[/bold]")
@@ -178,7 +184,8 @@ def render_template_config(c, tmpl: TemplateDef) -> None:
         c.print(f"    language: {la}")
 
 
-def render_template_sections(c, tmpl: TemplateDef) -> None:
+def render_template_sections(c: Console, tmpl: TemplateDef) -> None:
+    """Print a template's reply style, escalation rules, and goal hint."""
     if tmpl.reply_style:
         c.print("\n  [bold]reply_style[/bold]")
         for line in tmpl.reply_style.strip().split("\n")[:4]:

@@ -44,12 +44,11 @@ jobs:
       - name: Radon complexity
         run: uvx radon cc -s -n C src -e tests
 
-      # min-confidence 60 per docs/coding-standard.md, with the curated
-      # whitelist of framework-dispatched names (typer/FastAPI routes,
-      # pydantic validators, plugin API, test seams). A hit outside the
-      # whitelist is a defect.
+      # Dead-code gate per docs/coding-standard.md. Threshold, paths, and
+      # framework-dispatch ignores live in [tool.vulture] in pyproject.toml;
+      # the default run is expected to be empty.
       - name: Vulture dead code
-        run: uvx vulture --min-confidence 60 src vulture_whitelist.py
+        run: uvx vulture
 
       - name: Pytest
         run: uv run pytest -q

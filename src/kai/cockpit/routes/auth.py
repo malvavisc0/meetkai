@@ -6,7 +6,7 @@ from collections import deque
 from threading import Lock
 
 from fastapi import APIRouter, BackgroundTasks, Depends, Form, HTTPException, Request
-from fastapi.responses import RedirectResponse
+from fastapi.responses import RedirectResponse, Response
 from sqlalchemy.orm import Session
 
 from kai.cockpit import tokens
@@ -41,6 +41,7 @@ class LoginRateLimiter:
         self._lock = Lock()
 
     def allow(self, client: str, now: float) -> bool:
+        """Record a hit and report whether the client is still under the limit."""
         with self._lock:
             hits = self._hits.setdefault(client, deque())
             while hits and now - hits[0] > self._window_seconds:
@@ -55,6 +56,7 @@ LOGIN_RATE_LIMITER = LoginRateLimiter(LOGIN_WINDOW_SECONDS, LOGIN_MAX_ATTEMPTS)
 
 
 def enforce_login_rate_limit(request: Request) -> None:
+    """Raise 429 when the client exceeds the login request window."""
     if get_cockpit_settings().cockpit_testing:
         return
     client = request.client.host if request.client else "unknown"
@@ -63,11 +65,13 @@ def enforce_login_rate_limit(request: Request) -> None:
 
 
 def auto_approve_enabled() -> bool:
+    """Report whether new login requests skip operator approval."""
     return get_cockpit_settings().cockpit_auto_approve_login
 
 
 @router.get("/login")
-async def login_get(request: Request, user: User | None = Depends(get_current_user)):
+async def login_get(request: Request, user: User | None = Depends(get_current_user)) -> Response:
+    """Render the login page, or send an authenticated user to the console."""
     if user:
         return RedirectResponse("/console", status_code=302)
     return templates.TemplateResponse(request, "login.html", {"user": None, "requested": False})
@@ -79,7 +83,8 @@ async def login_post(
     background_tasks: BackgroundTasks,
     email: str = Form(...),
     db: Session = Depends(get_db),
-):
+) -> Response:
+    """Request a magic link and always render the same requested state."""
     enforce_login_rate_limit(request)
     user = db.query(User).filter(User.email == email).first()
     if user and not user.is_disabled:
@@ -99,7 +104,8 @@ async def login_auth(
     request: Request,
     token: str,
     db: Session = Depends(get_db),
-):
+) -> Response:
+    """Consume a magic-link token, start the session, and redirect."""
     provider = MagicLinkProvider(db)
     user_id = provider.consume_login(token)
     if user_id is None:
@@ -117,6 +123,7 @@ async def login_auth(
 
 
 @router.get("/logout")
-async def logout(request: Request):
+async def logout(request: Request) -> RedirectResponse:
+    """Clear the session and send the operator to the login page."""
     request.session.clear()
     return RedirectResponse("/login", status_code=302)

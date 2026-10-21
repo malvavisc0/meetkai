@@ -86,7 +86,7 @@ def _login(client, db, bob):
 
 
 class TestBrainsPage:
-    def test_requires_login(self, client):
+    def test_brain_page_redirects_to_login(self, client):
         r = client.get("/brain", follow_redirects=False)
         assert r.status_code == 302
         assert r.headers["location"] == "/login"
@@ -106,7 +106,7 @@ class TestBrainsPage:
 
 
 class TestBrainsCreate:
-    def test_creates_row(self, client, db, bob):
+    def test_create_route_persists_brain(self, client, db, bob):
         from kai.cockpit.brains import BrainsService
 
         _login(client, db, bob)
@@ -145,7 +145,7 @@ class TestBrainsInstruction:
         r = client.get("/brain")
         assert "Create Brain" in r.text  # still not created
 
-    def test_saves_instruction(self, client, db, bob):
+    def test_instruction_route_persists_value(self, client, db, bob):
         from kai.cockpit.brains import BrainsService
 
         _login(client, db, bob)
@@ -307,7 +307,7 @@ class TestBrainsIngestUrl:
 
 
 class TestBrainsIngestText:
-    def test_adds_text(self, client, db, bob, fake_morphik_client):
+    def test_ingest_text_route_adds_document(self, client, db, bob, fake_morphik_client):
         _login(client, db, bob)
         csrf_post(client, "/brain/create", follow_redirects=False)
         fake_morphik_client.ingest_text.return_value = IngestResult(
@@ -398,7 +398,7 @@ class TestBrainsDocumentsList:
 
 
 class TestBrainsDeleteDocument:
-    def test_deletes_document(self, client, db, bob, fake_morphik_client):
+    def test_delete_route_removes_document(self, client, db, bob, fake_morphik_client):
         _login(client, db, bob)
         csrf_post(client, "/brain/create", follow_redirects=False)
         fake_morphik_client.delete_doc.return_value = "deletion_started"

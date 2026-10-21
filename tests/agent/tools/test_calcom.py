@@ -374,7 +374,7 @@ class TestWorkflowInstruction:
         assert "bookingFields" in out
         assert "Use it when:" not in out
 
-    def test_appends_triggers(self):
+    def test_appends_trigger_bullets_to_instruction(self):
         out = build_calcom_workflow_instruction("someone asks to book\nsomeone wants to cancel")
         assert "Use it when:" in out
         assert "- someone asks to book" in out

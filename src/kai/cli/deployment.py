@@ -24,7 +24,7 @@ def deployment_create(
     goal: str = typer.Option(..., "--goal", help="What the bot should do"),
     language: str = typer.Option(..., "--language", help="Bot language"),
     template: str = typer.Option("general", "--template", "-t", help="Template to start from"),
-):
+) -> None:
     """Create a new deployment for a user."""
     from kai.cockpit.db import SessionLocal
     from kai.cockpit.deployments import ConnectionRequiredError, DeploymentsService
@@ -59,7 +59,7 @@ def deployment_create(
 @deployment_app.command("list")
 def deployment_list(
     user: str = typer.Option(..., "--user", help="User email"),
-):
+) -> None:
     """List a user's deployments."""
     from kai.cockpit.db import SessionLocal
     from kai.cockpit.deployments import DeploymentsService
@@ -102,7 +102,7 @@ def deployment_list(
 @deployment_app.command("start")
 def deployment_start(
     deployment_id: int = typer.Argument(..., help="Deployment id"),
-):
+) -> None:
     """Start a deployment."""
     from kai.cockpit.db import SessionLocal
     from kai.cockpit.deployments import (
@@ -134,7 +134,7 @@ def deployment_start(
 @deployment_app.command("stop")
 def deployment_stop(
     deployment_id: int = typer.Argument(..., help="Deployment id"),
-):
+) -> None:
     """Stop a deployment."""
     from kai.cockpit.db import SessionLocal
     from kai.cockpit.deployments import DeploymentsService
@@ -157,7 +157,7 @@ def deployment_edit(
     deployment_id: int = typer.Argument(..., help="Deployment id"),
     goal: str = typer.Option(None, "--goal", help="New goal (leave unset to keep)"),
     language: str = typer.Option(None, "--language", help="New language (leave unset to keep)"),
-):
+) -> None:
     """Change a deployment's goal or language."""
     from kai.cockpit.db import SessionLocal
     from kai.cockpit.deployments import DeploymentsService
@@ -193,7 +193,7 @@ def deployment_edit(
 def deployment_delete(
     deployment_id: int = typer.Argument(..., help="Deployment id"),
     yes: bool = typer.Option(False, "--yes", "-y", help="Skip confirmation prompt"),
-):
+) -> None:
     """Delete a deployment, stopping it first if it's running."""
     from kai.cockpit.db import SessionLocal
     from kai.cockpit.deployments import DeploymentsService

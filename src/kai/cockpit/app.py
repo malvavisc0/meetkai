@@ -2,6 +2,7 @@
 
 import logging
 import threading
+from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime
 from pathlib import Path
@@ -14,6 +15,7 @@ from sentry_sdk.integrations.fastapi import FastApiIntegration
 from sentry_sdk.integrations.starlette import StarletteIntegration
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.middleware.sessions import SessionMiddleware
+from starlette.responses import Response
 
 from kai.cockpit.auth import get_cockpit_secret, get_current_user
 from kai.cockpit.csrf import CSRF_TOKEN, CSRFMiddleware
@@ -75,6 +77,7 @@ templates.env.globals["format_timestamp"] = format_timestamp
 
 
 def reconcile_deployments_in_background() -> None:
+    """Reconcile deployments and clean expired tokens on a startup thread."""
     # Bot subprocesses are children of this process, so a container restart
     # kills all of them even though each deployment's `desired_state` is
     # still "running" in the DB. Restart in a background thread so a
@@ -98,7 +101,8 @@ def reconcile_deployments_in_background() -> None:
 
 
 @asynccontextmanager
-async def lifespan(app: FastAPI):
+async def lifespan(app: FastAPI) -> AsyncIterator[None]:
+    """Run startup reconciliation and yield for the app's lifetime."""
     # Skipped under pytest: tests use an in-memory SQLite StaticPool (single
     # shared connection) and a background thread racing that connection
     # against the test's own session corrupts SQLAlchemy's identity map.
@@ -113,6 +117,7 @@ async def lifespan(app: FastAPI):
 
 
 def create_app() -> FastAPI:
+    """Build the cockpit FastAPI app with middleware and routes."""
     init_sentry(
         "cockpit",
         extra_integrations=[FastApiIntegration(), StarletteIntegration()],
@@ -200,18 +205,21 @@ def create_app() -> FastAPI:
 
         @app.get("/_csrf")
         async def get_csrf_token(request: Request) -> dict[str, str]:
+            """Expose the session CSRF token to test clients."""
             return {"token": request.session.get("csrf_token", "")}
 
     @app.exception_handler(StarletteHTTPException)
-    async def http_exception_handler(request, exc):
+    async def http_exception_handler(request: Request, exc: StarletteHTTPException) -> Response:
+        """Render redirects, JSON, or the HTML error page for HTTP exceptions."""
         # Pass through redirects (require_user raises HTTPException(302)).
         if exc.status_code in (301, 302, 303, 307, 308):
             from starlette.responses import RedirectResponse
 
+            redirect_headers = exc.headers or {}
             return RedirectResponse(
-                url=exc.headers.get("Location", "/"),
+                url=redirect_headers.get("Location", "/"),
                 status_code=exc.status_code,
-                headers=exc.headers,
+                headers=redirect_headers,
             )
         # Webhook / API endpoints serve machine consumers — return JSON, not
         # the operator-facing HTML error page.

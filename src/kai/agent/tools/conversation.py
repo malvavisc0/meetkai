@@ -61,6 +61,7 @@ def register_conversation_tools(
     """
 
     def resolve(conversation_id: str) -> str:
+        """Resolve an explicit conversation id or fall back to the current chat."""
         if conversation_id.strip():
             return conversation_id.strip()
         if tool_context is not None:

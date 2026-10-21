@@ -125,7 +125,7 @@ class TestCreateConnectionGate:
 
 
 class TestEdit:
-    def test_edit_goal(self, db, user):
+    def test_edit_updates_goal(self, db, user):
         svc = DeploymentsService(db)
         dep = svc.create(user, "email", "goal", "English")
         svc.edit(dep, goal="new goal")
@@ -159,7 +159,7 @@ class TestEdit:
 
 
 class TestGetAndList:
-    def test_get(self, db, user):
+    def test_get_returns_existing_deployment(self, db, user):
         svc = DeploymentsService(db)
         dep = svc.create(user, "email", "goal", "English")
         fetched = svc.get(dep.id)
@@ -177,7 +177,7 @@ class TestGetAndList:
 
 
 class TestStart:
-    def test_requires_connection(self, db, user):
+    def test_start_rejects_disconnected_connection(self, db, user):
         svc = DeploymentsService(db)
         dep = svc.create(user, "email", "goal", "English")
         # Disconnect after creation to prove start() re-checks the

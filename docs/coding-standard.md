@@ -46,7 +46,8 @@ uv run ruff format .                   # format
 uv run pyright                         # type check
 uv run pytest                          # test suite (-n auto, xdist)
 uvx radon cc src -s | grep -E '-\s(C|D|E|F)\s'   # complexity gate (must be empty)
-uvx vulture --min-confidence 60 src vulture_whitelist.py    # dead code
+uvx vulture                           # dead code (config in pyproject.toml)
+find src tests -name '*.py' -exec wc -l {} + | awk '$1 > 600 && $2 != "total"' | sort -rn   # file-size offenders
 ```
 Run `ruff check`, `ruff format --check`, `pyright`, and the relevant
 tests after every change.
@@ -66,14 +67,30 @@ uvx radon cc src -s | grep -E '-\s(C|D|E|F)\s'   # must be empty
 ```
 
 ## Dead code
-Rules say "no dead code"; vulture enforces it (`uvx vulture
---min-confidence 60 src vulture_whitelist.py`). A hit is a *suspect*: check
-for a registration site before deleting — typer commands, FastAPI routes,
-and pydantic members are framework-dispatched and legitimately look unused;
-those live in `vulture_whitelist.py` (curated, with justifications in its
-docstring — never add an entry to silence a new hit without one). Real
-dead code (never-read fields, zero-call-site functions) goes out in the
-same pass.
+Rules say "no dead code"; vulture enforces it. Config lives in
+`[tool.vulture]` in pyproject.toml: `ignore_decorators` covers
+framework-dispatched registrations (typer `@*.command`, FastAPI routes
+and exception handlers, pydantic validators/serializers, `@pytest.*`),
+and `ignore_names` covers the rest of the names static analysis cannot
+resolve (pydantic/SQLAlchemy fields, the bot plugin API, documented test
+seams) — each group commented with its reason. The default run is
+**expected to be empty**. A hit is either a new framework-dispatch
+pattern (add it to `ignore_decorators` in the same pass) or a defect:
+real dead code (never-read fields, zero-call-site functions) goes out in
+the same pass. Never add an `ignore_names` entry to silence a new hit
+without a comment-level justification.
+
+## File size
+No Python file over 600 lines in `src/` or `tests/`. A file already over
+the cap may still grow for docstrings or type annotations; any other
+addition requires extracting code into a new module first. When an
+over-cap file's logic is changed, split it by responsibility (extract
+helpers, separate modules), not by truncating. Check with:
+```bash
+find src tests -name '*.py' -exec wc -l {} + | awk '$1 > 600 && $2 != "total"' | sort -rn
+```
+The output names the current offenders; a new entry, or growth beyond
+docstrings/annotations, is not allowed.
 
 ## PII
 Never use or commit PII — not in code, tests, docs, plans, fixtures,
@@ -117,12 +134,15 @@ One-line messages only. No body, no trailers.
 - No fake-private `_helpers` — put functions in a module (e.g.
   `bots/webhook.py`) with public names
 - No dead code
+- No Python file over 600 lines in `src/` or `tests/`
 - No `_`-prefix for methods
 
 ## Style
 Write the simplest correct solution. Delete anything that isn't needed.
 
 ## Conventions
+- Tests follow `docs/writing-tests.md`: behavior over implementation,
+  no assertions on log text or stub interactions.
 - CLI commands live in `src/kai/cli/` as typer commands in the `kai`
   app; env vars (`KAI_` prefix) override flag defaults.
 - Bot plugins live under `src/kai/bots/<name>/` exposing a `Bot`

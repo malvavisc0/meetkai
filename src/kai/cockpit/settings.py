@@ -32,10 +32,12 @@ class CockpitSettings(BaseSettings):
 
     @model_validator(mode="after")
     def set_cookie_secure_default(self) -> Self:
+        """Default cookie security to whether the public URL uses HTTPS."""
         if self.cookie_secure is None:
             self.cookie_secure = self.public_url.lower().startswith("https://")
         return self
 
 
 def get_cockpit_settings() -> CockpitSettings:
+    """Construct cockpit settings from the environment."""
     return CockpitSettings()

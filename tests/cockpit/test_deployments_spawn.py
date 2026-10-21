@@ -129,7 +129,7 @@ class TestSpawnTemplate:
 
 
 class TestEditToolOverrides:
-    def test_edit_template(self, db, user):
+    def test_edit_updates_template(self, db, user):
         svc = DeploymentsService(db)
         dep = svc.create(user, "email", "goal", "English")
         svc.edit(dep, template="customer-support")

@@ -18,6 +18,7 @@ from pathlib import Path
 
 import httpx
 from sqlalchemy.orm import Session
+from starlette.requests import Request
 
 from kai.cockpit import config_writer
 from kai.cockpit.bots import (
@@ -34,16 +35,19 @@ logger = logging.getLogger(__name__)
 
 
 def require_supported_language(language: str) -> None:
+    """Raise when ``language`` is not one of the supported languages."""
     if language not in ALL_LANGUAGES:
         raise ValueError(f"unsupported language: {language!r}. Supported: {ALL_LANGUAGES}")
 
 
 def require_non_empty(value: object, label: str) -> None:
+    """Raise when ``value`` is empty or whitespace-only."""
     if not value or not str(value).strip():
         raise ValueError(f"{label} is required")
 
 
 def validate_create_inputs(user: User, bot_type: str, goal: str, language: str) -> None:
+    """Validate the operator, bot type, goal, and language before creation."""
     if user.is_disabled:
         raise ValueError(f"Operator '{user.email}' is disabled")
     if bot_type not in BOT_TYPES:
@@ -94,6 +98,7 @@ def attention_reason(dep: Deployment, status_data: dict | None) -> str | None:
 
 
 def instance_id_for(bot_type: str, email: str) -> str:
+    """Derive the run-registry instance id from bot type and operator email."""
     return sanitize_instance_id(f"{bot_type}-{email}")
 
 
@@ -103,6 +108,7 @@ def tool_enabled(value: dict) -> bool:
 
 
 def tool_instruction(value: dict) -> str:
+    """Read the operator-supplied instruction from a stored tool toggle."""
     return str(value.get("instruction", ""))
 
 
@@ -147,7 +153,7 @@ def is_connected(service: str, conn: Connection | None) -> bool:
     return conn.status == "connected"
 
 
-def inject_connection_env(env: dict, service: str, conn: Connection) -> bool:
+def inject_connection_env(env: dict[str, str], service: str, conn: Connection) -> bool:
     """Inject env vars for a supported credential connection into ``env``.
 
     Driven by ``SERVICE_ENV_VARS``. A service not listed raises
@@ -175,7 +181,8 @@ def inject_connection_env(env: dict, service: str, conn: Connection) -> bool:
         ) from exc
 
 
-def apply_service_env_vars(env: dict, cfg: dict, svc_vars: dict) -> bool:
+def apply_service_env_vars(env: dict[str, str], cfg: dict, svc_vars: dict) -> bool:
+    """Copy a connection's config values into ``env``; return whether any landed."""
     bool_fields = svc_vars.get("bool_fields", set())
     injected = False
     for config_key, env_var in svc_vars.get("fields", {}).items():
@@ -195,12 +202,14 @@ class DeploymentsService:
         self.db = db
 
     def user_for(self, deployment: Deployment) -> User:
+        """Return the deployment's owning Operator."""
         user = self.db.query(User).filter(User.id == deployment.user_id).first()
         if user is None:
             raise ValueError(f"deployment {deployment.id} has no Operator")
         return user
 
     def deployment_instance_id(self, deployment: Deployment, *, user: User | None = None) -> str:
+        """Return the run-registry instance id for a deployment."""
         if user is None:
             user = self.user_for(deployment)
         return instance_id_for(deployment.bot_type, user.email)
@@ -218,6 +227,7 @@ class DeploymentsService:
         raise RuntimeError(f"no available control ports in range 8200-8299 ({len(used)} in use)")
 
     def run_registry(self, deployment: Deployment, *, user: User | None = None) -> RunRegistry:
+        """Open the run registry for a deployment."""
         from kai.config.settings import get_settings
 
         settings = get_settings()
@@ -241,12 +251,13 @@ class DeploymentsService:
             return None
         return record
 
-    def sign_body(self, record, body: bytes) -> str:
+    def sign_body(self, record: RunRecord, body: bytes) -> str:
+        """Compute the HMAC signature for a request body sent to the bot."""
         return compute_hmac(record.hmac_key, body, record.hmac_algorithm)
 
     def call_bot(
         self,
-        record,
+        record: RunRecord,
         method: str,
         path: str,
         body: bytes = b"",
@@ -288,9 +299,11 @@ class DeploymentsService:
         return result.get("ok", True) is not False
 
     def get(self, deployment_id: int) -> Deployment | None:
+        """Return a deployment by primary key, or None when it does not exist."""
         return self.db.query(Deployment).filter(Deployment.id == deployment_id).first()
 
     def list_for_user(self, user_id: int) -> list[Deployment]:
+        """Return every deployment owned by the given operator."""
         return self.db.query(Deployment).filter(Deployment.user_id == user_id).all()
 
     def stop_all_for_user(self, user_id: int) -> int:
@@ -312,6 +325,7 @@ class DeploymentsService:
         return stopped
 
     def get_for_user_and_type(self, user_id: int, bot_type: str) -> Deployment | None:
+        """Return the operator's deployment for one bot type, if any."""
         return (
             self.db.query(Deployment)
             .filter(Deployment.user_id == user_id, Deployment.bot_type == bot_type)
@@ -360,12 +374,14 @@ class DeploymentsService:
         return dep
 
     def require_connections(self, bt: BotType, user: User) -> None:
+        """Raise when a required connection is missing or not ready."""
         for service in bt.required_connections:
             c = self.find_connection(user, service)
             if not is_connected(service, c):
                 raise ConnectionRequiredError(f"Connect {service} first at /connections")
 
     def reject_duplicate(self, bot_type: str, user: User) -> None:
+        """Raise when the operator already has a deployment of this bot type."""
         existing = (
             self.db.query(Deployment)
             .filter(Deployment.user_id == user.id, Deployment.bot_type == bot_type)
@@ -377,6 +393,7 @@ class DeploymentsService:
             )
 
     def edit(self, deployment: Deployment, **fields: object) -> Deployment:
+        """Apply field edits, persist config, and flag a restart when running."""
         bt = BOT_TYPES.get(deployment.bot_type)
         if bt is None:
             raise ValueError(f"unknown bot type: {deployment.bot_type}")
@@ -410,11 +427,13 @@ class DeploymentsService:
         return deployment
 
     def apply_goal(self, deployment: Deployment, bt: BotType, value: object) -> bool:
+        """Set the deployment goal."""
         require_non_empty(value, "goal")
         deployment.goal = str(value).strip()
         return False
 
     def apply_language(self, deployment: Deployment, bt: BotType, value: object) -> bool:
+        """Set the deployment language and mirror it into settings."""
         require_non_empty(value, "language")
         language = str(value).strip()
         require_supported_language(language)
@@ -423,6 +442,7 @@ class DeploymentsService:
         return True
 
     def apply_feature_flags(self, deployment: Deployment, bt: BotType, value: object) -> bool:
+        """Set feature flags after rejecting names the bot type doesn't declare."""
         if not isinstance(value, dict):
             raise ValueError("feature_flags must be a dict")
         invalid = set(value.keys()) - set(bt.feature_flags)
@@ -432,6 +452,7 @@ class DeploymentsService:
         return False
 
     def apply_settings(self, deployment: Deployment, bt: BotType, value: object) -> bool:
+        """Merge settings after rejecting empty required values."""
         if not isinstance(value, dict):
             raise ValueError("settings must be a dict")
         for req in bt.required_settings:
@@ -441,22 +462,26 @@ class DeploymentsService:
         return True
 
     def apply_brain_mandatory(self, deployment: Deployment, bt: BotType, value: object) -> bool:
+        """Set whether the Brain is mandatory for this deployment."""
         if value is not None and not isinstance(value, bool):
             raise ValueError("brain_mandatory must be a bool or null")
         deployment.brain_mandatory = value
         return False
 
     def apply_brain_instruction(self, deployment: Deployment, bt: BotType, value: object) -> bool:
+        """Set the per-deployment Brain instruction."""
         if value is not None and not isinstance(value, str):
             raise ValueError("brain_instruction must be a string or null")
         deployment.brain_instruction = str(value).strip() if value is not None else None
         return False
 
     def apply_template(self, deployment: Deployment, bt: BotType, value: object) -> bool:
+        """Set the deployment's template name."""
         deployment.template = str(value)
         return False
 
     def apply_tool_overrides(self, deployment: Deployment, bt: BotType, value: object) -> bool:
+        """Set template tool enable/disable overrides."""
         if not isinstance(value, dict):
             raise ValueError("tool_overrides must be a dict")
         if set(value.keys()) - {"enable", "disable"}:
@@ -502,6 +527,7 @@ class DeploymentsService:
         self.db.commit()
 
     def resolve_required_connections(self, bt: BotType, user: User) -> dict[str, Connection]:
+        """Return the operator's ready connections required by the bot type."""
         required: dict[str, Connection] = {}
         for service in bt.required_connections:
             c = self.find_connection(user, service)
@@ -511,6 +537,7 @@ class DeploymentsService:
         return required
 
     def find_connection(self, user: User, service: str) -> Connection | None:
+        """Return the operator's connection for a service, if any."""
         return (
             self.db.query(Connection)
             .filter(
@@ -521,6 +548,7 @@ class DeploymentsService:
         )
 
     def build_spawn_argv(self, deployment: Deployment, user: User) -> list[str]:
+        """Build the ``kai bot start`` argv for the deployment."""
         argv = [
             *kai_argv_prefix(),
             "bot",
@@ -550,6 +578,7 @@ class DeploymentsService:
         required_conns: dict[str, Connection],
         brain_conn: Connection | None,
     ) -> dict[str, str]:
+        """Build the spawn environment from connections, Brain, and tools."""
         env: dict[str, str] = {**os.environ}
         # Operator slug for per-user escalation scoping. fail-fast here
         # (before the subprocess spawns) so the error is clear; the DB NOT
@@ -592,6 +621,7 @@ class DeploymentsService:
     def inject_brain_env(
         self, env: dict[str, str], deployment: Deployment, brain_conn: Connection
     ) -> None:
+        """Inject Brain workspace, instruction, and mandatory env vars."""
         workspace = brain_conn.config["workspace"]
         if deployment.brain_instruction is not None and deployment.brain_instruction.strip():
             instruction = deployment.brain_instruction
@@ -609,6 +639,7 @@ class DeploymentsService:
         bt: BotType,
         user: User,
     ) -> None:
+        """Inject env vars for enabled optional tool connections."""
         tools_cfg = deployment.settings.get("tools", {})
         for service in bt.supported_connections:
             if service in bt.required_connections:
@@ -640,6 +671,7 @@ class DeploymentsService:
         argv: list[str],
         env: dict[str, str],
     ) -> str:
+        """Spawn the bot, drain its output, and wait for its run id."""
         proc = subprocess.Popen(
             argv,
             env=env,
@@ -662,6 +694,7 @@ class DeploymentsService:
         instance_id_for_logs = self.deployment_instance_id(deployment, user=user)
 
         def pump_output() -> None:
+            """Drain bot stdout, capture the run id, and echo lines to the log."""
             try:
                 for line in iter(stdout.readline, ""):
                     line = line.rstrip("\n")
@@ -698,6 +731,7 @@ class DeploymentsService:
         run_id_box: list[str],
         deadline: float,
     ) -> str:
+        """Block until the subprocess prints ``KAI_RUN_ID`` or fails."""
         while time.time() < deadline:
             remaining = deadline - time.time()
             if remaining <= 0:
@@ -710,6 +744,7 @@ class DeploymentsService:
         raise DeploymentStartupError("Timed out waiting for KAI_RUN_ID")
 
     def await_registry_entry(self, deployment: Deployment, user: User, run_id: str) -> None:
+        """Wait for the spawned run to appear in the run registry."""
         registry = self.run_registry(deployment, user=user)
         deadline = time.time() + 10
         while time.time() < deadline:
@@ -720,12 +755,14 @@ class DeploymentsService:
         raise DeploymentStartupError(f"Run {run_id} not found in registry")
 
     def clear_control_port(self, deployment: Deployment) -> None:
+        """Drop the allocated control port from deployment settings."""
         if "control_port" in deployment.settings:
             deployment.settings = {
                 k: v for k, v in deployment.settings.items() if k != "control_port"
             }
 
     def stop(self, deployment: Deployment) -> None:
+        """Stop the bot process and mark the deployment stopped."""
         if not deployment.run_id:
             deployment.status = "stopped"
             deployment.desired_state = "stopped"
@@ -826,6 +863,7 @@ class DeploymentsService:
             pass
 
     def run_started_at(self, deployment: Deployment) -> str | None:
+        """Return the live run's start timestamp, if any."""
         record = self.resolve_run(deployment)
         return record.started_at if record else None
 
@@ -850,6 +888,7 @@ class DeploymentsService:
         return self.call_bot(record, "POST", "/tell", body, timeout=120.0)
 
     def clear_history(self, deployment: Deployment) -> dict:
+        """Clear the bot's conversation history."""
         record = self.resolve_run(deployment)
         if record is None:
             return {"ok": False, "error": "bot is not running"}
@@ -881,6 +920,7 @@ class DeploymentsService:
         return self.normalize_history(history_data, instance_id)
 
     def load_history_raw(self, deployment: Deployment, instance_id: str | None = None) -> object:
+        """Read the raw history JSON for a deployment instance."""
         from kai.config.settings import get_settings
 
         folder = get_settings().agent_history_folder
@@ -898,6 +938,7 @@ class DeploymentsService:
 
     @staticmethod
     def normalize_history(history_data: dict, instance_id: str) -> dict[str, list[dict]]:
+        """Strip the instance prefix and normalize stored messages."""
         prefix = f"{instance_id}:"
         result: dict[str, list[dict]] = {}
         for key, messages in history_data.items():
@@ -908,6 +949,7 @@ class DeploymentsService:
         return result
 
     def interaction_summary(self, deployment: Deployment) -> tuple[int, int]:
+        """Return ``(conversation count, message count)`` from on-disk history."""
         history = self.history(deployment)
         conversation_count = len(history)
         message_count = sum(len(msgs) for msgs in history.values())
@@ -987,7 +1029,7 @@ def reconcile_deployments() -> None:
         db.close()
 
 
-def topbar_status(request, user) -> str:
+def topbar_status(request: Request, user: User | None) -> str:
     """Overall deployment health for the topbar indicator, shown on every page.
 
     Returns one of:
@@ -1017,16 +1059,19 @@ def topbar_status(request, user) -> str:
 
 
 def topbar_level(running: int, unexpected_down: int) -> str:
+    """Map running and unexpected-down counts to a topbar status level."""
     if unexpected_down:
         return "down" if running == 0 else "warn"
     return "ok" if running > 0 else "warn"
 
 
 def valid_msg(m: object) -> bool:
+    """Report whether a stored history entry has the required message keys."""
     return isinstance(m, dict) and "role" in m and "content" in m
 
 
 def normalize_msg(m: dict) -> dict:
+    """Return the display shape of one stored chat message."""
     ts = m.get("ts")
     return {
         "role": str(m["role"]),

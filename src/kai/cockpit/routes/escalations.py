@@ -15,7 +15,7 @@ payload is a plain escalation record (no credentials).
 """
 
 from fastapi import APIRouter, Depends, Request
-from fastapi.responses import JSONResponse, RedirectResponse
+from fastapi.responses import JSONResponse, RedirectResponse, Response
 from pydantic import ValidationError
 from sqlalchemy.orm import Session
 
@@ -52,7 +52,7 @@ def check_escalation_secret(request: Request) -> JSONResponse | None:
 
 
 @router.get("/escalations")
-async def dashboard(request: Request, user: User = Depends(require_user)):
+async def dashboard(request: Request, user: User = Depends(require_user)) -> Response:
     """Escalation dashboard: active escalations + resolved history (owner-scoped)."""
     user_escs = await escalation_state(request).store.list_for_user(user.kai_slug)
     active = [e for e in user_escs if not e.resolved]
@@ -65,7 +65,7 @@ async def dashboard(request: Request, user: User = Depends(require_user)):
 
 
 @router.get("/api/escalations")
-async def list_all(request: Request) -> dict:
+async def list_all(request: Request) -> dict[str, list[dict]]:
     """Return all escalation events (JSON).
 
     Bearer-authed ingestion endpoint — intentionally returns every escalation
@@ -77,7 +77,7 @@ async def list_all(request: Request) -> dict:
 
 
 @router.get("/api/escalations/active")
-async def list_active(request: Request) -> dict:
+async def list_active(request: Request) -> dict[str, list[dict] | int]:
     """Return active (unresolved) escalation events (JSON).
 
     Bearer-authed ingestion endpoint — see ``list_all`` for the no-scoping
@@ -128,7 +128,7 @@ async def resolve(
     request: Request,
     user: User = Depends(require_user),
     db: Session = Depends(get_db),
-):
+) -> RedirectResponse:
     """Mark an escalation as resolved. Requires auth (mutates state).
 
     Owner-scoped: refuses to resolve an escalation whose ``user_id`` is set

@@ -44,6 +44,7 @@ class SmtpConnectionsService:
         self.db = db
 
     def get(self, user: User) -> Connection | None:
+        """Return the operator's SMTP connection, or None when unset."""
         return (
             self.db.query(Connection)
             .filter(Connection.user_id == user.id, Connection.service == "smtp")
@@ -61,6 +62,7 @@ class SmtpConnectionsService:
         from_address: str,
         use_tls: bool = True,
     ) -> Connection:
+        """Create or update the SMTP connection and probe the saved credentials."""
         existing = self.get(user)
         config: dict = {
             "host": host,
@@ -110,12 +112,14 @@ class SmtpConnectionsService:
         return conn
 
     def delete(self, user: User) -> None:
+        """Remove the operator's SMTP connection if it exists."""
         conn = self.get(user)
         if conn is not None:
             self.db.delete(conn)
             self.db.commit()
 
     def decrypt_config(self, user: User) -> dict | None:
+        """Return the operator's decrypted SMTP config, or None when unset."""
         conn = self.get(user)
         if conn is None:
             return None
@@ -153,5 +157,5 @@ class SmtpConnectionsService:
             return False, "no SMTP host configured"
         try:
             return smtp_test(test_host, test_port, test_user, test_pass, test_tls)
-        except Exception as exc:  # noqa: BLE001 - surfaced to the operator
+        except Exception as exc:  # surfaced to the operator
             return False, str(exc)

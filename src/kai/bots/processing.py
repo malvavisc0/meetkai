@@ -36,6 +36,7 @@ SENTENCE_SPLIT_RE = re.compile(r"(?<=[.!?])\s+")
 
 
 def truncate_sentences(text: str, *, limit: int) -> str:
+    """Keep at most the given number of sentences."""
     sentences = SENTENCE_SPLIT_RE.split(text.strip())
     if len(sentences) <= limit:
         return text.strip()
@@ -46,6 +47,7 @@ WORD_SPLIT_RE = re.compile(r"\s+")
 
 
 def truncate_words(text: str, *, limit: int) -> str:
+    """Keep at most the given number of words."""
     words = WORD_SPLIT_RE.split(text.strip())
     if len(words) <= limit:
         return text.strip()
@@ -80,16 +82,19 @@ class PostProcessor:
 
     @staticmethod
     def run_default_cleanup(text: str) -> str:
+        """Apply the full default chat cleanup pipeline."""
         from kai.bots.text_cleanup import post_process
 
         return post_process(text)
 
     def run_custom(self, text: str) -> str:
         # Strip leaked reasoning channels before custom profile transforms.
+        """Apply the template's selected custom transforms in order."""
         text = strip_reasoning_channels(text)
         for step in self._custom_steps:
             text = step(text)
         return text.strip()
 
     def process(self, text: str) -> str:
+        """Apply the configured post-processing profile to the text."""
         return self._fn(text)

@@ -15,8 +15,8 @@ from urllib.parse import urldefrag, urljoin, urlparse
 from sqlalchemy.orm import Session
 
 from kai.brain.client import DocumentRecord, IngestResult, MorphikClient
-from kai.brain.config import get_brain_settings
-from kai.brain.crawler import Crawl4aiClient
+from kai.brain.config import BrainSettings, get_brain_settings
+from kai.brain.crawler import Crawl4aiClient, CrawlPage
 from kai.brain.validation import (
     validate_ingest_url,
     validate_upload_filename,
@@ -143,12 +143,15 @@ class BrainsService:
     # --- External clients (shared morphik/crawl4ai containers) ---
 
     def morphik_client(self) -> MorphikClient:
+        """Return a Morphik API client built from the Brain settings."""
         return MorphikClient(get_brain_settings())
 
     def crawler_client(self) -> Crawl4aiClient:
+        """Return a crawl4ai client built from the Brain settings."""
         return Crawl4aiClient(get_brain_settings())
 
     def require_brain(self, user: User) -> Connection:
+        """Return the user's Brain or raise when it has not been created."""
         conn = self.get_brain(user)
         if conn is None:
             raise ValueError("No Brain provisioned for this Operator yet. Create the Brain first.")
@@ -229,7 +232,13 @@ class BrainsService:
 
         return await self.ingest_crawled_pages(brain, pages)
 
-    async def bfs_crawl(self, crawler, url: str, seed_host: str, settings) -> list[tuple[str, str]]:
+    async def bfs_crawl(
+        self,
+        crawler: Crawl4aiClient,
+        url: str,
+        seed_host: str,
+        settings: BrainSettings,
+    ) -> list[tuple[str, str]]:
         """BFS crawl: fetch the seed page and same-host linked pages."""
         pages: list[tuple[str, str]] = []
         fetched = 0
@@ -251,14 +260,15 @@ class BrainsService:
 
     @staticmethod
     def enqueue_links(
-        page,
+        page: CrawlPage,
         page_url: str,
         depth: int,
         seed_host: str,
-        settings,
+        settings: BrainSettings,
         visited: set[str],
-        queue: deque,
+        queue: deque[tuple[str, int]],
     ) -> None:
+        """Queue unseen same-host links on ``page`` for the next BFS depth."""
         if depth >= settings.crawl_max_depth:
             return
         for href in page.links.internal:
@@ -267,7 +277,10 @@ class BrainsService:
                 visited.add(next_url)
                 queue.append((next_url, depth + 1))
 
-    async def ingest_crawled_pages(self, brain, pages: list[tuple[str, str]]) -> IngestResult:
+    async def ingest_crawled_pages(
+        self, brain: Connection, pages: list[tuple[str, str]]
+    ) -> IngestResult:
+        """Batch-ingest crawled pages into the Brain under per-page slugs."""
         file_sources = [slug_for_url(u) for u, _ in pages]
         texts = [md for _, md in pages]
         client = self.morphik_client()

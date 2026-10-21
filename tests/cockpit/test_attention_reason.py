@@ -39,7 +39,7 @@ class TestAttentionReason:
         dep = _dep("email")
         assert attention_reason(dep, None) == "Bot process isn't responding"
 
-    def test_needs_restart(self):
+    def test_needs_restart_reports_restart_message(self):
         dep = _dep("email", needs_restart=True)
         assert attention_reason(dep, {"connected": True}) == "Restart needed to apply settings"
 

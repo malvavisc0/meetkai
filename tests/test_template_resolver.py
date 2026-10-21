@@ -16,7 +16,7 @@ from kai.templates.schema import (
 
 
 class TestResolveTools:
-    def test_defaults_only(self):
+    def test_default_tools_used_when_template_omits_tools(self):
         tmpl = TemplateDef(
             name="test",
             transport="email",
@@ -191,7 +191,7 @@ class TestValidateActions:
         assert len(errors) == 1
         assert "send_voice_note" in errors[0]
 
-    def test_invalid_action(self):
+    def test_invalid_action_returns_error(self):
         tmpl = TemplateDef(
             name="test",
             transport="email",
@@ -263,7 +263,7 @@ class TestResolveConfig:
         )
         assert result.temperature == 0.8
 
-    def test_email_config(self):
+    def test_email_config_preserves_language(self):
         tmpl = TemplateDef(
             name="test",
             transport="email",

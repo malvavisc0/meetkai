@@ -3,7 +3,7 @@ upload/paste/crawl documents, list + delete them.
 """
 
 from fastapi import APIRouter, Depends, File, Form, Request, UploadFile
-from fastapi.responses import RedirectResponse
+from fastapi.responses import RedirectResponse, Response
 from sqlalchemy.orm import Session
 
 from kai.cockpit.app import templates
@@ -22,7 +22,8 @@ async def brains_page(
     request: Request,
     user: User = Depends(require_user),
     db: Session = Depends(get_db),
-):
+) -> Response:
+    """Render the Brain page with documents and crawler health."""
     svc = BrainsService(db)
     brain = svc.get_brain(user)
     docs = []
@@ -59,7 +60,8 @@ async def brains_create(
     request: Request,
     user: User = Depends(require_user),
     db: Session = Depends(get_db),
-):
+) -> RedirectResponse:
+    """Provision the operator's Brain."""
     svc = BrainsService(db)
     try:
         svc.create_brain(user)
@@ -75,7 +77,8 @@ async def brains_update_instruction(
     instruction: str = Form(""),
     user: User = Depends(require_user),
     db: Session = Depends(get_db),
-):
+) -> RedirectResponse:
+    """Save the Brain instruction and flag running bots for restart."""
     svc = BrainsService(db)
     try:
         svc.update_instruction(user, instruction=instruction)
@@ -93,7 +96,8 @@ async def brains_upload(
     file: UploadFile = File(...),
     user: User = Depends(require_user),
     db: Session = Depends(get_db),
-):
+) -> RedirectResponse:
+    """Upload a document into the Brain."""
     svc = BrainsService(db)
     try:
         if not file.filename:
@@ -113,7 +117,8 @@ async def brains_ingest_url(
     url: str = Form(...),
     user: User = Depends(require_user),
     db: Session = Depends(get_db),
-):
+) -> RedirectResponse:
+    """Crawl a website into the Brain."""
     svc = BrainsService(db)
     url = url.strip()
     try:
@@ -141,7 +146,8 @@ async def brains_ingest_text(
     text: str = Form(...),
     user: User = Depends(require_user),
     db: Session = Depends(get_db),
-):
+) -> RedirectResponse:
+    """Ingest pasted text into the Brain."""
     svc = BrainsService(db)
     name = name.strip()
     text = text.strip()
@@ -165,7 +171,8 @@ async def brains_delete_document(
     doc_id: str = Form(...),
     user: User = Depends(require_user),
     db: Session = Depends(get_db),
-):
+) -> RedirectResponse:
+    """Delete one document from the Brain."""
     svc = BrainsService(db)
     try:
         await svc.delete_doc(user, doc_id=doc_id)

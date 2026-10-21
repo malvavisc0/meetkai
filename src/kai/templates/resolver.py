@@ -83,6 +83,7 @@ def resolve_config[T: BaseModel](
     cli_overrides: dict,
     config_cls: type[T],
 ) -> T:
+    """Layer defaults, template, config file, and CLI overrides into a config."""
     defaults = config_cls().model_dump()
     merged = deep_merge(defaults, template.config)
     if config_file_data:
@@ -96,6 +97,7 @@ def resolve_tools(
     operator_enable: list[str],
     operator_disable: list[str],
 ) -> ToolResolution:
+    """Resolve the final tool set plus rejected and missing-tool diagnostics."""
     template_required = frozenset(template.tools.required)
     cannot_disable = NON_DISABLEABLE_DEFAULTS | template_required
 
@@ -115,6 +117,7 @@ def resolve_tools(
 def build_rejected_disable(
     operator_disable: list[str], cannot_disable: frozenset[str], template_required: frozenset[str]
 ) -> list[str]:
+    """List disable requests refused because the tool is required or protected."""
     rejected = []
     for tool in operator_disable:
         if tool not in cannot_disable:
@@ -134,6 +137,7 @@ def build_tool_set(
     operator_disable: list[str],
     cannot_disable: frozenset[str],
 ) -> set[str]:
+    """Compute the enabled tools from defaults, template, config, and overrides."""
     tools: set[str] = set(frozenset(DEFAULT_TOOL_NAMES))
     tools |= frozenset(template.tools.required)
     tools |= frozenset(template.tools.bot_tools)
@@ -150,6 +154,7 @@ def build_tool_set(
 
 
 def build_missing_required(template_required: frozenset[str]) -> list[str]:
+    """List required tools whose environment variables are not configured."""
     missing = []
     for tool in template_required:
         if not is_tool_configured(tool):
@@ -173,6 +178,7 @@ def validate_tools(template: TemplateDef) -> list[str]:
 
 
 def validate_actions(template: TemplateDef) -> list[str]:
+    """Return errors for actions the template's transport does not support."""
     valid = VALID_ACTIONS_BY_TRANSPORT.get(template.transport, set())
     errors = []
     for action in template.actions:
@@ -188,6 +194,7 @@ def tool_configured_map(template: TemplateDef) -> dict[str, bool]:
 
 
 def is_tool_configured(tool_name: str) -> bool:
+    """Report whether every environment variable a tool requires is set."""
     env_vars = TOOL_ENV_MAP.get(tool_name)
     if not env_vars:
         return True
@@ -197,6 +204,7 @@ def is_tool_configured(tool_name: str) -> bool:
 
 
 def deep_merge(a: dict, b: dict) -> dict:
+    """Recursively merge ``b`` into ``a``, returning a new dict."""
     result = a.copy()
     for key, value in b.items():
         if key in result and isinstance(result[key], dict) and isinstance(value, dict):

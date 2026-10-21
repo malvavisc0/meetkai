@@ -70,7 +70,7 @@ class TestUserCreate:
 
 
 class TestUserList:
-    def test_list_empty(self):
+    def test_list_reports_no_users(self):
         result = runner.invoke(app, ["cockpit", "user", "list"])
         assert result.exit_code == 0
         assert "no users found" in result.stdout

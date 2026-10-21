@@ -27,22 +27,27 @@ class NonceStore:
         self._items: OrderedDict[str, float] = OrderedDict()
 
     def prune(self, now: float) -> None:
+        """Drop nonces older than the freshness window."""
         cutoff = now - FRESHNESS_WINDOW_SECONDS
         while self._items and next(iter(self._items.values())) < cutoff:
             self._items.popitem(last=False)
 
     def seen(self, nonce: str) -> bool:
+        """Report whether a nonce is already recorded."""
         return nonce in self._items
 
     def record(self, nonce: str, now: float) -> None:
+        """Record a nonce and evict the oldest when over the size cap."""
         self._items[nonce] = now
         if len(self._items) > SEEN_NONCES_MAX:
             self._items.popitem(last=False)
 
     def count(self) -> int:
+        """Return the number of cached nonces."""
         return len(self._items)
 
     def clear(self) -> None:
+        """Drop every cached nonce."""
         self._items.clear()
 
 

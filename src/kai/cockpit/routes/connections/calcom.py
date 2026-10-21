@@ -1,7 +1,7 @@
 """Cal.com connection routes: /connections/calcom — CRUD + test."""
 
 from fastapi import APIRouter, Depends, Form, Request
-from fastapi.responses import RedirectResponse
+from fastapi.responses import RedirectResponse, Response
 from sqlalchemy.orm import Session
 
 from kai.cockpit.app import templates
@@ -19,7 +19,8 @@ async def calcom_page(
     request: Request,
     user: User = Depends(require_user),
     db: Session = Depends(get_db),
-):
+) -> Response:
+    """Render the Cal.com connection form."""
     svc = CalcomConnectionsService(db)
     conn = svc.get(user)
     has_key = bool(conn and conn.config.get("api_key"))
@@ -43,12 +44,13 @@ def calcom_save(
     base_url: str = Form(""),
     user: User = Depends(require_user),
     db: Session = Depends(get_db),
-):
+) -> RedirectResponse:
+    """Save the Cal.com connection."""
     svc = CalcomConnectionsService(db)
     try:
         conn = svc.save(user, api_key=api_key.strip(), base_url=base_url.strip())
         flash_connection_save(request, "Cal.com", conn)
-    except Exception as exc:  # noqa: BLE001 - surfaced to the operator
+    except Exception as exc:  # surfaced to the operator
         flash(request, "error", f"Could not save: {exc}")
     return RedirectResponse("/connections/calcom", status_code=302)
 
@@ -58,7 +60,8 @@ async def calcom_delete(
     request: Request,
     user: User = Depends(require_user),
     db: Session = Depends(get_db),
-):
+) -> RedirectResponse:
+    """Delete the Cal.com connection."""
     svc = CalcomConnectionsService(db)
     svc.delete(user)
     flash(request, "success", "Cal.com connection removed.")
@@ -72,7 +75,7 @@ def calcom_test(
     base_url: str = Form(""),
     user: User = Depends(require_user),
     db: Session = Depends(get_db),
-):
+) -> RedirectResponse:
     """Test the Cal.com connection. Accepts the same form fields as save,
     so the operator can test a freshly-typed key before saving it. When the
     api_key field is blank (the ``••••••••`` placeholder), falls back to the

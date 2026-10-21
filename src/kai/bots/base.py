@@ -7,9 +7,9 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from kai.agent.context import ToolContext
 from kai.agent.core import ActionResult, KaiAgent
-from kai.agent.scheduler import TaskScheduler, TaskStore, build_task_tools
+from kai.agent.scheduler import Task, TaskScheduler, TaskStore, build_task_tools
 from kai.agent.tools.email import DEFAULT_DISPLAY_NAME
-from kai.agent.tools.escalate import EscalationState, EscalationStore
+from kai.agent.tools.escalate import Escalation, EscalationState, EscalationStore
 from kai.config.settings import Settings, get_settings
 from kai.observability import init_sentry
 from kai.templates.resolver import ToolResolution
@@ -243,7 +243,7 @@ class BaseBot(ABC):
             return
         ctx.set(chat_id=chat_id, owner_id=owner_id, tz_hint=tz_hint)
 
-    async def execute_task(self, task) -> None:
+    async def execute_task(self, task: Task) -> None:
         """Execute a fired task by feeding its goal back to the agent.
 
         The agent runs with its normal tools EXCEPT that ``schedule_task``
@@ -363,17 +363,22 @@ class BaseBot(ABC):
         return answer == "CLEAR"
 
     def start_task_scheduler(self) -> None:
+        """Start the task scheduler loop if configured."""
         if self._task_scheduler is not None:
             self._task_scheduler.start()
 
     async def stop_task_scheduler(self) -> None:
+        """Stop the task scheduler loop."""
         if self._task_scheduler is not None:
             await self._task_scheduler.stop()
 
     @abstractmethod
-    async def run(self) -> None: ...
+    async def run(self) -> None:
+        """Run the bot until stopped."""
+        ...
 
     async def stop(self) -> None:
+        """Stop the bot and its task scheduler."""
         await self.stop_task_scheduler()
 
     async def status_snapshot(self) -> dict:
@@ -402,7 +407,7 @@ class BaseBot(ABC):
         """
         raise NotImplementedError(f"{self.name} does not implement ingest_event()")
 
-    async def on_escalation(self, escalation) -> None:
+    async def on_escalation(self, escalation: Escalation) -> None:
         """Called when the ``escalate`` tool fires during an agent turn.
 
         Logs the escalation and forwards it to the cockpit's

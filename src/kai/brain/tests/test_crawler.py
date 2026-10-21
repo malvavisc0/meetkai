@@ -38,7 +38,7 @@ class TestExtractMarkdown:
 
     @respx.mock
     @pytest.mark.asyncio
-    async def test_strategy_override(self, client):
+    async def test_extract_markdown_uses_strategy_filter(self, client):
         respx.post("/md").mock(
             return_value=Response(200, json={"markdown": "raw content", "success": True})
         )

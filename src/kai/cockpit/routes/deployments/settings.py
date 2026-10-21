@@ -3,7 +3,7 @@
 from collections.abc import Callable
 
 from fastapi import APIRouter, Depends, Form, Request
-from fastapi.responses import RedirectResponse
+from fastapi.responses import RedirectResponse, Response
 from sqlalchemy.orm import Session
 
 from kai.agent.tools.email import DEFAULT_DISPLAY_NAME
@@ -14,13 +14,14 @@ from kai.cockpit.bots import (
     BOT_TYPES,
     CAPABILITY_LABELS,
     CREDENTIAL_TYPES,
+    BotType,
 )
 from kai.cockpit.brains import BrainsService
 from kai.cockpit.connections.service import ConnectionsService
 from kai.cockpit.db import get_db
 from kai.cockpit.deployments import DeploymentsService, tool_enabled, tool_instruction
 from kai.cockpit.flash import flash
-from kai.cockpit.models import User
+from kai.cockpit.models import Deployment, User
 from kai.cockpit.routes.deployments._shared import (
     SETTINGS_TEMPLATES,
     TOOLS_WITH_INSTRUCTION,
@@ -34,6 +35,7 @@ from kai.templates.resolver import (
     tool_configured_map,
     validate_tools,
 )
+from kai.templates.schema import TemplateDef
 
 router = APIRouter()
 
@@ -46,7 +48,9 @@ SettingsParseResult = dict | RedirectResponse
 SettingsParser = Callable[[int, Request, dict], SettingsParseResult]
 
 
-def parse_email_settings(dep_id: int, request: Request, form_fields: dict) -> SettingsParseResult:
+def parse_email_settings(
+    dep_id: int, request: Request, form_fields: dict[str, str]
+) -> SettingsParseResult:
     """Email-only settings: a blocklist of sender addresses to silently ignore."""
     updates = {
         "blacklist": [
@@ -73,7 +77,8 @@ async def deployment_settings_page(
     dep_id: int,
     user: User = Depends(require_user),
     db: Session = Depends(get_db),
-):
+) -> Response:
+    """Render the deployment settings form."""
     svc = DeploymentsService(db)
     result = get_deployment(svc, dep_id, user)
     if isinstance(result, RedirectResponse):
@@ -118,7 +123,7 @@ async def deployment_settings_page(
     )
 
 
-def build_feature_flags(bt, entitlements: set[str]) -> list[tuple[str, str, bool]]:
+def build_feature_flags(bt: BotType | None, entitlements: set[str]) -> list[tuple[str, str, bool]]:
     """Render every flag the bot type declares: an unentitled flag shows up
     disabled + unchecked so the operator sees what's possible. The POST
     handler clamps submitted values to entitlements so a crafted checkbox
@@ -132,7 +137,9 @@ def build_feature_flags(bt, entitlements: set[str]) -> list[tuple[str, str, bool
     return flags
 
 
-def build_supported_tools(bt, available_conns: set[str]) -> list[tuple[str, str, bool]]:
+def build_supported_tools(
+    bt: BotType | None, available_conns: set[str]
+) -> list[tuple[str, str, bool]]:
     """One checkbox per supported connection that isn't required. Each is
     disabled when the connection doesn't exist yet."""
     tools: list[tuple[str, str, bool]] = []
@@ -153,6 +160,7 @@ def build_supported_tools(bt, available_conns: set[str]) -> list[tuple[str, str,
 def build_tools_state(
     supported_tools: list[tuple[str, str, bool]], tools_enabled: dict
 ) -> dict[str, dict]:
+    """Build per-service toggle state for the settings form."""
     state: dict[str, dict] = {}
     for conn_svc, _, available in supported_tools:
         raw = tools_enabled.get(conn_svc, {})
@@ -164,14 +172,17 @@ def build_tools_state(
     return state
 
 
-def resolve_template(dep):
+def resolve_template(dep: Deployment) -> TemplateDef | None:
+    """Load the deployment's template, or None when it is missing."""
     try:
         return TemplateRegistry.bundled().get(dep.bot_type, dep.template)
     except FileNotFoundError:
         return None
 
 
-def build_template_tools(tmpl, saved_overrides: dict) -> tuple[list[tuple[str, bool]], list[str]]:
+def build_template_tools(
+    tmpl: TemplateDef | None, saved_overrides: dict
+) -> tuple[list[tuple[str, bool]], list[str]]:
     """Template optional tool toggles: each row is a checkbox the operator
     can uncheck to disable that optional tool for the deployment."""
     if tmpl is None:
@@ -185,6 +196,7 @@ def build_template_tools(tmpl, saved_overrides: dict) -> tuple[list[tuple[str, b
 
 
 def template_tool_is_on(tool_name: str, is_configured: bool, saved: dict) -> bool:
+    """Decide whether an optional template tool is enabled from saved overrides."""
     # Reflect persisted overrides: explicitly-disabled stays unchecked;
     # explicitly-enabled stays checked; otherwise default to "on" for
     # configured optional tools.
@@ -197,7 +209,10 @@ def template_tool_is_on(tool_name: str, is_configured: bool, saved: dict) -> boo
     return is_configured
 
 
-def build_feature_flags_for_post(bt, entitlements: set[str], form_fields: dict) -> dict:
+def build_feature_flags_for_post(
+    bt: BotType | None, entitlements: set[str], form_fields: dict[str, str]
+) -> dict:
+    """Clamp submitted feature flags to the operator's entitlements."""
     # Clamp submitted feature flag values to the user's entitlements — the
     # POST can spoof any checkbox name, so we silently drop unentitled
     # flags rather than returning 403 (avoids leaking entitlement state).
@@ -210,7 +225,8 @@ def build_feature_flags_for_post(bt, entitlements: set[str], form_fields: dict) 
     return flags
 
 
-def supported_optional_services(bt) -> list[str]:
+def supported_optional_services(bt: BotType | None) -> list[str]:
+    """List the bot type's non-required supported connection services."""
     if not bt:
         return []
     return [
@@ -218,7 +234,8 @@ def supported_optional_services(bt) -> list[str]:
     ]
 
 
-def build_tool_overrides(tmpl, form_fields: dict) -> dict:
+def build_tool_overrides(tmpl: TemplateDef | None, form_fields: dict[str, str]) -> dict:
+    """Build tool enable/disable overrides from the submitted form."""
     # Parse template tool overrides from the form. Unchecked optional tools
     # go into the "disable" list; checked ones stay on (the resolver still
     # env-gates any optional tool, so enabling an unconfigured tool is a
@@ -233,8 +250,9 @@ def build_tool_overrides(tmpl, form_fields: dict) -> dict:
 
 
 def validate_tool_overrides(
-    request: Request, dep_id: int, tmpl, tool_overrides: dict
+    request: Request, dep_id: int, tmpl: TemplateDef | None, tool_overrides: dict
 ) -> RedirectResponse | None:
+    """Reject invalid tool overrides with a redirect and flash message."""
     # Server-side validation: reject disabling default/required tools and
     # unknown tool names. Uses resolve_tools() so the resolver rules are the
     # single source of truth — the cockpit never reimplements them.
@@ -261,7 +279,8 @@ async def deployment_settings(
     brain_instruction: str = Form(""),
     user: User = Depends(require_user),
     db: Session = Depends(get_db),
-):
+) -> RedirectResponse:
+    """Validate and apply the submitted deployment settings."""
     svc = DeploymentsService(db)
     result = get_deployment(svc, dep_id, user)
     if isinstance(result, RedirectResponse):
@@ -304,18 +323,19 @@ async def deployment_settings(
 
 
 def build_edit_fields(
-    bt,
-    dep,
-    goal,
-    language,
-    timezone,
-    brain_mandatory,
-    brain_instruction,
-    form_fields,
-    entitlements,
-    tool_overrides,
-    parsed,
+    bt: BotType | None,
+    dep: Deployment,
+    goal: str,
+    language: str,
+    timezone: str,
+    brain_mandatory: str,
+    brain_instruction: str,
+    form_fields: dict[str, str],
+    entitlements: set[str],
+    tool_overrides: dict,
+    parsed: dict,
 ) -> dict:
+    """Build the keyword fields passed to ``DeploymentsService.edit``."""
     feature_flags = build_feature_flags_for_post(bt, entitlements, form_fields)
     supported_svcs = supported_optional_services(bt)
     settings_update: dict = {
@@ -339,9 +359,10 @@ def apply_edit(
     request: Request,
     dep_id: int,
     svc: DeploymentsService,
-    dep,
+    dep: Deployment,
     edit_fields: dict,
 ) -> RedirectResponse | None:
+    """Apply the edit and return a redirect when validation fails."""
     try:
         svc.edit(dep, **edit_fields)
     except ValueError as exc:
@@ -350,14 +371,18 @@ def apply_edit(
     return None
 
 
-def flash_saved(request: Request, dep) -> None:
+def flash_saved(request: Request, dep: Deployment) -> None:
+    """Flash the settings-saved message, noting a restart when running."""
     if dep.status == "running":
         flash(request, "info", "Settings saved. Restart to apply.")
     else:
         flash(request, "success", "Settings saved.")
 
 
-def parse_bot_settings(dep, dep_id: int, request: Request, form_fields: dict):
+def parse_bot_settings(
+    dep: Deployment, dep_id: int, request: Request, form_fields: dict[str, str]
+) -> SettingsParseResult:
+    """Run the bot type's settings parser, if it has one."""
     parser = SETTINGS_PARSERS.get(dep.bot_type)
     if parser is None:
         return {}

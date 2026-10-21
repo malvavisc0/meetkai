@@ -1,7 +1,7 @@
 """Database connection routes: /connections/database — CRUD + test."""
 
 from fastapi import APIRouter, Depends, Form, Request
-from fastapi.responses import RedirectResponse
+from fastapi.responses import RedirectResponse, Response
 from sqlalchemy.orm import Session
 
 from kai.cockpit.app import templates
@@ -19,7 +19,8 @@ async def db_page(
     request: Request,
     user: User = Depends(require_user),
     db: Session = Depends(get_db),
-):
+) -> Response:
+    """Render the database connection form."""
     svc = DatabaseConnectionsService(db)
     conn = svc.get(user)
     has_url = bool(conn and conn.config.get("url"))
@@ -43,12 +44,13 @@ def db_save(
     url: str = Form(""),
     user: User = Depends(require_user),
     db: Session = Depends(get_db),
-):
+) -> RedirectResponse:
+    """Save the database connection."""
     svc = DatabaseConnectionsService(db)
     try:
         conn = svc.save(user, label=label.strip(), url=url.strip())
         flash_connection_save(request, "Database", conn)
-    except Exception as exc:  # noqa: BLE001 - surfaced to the operator
+    except Exception as exc:  # surfaced to the operator
         flash(request, "error", f"Could not save: {exc}")
     return RedirectResponse("/connections/database", status_code=302)
 
@@ -58,7 +60,8 @@ async def db_delete(
     request: Request,
     user: User = Depends(require_user),
     db: Session = Depends(get_db),
-):
+) -> RedirectResponse:
+    """Delete the database connection."""
     svc = DatabaseConnectionsService(db)
     svc.delete(user)
     flash(request, "success", "Database connection removed.")
@@ -72,7 +75,7 @@ def db_test(
     url: str = Form(""),
     user: User = Depends(require_user),
     db: Session = Depends(get_db),
-):
+) -> RedirectResponse:
     """Test the database connection. Accepts the same form fields as save,
     so the operator can test a freshly-typed DSN before saving it. When the
     url field is blank (the ``••••••••`` placeholder), falls back to the

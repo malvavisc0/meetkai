@@ -36,6 +36,7 @@ class Escalation(BaseModel):
     resolved_by: str | None = None
 
     def to_dict(self) -> dict[str, Any]:
+        """Serialize the escalation to a JSON-compatible dict."""
         d = self.model_dump()
         d["created_at"] = to_iso(self.created_at)
         d["resolved_at"] = to_iso(self.resolved_at) if self.resolved_at else None
@@ -43,6 +44,7 @@ class Escalation(BaseModel):
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> "Escalation":
+        """Build an escalation from a persisted dict."""
         created_at = (
             parse_iso(str(data["created_at"])) if data.get("created_at") else datetime.now(UTC)
         )
@@ -76,11 +78,13 @@ class EscalationStore:
         self.load()
 
     def lock_for(self) -> asyncio.Lock:
+        """Return the store's lazily created async lock."""
         if self._lock is None:
             self._lock = asyncio.Lock()
         return self._lock
 
     def load(self) -> None:
+        """Load persisted escalations into memory."""
         if self._path is None or not self._path.exists():
             return
         try:
@@ -96,6 +100,7 @@ class EscalationStore:
             logger.warning("Failed to load escalations from %s: %s", self._path, exc)
 
     def save_locked(self) -> None:
+        """Write escalations atomically; the caller must hold the lock."""
         if self._path is None:
             return
         try:
@@ -108,6 +113,7 @@ class EscalationStore:
             logger.warning("Failed to save escalations to %s: %s", self._path, exc)
 
     async def add(self, escalation: Escalation) -> None:
+        """Persist an escalation."""
         async with self.lock_for():
             self._escalations[escalation.id] = escalation
             self.save_locked()
@@ -119,6 +125,7 @@ class EscalationStore:
         resolved_by: str | None = None,
         owner_slug: str | None = None,
     ) -> bool:
+        """Mark an escalation resolved, optionally scoped to an owner."""
         async with self.lock_for():
             esc = self._escalations.get(escalation_id)
             if esc is None or esc.resolved:
@@ -137,12 +144,14 @@ class EscalationStore:
             return True
 
     async def list_all(self) -> list[Escalation]:
+        """Return every escalation ordered by creation time."""
         async with self.lock_for():
             escs = list(self._escalations.values())
         escs.sort(key=lambda e: e.created_at)
         return escs
 
     async def list_active(self) -> list[Escalation]:
+        """Return unresolved escalations."""
         return [e for e in await self.list_all() if not e.resolved]
 
     async def list_for_user(self, owner_slug: str) -> list[Escalation]:
@@ -167,6 +176,7 @@ class EscalationStore:
 
     @staticmethod
     def new_id() -> str:
+        """Return a new escalation id."""
         return f"esc-{uuid.uuid4().hex[:12]}"
 
 
@@ -202,6 +212,7 @@ class EscalationState:
         self.owner_slug = owner_slug
 
     def resolve_chat_id(self, override: str | None = None) -> str:
+        """Return the override or current chat id, or an empty string."""
         if override and override.strip():
             return override.strip()
         ctx = self.tool_context

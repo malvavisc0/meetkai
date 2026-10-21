@@ -129,6 +129,7 @@ class Bot(BaseBot):
         template: TemplateDef,
         tools: ToolResolution,
     ) -> None:
+        """Load config and prompt, then wire the agent for this deployment."""
         super().configure(agent, settings, template=template, tools=tools)
         self._settings = settings
         self._email = get_email_settings()
@@ -154,6 +155,7 @@ class Bot(BaseBot):
     def load_config(self, template: TemplateDef, config_path: Path | None = None) -> BotConfig:
         # Config merge: BotConfig defaults ← template.config ← config.json
         # (the per-deployment file the cockpit writes).
+        """Merge template and config-file overrides into a bot config."""
         path = config_path or self.resolve_config_path()
         config_file_data: dict | None = None
         if path is not None and path.exists():
@@ -164,9 +166,11 @@ class Bot(BaseBot):
         return resolve_config(template, config_file_data, {}, BotConfig)
 
     def display_name(self) -> str:
+        """Return the configured sender display name."""
         return self._config.display_name
 
     def load_prompt(self, template: TemplateDef) -> str:
+        """Load the system prompt and append escalation rules."""
         from kai.templates import TemplateRegistry, escalation_prompt_section
 
         registry = TemplateRegistry.bundled()
@@ -185,6 +189,7 @@ class Bot(BaseBot):
         return prompt + escalation_prompt_section(template)
 
     async def run(self) -> None:
+        """Serve the operator webhook routes until stopped."""
         assert self._email is not None, "configure() must be called before run()"
         self._shutting_down.clear()
         self.start_task_scheduler()
@@ -209,6 +214,7 @@ class Bot(BaseBot):
         await self._server.serve()
 
     def tell_endpoint(self) -> str | None:
+        """Return the loopback operator endpoint for this bot."""
         if self._email is None:
             return None
         host = self._email.control_host
@@ -217,12 +223,15 @@ class Bot(BaseBot):
         return f"http://{host}:{self._email.control_port}"
 
     def tell_hmac_key(self) -> str | None:
+        """Return the HMAC key for operator requests."""
         return self._email.hmac_key if self._email is not None else None
 
     def tell_hmac_algorithm(self) -> str:
+        """Return the HMAC algorithm for operator requests."""
         return self._email.hmac_algorithm if self._email is not None else "sha512"
 
     async def stop(self) -> None:
+        """Stop the server and task scheduler."""
         await super().stop()
         if self._server and not self._shutting_down.is_set():
             self._shutting_down.set()
@@ -256,12 +265,14 @@ class Bot(BaseBot):
         # turn — the list is re-checked from config on every email (no
         # persisted block history). Both args are the normalized sender;
         # case-insensitive comparison catches variations like "Alice@Ex.com".
+        """Return whether a sender address is blacklisted."""
         sender = source.strip().lower()
         return not should_process_chat_message(
             sender, sender, set(), {e.lower() for e in self._config.blacklist}
         )
 
     async def process_inbound_email(self, event: dict, source: str) -> None:
+        """Run an inbound email through the agent and dispatch its action."""
         assert self._agent is not None
         text = event["text"]
         metadata = event.get("metadata", {})
@@ -408,7 +419,8 @@ class Bot(BaseBot):
             return TellResult(ok=True, reply="", actions=[{"tool": kind, "ok": True}])
         return self.dispatch_console(result, action)
 
-    async def dispatch_reply(self, result: ChatResult, action) -> TellResult:
+    async def dispatch_reply(self, result: ChatResult, action: ActionResult) -> TellResult:
+        """Send the agent's reply action and return a tell result."""
         target = (action.target or "").strip()
         out_text = action.text or ""
         sent_ok, reply = await self.send_operator_reply(result, target, out_text)
@@ -421,6 +433,7 @@ class Bot(BaseBot):
     async def send_operator_reply(
         self, result: ChatResult, target: str, out_text: str
     ) -> tuple[bool, str]:
+        """Deliver an operator reply and return its success and summary."""
         if not target:
             return False, "reply action missing target"
         if not out_text:
@@ -448,7 +461,8 @@ class Bot(BaseBot):
         return sent_ok, reply
 
     @staticmethod
-    def dispatch_console(result: ChatResult, action) -> TellResult:
+    def dispatch_console(result: ChatResult, action: ActionResult) -> TellResult:
+        """Return the agent's console action as a tell result."""
         actions: list[dict] = []
         for tc in result.tool_calls:
             entry: dict = {"tool": tc.name, "ok": tc.ok}
@@ -466,6 +480,7 @@ class Bot(BaseBot):
         return TellResult(ok=ok, actions=actions, reply=reply)
 
     async def status_snapshot(self) -> dict:
+        """Return the email bot's status snapshot."""
         return {
             "bot": "email",
             "language": self._config.language,
@@ -473,6 +488,7 @@ class Bot(BaseBot):
         }
 
     async def clear_operator_history(self) -> dict:
+        """Clear the operator conversation history."""
         if self._agent is None:
             return {"ok": False, "error": "bot has no agent"}
         await self._agent.clear_history("operator")

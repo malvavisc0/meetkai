@@ -188,20 +188,20 @@ class TestKaiAgent:
 
     def test_history_cleared_on_prompt_change(self):
         agent = KaiAgent(settings=None, goal_manager=GoalManager())
-        agent._history["chat"] = [ChatMessage(role=MessageRole.USER, content="fake")]
+        agent.get_history("chat").append(ChatMessage(role=MessageRole.USER, content="fake"))
         agent.set_system_prompt("New prompt")
-        assert len(agent._history) == 1
+        assert len(agent.list_conversations()) == 1
 
     def test_history_cleared_with_explicit_clear(self):
         agent = KaiAgent(settings=None, goal_manager=GoalManager())
-        agent._history["chat"] = [ChatMessage(role=MessageRole.USER, content="fake")]
+        agent.get_history("chat").append(ChatMessage(role=MessageRole.USER, content="fake"))
         agent.set_system_prompt("New prompt", clear_history=True)
-        assert len(agent._history) == 0
+        assert len(agent.list_conversations()) == 0
 
     def test_history_cleared_on_goal_change(self):
         gm = GoalManager()
         agent = KaiAgent(settings=None, goal_manager=gm)
-        agent._history["chat"] = [ChatMessage(role=MessageRole.USER, content="fake")]
+        agent.get_history("chat").append(ChatMessage(role=MessageRole.USER, content="fake"))
         gm.set_goal("New goal")
 
         messages = agent.build_messages("Hello", conversation_id="chat")
@@ -210,7 +210,7 @@ class TestKaiAgent:
         assert system is not None
         assert "Current goal: New goal" in system
         assert messages[1].content == "fake"
-        assert len(agent._history["chat"]) == 1
+        assert len(agent.get_history("chat")) == 1
 
     def test_build_messages_structure(self):
         gm = GoalManager()
@@ -227,10 +227,12 @@ class TestKaiAgent:
 
     def test_build_messages_includes_history(self):
         agent = KaiAgent(settings=None, goal_manager=GoalManager())
-        agent._history["default"] = [
-            ChatMessage(role=MessageRole.USER, content="prev user"),
-            ChatMessage(role=MessageRole.ASSISTANT, content="prev assistant"),
-        ]
+        agent.get_history("default").extend(
+            [
+                ChatMessage(role=MessageRole.USER, content="prev user"),
+                ChatMessage(role=MessageRole.ASSISTANT, content="prev assistant"),
+            ]
+        )
         messages = agent.build_messages("new message")
         assert len(messages) == 4
         assert messages[1].content == "prev user"
@@ -246,7 +248,7 @@ class TestKaiAgent:
         assert "Override prompt." in system
         assert "Base prompt." not in system
 
-    def test_trim_history(self):
+    def test_trim_history_keeps_most_recent_messages(self):
         agent = KaiAgent(settings=None, goal_manager=GoalManager())
         agent._max_history = 4
         for i in range(10):
@@ -979,18 +981,19 @@ class TestAuditFixes:
 
     def test_history_persists_across_prompt_change(self):
         agent = KaiAgent(settings=None, goal_manager=GoalManager())
-        agent._history["chat"] = [ChatMessage(role=MessageRole.USER, content="saved")]
+        agent.get_history("chat").append(ChatMessage(role=MessageRole.USER, content="saved"))
         agent.set_system_prompt("Different prompt")
-        assert len(agent._history["chat"]) == 1
-        assert agent._history["chat"][0].content == "saved"
+        history = agent.get_conversation_history("chat")
+        assert len(history) == 1
+        assert history[0].content == "saved"
 
     def test_goal_change_preserves_history(self):
         gm = GoalManager()
         agent = KaiAgent(settings=None, goal_manager=gm)
-        agent._history["chat"] = [ChatMessage(role=MessageRole.USER, content="kept")]
+        agent.get_history("chat").append(ChatMessage(role=MessageRole.USER, content="kept"))
         gm.set_goal("New goal")
         agent.build_messages("Hello", conversation_id="chat")
-        assert agent._history["chat"][0].content == "kept"
+        assert agent.get_conversation_history("chat")[0].content == "kept"
 
     @pytest.mark.asyncio
     async def test_goal_persisted_separately(self, tmp_path, settings):
@@ -1029,7 +1032,7 @@ class TestAuditFixes:
         assert restored_goal.description == "Restored goal"
         assert gm.revision == 0
 
-    def test_tool_registration(self):
+    def test_register_and_unregister_tool_updates_tool_list(self):
         from llama_index.core.tools import FunctionTool
 
         agent = KaiAgent(settings=None, goal_manager=GoalManager())
@@ -1206,17 +1209,18 @@ class TestHistoryEdits:
         assert b.get_history("shared-id")[0].content == "email"
 
     def test_history_conversations_evicted_beyond_cap(self):
-        agent = KaiAgent(settings=None, goal_manager=GoalManager())
-        agent._max_conversations = 3
+        settings = Settings.for_test(agent_max_conversations=3, agent_history_folder=None)
+        agent = KaiAgent(settings=settings, goal_manager=GoalManager())
         for i in range(5):
             agent.get_history(f"chat-{i}").append(
                 ChatMessage(role=MessageRole.USER, content=f"msg-{i}")
             )
-        assert len(agent._history) == 3
+        conversation_ids = [conversation_id for conversation_id, _, _ in agent.list_conversations()]
+        assert len(conversation_ids) == 3
         # oldest conversations evicted (LRU)
-        assert "chat-0" not in agent._history
-        assert "chat-1" not in agent._history
-        assert "chat-4" in agent._history
+        assert "chat-0" not in conversation_ids
+        assert "chat-1" not in conversation_ids
+        assert "chat-4" in conversation_ids
 
     @pytest.mark.asyncio
     async def test_debounced_save_flushed_on_flush(self, tmp_path, settings):

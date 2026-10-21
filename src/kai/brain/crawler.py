@@ -32,10 +32,12 @@ class CrawlLinks(BaseModel):
 
     @classmethod
     def from_dict(cls, links: dict[str, Any] | None) -> "CrawlLinks":
+        """Build crawl links from crawl4ai's per-page link mapping."""
         if not links:
             return cls()
 
         def hrefs(entries: list[Any]) -> list[str]:
+            """Extract href strings from mixed link entries."""
             out: list[str] = []
             for entry in entries:
                 href = entry.get("href") if isinstance(entry, dict) else entry
@@ -88,6 +90,7 @@ class CrawlPage(BaseModel):
 
     @classmethod
     def from_result(cls, result: dict[str, Any]) -> "CrawlPage":
+        """Build a crawl page from one /crawl result object."""
         return cls(
             url=result.get("url", ""),
             success=bool(result.get("success")),
@@ -114,6 +117,7 @@ class Crawl4aiClient:
         )
 
     async def close(self) -> None:
+        """Close the underlying HTTP client."""
         await self._client.aclose()
 
     async def extract_markdown(self, *, url: str, strategy: str = "fit") -> str:

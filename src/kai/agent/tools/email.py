@@ -58,17 +58,23 @@ class SmtpSettings(BaseSettings):
 
     @property
     def smtp_enabled(self) -> bool:
+        """True when the SMTP host and credentials are configured."""
         return bool(self.host and self.username and self.password and self.from_address)
 
 
 def get_smtp_settings() -> SmtpSettings:
+    """Load SMTP tool settings from the environment."""
     return SmtpSettings()
 
 
 class _EmailToolAgent(Protocol):
-    def register_tool(self, tool: FunctionTool) -> None: ...
+    def register_tool(self, tool: FunctionTool) -> None:
+        """Register a tool on the agent."""
+        ...
 
-    def add_tool_workflow(self, workflow: str | None) -> None: ...
+    def add_tool_workflow(self, workflow: str | None) -> None:
+        """Append a tool workflow prompt block."""
+        ...
 
 
 def valid_recipient(addr: str) -> bool:
@@ -226,7 +232,7 @@ def make_send_email_tool(
                 use_tls=use_tls,
             )
             return "sent"
-        except Exception as exc:  # noqa: BLE001 - surfaced to the model as a tool result
+        except Exception as exc:  # surfaced to the model as a tool result
             logger.exception("send_email failed")
             return f"Error: send failed ({exc})"
 
