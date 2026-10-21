@@ -19,7 +19,12 @@ from starlette.responses import Response
 
 from kai.cockpit.auth import get_cockpit_secret, get_current_user
 from kai.cockpit.csrf import CSRF_TOKEN, CSRFMiddleware
-from kai.cockpit.db import SessionLocal, run_migrations
+from kai.cockpit.db import (
+    SessionFactory,
+    build_engine,
+    build_session_factory,
+    run_migrations,
+)
 from kai.cockpit.settings import get_cockpit_settings
 from kai.observability import init_sentry
 
@@ -76,24 +81,24 @@ def format_timestamp(timestamp: str | datetime | None) -> str:
 templates.env.globals["format_timestamp"] = format_timestamp
 
 
-def reconcile_deployments_in_background() -> None:
+def reconcile_deployments_in_background(session_factory: SessionFactory) -> None:
     """Reconcile deployments and clean expired tokens on a startup thread."""
     # Bot subprocesses are children of this process, so a container restart
     # kills all of them even though each deployment's `desired_state` is
     # still "running" in the DB. Restart in a background thread so a
     # slow/failing bot start doesn't delay uvicorn from binding.
-    from kai.cockpit.db import SessionLocal
     from kai.cockpit.deployments import reconcile_deployments
     from kai.cockpit.tokens import cleanup_expired_tokens
 
-    db = SessionLocal()
+    db = session_factory()
     try:
         try:
             cleanup_expired_tokens(db)
         except Exception:
             logger.exception("startup token cleanup failed")
+            db.rollback()
         try:
-            reconcile_deployments()
+            reconcile_deployments(db)
         except Exception:
             logger.exception("startup reconciliation failed")
     finally:
@@ -108,16 +113,31 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     # against the test's own session corrupts SQLAlchemy's identity map.
     # Production runs always reconcile on startup.
     if not get_cockpit_settings().cockpit_testing:
-        threading.Thread(
+        reconcile_thread = threading.Thread(
             target=reconcile_deployments_in_background,
+            args=(app.state.session_factory,),
             name="reconcile-deployments",
             daemon=True,
-        ).start()
-    yield
+        )
+        reconcile_thread.start()
+    else:
+        reconcile_thread = None
+    try:
+        yield
+    finally:
+        if reconcile_thread is not None:
+            reconcile_thread.join(timeout=5.0)
+        engine = getattr(app.state, "engine", None)
+        if engine is not None and (reconcile_thread is None or not reconcile_thread.is_alive()):
+            engine.dispose()
 
 
-def create_app() -> FastAPI:
-    """Build the cockpit FastAPI app with middleware and routes."""
+def create_app(session_factory: SessionFactory | None = None) -> FastAPI:
+    """Build the cockpit FastAPI app with middleware and routes.
+
+    ``session_factory`` lets tests and embedders inject their own database.
+    Production builds an engine from ``CockpitSettings.cockpit_db``.
+    """
     init_sentry(
         "cockpit",
         extra_integrations=[FastApiIntegration(), StarletteIntegration()],
@@ -126,6 +146,13 @@ def create_app() -> FastAPI:
 
     settings = get_cockpit_settings()
     app = FastAPI(title="kai cockpit", lifespan=lifespan)
+    if session_factory is None:
+        owned_engine = build_engine()
+        session_factory = build_session_factory(owned_engine)
+    else:
+        owned_engine = None
+    app.state.engine = owned_engine
+    app.state.session_factory = session_factory
 
     app.add_middleware(CSRFMiddleware)
     app.add_middleware(
@@ -145,7 +172,8 @@ def create_app() -> FastAPI:
     )
 
     if not settings.cockpit_testing:
-        run_migrations()
+        if owned_engine is not None:
+            run_migrations()
         require_real_secret("KAI_COCKPIT_SECRET", settings.cockpit_secret)
         require_real_secret("KAI_COCKPIT_ESCALATION_SECRET", settings.cockpit_escalation_secret)
         from kai.cockpit.connections.secrets import get_encryption_settings
@@ -233,11 +261,13 @@ def create_app() -> FastAPI:
                 headers=dict(exc.headers) if exc.headers else None,
             )
         # Only open a DB session if the user has a session cookie — anonymous
-        # 404s from bots/scanners skip the pool entirely.
+        # 404s from bots/scanners skip the pool entirely. Route dependencies
+        # have already been torn down when the error handler runs, so always
+        # use (and close) a fresh session here.
         user = None
         db = None
         if request.session.get("user_id") is not None:
-            db = SessionLocal()
+            db = request.app.state.session_factory()
             request.state.db = db
             try:
                 user = get_current_user(request, db)

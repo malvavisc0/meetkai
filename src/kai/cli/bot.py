@@ -6,27 +6,20 @@ import signal
 
 import httpx
 import typer
-from rich.align import Align
 
 from kai.agent.core import KaiAgent
 from kai.agent.goal import GoalManager
-from kai.agent.tools.brain import register_brain_tool
 from kai.bots import list_bots, load_bot
-from kai.brain.client import MorphikClient
-from kai.brain.config import get_brain_settings
+from kai.cli.bot_display import render_help, render_status, render_tell
+from kai.cli.bot_runtime import load_startup_template, run_instance
 from kai.cli.style import (
-    ACCENT,
     DIM,
-    ERR,
     GL_ARROW,
-    GL_ERR,
     GL_IDLE,
     GL_OK,
     GL_RUN,
     OK,
     WARN,
-    BotStartupError,
-    card,
     console,
     err_line,
     soft_table,
@@ -37,14 +30,10 @@ from kai.logging.logger import setup_logging
 from kai.runs import (
     RunRecord,
     RunRegistry,
-    generate_run_id,
-    proc_start_time,
     runs_path,
     sanitize_instance_id,
 )
-from kai.templates.resolver import ToolResolution
-from kai.templates.schema import TemplateDef
-from kai.utils.common import compute_hmac, now_iso
+from kai.utils.common import compute_hmac
 
 logger = logging.getLogger(__name__)
 
@@ -58,77 +47,6 @@ def bot_instance_id(bot_name: str, user: str = "") -> str:
     """Per-user instance id matching what `start` registers under."""
     raw = f"{bot_name}-{user}" if user else bot_name
     return sanitize_instance_id(raw)
-
-
-def parse_tool_list(raw: str) -> list[str]:
-    """Parse a comma-separated ``--enable-tools`` / ``--disable-tools``
-    value. Empty / whitespace-only -> ``[]``.
-    """
-    if not raw:
-        return []
-    return [t.strip() for t in raw.split(",") if t.strip()]
-
-
-def fail_on_errors(errors: list[str]) -> bool:
-    """Print errors and return True if any were found."""
-    if not errors:
-        return False
-    for err in errors:
-        err_line(err)
-    return True
-
-
-def fail_on_tool_resolution(tool_resolution: ToolResolution) -> bool:
-    """Print tool-resolution errors and return True if any were found."""
-    had_errors = False
-    for err in tool_resolution.missing_required:
-        err_line(f"required tool missing: {err}")
-        had_errors = True
-    for err in tool_resolution.rejected_disable:
-        err_line(f"cannot disable: {err}")
-        had_errors = True
-    for name in tool_resolution.rejected_unknown:
-        err_line(f"unknown tool in --enable-tools: {name}")
-        had_errors = True
-    return had_errors
-
-
-def load_startup_template(
-    bot_name: str,
-    template_name: str,
-    enable_tools: str,
-    disable_tools: str,
-) -> tuple[TemplateDef, ToolResolution]:
-    """Resolve the start template and its final tool set, or exit on error.
-
-    Boot guards fail fast on templates declaring required tools without
-    configured env vars, transport-invalid actions, disabled default/required
-    tools, or typos in ``--enable-tools``.
-    """
-    from kai.templates import TemplateRegistry
-    from kai.templates.resolver import resolve_tools, validate_actions
-
-    transport = bot_name
-    tmpl_name = template_name or "general"
-    registry = TemplateRegistry.bundled()
-    try:
-        tmpl = registry.get(transport, tmpl_name)
-    except FileNotFoundError:
-        err_line(f"template not found: {transport}/{tmpl_name}")
-        raise typer.Exit(1)
-    except ValueError as exc:
-        err_line(f"invalid template {transport}/{tmpl_name}: {exc}")
-        raise typer.Exit(1) from exc
-
-    if fail_on_errors(validate_actions(tmpl)):
-        raise typer.Exit(1)
-
-    tool_resolution = resolve_tools(
-        tmpl, parse_tool_list(enable_tools), parse_tool_list(disable_tools)
-    )
-    if fail_on_tool_resolution(tool_resolution):
-        raise typer.Exit(1)
-    return tmpl, tool_resolution
 
 
 def resolve_run(bot_name: str, run_id: str, user: str = "") -> RunRecord:
@@ -177,148 +95,6 @@ def post_clear(record: RunRecord) -> tuple[int, dict]:
     except Exception:
         data = {"ok": False, "reply": resp.text}
     return resp.status_code, data
-
-
-def render_status(data: dict, *, uptime: int | None = None) -> None:
-    """Render a status snapshot dict (from the ``/status`` route) as bullets."""
-    lines: list = []
-
-    if uptime is not None:
-        lines.append(format_uptime_line(uptime))
-
-    lines.extend(format_tasks_lines(data.get("tasks")))
-    lines.extend(format_caps_lines(data.get("capabilities")))
-
-    from rich.console import Group
-
-    console.print(Group(*(Align.left(line) for line in lines)))
-
-
-def format_uptime_line(uptime: int) -> str:
-    """Format an uptime in seconds as a single status line."""
-    days, rem = divmod(uptime, 86400)
-    hours, rem = divmod(rem, 3600)
-    minutes, seconds = divmod(rem, 60)
-    if days:
-        dur = f"{days}d {hours}h {minutes}m"
-    elif hours:
-        dur = f"{hours}h {minutes}m"
-    elif minutes:
-        dur = f"{minutes}m {seconds}s"
-    else:
-        dur = f"{seconds}s"
-    return f"[blue]\u25cf[/blue] [bold]uptime[/bold]  [{DIM}]{dur}  ({uptime}s)[/{DIM}]"
-
-
-def format_tasks_lines(tasks: dict | None) -> list[str]:
-    """Format the status task summary and its first five items."""
-    if not tasks:
-        return []
-    pending = tasks.get("pending", 0)
-    recurring = tasks.get("recurring", 0)
-    total = pending + recurring
-    if not total:
-        return [f"[{OK}]\u25cf[/{OK}] [bold]tasks[/bold]  [{DIM}]none[/{DIM}]"]
-    parts = []
-    if pending:
-        parts.append(f"{pending} pending")
-    if recurring:
-        parts.append(f"{recurring} recurring")
-    lines = [f"[cyan]\u25cf[/cyan] [bold]tasks[/bold]  [{DIM}]{', '.join(parts)}[/{DIM}]"]
-    for item in tasks.get("items", [])[:5]:
-        repeat = item.get("repeat", "none")
-        tag = f" ({repeat})" if repeat != "none" else ""
-        lines.append(f"   [{DIM}]{item.get('goal', '?')[:60]}{tag}[/{DIM}]")
-    if total > 5:
-        lines.append(f"   [{DIM}]\u2026 +{total - 5} more[/{DIM}]")
-    return lines
-
-
-def format_caps_lines(caps: dict | None) -> list[str]:
-    """Format the status capability flags as a single line."""
-    if not caps:
-        return []
-    flags = []
-    for key, label in [("vision", "vision")]:
-        flags.append(f"[{OK}]{label}[/{OK}]" if caps.get(key) else f"[{DIM}]{label}[/{DIM}]")
-    return ["[bold]capabilities[/bold]  " + "  ".join(flags)]
-
-
-def render_tell(data: dict) -> None:
-    """Render a TellResult dict as a compact, styled summary."""
-    if not isinstance(data, dict):
-        err_line("unexpected reply from bot (expected a JSON object)")
-        return
-
-    ok = data.get("ok", False)
-    reply = data.get("reply", "") or "(no reply)"
-
-    mark = GL_OK if ok else GL_ERR
-    label = f"[{OK}]reply[/{OK}]" if ok else f"[{ERR}]error[/{ERR}]"
-    console.print(f"{mark} {label}")
-    console.print(f"  {reply}")
-
-    actions = data.get("actions") or []
-    if not actions:
-        return
-    table = soft_table(
-        ("", ""),
-        ("tool", ACCENT),
-        ("target", DIM),
-        ("text", ""),
-        ("status", ""),
-    )
-    for a in actions:
-        table.add_row(*render_tell_row(a))
-    console.print(table)
-
-
-def render_tell_row(a: dict) -> tuple[str, str, str, str, str]:
-    """Render one TellResult action as a table row tuple."""
-    name = a.get("tool", "?")
-    a_ok = a.get("ok", False)
-    mark = GL_OK if a_ok else GL_ERR
-    target = first_nonempty(a, ("chat_id", "target"))
-    target = truncate(target, 40) if target else f"[{DIM}]\u2014[/{DIM}]"
-    text = first_nonempty(a, ("text", "goal")) or first_other_arg(a)
-    text = truncate(text, 80) if text else f"[{DIM}]\u2014[/{DIM}]"
-    status = f"[{OK}]ok[/{OK}]" if a_ok else f"[{ERR}]failed[/{ERR}]"
-    return mark, name, target, text, status
-
-
-def first_nonempty(a: dict, keys: tuple[str, ...]) -> str:
-    """Return the first non-empty value among the given keys."""
-    for key in keys:
-        val = a.get(key)
-        if val:
-            return str(val)
-    return ""
-
-
-def first_other_arg(a: dict) -> str:
-    """Return the first non-empty action value that is not a known field."""
-    for key, val in a.items():
-        if key in ("tool", "ok", "target", "chat_id"):
-            continue
-        if val is None or val == "" or val is False:
-            continue
-        return str(val)
-    return ""
-
-
-def truncate(text: str, limit: int) -> str:
-    """Truncate text to the limit, replacing the tail with an ellipsis."""
-    return text[: limit - 3] + "..." if len(text) > limit else text
-
-
-def render_help() -> None:
-    """Render the slash-command list shown by ``/help``."""
-    table = soft_table(("command", "magenta"), ("description", DIM))
-    table.add_row("/help", "list these commands")
-    table.add_row("/quit /exit", "leave the chat")
-    table.add_row("/persist", "toggle persistent changes (set_goal)")
-    table.add_row("/clear", "reset the operator conversation history")
-    console.print(table)
 
 
 def start_bot(
@@ -371,201 +147,19 @@ def start_bot(
         f"[{DIM}]{tmpl.transport}/{tmpl.name}[/{DIM}]"
     )
 
-    async def main() -> int:
-        """Configure, run, and tear down one bot instance; return its exit code."""
-        stop_task: asyncio.Task | None = None
-        run_id: str | None = None
-        brain_client: MorphikClient | None = None
-        sql_engine = None
-
-        try:
-            bot.configure(agent, settings, template=tmpl, tools=tool_resolution)
-        except (FileNotFoundError, ValueError, OSError) as exc:
-            err_line(f"configuration error  {exc}")
-            return 1
-
-        brain_settings = get_brain_settings()
-        if brain_settings.brain_enabled and "brain_query" in tool_resolution.final_tools:
-            try:
-                brain_client = MorphikClient(brain_settings)
-                register_brain_tool(
-                    agent,
-                    brain_client,
-                    workspace=brain_settings.workspace,
-                    instruction=brain_settings.instruction,
-                    mandatory=brain_settings.mandatory,
-                )
-                logger.info(
-                    "brain_query tool registered (end_user_id=%s)", brain_settings.workspace
-                )
-                if brain_settings.mandatory:
-                    # Mandatory Brain: the workflow prompt (built with
-                    # mandatory=True) instructs the model to call brain_query
-                    # first, fall back to web_search when the Brain has nothing,
-                    # and never answer facts from memory. Lowering temperature
-                    # (greedy decoding) steers the model toward following that
-                    # MUST instruction. This is strong steering, not a
-                    # code-level guarantee.
-                    agent.set_temperature(brain_settings.mandatory_temperature)
-                    logger.info(
-                        "brain mandatory: MUST-use prompt + web fallback; "
-                        "LLM temperature set to %s",
-                        brain_settings.mandatory_temperature,
-                    )
-            except Exception:
-                logger.exception("failed to register brain_query tool; continuing without it")
-                brain_client = None
-        else:
-            for warning in brain_settings.validate_startup():
-                logger.debug("brain disabled: %s", warning)
-
-        from kai.agent.tools.sql import get_sql_settings
-
-        sql_settings = get_sql_settings()
-        if sql_settings.sql_enabled and "sql_query" in tool_resolution.final_tools:
-            try:
-                from kai.agent.tools.sql import register_sql_tool
-
-                sql_engine = register_sql_tool(
-                    agent,
-                    sql_settings.dsn,
-                    instruction=sql_settings.instruction,
-                    row_limit=sql_settings.row_limit,
-                )
-                logger.info("sql_query tool registered")
-            except Exception:
-                logger.exception("failed to register sql_query tool; continuing without it")
-
-        from kai.agent.tools.email import get_smtp_settings
-
-        smtp_settings = get_smtp_settings()
-        if smtp_settings.smtp_enabled and "send_email" in tool_resolution.final_tools:
-            try:
-                from kai.agent.tools.email import register_email_tool
-
-                register_email_tool(
-                    agent,
-                    host=smtp_settings.host,
-                    port=smtp_settings.port,
-                    username=smtp_settings.username,
-                    password=smtp_settings.password,
-                    from_address=smtp_settings.from_address,
-                    use_tls=smtp_settings.use_tls,
-                    instruction=smtp_settings.instruction,
-                    display_name=bot.display_name(),
-                )
-                logger.info("send_email tool registered")
-            except Exception:
-                logger.exception("failed to register send_email tool; continuing without it")
-
-        from kai.agent.tools.calcom import get_calcom_settings
-
-        calcom_settings = get_calcom_settings()
-        if calcom_settings.calcom_enabled and "calcom" in tool_resolution.final_tools:
-            try:
-                from kai.agent.tools.calcom import register_calcom_tool
-
-                register_calcom_tool(
-                    agent,
-                    api_key=calcom_settings.api_key,
-                    base_url=calcom_settings.base_url,
-                    instruction=calcom_settings.instruction,
-                )
-                logger.info("calcom tools registered")
-            except Exception:
-                logger.exception("failed to register calcom tools; continuing without it")
-
-        # Register a run_id so `kai bot tell` can target this instance.
-        # Bots that opt out of tell return None from tell_endpoint().
-        endpoint = bot.tell_endpoint()
-        if endpoint is not None:
-            run_id = generate_run_id()
-            registry = runs_registry(instance_id, settings)
-            registry.replace(
-                RunRecord(
-                    run_id=run_id,
-                    endpoint=endpoint,
-                    hmac_key=bot.tell_hmac_key() or "",
-                    hmac_algorithm=bot.tell_hmac_algorithm(),
-                    pid=os.getpid(),
-                    pid_start=proc_start_time(os.getpid()),
-                    started_at=now_iso(),
-                ),
-            )
-            print(f"KAI_RUN_ID={run_id}", flush=True)
-            tell_cmd = f"kai bot tell {bot_name}" + (f" --user {user}" if user else "")
-            card(
-                "[bold]run id[/bold]",
-                f"[bold yellow]{run_id}[/bold yellow]\n[{DIM}]use:[/{DIM}] "
-                f'{tell_cmd} --run {run_id} -m "..."',
-                border=WARN,
-            )
-
-        loop = asyncio.get_running_loop()
-        shutdown_requested = asyncio.Event()
-        force_quit = asyncio.Event()
-        run_task = asyncio.ensure_future(bot.run())
-
-        def request_shutdown() -> None:
-            """Request a graceful stop, forcing exit on a second signal."""
-            if not shutdown_requested.is_set():
-                shutdown_requested.set()
-                nonlocal stop_task
-                stop_task = asyncio.ensure_future(bot.stop())
-                stop_task.add_done_callback(on_stop_done)
-            elif not force_quit.is_set():
-                force_quit.set()
-                err_line("forcing exit")
-                run_task.cancel()
-
-        def on_stop_done(task: asyncio.Task) -> None:
-            """Log an exception raised by the bot's stop coroutine."""
-            if task.cancelled():
-                return
-            exc = task.exception()
-            if exc:
-                logger.error("bot.stop() raised: %s", exc)
-
-        for sig in (signal.SIGINT, signal.SIGTERM):
-            loop.add_signal_handler(sig, request_shutdown)
-
-        exit_code = 0
-        try:
-            await run_task
-        except asyncio.CancelledError:
-            err_line("forced shutdown")
-        except BotStartupError as exc:
-            err_line(f"startup failed  {exc}")
-            exit_code = 1
-        finally:
-            if stop_task and not stop_task.done():
-                try:
-                    await asyncio.wait_for(stop_task, timeout=5.0)
-                except TimeoutError:
-                    logger.debug("bot.stop() did not finish within 5s; proceeding")
-                except Exception:
-                    logger.debug("bot.stop() raised during shutdown", exc_info=True)
-            await agent.flush()
-            await agent.aclose()
-            if brain_client is not None:
-                try:
-                    await brain_client.close()
-                except Exception:
-                    logger.debug("brain_client.close() raised during shutdown", exc_info=True)
-            if sql_engine is not None:
-                try:
-                    sql_engine.dispose()
-                except Exception:
-                    logger.debug("sql_engine.dispose() raised during shutdown", exc_info=True)
-            if run_id is not None:
-                try:
-                    runs_registry(instance_id, settings).remove()
-                except Exception:
-                    logger.debug("failed to unregister run %s", run_id, exc_info=True)
-            console.print(f"{GL_IDLE} [{DIM}]kai stopped[/{DIM}]")
-        return exit_code
-
-    exit_code = asyncio.run(main())
+    exit_code = asyncio.run(
+        run_instance(
+            bot,
+            agent,
+            tmpl,
+            tool_resolution,
+            instance_id,
+            bot_name,
+            user,
+            settings,
+            runs_registry,
+        )
+    )
     if exit_code:
         raise typer.Exit(exit_code)
 

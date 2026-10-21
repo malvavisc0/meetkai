@@ -20,7 +20,6 @@ import asyncio
 import json
 import logging
 import uuid
-from calendar import monthrange
 from collections.abc import Awaitable, Callable
 from contextvars import ContextVar
 from datetime import UTC, datetime, timedelta
@@ -39,6 +38,7 @@ from kai.agent.helpers import (
     try_iso,
     utcnow,
 )
+from kai.agent.recurrence import advance_monthly, advance_weekly
 
 logger = logging.getLogger(__name__)
 
@@ -177,28 +177,6 @@ def advance_recurrence(task: Task) -> datetime:
     if task.repeat == "monthly":
         return advance_monthly(next_dt, interval)
     return next_dt
-
-
-def advance_weekly(next_dt: datetime, interval: int, weekdays: tuple[int, ...] | None) -> datetime:
-    """Advance to the next matching weekday, or one interval ahead."""
-    if not weekdays:
-        return next_dt + timedelta(weeks=interval)
-    for _ in range(7 * interval + 1):
-        next_dt = next_dt + timedelta(days=1)
-        if next_dt.weekday() in weekdays:
-            break
-    return next_dt
-
-
-def advance_monthly(next_dt: datetime, interval: int) -> datetime:
-    """Advance by whole months, clamping the day to the month length."""
-    year = next_dt.year
-    month = next_dt.month + interval
-    while month > 12:
-        month -= 12
-        year += 1
-    day = min(next_dt.day, monthrange(year, month)[1])
-    return next_dt.replace(year=year, month=month, day=day)
 
 
 class TaskStore:

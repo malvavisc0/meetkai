@@ -42,7 +42,21 @@ jobs:
         run: uv run pyright
 
       - name: Radon complexity
-        run: uvx radon cc -s -n C src -e tests
+        run: |
+          radon_out=$(uvx radon cc src -s -e tests) || exit 1
+          if echo "$radon_out" | grep -qE ' - [C-F] '; then
+            echo "$radon_out" | grep -E ' - [C-F] '
+            exit 1
+          fi
+
+      - name: File size
+        run: |
+          offenders=$(find src tests -name '*.py' -exec wc -l {} + | awk '$1 > 600 && $2 != "total"')
+          if [ -n "$offenders" ]; then
+            echo "Files over 600 lines:"
+            echo "$offenders"
+            exit 1
+          fi
 
       # Dead-code gate per docs/coding-standard.md. Threshold, paths, and
       # framework-dispatch ignores live in [tool.vulture] in pyproject.toml;

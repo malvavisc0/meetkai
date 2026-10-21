@@ -79,7 +79,7 @@ class BaseBot(ABC):
         # Escalation wiring shared with the agent: ``start`` hands this to
         # KaiAgent so its tools are bound methods of the same state.
         self.escalations = EscalationState()
-        self._agent: KaiAgent | None = None
+        self.agent: KaiAgent | None = None
         self._task_store: TaskStore | None = None
         self._task_scheduler: TaskScheduler | None = None
         self._escalation_store: EscalationStore | None = None
@@ -136,7 +136,7 @@ class BaseBot(ABC):
         template that omits a bot-owned tool actually omits it. There is no
         ``None`` branch — every deployment resolves a template.
         """
-        self._agent = agent
+        self.agent = agent
         self._template = template
         self._tool_resolution = tools
 
@@ -174,7 +174,7 @@ class BaseBot(ABC):
         if not any(self.has_tool(n) for n in task_tool_names):
             return
 
-        self._agent = agent
+        self.agent = agent
         folder = Path(settings.tasks_folder)
         store_path = folder / f"{self.instance_id}.tasks.json"
         store_path.parent.mkdir(parents=True, exist_ok=True)
@@ -253,11 +253,11 @@ class BaseBot(ABC):
         ``action.text`` via :meth:`send_text`; ``silent`` (or an error)
         sends a short notice instead.
         """
-        if self._agent is None:
+        if self.agent is None:
             logger.warning("Bot %s has no agent; cannot execute task %s", self.name, task.id)
             return
         try:
-            result = await self._agent.chat(
+            result = await self.agent.chat(
                 task.goal,
                 output_cls=TaskAction,
                 conversation_id=task.chat_id,
@@ -348,7 +348,7 @@ class BaseBot(ABC):
         LLM error, unparseable answer) returns False so unclear goals are
         never scheduled.
         """
-        if self._agent is None:
+        if self.agent is None:
             return False
         trimmed = goal.strip()
         prompt = (
@@ -359,7 +359,7 @@ class BaseBot(ABC):
             "when it states what to do concretely enough to act on; UNCLEAR "
             "when it is vague, ambiguous, or missing the actual action."
         )
-        answer = (await self._agent.complete(prompt)).strip().upper()
+        answer = (await self.agent.complete(prompt)).strip().upper()
         return answer == "CLEAR"
 
     def start_task_scheduler(self) -> None:

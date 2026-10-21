@@ -20,10 +20,10 @@ def _connect_email(email: str = "bob@x.com") -> None:
     mockable at the CLI-invocation boundary these tests use.
     ``DeploymentsService.create()`` requires both resend and smtp to exist.
     """
-    from kai.cockpit.db import SessionLocal
+    from kai.cockpit.db import open_session
     from kai.cockpit.models import Connection, User
 
-    db = SessionLocal()
+    db = open_session()
     try:
         db_user = db.query(User).filter(User.email == email).first()
         assert db_user is not None, f"user '{email}' not found"

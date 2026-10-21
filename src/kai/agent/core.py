@@ -1,8 +1,6 @@
 import asyncio
-import copy
 import json
 import logging
-import re
 from collections import OrderedDict
 from collections.abc import Callable
 from datetime import UTC, datetime
@@ -11,118 +9,29 @@ from typing import Any
 from zoneinfo import ZoneInfo
 
 import httpx
-from llama_index.core.base.llms.types import ContentBlock, ImageBlock, TextBlock, VideoBlock
+from llama_index.core.base.llms.types import ImageBlock, TextBlock, VideoBlock
 from llama_index.core.llms import ChatMessage, MessageRole
 from llama_index.core.tools import FunctionTool
 from llama_index.core.types import PydanticProgramMode
-from llama_index.llms.openai import utils as openai_utils
 from llama_index.llms.openai_like import OpenAILike
-from openai.types.chat import (
-    ChatCompletionContentPartParam,
-    ChatCompletionContentPartRefusalParam,
-    ChatCompletionMessageParam,
-)
 from pydantic import BaseModel, ConfigDict, Field
 
+import kai.agent.openai_compat  # noqa: F401 - installs the VideoBlock serializer shim
+from kai.agent.action_parsing import (
+    strip_reasoning_channels as strip_reasoning_channels,
+)
+from kai.agent.action_parsing import (
+    unescape_literal_newlines as unescape_literal_newlines,
+)
 from kai.agent.context import MessageContext
 from kai.agent.goal import GoalManager
+from kai.agent.history_store import HistoryStoreMixin
+from kai.agent.tool_loop import ToolLoopMixin
 from kai.agent.tools import get_tool_instructions, get_tools
 from kai.agent.tools.escalate import EscalationState
 from kai.config.settings import Settings, get_settings
 
-# Upper bound on tool-calling rounds per turn. Sized for the
-# fact-checking workflow: one web_search round, then visiting several
-# results one-per-round (some live-score/aggregator pages 403/406 and
-# must be retried against the next result), plus a final synthesis
-# round. The loop exits early as soon as the model stops calling tools.
-MAX_TOOL_ROUNDS = 24
-FLUSH_DELAY = 0.5
-
 logger = logging.getLogger(__name__)
-
-# --- VideoBlock shim --------------------------------------------------------
-# llama_index's OpenAI adapter does not serialize VideoBlock — it raises
-# ValueError("Unsupported content block type").  This monkeypatch makes
-# to_openai_message_dict emit the verified ``video_url`` shape for VideoBlock,
-# delegating all other block types to the original implementation.
-
-original_to_openai_message_dict = openai_utils.to_openai_message_dict
-
-ContentPart = (
-    dict[str, Any] | ChatCompletionContentPartParam | ChatCompletionContentPartRefusalParam
-)
-
-
-def to_openai_message_dict(
-    message: ChatMessage,
-    drop_none: bool = False,
-    model: str | None = None,
-    store: bool = False,
-) -> dict[str, Any] | ChatCompletionMessageParam:
-    """Serialize a chat message, adding OpenAI video block support."""
-    if not any(isinstance(b, VideoBlock) for b in message.blocks):
-        return original_to_openai_message_dict(
-            message, drop_none=drop_none, model=model, store=store
-        )
-    content: list[ContentPart] = []
-    content_txt = ""
-    for block in message.blocks:
-        txt = append_block_to_content(block, message, content, drop_none, model, store)
-        if txt:
-            content_txt += txt
-    return {
-        "role": message.role.value,
-        "content": (
-            content_txt if all(isinstance(b, TextBlock) for b in message.blocks) else content
-        ),
-    }
-
-
-def append_block_to_content(
-    block: ContentBlock,
-    message: ChatMessage,
-    content: list[ContentPart],
-    drop_none: bool,
-    model: str | None,
-    store: bool,
-) -> str:
-    """Append one block's OpenAI representation to ``content``; return text added."""
-    if isinstance(block, TextBlock):
-        content.append({"type": "text", "text": block.text})
-        return block.text
-    if isinstance(block, VideoBlock):
-        content.append({"type": "video_url", "video_url": {"url": video_url(block)}})
-        return ""
-    single = original_to_openai_message_dict(
-        type(message)(
-            role=message.role,
-            blocks=[block],
-            additional_kwargs=message.additional_kwargs,
-        ),
-        drop_none=drop_none,
-        model=model,
-        store=store,
-    )
-    item = single.get("content", "") if isinstance(single, dict) else single
-    if isinstance(item, list):
-        content.extend(item)
-        return ""
-    if isinstance(item, str):
-        content.append({"type": "text", "text": item})
-        return item
-    return ""
-
-
-def video_url(block: VideoBlock) -> str:
-    """Return a video block's URL, inlining local data as base64."""
-    if block.url:
-        return str(block.url)
-    vid = block.resolve_video(as_base64=True).read()
-    mt = block.video_mimetype or "video/mp4"
-    return f"data:{mt};base64,{vid.decode() if isinstance(vid, bytes) else vid}"
-
-
-openai_utils.to_openai_message_dict = to_openai_message_dict
 
 # Invoked on every tool call so a caller (e.g. a bot) can render tool usage
 # live. Receives (tool_name, tool_kwargs, result); the result string may be
@@ -130,7 +39,6 @@ openai_utils.to_openai_message_dict = to_openai_message_dict
 ToolCallCallback = Callable[[str, dict, str], None]
 
 DEFAULT_SYSTEM_PROMPT = "You are a helpful assistant."
-VALID_ROLES = frozenset(r.value for r in MessageRole)
 
 
 class ToolCallRecord(BaseModel):
@@ -178,124 +86,7 @@ class ChatResult(BaseModel):
     error: str | None = None  # None on success; set on failure
 
 
-# Reasoning models sometimes emit their chain-of-thought wrapped in "channel"
-# tokens (e.g. ``<|channel>thought ... <channel|>``). These must never reach
-# the user: strip whole channel blocks first, then any stray channel markers.
-REASONING_BLOCK_RE = re.compile(r"<\|?channel\|?>.*?<\|?channel\|?>", re.DOTALL)
-REASONING_TOKEN_RE = re.compile(r"<\|?channel\|?>")
-
-
-def strip_reasoning_channels(text: str) -> str:
-    """Remove reasoning-model "channel" artifacts from model output.
-
-    Strips ``<|channel>...<channel|>`` blocks and any leftover channel
-    markers, returning the user-visible content. Returns the input unchanged
-    (apart from stripping) if no channel tokens are present.
-    """
-    if not text:
-        return text
-    text = REASONING_BLOCK_RE.sub("", text)
-    text = REASONING_TOKEN_RE.sub("", text)
-    return text.strip()
-
-
-KV_LINE_RE = re.compile(r'^[\s\-*]*["\']?(\w+)["\']?\s*[:=]\s*(.*)$')
-
-
-def unescape_literal_newlines(text: str) -> str:
-    """Convert literal ``\\n``/``\\r`` tokens into real line breaks.
-
-    Some models serialize a multi-line reply as a single line with literal
-    backslash-n tokens (a double-escaping of the JSON string value, or a
-    ``key: value`` line that can't hold real newlines). Left alone the
-    recipient sees visible ``\\n`` garbage instead of line breaks.
-
-    This only fires when the text contains *no* real newline yet holds at
-    least two literal ``\\n`` tokens — the signature of an escaped multi-line
-    body. A reply that already has real newlines is left untouched (so a
-    legit literal backslash-n is preserved), and a stray single ``\\n`` (e.g.
-    a Windows path like ``C:\\new``) is not mangled.
-    """
-    if not text or "\n" in text:
-        return text
-    if text.count("\\n") < 2:
-        return text
-    return text.replace("\\r\\n", "\r\n").replace("\\n", "\n").replace("\\r", "\r")
-
-
-def normalize_action_text(action: ActionResult) -> ActionResult:
-    """Strip reasoning-channel artifacts and unescape literal newlines in text.
-
-    Shared by the structured-output parser and the action-as-tool path so the
-    two can't drift on what a cleaned ``text`` looks like before dispatch.
-    Returns the same instance when there is nothing to normalize.
-    """
-    text = action.text
-    if not text:
-        return action
-    cleaned = unescape_literal_newlines(strip_reasoning_channels(text))
-    if cleaned == text:
-        return action
-    return action.model_copy(update={"text": cleaned})
-
-
-def parse_kv_lines(text: str) -> dict[str, str]:
-    """Parse ``key: value`` lines into a dict.
-
-    Some models ignore the JSON instruction and emit the action as plain
-    ``key: value`` lines (e.g. ``action: send_to_group\\ntext: hello``).
-    This recovers those into a dict that ``model_validate`` can consume.
-    """
-    result: dict[str, str] = {}
-    for line in text.strip().splitlines():
-        line = line.strip()
-        if not line or line.startswith("#") or line.startswith("```"):
-            continue
-        match = KV_LINE_RE.match(line)
-        if not match:
-            continue
-        key = match.group(1).strip()
-        value = match.group(2).strip().rstrip(",").strip("\"'`")
-        if key:
-            result[key] = value
-    return result
-
-
-def repair_json(text: str) -> str | None:
-    """Attempt to extract and repair a JSON-like substring from text.
-
-    Finds the first ``{``, then takes everything after it (to the end of
-    the string or the last ``}``), and patches missing quotes and braces so
-    partial JSON can still validate.
-    """
-    left = text.find("{")
-    if left == -1:
-        return None
-    right = text.rfind("}")
-    candidate = text[left : right + 1] if right > left else text[left:]
-    quote_count = candidate.count('"')
-    if quote_count % 2 == 1:
-        candidate += '"'
-    brace_count = candidate.count("{") - candidate.count("}")
-    if brace_count > 0:
-        candidate += "}" * brace_count
-    return candidate
-
-
-def action_values(output_cls: type[ActionResult]) -> frozenset[str]:
-    """Extract the allowed ``action`` enum values from a bot's ``output_cls``."""
-    try:
-        schema = output_cls.model_json_schema()
-        action_prop = (schema.get("properties") or {}).get("action", {})
-        enum = action_prop.get("enum")
-        if enum:
-            return frozenset(enum)
-    except Exception:
-        pass
-    return frozenset()
-
-
-class KaiAgent:
+class KaiAgent(HistoryStoreMixin, ToolLoopMixin):
     def __init__(
         self,
         settings: Settings | None = None,
@@ -330,7 +121,7 @@ class KaiAgent:
             timeout=httpx.Timeout(self.settings.llm_timeout, connect=10.0),
             limits=httpx.Limits(max_connections=10, max_keepalive_connections=5),
         )
-        self._llm = self.build_llm(async_http_client=self._http)
+        self.llm = self.build_llm(async_http_client=self._http)
         self._history: OrderedDict[str, list[ChatMessage]] = OrderedDict()
         self._timestamps: OrderedDict[str, list[str | None]] = OrderedDict()
         self.load_history_state()
@@ -342,19 +133,6 @@ class KaiAgent:
         # mandatory, bot.py lowers this to steer the model toward calling
         # brain_query first — steering, not a guarantee.
         self._temperature: float | None = None
-
-    def resolve_history_file(self) -> Path | None:
-        """Return this agent's history file path, or None when persistence is off."""
-        folder = self.settings.agent_history_folder
-        if folder is None:
-            return None
-        name = self._namespace or "default"
-        return Path(folder) / f"{name}.json"
-
-    @staticmethod
-    def now_ts() -> str:
-        """ISO-8601 UTC timestamp for a history message."""
-        return datetime.now(UTC).isoformat()
 
     def set_system_prompt(self, prompt: str, *, clear_history: bool = False) -> None:
         """Set the system prompt, optionally clearing history when it changes."""
@@ -487,66 +265,6 @@ class KaiAgent:
             pydantic_program_mode=PydanticProgramMode.LLM,
         )
 
-    def history_key(self, conversation_id: str | None = None) -> str:
-        """Return the namespaced history key for a conversation."""
-        if not conversation_id:
-            logger.debug("conversation_id not provided; using 'default' bucket")
-            key = "default"
-        else:
-            key = conversation_id
-        if self._namespace:
-            return f"{self._namespace}:{key}"
-        return key
-
-    def load_history_state(self) -> None:
-        """Populate ``_history`` and ``_timestamps`` from the history file.
-
-        Timestamps are optional: a missing or non-string ``ts`` field is
-        recorded as ``None`` so the parallel-list invariant (one timestamp
-        entry per message) is preserved across loads of old files.
-        """
-        self._history.clear()
-        self._timestamps.clear()
-        if self._history_file is None:
-            return
-
-        try:
-            if not self._history_file.exists():
-                return
-            raw = json.loads(self._history_file.read_text(encoding="utf-8"))
-            if not isinstance(raw, dict):
-                logger.warning("Ignoring invalid agent history file: %s", self._history_file)
-                return
-
-            history_data = raw.get("history", raw)
-            if not isinstance(history_data, dict):
-                return
-
-            for key, messages in history_data.items():
-                if not isinstance(key, str) or not isinstance(messages, list):
-                    continue
-                self._history[key], self._timestamps[key] = self.parse_history_messages(messages)
-        except (OSError, json.JSONDecodeError, TypeError, ValueError) as exc:
-            logger.warning("Failed to load agent history from %s: %s", self._history_file, exc)
-            self._history.clear()
-            self._timestamps.clear()
-
-    @staticmethod
-    def parse_history_messages(messages: list) -> tuple[list[ChatMessage], list[str | None]]:
-        """Parse persisted message dicts into chat messages and timestamps."""
-        msgs: list[ChatMessage] = []
-        ts_list: list[str | None] = []
-        for item in messages:
-            if not isinstance(item, dict):
-                continue
-            role = item.get("role")
-            content = item.get("content")
-            if role in VALID_ROLES and isinstance(content, str):
-                msgs.append(ChatMessage(role=MessageRole(role), content=content))
-                ts = item.get("ts")
-                ts_list.append(ts if isinstance(ts, str) else None)
-        return msgs, ts_list
-
     def load_goal(self) -> None:
         """Load the persisted goal, if any."""
         if self._goal_file is None or not self._goal_file.exists():
@@ -558,20 +276,6 @@ class KaiAgent:
                 self.goal_manager.restore_goal(stored_goal)
         except (OSError, json.JSONDecodeError, TypeError, ValueError) as exc:
             logger.warning("Failed to load goal from %s: %s", self._goal_file, exc)
-
-    def save_history(self) -> None:
-        """Persist the current history snapshot."""
-        if self._history_file is None:
-            return
-        self.save_from_snapshot(self._history, self._timestamps)
-
-    @staticmethod
-    def serialize_history_message(message: ChatMessage, ts: str | None) -> dict:
-        """Serialize one history message, including its optional timestamp."""
-        item = {"role": message.role.value, "content": message.content or ""}
-        if ts:
-            item["ts"] = ts
-        return item
 
     def save_goal(self) -> None:
         """Persist the current goal, if persistence is enabled."""
@@ -628,27 +332,6 @@ class KaiAgent:
             f" (UTC: {now.strftime('%Y-%m-%d %H:%M:%S')})"
         )
 
-    def get_history(self, conversation_id: str | None = None) -> list[ChatMessage]:
-        """Return the message list for a conversation, creating it if needed."""
-        key = self.history_key(conversation_id)
-        if key in self._history:
-            self._history.move_to_end(key)
-            # Self-heal a parallel-list divergence (e.g. a test or external
-            # caller mutating _history directly): ensure _timestamps has a
-            # matching entry, backfilling with None when it doesn't.
-            if key not in self._timestamps:
-                self._timestamps[key] = [None] * len(self._history[key])
-            else:
-                self._timestamps.move_to_end(key)
-        else:
-            self._history[key] = []
-            self._timestamps[key] = []
-            while len(self._history) > self._max_conversations:
-                evicted_key, _ = self._history.popitem(last=False)
-                self._timestamps.pop(evicted_key, None)
-                logger.debug("Evicted conversation from history cache: %s", evicted_key)
-        return self._history[key]
-
     def build_messages(
         self,
         user_message: str,
@@ -678,78 +361,6 @@ class KaiAgent:
         else:
             messages.append(ChatMessage(role=MessageRole.USER, content=user_message))
         return messages
-
-    def trim_history(self, conversation_id: str | None = None) -> None:
-        """Trim a conversation to the configured message and character limits."""
-        key = self.history_key(conversation_id)
-        history = self._history.get(key, [])
-        ts_list = self._timestamps.get(key, [])
-        if self._max_history == 0 or self._max_history_chars == 0:
-            self._history[key] = []
-            self._timestamps[key] = []
-            return
-
-        # Iterate the tail (capped to _max_history) newest-first, dropping the
-        # oldest entries that breach the char budget. Track surviving indices
-        # so the parallel timestamps list trims to match.
-        tail = history[-self._max_history :] if self._max_history > 0 else history
-        base = len(history) - len(tail)
-        trimmed: list[ChatMessage] = []
-        kept_idx: list[int] = []
-        total_chars = 0
-        for j, message in enumerate(reversed(tail)):
-            content_length = len(message.content or "")
-            if trimmed and total_chars + content_length > self._max_history_chars:
-                break
-            trimmed.append(message)
-            kept_idx.append(base + len(tail) - 1 - j)
-            total_chars += content_length
-        kept_idx.reverse()
-        self._history[key] = list(reversed(trimmed))
-        self._timestamps[key] = [(ts_list[i] if i < len(ts_list) else None) for i in kept_idx]
-
-    async def clear_history(self, conversation_id: str | None = None) -> None:
-        """Clear a single conversation bucket's history (e.g. a ``/clear`` route).
-
-        Mutates ``_history`` under ``_save_lock`` — like every other mutator
-        (``observe``, ``record_assistant_message``, ``chat``) — so it can't
-        race with a concurrent ``flush_now`` snapshot.
-        """
-        key = self.history_key(conversation_id)
-        async with self._save_lock:
-            self._history[key] = []
-            self._timestamps[key] = []
-        self.mark_dirty()
-
-    def get_conversation_history(self, conversation_id: str | None = None) -> list[ChatMessage]:
-        """Return the stored messages for a conversation (read-only).
-
-        Public read counterpart to :meth:`record_assistant_message` and
-        :meth:`observe`. Used by the ``get_conversation_messages`` tool so the
-        operator (or the model on an autonomous turn) can recall what was said
-        in a conversation other than the one the current turn is running under.
-        """
-        return list(self.get_history(conversation_id))
-
-    def list_conversations(self) -> list[tuple[str, int, str | None]]:
-        """Return known, non-empty conversations as ``(id, message_count, last_ts)``.
-
-        Read-only — never creates entries or triggers eviction. IDs are
-        stripped of the agent's namespace prefix. Ordered most-recently-active
-        first. Used by the ``list_conversations`` tool so the model can
-        discover conversation_ids to pass to ``get_conversation_messages``.
-        """
-        prefix = f"{self._namespace}:" if self._namespace else ""
-        results: list[tuple[str, int, str | None]] = []
-        for key, messages in self._history.items():
-            if not messages:
-                continue
-            cid = key[len(prefix) :] if prefix and key.startswith(prefix) else key
-            ts_list = self._timestamps.get(key) or []
-            last_ts = ts_list[-1] if ts_list else None
-            results.append((cid, len(messages), last_ts))
-        results.reverse()
-        return results
 
     async def observe(
         self,
@@ -924,7 +535,7 @@ class KaiAgent:
         an empty string on failure.
         """
         try:
-            resp = await self._llm.achat(
+            resp = await self.llm.achat(
                 messages=[ChatMessage(role=MessageRole.USER, content=prompt)]
             )
             content = resp.message.content or ""
@@ -932,308 +543,6 @@ class KaiAgent:
         except Exception:
             logger.warning("one-shot LLM completion failed", exc_info=True)
             return ""
-
-    async def run_with_tools(
-        self,
-        messages: list[ChatMessage],
-        output_cls: type[ActionResult],
-        tools: list[FunctionTool] | None = None,
-    ) -> tuple[ActionResult, list[ToolCallRecord]]:
-        """Run the tool-calling loop, then resolve a typed ``output_cls`` action.
-
-        Returns ``(action, tool_calls)`` where ``action`` is an instance of
-        the bot-declared ``output_cls`` and ``tool_calls`` records every
-        side-effecting tool invocation. The terminal step is always a
-        schema-constrained ``astructured_predict`` call — there is no
-        free-form ``achat`` path left for the model to leak markup through.
-        """
-        active_tools = tools if tools is not None else self._tools
-        active_by_name = {t.metadata.name: t for t in active_tools} if tools is not None else None
-        scratchpad: list[ChatMessage] = []
-        tool_call_records: list[ToolCallRecord] = []
-        allowed_values = action_values(output_cls)
-        # Temperature override makes the model more deterministic when e.g.
-        # Brain is mandatory — greedy decoding increases the chance the model
-        # follows MUST instructions.
-        llm_kwargs: dict = {}
-        if self._temperature is not None:
-            llm_kwargs["temperature"] = self._temperature
-
-        for _ in range(MAX_TOOL_ROUNDS):
-            response = await self._llm.achat_with_tools(
-                tools=active_tools,
-                chat_history=[*messages, *scratchpad],
-                **llm_kwargs,
-            )
-
-            tool_calls = self._llm.get_tool_calls_from_response(
-                response, error_on_no_tool_call=False
-            )
-
-            scratchpad.append(response.message)
-
-            if not tool_calls:
-                break
-
-            for tc in tool_calls:
-                action = self.maybe_resolve_action_tool_call(
-                    tc, output_cls, allowed_values, tool_call_records
-                )
-                if action is not None:
-                    return action, tool_call_records
-                result, ok = await self.execute_tool_call(tc, active_by_name)
-                self.record_tool_call(tc, result, ok, tool_call_records, scratchpad)
-
-        action = await self.resolve_terminal_action(messages, scratchpad, output_cls, llm_kwargs)
-        return normalize_action_text(action), tool_call_records
-
-    def maybe_resolve_action_tool_call(
-        self,
-        tc: Any,
-        output_cls: type[ActionResult],
-        action_values: frozenset[str],
-        tool_call_records: list[ToolCallRecord],
-    ) -> ActionResult | None:
-        """If the model called an action-value name as a tool, resolve it."""
-        if tc.tool_name not in action_values or tc.tool_name in self._tools_by_name:
-            return None
-        action = self.action_from_tool_call(output_cls, tc.tool_name, tc.tool_kwargs)
-        if action is not None:
-            logger.info("Resolved action-as-tool: %s(%s)", tc.tool_name, tc.tool_kwargs)
-            return action
-        return None
-
-    async def execute_tool_call(
-        self, tc: Any, active_by_name: dict[str | None, FunctionTool] | None
-    ) -> tuple[str, bool]:
-        """Execute one model tool call and return its result and success flag."""
-        tool = self.resolve_tool(tc.tool_name, active_by_name)
-        if tool is None:
-            return f"Error: unknown tool '{tc.tool_name}'", False
-        try:
-            output = await tool.acall(**tc.tool_kwargs)
-            return str(output.content), True
-        except Exception as exc:
-            logger.warning("Tool %s failed: %s", tc.tool_name, exc)
-            return f"Error calling {tc.tool_name}: {exc}", False
-
-    def resolve_tool(
-        self, name: str, active_by_name: dict[str | None, FunctionTool] | None
-    ) -> FunctionTool | None:
-        """Return the tool named name from the active or default set."""
-        if active_by_name is not None:
-            found = active_by_name.get(name)
-            if found is not None:
-                return found
-            return self._tools_by_name.get(name)
-        return self._tools_by_name.get(name)
-
-    def record_tool_call(
-        self,
-        tc: Any,
-        result: str,
-        ok: bool,
-        tool_call_records: list[ToolCallRecord],
-        scratchpad: list[ChatMessage],
-    ) -> None:
-        """Record a tool call, fire its callback, and add its scratchpad result."""
-        logger.info("Tool call: %s(%s)", tc.tool_name, tc.tool_kwargs)
-        logger.info(
-            "Tool result: %s -> %s (%d chars)",
-            tc.tool_name,
-            "ok" if ok else "error",
-            len(result),
-        )
-        tool_call_records.append(
-            ToolCallRecord(name=tc.tool_name, args=dict(tc.tool_kwargs), ok=ok, result=result)
-        )
-        if self._tool_call_callback is not None:
-            try:
-                self._tool_call_callback(tc.tool_name, dict(tc.tool_kwargs), result)
-            except Exception:
-                logger.debug("tool_call_callback raised", exc_info=True)
-        scratchpad.append(
-            ChatMessage(
-                role=MessageRole.TOOL,
-                content=result,
-                additional_kwargs={"tool_call_id": tc.tool_id},
-            )
-        )
-
-    async def resolve_terminal_action(
-        self,
-        messages: list[ChatMessage],
-        scratchpad: list[ChatMessage],
-        output_cls: type[ActionResult],
-        llm_kwargs: dict,
-    ) -> ActionResult:
-        """Resolve the turn's terminal typed action from the model."""
-        from llama_index.core.output_parsers.pydantic import PydanticOutputParser
-
-        parser = PydanticOutputParser(output_cls=output_cls)
-        schema = json.dumps(output_cls.model_json_schema(), ensure_ascii=False)
-        json_instruction = (
-            "\n\n## Output format (mandatory)\n"
-            "Respond with ONLY a single JSON object matching this schema — "
-            "no prose, no markdown, no code fences, no `key: value` lines. "
-            "Choose the action and fill its fields; the whole response must "
-            "be that one JSON object.\n\n"
-            f"Schema: {schema}"
-        )
-        predict_messages = self.build_predict_messages(messages, scratchpad, json_instruction)
-
-        for attempt in range(2):
-            try:
-                response = await self._llm.achat(messages=predict_messages, **llm_kwargs)
-            except Exception as exc:
-                logger.warning("Structured prediction LLM call failed: %s", exc)
-                raise
-
-            raw_text = strip_reasoning_channels(response.message.content or "")
-            try:
-                return self.parse_structured_text(raw_text, output_cls, parser)
-            except Exception as exc:
-                if attempt == 1:
-                    logger.warning("Structured output parse failed after retry: %s", exc)
-                    raise
-                logger.warning("Structured output parse failed, retrying with correction: %s", exc)
-                predict_messages = [
-                    *predict_messages,
-                    ChatMessage(role=MessageRole.ASSISTANT, content=raw_text),
-                    ChatMessage(
-                        role=MessageRole.SYSTEM,
-                        content=(
-                            "The previous response was not valid JSON. "
-                            "Return ONLY a JSON object matching the schema — "
-                            "no prose, no code fences, no field labels."
-                        ),
-                    ),
-                ]
-        raise RuntimeError("structured output parsing returned None unexpectedly")
-
-    @staticmethod
-    def build_predict_messages(
-        messages: list[ChatMessage], scratchpad: list[ChatMessage], json_instruction: str
-    ) -> list[ChatMessage]:
-        """Build prompt messages for the final structured prediction."""
-        sys_msg = messages[0]
-        if sys_msg.role == MessageRole.SYSTEM:
-            augmented = ChatMessage(
-                role=MessageRole.SYSTEM, content=(sys_msg.content or "") + json_instruction
-            )
-            return [augmented, *messages[1:], *scratchpad]
-        return [
-            ChatMessage(role=MessageRole.SYSTEM, content=json_instruction),
-            *messages,
-            *scratchpad,
-        ]
-
-    @staticmethod
-    def parse_structured_text(
-        text: str,
-        output_cls: type[ActionResult],
-        parser: Any,
-    ) -> ActionResult:
-        """Parse a model reply into ``output_cls`` via 4 strategies:
-        standard JSON extraction, ``key: value`` line parsing, JSON repair,
-        and base-class ``ActionResult`` recovery for out-of-scope actions.
-        """
-        # 1. Standard JSON extraction
-        try:
-            result = parser.parse(text)
-            if isinstance(result, output_cls):
-                return normalize_action_text(result)
-            return normalize_action_text(output_cls.model_validate(result.model_dump()))
-        except Exception:
-            pass
-
-        # 2. key: value line format
-        kv = parse_kv_lines(text)
-        if kv:
-            try:
-                return normalize_action_text(output_cls.model_validate(kv))
-            except Exception:
-                pass
-
-        # 3. JSON repair
-        repaired = repair_json(text)
-        if repaired:
-            try:
-                return normalize_action_text(output_cls.model_validate_json(repaired))
-            except Exception:
-                pass
-
-        # 4. Base-class recovery for out-of-scope actions.
-        action = KaiAgent.recover_base_action(text, output_cls, repaired, kv)
-        if action is not None:
-            return normalize_action_text(action)
-
-        raise ValueError(f"Could not parse structured output from: {text[:200]!r}")
-
-    @staticmethod
-    def recover_base_action(
-        text: str,
-        output_cls: type[ActionResult],
-        repaired: str | None,
-        kv: dict[str, Any] | None,
-    ) -> ActionResult | None:
-        # Control actions (silent / sleep / console) are excluded — recovering
-        # them would ghost the user. A payload failing for any other reason
-        # continues to raise so malformed output isn't silently accepted.
-        """Recover a valid base action from out-of-scope structured output."""
-        control_actions = frozenset({"silent", "sleep", "console"})
-        allowed = action_values(output_cls)
-        payload = KaiAgent.extract_payload(repaired, kv)
-        if not (
-            isinstance(payload, dict)
-            and "action" in payload
-            and allowed
-            and str(payload["action"]) not in allowed
-        ):
-            return None
-        try:
-            base = ActionResult.model_validate(payload)
-        except Exception:
-            return None
-        if base is None or base.action in control_actions or not bool(base.text):
-            return None
-        logger.warning(
-            "Structured output: action %r is not in the %s "
-            "vocabulary for this turn; recovering via base "
-            "ActionResult so dispatch can degrade gracefully "
-            "(e.g. falling back to a plain text reply).",
-            base.action,
-            output_cls.__name__,
-        )
-        return base
-
-    @staticmethod
-    def extract_payload(repaired: str | None, kv: dict[str, Any] | None) -> dict[str, Any] | None:
-        """Extract a JSON payload from repaired text or key/value lines."""
-        if repaired:
-            try:
-                return json.loads(repaired)
-            except Exception:
-                pass
-        return kv
-
-    @staticmethod
-    def action_from_tool_call(
-        output_cls: type[ActionResult], action_name: str, tool_kwargs: dict
-    ) -> ActionResult | None:
-        """Build a typed action from a model "action-as-tool" call.
-
-        When the model emits an action value (e.g. ``send_to_group``) as a
-        tool call, its keyword arguments are the action's fields. This maps
-        them onto ``output_cls`` and strips reasoning-channel artifacts from
-        any ``text``. Returns ``None`` if the kwargs don't validate.
-        """
-        try:
-            payload = {**tool_kwargs, "action": action_name}
-            action = output_cls.model_validate(payload)
-            return normalize_action_text(action)
-        except Exception:
-            return None
 
     def format_user_message(self, message: str, context: MessageContext | None = None) -> str:
         """Prefix a user message with its speaker header."""
@@ -1247,70 +556,6 @@ class KaiAgent:
         if "\n" in message:
             return f"{header}\n{message}"
         return f"{header} {message}"
-
-    def save_from_snapshot(
-        self,
-        snapshot: dict[str, list[ChatMessage]],
-        timestamps: dict[str, list[str | None]] | None = None,
-    ) -> None:
-        """Write a history snapshot to disk."""
-        if self._history_file is None:
-            return
-        if timestamps is None:
-            timestamps = self._timestamps
-        try:
-            self._history_file.parent.mkdir(parents=True, exist_ok=True)
-            serialized: dict[str, list[dict]] = {}
-            for key, messages in snapshot.items():
-                ts_list = timestamps.get(key, [])
-                items = []
-                for i, message in enumerate(messages):
-                    ts = ts_list[i] if i < len(ts_list) else None
-                    items.append(self.serialize_history_message(message, ts))
-                serialized[key] = items
-            data = {"history": serialized}
-            temp_path = Path(f"{self._history_file}.tmp")
-            temp_path.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
-            temp_path.replace(self._history_file)
-        except OSError as exc:
-            logger.warning("Failed to save agent history to %s: %s", self._history_file, exc)
-
-    def mark_dirty(self) -> None:
-        """Mark history as modified and schedule a debounced flush."""
-        if self._history_file is None:
-            return
-        self._dirty = True
-        if self._flush_task is None or self._flush_task.done():
-            self._flush_task = asyncio.ensure_future(self.flush_after_delay())
-
-    async def flush_after_delay(self) -> None:
-        """Flush history after the debounce delay."""
-        try:
-            await asyncio.sleep(FLUSH_DELAY)
-            await self.flush_now()
-        except asyncio.CancelledError:
-            await self.flush_now()
-
-    async def flush_now(self) -> None:
-        """Flush pending history changes immediately when dirty."""
-        async with self._save_lock:
-            if not self._dirty:
-                return
-            snapshot = copy.deepcopy(self._history)
-            ts_snapshot = {k: list(v) for k, v in self._timestamps.items()}
-            self._dirty = False
-        await asyncio.to_thread(self.save_from_snapshot, snapshot, ts_snapshot)
-
-    async def flush(self) -> None:
-        """Persist any pending history changes immediately."""
-        if self._flush_task is not None and not self._flush_task.done():
-            self._flush_task.cancel()
-            try:
-                await self._flush_task
-            except asyncio.CancelledError:
-                pass
-            self._flush_task = None
-        await self.flush_now()
 
     async def aclose(self) -> None:
         """Release the shared httpx client backing the LLM.

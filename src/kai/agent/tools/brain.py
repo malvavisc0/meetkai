@@ -11,7 +11,8 @@ async, so no thread/executor wrapping is needed and no second sync client
 class is required). It is registered **without** the
 ``logged`` wrapper from ``agent/tools/__init__.py`` because that wrapper is
 sync and would break llama_index's coroutine detection — logging is left to
-``KaiAgent``'s existing tool-call/tool-result logging in ``agent/core.py``.
+``KaiAgent``'s existing tool-call/tool-result logging in
+``agent/tool_loop.py``.
 """
 
 import logging

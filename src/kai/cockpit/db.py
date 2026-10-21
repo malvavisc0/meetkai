@@ -1,44 +1,56 @@
 """SQLAlchemy engine, session factory, and helpers for the cockpit database."""
 
 from collections.abc import Generator
+from functools import lru_cache
 from pathlib import Path
 
 from fastapi import Request
-from sqlalchemy import create_engine
+from sqlalchemy import Engine, create_engine
 from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 
 from kai.cockpit.settings import get_cockpit_settings
 
-db_url = get_cockpit_settings().cockpit_db
-
-engine = create_engine(db_url, echo=False)
-SessionLocal = sessionmaker(bind=engine)
+SessionFactory = sessionmaker[Session]
 
 
 class Base(DeclarativeBase):
     pass
 
 
+def build_engine() -> Engine:
+    """Create the engine for the configured cockpit database."""
+    return create_engine(get_cockpit_settings().cockpit_db, echo=False)
+
+
+def build_session_factory(engine: Engine) -> SessionFactory:
+    """Bind a session factory to an engine."""
+    return sessionmaker(bind=engine)
+
+
+@lru_cache(maxsize=1)
+def default_session_factory() -> SessionFactory:
+    """Return the process-wide session factory for standalone callers."""
+    return build_session_factory(build_engine())
+
+
+def open_session() -> Session:
+    """Open a standalone session against the configured cockpit database."""
+    return default_session_factory()()
+
+
 def get_db(request: Request) -> Generator[Session]:
-    """FastAPI dependency — yields a Session, closes on exit.
+    """FastAPI dependency — yields a Session from the app's factory, closes on exit.
 
     Also stashes the session on ``request.state.db`` so plain callables that
     only receive ``request`` (e.g. the ``topbar_status`` Jinja global) can
     reuse the same request-scoped session instead of opening an extra one.
     """
-    db = SessionLocal()
+    db = request.app.state.session_factory()
     request.state.db = db
     try:
         yield db
     finally:
         db.close()
-
-
-def create_all() -> None:
-    """Create all tables. Idempotent. Used by tests (in-memory StaticPool);
-    production schema is managed by Alembic via ``run_migrations``.
-    """
-    Base.metadata.create_all(engine)
 
 
 def run_migrations() -> None:

@@ -5,15 +5,10 @@ import subprocess
 from collections.abc import Callable
 
 import pytest
-from tests.cockpit.helpers import _connect_email, _connect_smtp
 
 from kai.cockpit.deployments import DeploymentsService
 
-
-@pytest.fixture(autouse=True)
-def _email_connected(user, db):
-    _connect_email(db, user)
-    _connect_smtp(db, user)
+pytestmark = pytest.mark.usefixtures("email_ready_user")
 
 
 @pytest.fixture(autouse=True)

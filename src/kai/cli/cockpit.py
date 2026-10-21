@@ -70,10 +70,10 @@ def cockpit_rotate_credential_key() -> None:
     Bumps ``KAI_CREDENTIAL_KEY_VERSION``. The root secret
     (``KAI_CREDENTIAL_ENCRYPTION_KEY``) is left untouched.
     """
-    from kai.cockpit.db import SessionLocal
+    from kai.cockpit.db import open_session
     from kai.cockpit.key_rotation import rotate_credential_key
 
-    db = SessionLocal()
+    db = open_session()
     try:
         try:
             new_version, env_written = rotate_credential_key(db)
@@ -105,7 +105,7 @@ def cockpit_user_create(
     import secrets
 
     from kai.cockpit.bots import ALL_LANGUAGES
-    from kai.cockpit.db import SessionLocal
+    from kai.cockpit.db import open_session
     from kai.cockpit.models import User
     from kai.cockpit.naming import kai_slug_for
 
@@ -124,7 +124,7 @@ def cockpit_user_create(
         console.print(f"[{WARN}]\u25cf unknown timezone '{timezone}'[/{WARN}]")
         raise typer.Exit(1)
 
-    db = SessionLocal()
+    db = open_session()
     try:
         existing = db.query(User).filter(User.email == email).first()
         if existing:
@@ -156,10 +156,10 @@ def cockpit_user_create(
 @cockpit_user_app.command("list")
 def cockpit_user_list() -> None:
     """List cockpit users."""
-    from kai.cockpit.db import SessionLocal
+    from kai.cockpit.db import open_session
     from kai.cockpit.models import User
 
-    db = SessionLocal()
+    db = open_session()
     try:
         users = db.query(User).all()
         if not users:
@@ -196,10 +196,10 @@ def cockpit_user_disable(
     email: str = typer.Argument(..., help="User email"),
 ) -> None:
     """Disable a cockpit user so they can no longer log in."""
-    from kai.cockpit.db import SessionLocal
+    from kai.cockpit.db import open_session
     from kai.cockpit.models import User
 
-    db = SessionLocal()
+    db = open_session()
     try:
         user = db.query(User).filter(User.email == email).first()
         if not user:
@@ -238,10 +238,10 @@ def cockpit_user_flags(
     ``--no-image`` to disable; a flag you omit is left as it is. With
     ``--show`` nothing changes, the current flags are just printed.
     """
-    from kai.cockpit.db import SessionLocal
+    from kai.cockpit.db import open_session
     from kai.cockpit.models import User
 
-    db = SessionLocal()
+    db = open_session()
     try:
         user = db.query(User).filter(User.email == email).first()
         if not user:
@@ -270,10 +270,10 @@ def cockpit_user_flags(
 @cockpit_request_app.command("list")
 def cockpit_request_list() -> None:
     """List pending login requests."""
-    from kai.cockpit.db import SessionLocal
+    from kai.cockpit.db import open_session
     from kai.cockpit.models import LoginRequest, User
 
-    db = SessionLocal()
+    db = open_session()
     try:
         requests = db.query(LoginRequest).filter(LoginRequest.status == "pending").all()
         if not requests:
@@ -294,10 +294,10 @@ def cockpit_request_create(
     email: str = typer.Argument(..., help="User email"),
 ) -> None:
     """Create a pending login request for a user, without the browser."""
-    from kai.cockpit.db import SessionLocal
+    from kai.cockpit.db import open_session
     from kai.cockpit.models import LoginRequest, User
 
-    db = SessionLocal()
+    db = open_session()
     try:
         user = db.query(User).filter(User.email == email).first()
         if not user:
@@ -333,11 +333,11 @@ def cockpit_request_approve(
     """Approve a login request and send the user a magic link."""
     from kai.cockpit.auth_backends import MagicLinkProvider
     from kai.cockpit.cli_helpers import build_magic_link_url
-    from kai.cockpit.db import SessionLocal
+    from kai.cockpit.db import open_session
     from kai.cockpit.mailer import MailError, send_magic_link
     from kai.cockpit.models import User
 
-    db = SessionLocal()
+    db = open_session()
     try:
         user = db.query(User).filter(User.email == email).first()
         if not user:

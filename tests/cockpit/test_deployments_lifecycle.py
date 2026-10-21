@@ -4,7 +4,6 @@ import os
 import subprocess
 
 import pytest
-from tests.cockpit.helpers import _connect_email, _connect_smtp
 
 from kai.cockpit.deployments import (
     ConnectionRequiredError,
@@ -13,167 +12,78 @@ from kai.cockpit.deployments import (
 )
 from kai.cockpit.models import Connection
 
-
-@pytest.fixture(autouse=True)
-def _email_connected(user, db):
-    """Most of this module's tests just want a "ready to go" user:
-    ``DeploymentsService.create()`` enforces
-    ``BotType.required_connections``, so connected resend + smtp
-    connections are a prerequisite for the ``svc.create(user, "email",
-    ...)`` calls throughout this file. The handful of tests that
-    specifically exercise the disconnected/missing-connection path
-    mutate or remove these connections themselves after ``create()``
-    succeeds.
-    """
-    _connect_email(db, user)
-    _connect_smtp(db, user)
+pytestmark = pytest.mark.usefixtures("email_ready_user")
 
 
-class TestCreate:
-    def test_create_happy_path(self, db, user):
-        svc = DeploymentsService(db)
-        dep = svc.create(user, "email", "be helpful", "English")
-        assert dep.id is not None
-        assert dep.status == "stopped"
-        assert dep.desired_state == "stopped"
-        assert dep.settings["language"] == "English"
-        assert dep.feature_flags == {"image": False}
+def _start_with_morphik_connection(db, user, monkeypatch, tmp_path) -> dict:
+    svc = DeploymentsService(db)
+    dep = svc.create(user, "email", "goal", "English")
+    svc.edit(dep, brain_mandatory=True)
 
-    def test_create_seeds_email_schema(self, db, user):
-        """Regression: ``create()`` seeds the deployment from the email
-        BotConfig (``vision``, no ``media`` block), not some stale
-        transport's schema."""
-        svc = DeploymentsService(db)
-        dep = svc.create(user, "email", "answer support emails", "English")
-        assert "media" not in dep.settings
-        assert "vision" in dep.settings
-        assert dep.settings["language"] == "English"
-
-    def test_reject_empty_goal(self, db, user):
-        svc = DeploymentsService(db)
-        with pytest.raises(ValueError):
-            svc.create(user, "email", "", "English")
-
-    def test_reject_empty_language(self, db, user):
-        svc = DeploymentsService(db)
-        with pytest.raises(ValueError):
-            svc.create(user, "email", "goal", "")
-
-    def test_reject_disabled_user(self, db, user):
-        user.is_disabled = True
-        db.commit()
-        svc = DeploymentsService(db)
-        with pytest.raises(ValueError):
-            svc.create(user, "email", "goal", "English")
-
-    def test_reject_unknown_bot_type(self, db, user):
-        svc = DeploymentsService(db)
-        with pytest.raises(ValueError):
-            svc.create(user, "telegram", "goal", "English")
-
-    def test_unique_constraint_per_user_bot_type(self, db, user):
-        svc = DeploymentsService(db)
-        svc.create(user, "email", "goal", "English")
-        with pytest.raises(ValueError):
-            svc.create(user, "email", "another goal", "English")
-
-
-class TestCreateConnectionGate:
-    """DeploymentsService.create() enforces BotType.required_connections —
-    a bot can't even be created before its required connections exist, not
-    just started (see also TestConnectionCatalog's start()-time gate)."""
-
-    def test_rejects_when_resend_missing(self, db):
-        """A user fixture with no Connection row at all (bypassing the
-        module's autouse ``_email_connected`` fixture by constructing a
-        fresh user) must be rejected at create()."""
-        import secrets
-        from datetime import UTC, datetime
-
-        from kai.cockpit.models import User
-        from kai.cockpit.naming import kai_slug_for
-
-        lonely_user = User(
-            email="lonely@test.com",
-            language="English",
-            timezone="UTC",
-            hmac_key=secrets.token_hex(32),
-            created_at=datetime.now(UTC).isoformat(),
-            kai_slug=kai_slug_for("lonely@test.com"),
+    db.add(
+        Connection(
+            user_id=user.id,
+            service="morphik",
+            status="ready",
+            config={
+                "workspace": "kai-v001-bob_at_test_com",
+                "instruction": "how to do X from section Y",
+            },
+            created_at="now",
+            updated_at="now",
         )
-        db.add(lonely_user)
-        db.commit()
+    )
+    db.commit()
 
-        svc = DeploymentsService(db)
-        with pytest.raises(ConnectionRequiredError, match="resend"):
-            svc.create(lonely_user, "email", "goal", "English")
+    monkeypatch.setattr("kai.cockpit.config_writer.write_config", lambda dep, instance_id: None)
 
-    def test_rejects_when_resend_disconnected(self, db, user):
-        conn = db.query(Connection).filter_by(user_id=user.id, service="resend").first()
-        conn.status = "disconnected"
-        db.commit()
+    captured_env: dict = {}
 
-        svc = DeploymentsService(db)
-        with pytest.raises(ConnectionRequiredError, match="resend"):
-            svc.create(user, "email", "goal", "English")
+    class FakeProc:
+        returncode = None
 
-    def test_succeeds_once_email_connected(self, db, user):
-        # The module-level autouse fixture already connected resend + smtp.
-        svc = DeploymentsService(db)
-        dep = svc.create(user, "email", "goal", "English")
-        assert dep.id is not None
+        def __init__(self):
+            self._lines = iter(["starting...\n", "KAI_RUN_ID=deadbeef\n"])
 
+        @property
+        def stdout(self):
+            return self
 
-class TestEdit:
-    def test_edit_updates_goal(self, db, user):
-        svc = DeploymentsService(db)
-        dep = svc.create(user, "email", "goal", "English")
-        svc.edit(dep, goal="new goal")
-        assert dep.goal == "new goal"
+        def readline(self):
+            return next(self._lines, "")
 
-    def test_edit_rejects_empty_goal(self, db, user):
-        svc = DeploymentsService(db)
-        dep = svc.create(user, "email", "goal", "English")
-        with pytest.raises(ValueError):
-            svc.edit(dep, goal="")
+        def poll(self):
+            return self.returncode
 
-    def test_edit_feature_flags_validates_subset(self, db, user):
-        svc = DeploymentsService(db)
-        dep = svc.create(user, "email", "goal", "English")
-        with pytest.raises(ValueError):
-            svc.edit(dep, feature_flags={"telegram": True})
+    def fake_popen(*args, **kwargs):
+        captured_env.update(kwargs.get("env") or {})
+        return FakeProc()
 
-    def test_edit_feature_flags_happy_path(self, db, user):
-        svc = DeploymentsService(db)
-        dep = svc.create(user, "email", "goal", "English")
-        svc.edit(dep, feature_flags={"image": False})
-        assert dep.feature_flags == {"image": False}
+    monkeypatch.setattr(subprocess, "Popen", fake_popen)
 
-    def test_edit_settings_merges_partial(self, db, user):
-        svc = DeploymentsService(db)
-        dep = svc.create(user, "email", "goal", "English")
-        original_temperature = dep.settings["temperature"]
-        svc.edit(dep, settings={"blacklist": ["a@b.c"]})
-        assert dep.settings["blacklist"] == ["a@b.c"]
-        assert dep.settings["temperature"] == original_temperature
+    from kai.config.settings import Settings
+    from kai.runs import RunRecord, RunRegistry, proc_start_time, runs_path
 
+    fake_settings = Settings.for_test(agent_history_folder=str(tmp_path))
+    monkeypatch.setattr("kai.config.settings.get_settings", lambda: fake_settings)
 
-class TestGetAndList:
-    def test_get_returns_existing_deployment(self, db, user):
-        svc = DeploymentsService(db)
-        dep = svc.create(user, "email", "goal", "English")
-        fetched = svc.get(dep.id)
-        assert fetched is not None
-        assert fetched.id == dep.id
+    instance_id = f"{dep.bot_type}-{user.email}"
+    registry = RunRegistry(runs_path(fake_settings.agent_history_folder, instance_id))
+    registry.replace(
+        RunRecord(
+            run_id="deadbeef",
+            endpoint="http://x",
+            hmac_key="k",
+            hmac_algorithm="sha512",
+            pid=os.getpid(),
+            pid_start=proc_start_time(os.getpid()),  # live-looking seed
+            started_at="t",
+        ),
+    )
 
-    def test_get_missing_returns_none(self, db, user):
-        svc = DeploymentsService(db)
-        assert svc.get(999) is None
+    svc.start(dep)
 
-    def test_list_for_user(self, db, user):
-        svc = DeploymentsService(db)
-        svc.create(user, "email", "goal", "English")
-        assert len(svc.list_for_user(user.id)) == 1
+    return captured_env
 
 
 class TestStart:
@@ -243,72 +153,7 @@ class TestStart:
     def test_start_injects_brain_env_when_morphik_connection_exists(
         self, db, user, monkeypatch, tmp_path
     ):
-        svc = DeploymentsService(db)
-        dep = svc.create(user, "email", "goal", "English")
-        svc.edit(dep, brain_mandatory=True)
-
-        db.add(
-            Connection(
-                user_id=user.id,
-                service="morphik",
-                status="ready",
-                config={
-                    "workspace": "kai-v001-bob_at_test_com",
-                    "instruction": "how to do X from section Y",
-                },
-                created_at="now",
-                updated_at="now",
-            )
-        )
-        db.commit()
-
-        monkeypatch.setattr("kai.cockpit.config_writer.write_config", lambda dep, instance_id: None)
-
-        captured_env: dict = {}
-
-        class FakeProc:
-            returncode = None
-
-            def __init__(self):
-                self._lines = iter(["starting...\n", "KAI_RUN_ID=deadbeef\n"])
-
-            @property
-            def stdout(self):
-                return self
-
-            def readline(self):
-                return next(self._lines, "")
-
-            def poll(self):
-                return self.returncode
-
-        def fake_popen(*args, **kwargs):
-            captured_env.update(kwargs.get("env") or {})
-            return FakeProc()
-
-        monkeypatch.setattr(subprocess, "Popen", fake_popen)
-
-        from kai.config.settings import Settings
-        from kai.runs import RunRecord, RunRegistry, proc_start_time, runs_path
-
-        fake_settings = Settings.for_test(agent_history_folder=str(tmp_path))
-        monkeypatch.setattr("kai.config.settings.get_settings", lambda: fake_settings)
-
-        instance_id = f"{dep.bot_type}-{user.email}"
-        registry = RunRegistry(runs_path(fake_settings.agent_history_folder, instance_id))
-        registry.replace(
-            RunRecord(
-                run_id="deadbeef",
-                endpoint="http://x",
-                hmac_key="k",
-                hmac_algorithm="sha512",
-                pid=os.getpid(),
-                pid_start=proc_start_time(os.getpid()),  # live-looking seed
-                started_at="t",
-            ),
-        )
-
-        svc.start(dep)
+        captured_env = _start_with_morphik_connection(db, user, monkeypatch, tmp_path)
 
         assert captured_env["KAI_BRAIN_WORKSPACE"] == "kai-v001-bob_at_test_com"
         assert captured_env["KAI_BRAIN_INSTRUCTION"] == "how to do X from section Y"
@@ -403,7 +248,7 @@ class TestStop:
         assert dep.status == "stopped"
         assert dep.desired_state == "stopped"
 
-    def test_stop_after_start_resets_desired_state(self, db, user, monkeypatch):
+    def test_stop_after_start_resets_desired_state(self, db, user):
         """A deployment stopped by the user must not be relaunched by
         ``reconcile_deployments`` on the next cockpit startup — regression
         test for a bug where ``stop()`` left ``desired_state == "running"``
@@ -501,11 +346,7 @@ class TestStop:
 
 
 class TestDelete:
-    def test_delete_removes_row(self, db, user, monkeypatch):
-        # delete() calls write_config via edit path indirectly? No — delete
-        # itself unlinks the config file. Stub write_config so edit (called
-        # by create) doesn't touch the real CONFIGS_DIR.
-        monkeypatch.setattr("kai.cockpit.config_writer.write_config", lambda d, i: None)
+    def test_delete_removes_row(self, db, user):
         svc = DeploymentsService(db)
         dep = svc.create(user, "email", "goal", "English")
         dep_id = dep.id
@@ -515,7 +356,6 @@ class TestDelete:
         assert svc.get(dep_id) is None
 
     def test_delete_stops_running_bot_first(self, db, user, monkeypatch, tmp_path):
-        monkeypatch.setattr("kai.cockpit.config_writer.write_config", lambda d, i: None)
         svc = DeploymentsService(db)
         dep = svc.create(user, "email", "goal", "English")
         dep.run_id = "deadbeef"
@@ -565,10 +405,8 @@ class TestDelete:
         assert not config_path.exists()
         assert svc.get(dep.id) is None
 
-    def test_delete_keeps_email_connection(self, db, user, monkeypatch):
+    def test_delete_keeps_email_connection(self, db, user):
         """Deleting a deployment must NOT touch the resend Connection."""
-        monkeypatch.setattr("kai.cockpit.config_writer.write_config", lambda d, i: None)
-
         svc = DeploymentsService(db)
         dep = svc.create(user, "email", "goal", "English")
         svc.delete(dep)
@@ -619,119 +457,3 @@ class TestDelete:
         for path in files:
             assert not path.exists(), f"State file not purged: {path}"
         assert svc.get(dep.id) is None
-
-
-class TestReconcileDeployments:
-    def test_restarts_deployment_marked_running_with_no_live_process(self, db, user, monkeypatch):
-        """desired_state=='running' but no live run (e.g. after a container
-        restart killed every bot subprocess) must trigger a fresh start()."""
-        from kai.cockpit.deployments import DeploymentsService, reconcile_deployments
-
-        svc = DeploymentsService(db)
-        dep = svc.create(user, "email", "goal", "English")
-        # Simulate a deployment that was running before a restart: intent
-        # persisted (desired_state) but no run_id / live process anymore.
-        dep.desired_state = "running"
-        dep.status = "stopped"
-        dep.run_id = None
-        db.commit()
-
-        started: list[int] = []
-        monkeypatch.setattr(
-            "kai.cockpit.deployments.DeploymentsService.start",
-            lambda self, d: started.append(d.id),
-        )
-        monkeypatch.setattr(
-            "kai.cockpit.deployments.DeploymentsService.fetch_status",
-            lambda self, d: None,
-        )
-
-        reconcile_deployments()
-
-        assert started == [dep.id]
-
-    def test_skips_deployment_already_alive(self, db, user, monkeypatch):
-        from kai.cockpit.deployments import DeploymentsService, reconcile_deployments
-
-        svc = DeploymentsService(db)
-        dep = svc.create(user, "email", "goal", "English")
-        dep.desired_state = "running"
-        db.commit()
-
-        started: list[int] = []
-        monkeypatch.setattr(
-            "kai.cockpit.deployments.DeploymentsService.start",
-            lambda self, d: started.append(d.id),
-        )
-        monkeypatch.setattr(
-            "kai.cockpit.deployments.DeploymentsService.fetch_status",
-            lambda self, d: {"ok": True},
-        )
-
-        reconcile_deployments()
-
-        assert started == []
-
-    def test_skips_deployment_without_connection_and_continues(self, db, user, monkeypatch):
-        """A ConnectionRequiredError for one deployment must not stop the
-        reconciliation of the rest."""
-        import secrets
-        from datetime import UTC, datetime
-
-        from kai.cockpit.deployments import DeploymentsService, reconcile_deployments
-        from kai.cockpit.models import User
-        from kai.cockpit.naming import kai_slug_for
-
-        user2 = User(
-            email="alice@test.com",
-            language="English",
-            timezone="UTC",
-            hmac_key=secrets.token_hex(32),
-            created_at=datetime.now(UTC).isoformat(),
-            kai_slug=kai_slug_for("alice@test.com"),
-        )
-        db.add(user2)
-        db.commit()
-        _connect_email(db, user2)
-        _connect_smtp(db, user2)
-
-        svc = DeploymentsService(db)
-        dep1 = svc.create(user, "email", "goal 1", "English")
-        dep1.desired_state = "running"
-        dep2 = svc.create(user2, "email", "goal 2", "English")
-        dep2.desired_state = "running"
-        db.commit()
-
-        started: list[int] = []
-
-        def fake_start(self, d):
-            if d.id == dep1.id:
-                raise ConnectionRequiredError("no connection")
-            started.append(d.id)
-
-        monkeypatch.setattr("kai.cockpit.deployments.DeploymentsService.start", fake_start)
-        monkeypatch.setattr(
-            "kai.cockpit.deployments.DeploymentsService.fetch_status",
-            lambda self, d: None,
-        )
-
-        reconcile_deployments()
-
-        assert started == [dep2.id]
-
-    def test_ignores_deployments_with_desired_state_stopped(self, db, user, monkeypatch):
-        from kai.cockpit.deployments import DeploymentsService, reconcile_deployments
-
-        svc = DeploymentsService(db)
-        dep = svc.create(user, "email", "goal", "English")
-        assert dep.desired_state == "stopped"
-
-        started: list[int] = []
-        monkeypatch.setattr(
-            "kai.cockpit.deployments.DeploymentsService.start",
-            lambda self, d: started.append(d.id),
-        )
-
-        reconcile_deployments()
-
-        assert started == []

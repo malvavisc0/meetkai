@@ -61,16 +61,16 @@ class TestIngestEvent:
     @pytest.mark.asyncio
     async def test_unsupported_event_returns_false(self, tmp_path):
         bot = _make_bot(tmp_path)
-        bot._agent = AsyncMock()
+        bot.agent = AsyncMock()
         result = await bot.ingest_event({"event": "some.other", "source": "a@b.com", "text": "hi"})
         assert result == {"ok": False}
-        bot._agent.chat.assert_not_called()
+        bot.agent.chat.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_silent_action_returns_ok(self, tmp_path):
         bot = _make_bot(tmp_path)
-        bot._agent = AsyncMock()
-        bot._agent.chat = AsyncMock(return_value=_chat_result("silent"))
+        bot.agent = AsyncMock()
+        bot.agent.chat = AsyncMock(return_value=_chat_result("silent"))
         result = await bot.ingest_event(
             {
                 "event": "email.inbound",
@@ -84,8 +84,8 @@ class TestIngestEvent:
     @pytest.mark.asyncio
     async def test_exception_returns_false(self, tmp_path):
         bot = _make_bot(tmp_path)
-        bot._agent = AsyncMock()
-        bot._agent.chat = AsyncMock(side_effect=RuntimeError("boom"))
+        bot.agent = AsyncMock()
+        bot.agent.chat = AsyncMock(side_effect=RuntimeError("boom"))
         result = await bot.ingest_event(
             {
                 "event": "email.inbound",
@@ -98,8 +98,8 @@ class TestIngestEvent:
     @pytest.mark.asyncio
     async def test_passes_context_and_conversation_id(self, tmp_path):
         bot = _make_bot(tmp_path)
-        bot._agent = AsyncMock()
-        bot._agent.chat = AsyncMock(return_value=_chat_result("silent"))
+        bot.agent = AsyncMock()
+        bot.agent.chat = AsyncMock(return_value=_chat_result("silent"))
         await bot.ingest_event(
             {
                 "event": "email.inbound",
@@ -108,7 +108,7 @@ class TestIngestEvent:
                 "metadata": {"subject": "test"},
             }
         )
-        call_kwargs = bot._agent.chat.call_args
+        call_kwargs = bot.agent.chat.call_args
         assert call_kwargs.kwargs["conversation_id"] == "alice@example.com"
         ctx = call_kwargs.kwargs["context"]
         assert ctx.sender_name == "alice@example.com"
@@ -125,8 +125,8 @@ class TestSmtpReply:
     @pytest.mark.asyncio
     async def test_reply_sends_email(self, tmp_path):
         bot = _make_bot(tmp_path)
-        bot._agent = AsyncMock()
-        bot._agent.chat = AsyncMock(return_value=_chat_result("reply", text="Here is the answer."))
+        bot.agent = AsyncMock()
+        bot.agent.chat = AsyncMock(return_value=_chat_result("reply", text="Here is the answer."))
 
         with patch("kai.agent.tools.email.smtplib.SMTP") as mock_smtp:
             server = MagicMock()
@@ -158,8 +158,8 @@ class TestSmtpReply:
     async def test_reply_uses_configured_display_name(self, tmp_path):
         bot = _make_bot(tmp_path)
         bot._config = BotConfig(language="English", timezone="UTC", display_name="Acme Support")
-        bot._agent = AsyncMock()
-        bot._agent.chat = AsyncMock(return_value=_chat_result("reply", text="Here is the answer."))
+        bot.agent = AsyncMock()
+        bot.agent.chat = AsyncMock(return_value=_chat_result("reply", text="Here is the answer."))
 
         with patch("kai.agent.tools.email.smtplib.SMTP") as mock_smtp:
             server = MagicMock()
@@ -180,8 +180,8 @@ class TestSmtpReply:
     @pytest.mark.asyncio
     async def test_reply_empty_subject_uses_default(self, tmp_path):
         bot = _make_bot(tmp_path)
-        bot._agent = AsyncMock()
-        bot._agent.chat = AsyncMock(return_value=_chat_result("reply", text="hi"))
+        bot.agent = AsyncMock()
+        bot.agent.chat = AsyncMock(return_value=_chat_result("reply", text="hi"))
 
         with patch("kai.agent.tools.email.smtplib.SMTP") as mock_smtp:
             server = MagicMock()
@@ -204,8 +204,8 @@ class TestSmtpReply:
         bot = _make_bot(tmp_path)
         bot._smtp = MagicMock()
         bot._smtp.smtp_enabled = False
-        bot._agent = AsyncMock()
-        bot._agent.chat = AsyncMock(return_value=_chat_result("reply", text="hi"))
+        bot.agent = AsyncMock()
+        bot.agent.chat = AsyncMock(return_value=_chat_result("reply", text="hi"))
 
         result = await bot.ingest_event(
             {
@@ -220,8 +220,8 @@ class TestSmtpReply:
     @pytest.mark.asyncio
     async def test_smtp_send_failure_returns_false(self, tmp_path):
         bot = _make_bot(tmp_path)
-        bot._agent = AsyncMock()
-        bot._agent.chat = AsyncMock(return_value=_chat_result("reply", text="hi"))
+        bot.agent = AsyncMock()
+        bot.agent.chat = AsyncMock(return_value=_chat_result("reply", text="hi"))
 
         with patch(
             "kai.agent.tools.email.smtplib.SMTP",
@@ -240,8 +240,8 @@ class TestSmtpReply:
     @pytest.mark.asyncio
     async def test_reply_uses_tls_and_auth(self, tmp_path):
         bot = _make_bot(tmp_path)
-        bot._agent = AsyncMock()
-        bot._agent.chat = AsyncMock(return_value=_chat_result("reply", text="hi"))
+        bot.agent = AsyncMock()
+        bot.agent.chat = AsyncMock(return_value=_chat_result("reply", text="hi"))
 
         with patch("kai.agent.tools.email.smtplib.SMTP") as mock_smtp:
             server = MagicMock()
@@ -267,32 +267,40 @@ class TestSmtpReply:
 
 class TestAttachments:
     def _mock_async_client(self, content: bytes | None = b""):
-        """Build a mock httpx.AsyncClient that returns the given content.
+        """Build a mock httpx.AsyncClient that streams the given content.
 
-        Returns a (mock_client_class, mock_get) pair. ``mock_get`` is the
-        ``client.get`` mock for call assertions.
+        Returns a (mock_client_class, mock_stream) pair. ``mock_stream`` is
+        the ``client.stream`` mock for call assertions.
         """
         fake_resp = MagicMock()
-        fake_resp.content = content
         fake_resp.raise_for_status = MagicMock()
 
-        mock_get = AsyncMock(return_value=fake_resp)
+        async def aiter_bytes():
+            yield content
+
+        fake_resp.aiter_bytes = aiter_bytes
+
+        stream_cm = MagicMock()
+        stream_cm.__aenter__ = AsyncMock(return_value=fake_resp)
+        stream_cm.__aexit__ = AsyncMock(return_value=False)
+
+        mock_stream = MagicMock(return_value=stream_cm)
         mock_client = MagicMock()
-        mock_client.get = mock_get
+        mock_client.stream = mock_stream
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
         mock_client.__aexit__ = AsyncMock(return_value=False)
 
         mock_class = MagicMock(return_value=mock_client)
-        return mock_class, mock_get
+        return mock_class, mock_stream
 
     @pytest.mark.asyncio
-    async def test_image_attachment_downloaded_and_passed_to_agent(self, tmp_path, monkeypatch):
+    async def test_image_attachment_downloaded_and_passed_to_agent(self, tmp_path):
         bot = _make_bot(tmp_path, vision=True)
-        bot._agent = AsyncMock()
-        bot._agent.chat = AsyncMock(return_value=_chat_result("silent"))
+        bot.agent = AsyncMock()
+        bot.agent.chat = AsyncMock(return_value=_chat_result("silent"))
 
-        mock_class, mock_get = self._mock_async_client(b"\x89PNG fake image bytes")
-        with patch("kai.bots.email.httpx.AsyncClient", mock_class):
+        mock_class, mock_stream = self._mock_async_client(b"\x89PNG fake image bytes")
+        with patch("kai.bots.email.attachments.httpx.AsyncClient", mock_class):
             await bot.ingest_event(
                 {
                     "event": "email.inbound",
@@ -311,19 +319,19 @@ class TestAttachments:
                 }
             )
 
-        mock_get.assert_called_once_with("https://resend.example/att1")
-        images_arg = bot._agent.chat.call_args.kwargs["images"]
+        mock_stream.assert_called_once_with("GET", "https://resend.example/att1")
+        images_arg = bot.agent.chat.call_args.kwargs["images"]
         assert images_arg is not None
         assert len(images_arg) == 1
         assert images_arg[0] == b"\x89PNG fake image bytes"
 
     @pytest.mark.asyncio
-    async def test_vision_disabled_image_not_downloaded(self, tmp_path, monkeypatch):
+    async def test_vision_disabled_image_not_downloaded(self, tmp_path):
         bot = _make_bot(tmp_path)
-        bot._agent = AsyncMock()
-        bot._agent.chat = AsyncMock(return_value=_chat_result("silent"))
+        bot.agent = AsyncMock()
+        bot.agent.chat = AsyncMock(return_value=_chat_result("silent"))
 
-        with patch("kai.bots.email.httpx.AsyncClient") as mock_class:
+        with patch("kai.bots.email.attachments.httpx.AsyncClient") as mock_class:
             mock_class.return_value.__aenter__ = AsyncMock(return_value=MagicMock())
             mock_class.return_value.__aexit__ = AsyncMock(return_value=False)
             await bot.ingest_event(
@@ -344,19 +352,19 @@ class TestAttachments:
                 }
             )
 
-        mock_class.return_value.__aenter__.return_value.get.assert_not_called()
-        assert bot._agent.chat.call_args.kwargs["images"] is None
+        mock_class.return_value.__aenter__.return_value.stream.assert_not_called()
+        assert bot.agent.chat.call_args.kwargs["images"] is None
         # The text passed to agent.chat should contain the tag
-        enriched = bot._agent.chat.call_args.args[0]
+        enriched = bot.agent.chat.call_args.args[0]
         assert "[attachment: shot.png (image/png)]" in enriched
 
     @pytest.mark.asyncio
-    async def test_non_image_attachment_tagged_not_downloaded(self, tmp_path, monkeypatch):
+    async def test_non_image_attachment_tagged_not_downloaded(self, tmp_path):
         bot = _make_bot(tmp_path, vision=True)
-        bot._agent = AsyncMock()
-        bot._agent.chat = AsyncMock(return_value=_chat_result("silent"))
+        bot.agent = AsyncMock()
+        bot.agent.chat = AsyncMock(return_value=_chat_result("silent"))
 
-        with patch("kai.bots.email.httpx.AsyncClient") as mock_class:
+        with patch("kai.bots.email.attachments.httpx.AsyncClient") as mock_class:
             mock_class.return_value.__aenter__ = AsyncMock(return_value=MagicMock())
             mock_class.return_value.__aexit__ = AsyncMock(return_value=False)
             await bot.ingest_event(
@@ -377,19 +385,19 @@ class TestAttachments:
                 }
             )
 
-        mock_class.return_value.__aenter__.return_value.get.assert_not_called()
-        assert bot._agent.chat.call_args.kwargs["images"] is None
-        enriched = bot._agent.chat.call_args.args[0]
+        mock_class.return_value.__aenter__.return_value.stream.assert_not_called()
+        assert bot.agent.chat.call_args.kwargs["images"] is None
+        enriched = bot.agent.chat.call_args.args[0]
         assert "[attachment: report.pdf (application/pdf)]" in enriched
 
     @pytest.mark.asyncio
-    async def test_attachment_too_large_returns_none(self, tmp_path, monkeypatch):
+    async def test_attachment_too_large_returns_none(self, tmp_path):
         bot = _make_bot(tmp_path, vision=True, max_attachment_bytes=100)
-        bot._agent = AsyncMock()
-        bot._agent.chat = AsyncMock(return_value=_chat_result("silent"))
+        bot.agent = AsyncMock()
+        bot.agent.chat = AsyncMock(return_value=_chat_result("silent"))
 
-        mock_class, mock_get = self._mock_async_client(b"x" * 200)
-        with patch("kai.bots.email.httpx.AsyncClient", mock_class):
+        mock_class, _ = self._mock_async_client(b"x" * 200)
+        with patch("kai.bots.email.attachments.httpx.AsyncClient", mock_class):
             await bot.ingest_event(
                 {
                     "event": "email.inbound",
@@ -408,9 +416,9 @@ class TestAttachments:
                 }
             )
 
-        images_arg = bot._agent.chat.call_args.kwargs["images"]
+        images_arg = bot.agent.chat.call_args.kwargs["images"]
         assert images_arg is None
-        enriched = bot._agent.chat.call_args.args[0]
+        enriched = bot.agent.chat.call_args.args[0]
         assert "failed to download" in enriched
 
 
@@ -424,14 +432,14 @@ class TestHandleOperator:
     async def test_console_action_returns_reply_without_sending(self, tmp_path):
         """console = answer the operator directly, no email sent."""
         bot = _make_bot(tmp_path)
-        bot._agent = AsyncMock()
-        bot._agent.chat = AsyncMock(return_value=_chat_result("console", text="here's your answer"))
+        bot.agent = AsyncMock()
+        bot.agent.chat = AsyncMock(return_value=_chat_result("console", text="here's your answer"))
 
         with patch("kai.agent.tools.email.smtplib.SMTP") as mock_smtp:
             result = await bot.handle_operator("what's the status?")
 
         mock_smtp.assert_not_called()
-        bot._agent.record_assistant_message.assert_not_called()
+        bot.agent.record_assistant_message.assert_not_called()
         assert result.ok is True
         assert result.reply == "here's your answer"
         assert result.actions == []
@@ -440,8 +448,8 @@ class TestHandleOperator:
     async def test_reply_action_sends_email_and_records_history(self, tmp_path):
         """reply = agent picked the target from the instruction; bot delivers."""
         bot = _make_bot(tmp_path)
-        bot._agent = AsyncMock()
-        bot._agent.chat = AsyncMock(
+        bot.agent = AsyncMock()
+        bot.agent.chat = AsyncMock(
             return_value=_chat_result("reply", text="a real answer", target="alice@example.com")
         )
 
@@ -456,7 +464,7 @@ class TestHandleOperator:
         server.send_message.assert_called_once()
         sent_msg = server.send_message.call_args.args[0]
         assert sent_msg["To"] == "alice@example.com"
-        bot._agent.record_assistant_message.assert_awaited_once_with(
+        bot.agent.record_assistant_message.assert_awaited_once_with(
             "alice@example.com", "a real answer"
         )
         assert result.ok is True
@@ -472,21 +480,21 @@ class TestHandleOperator:
     @pytest.mark.asyncio
     async def test_silent_action_never_sends(self, tmp_path):
         bot = _make_bot(tmp_path)
-        bot._agent = AsyncMock()
-        bot._agent.chat = AsyncMock(return_value=_chat_result("silent"))
+        bot.agent = AsyncMock()
+        bot.agent.chat = AsyncMock(return_value=_chat_result("silent"))
 
         with patch("kai.agent.tools.email.smtplib.SMTP") as mock_smtp:
             result = await bot.handle_operator("test message")
 
         mock_smtp.assert_not_called()
-        bot._agent.record_assistant_message.assert_not_called()
+        bot.agent.record_assistant_message.assert_not_called()
         assert result.ok is True
 
     @pytest.mark.asyncio
     async def test_send_failure_reported_without_crashing(self, tmp_path):
         bot = _make_bot(tmp_path)
-        bot._agent = AsyncMock()
-        bot._agent.chat = AsyncMock(
+        bot.agent = AsyncMock()
+        bot.agent.chat = AsyncMock(
             return_value=_chat_result("reply", text="a real answer", target="alice@example.com")
         )
 
@@ -498,14 +506,14 @@ class TestHandleOperator:
 
         assert result.ok is False
         assert "alice@example.com" in result.reply
-        bot._agent.record_assistant_message.assert_not_called()
+        bot.agent.record_assistant_message.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_reply_without_target_reports_missing_target(self, tmp_path):
         """Agent chose reply but didn't fill target — can't send, report it."""
         bot = _make_bot(tmp_path)
-        bot._agent = AsyncMock()
-        bot._agent.chat = AsyncMock(
+        bot.agent = AsyncMock()
+        bot.agent.chat = AsyncMock(
             return_value=_chat_result("reply", text="some text", target=None)
         )
 
@@ -517,8 +525,8 @@ class TestHandleOperator:
     @pytest.mark.asyncio
     async def test_reply_without_text_reports_missing_text(self, tmp_path):
         bot = _make_bot(tmp_path)
-        bot._agent = AsyncMock()
-        bot._agent.chat = AsyncMock(
+        bot.agent = AsyncMock()
+        bot.agent.chat = AsyncMock(
             return_value=_chat_result("reply", text=None, target="alice@example.com")
         )
 
@@ -530,6 +538,6 @@ class TestHandleOperator:
     @pytest.mark.asyncio
     async def test_no_agent_returns_error(self, tmp_path):
         bot = _make_bot(tmp_path)
-        bot._agent = None
+        bot.agent = None
         result = await bot.handle_operator("test message")
         assert result.ok is False

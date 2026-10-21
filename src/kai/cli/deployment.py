@@ -26,11 +26,11 @@ def deployment_create(
     template: str = typer.Option("general", "--template", "-t", help="Template to start from"),
 ) -> None:
     """Create a new deployment for a user."""
-    from kai.cockpit.db import SessionLocal
+    from kai.cockpit.db import open_session
     from kai.cockpit.deployments import ConnectionRequiredError, DeploymentsService
     from kai.cockpit.models import User
 
-    db = SessionLocal()
+    db = open_session()
     try:
         db_user = db.query(User).filter(User.email == user).first()
         if not db_user:
@@ -61,11 +61,11 @@ def deployment_list(
     user: str = typer.Option(..., "--user", help="User email"),
 ) -> None:
     """List a user's deployments."""
-    from kai.cockpit.db import SessionLocal
+    from kai.cockpit.db import open_session
     from kai.cockpit.deployments import DeploymentsService
     from kai.cockpit.models import User
 
-    db = SessionLocal()
+    db = open_session()
     try:
         db_user = db.query(User).filter(User.email == user).first()
         if not db_user:
@@ -104,14 +104,14 @@ def deployment_start(
     deployment_id: int = typer.Argument(..., help="Deployment id"),
 ) -> None:
     """Start a deployment."""
-    from kai.cockpit.db import SessionLocal
+    from kai.cockpit.db import open_session
     from kai.cockpit.deployments import (
         ConnectionRequiredError,
         DeploymentsService,
         DeploymentStartupError,
     )
 
-    db = SessionLocal()
+    db = open_session()
     try:
         svc = DeploymentsService(db)
         dep = svc.get(deployment_id)
@@ -136,10 +136,10 @@ def deployment_stop(
     deployment_id: int = typer.Argument(..., help="Deployment id"),
 ) -> None:
     """Stop a deployment."""
-    from kai.cockpit.db import SessionLocal
+    from kai.cockpit.db import open_session
     from kai.cockpit.deployments import DeploymentsService
 
-    db = SessionLocal()
+    db = open_session()
     try:
         svc = DeploymentsService(db)
         dep = svc.get(deployment_id)
@@ -159,10 +159,10 @@ def deployment_edit(
     language: str = typer.Option(None, "--language", help="New language (leave unset to keep)"),
 ) -> None:
     """Change a deployment's goal or language."""
-    from kai.cockpit.db import SessionLocal
+    from kai.cockpit.db import open_session
     from kai.cockpit.deployments import DeploymentsService
 
-    db = SessionLocal()
+    db = open_session()
     try:
         svc = DeploymentsService(db)
         dep = svc.get(deployment_id)
@@ -195,10 +195,10 @@ def deployment_delete(
     yes: bool = typer.Option(False, "--yes", "-y", help="Skip confirmation prompt"),
 ) -> None:
     """Delete a deployment, stopping it first if it's running."""
-    from kai.cockpit.db import SessionLocal
+    from kai.cockpit.db import open_session
     from kai.cockpit.deployments import DeploymentsService
 
-    db = SessionLocal()
+    db = open_session()
     try:
         svc = DeploymentsService(db)
         dep = svc.get(deployment_id)

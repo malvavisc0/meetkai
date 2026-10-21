@@ -20,10 +20,10 @@ def connection_list(
 ) -> None:
     """List the integrations a user has connected."""
     from kai.cockpit.connections.service import ConnectionsService
-    from kai.cockpit.db import SessionLocal
+    from kai.cockpit.db import open_session
     from kai.cockpit.models import User
 
-    db = SessionLocal()
+    db = open_session()
     try:
         db_user = db.query(User).filter(User.email == user).first()
         if not db_user:

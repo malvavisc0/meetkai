@@ -54,6 +54,17 @@ def make_test_settings() -> Settings:
     )
 
 
+@pytest.fixture
+def settings() -> Settings:
+    """Agent settings with test LLM credentials and no on-disk history."""
+    return Settings.for_test(
+        llm_api_base="http://localhost:8080/v1",
+        llm_api_key="test-key",
+        llm_model="test-model",
+        agent_history_folder=None,
+    )
+
+
 @pytest.fixture(autouse=True)
 def _isolated_settings(monkeypatch):
     """Ensure tests using KaiAgent(settings=None) never load real history

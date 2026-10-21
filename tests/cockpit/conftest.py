@@ -14,7 +14,7 @@ from fastapi import Request
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
-from tests.cockpit.helpers import _connect_email  # noqa: F401 (re-exported)
+from tests.cockpit.helpers import _connect_email, _connect_smtp  # noqa: F401 (re-exported)
 
 from kai.cockpit.db import Base
 from kai.cockpit.models import User
@@ -30,7 +30,7 @@ def _cockpit_env(monkeypatch):
     # background thread — it would race the isolated in-memory SQLite
     # StaticPool connection set up by _isolated_db_engine below and corrupt
     # SQLAlchemy's identity map. Exercised directly by
-    # TestReconcileDeployments in tests/cockpit/test_deployments_service.py.
+    # TestReconcileDeployments in tests/cockpit/test_deployments_reconcile.py.
     monkeypatch.setenv("KAI_COCKPIT_TESTING", "1")
 
 
@@ -54,18 +54,13 @@ def _isolated_configs_dir(tmp_path, monkeypatch):
 
 @pytest.fixture(autouse=True)
 def _isolated_db_engine(monkeypatch):
-    """Bind the cockpit DB module to an in-memory engine for every test.
+    """Bind cockpit DB access to an in-memory engine for every test.
 
-    ``kai.cockpit.db`` creates its module-level ``engine`` /
-    ``SessionLocal`` at import time, defaulting to
-    ``sqlite:///data/cockpit.db`` (a production file). ``app.py`` imports
-    ``run_migrations`` by reference at module load, so patching
-    ``cockpit_db.run_migrations`` *after* import does not stop ``create_app()``
-    from calling the real one. Patching the module-global ``engine`` (and
-    the already-imported ``app.run_migrations``) is the only airtight way to
-    guarantee no test ever creates ``data/cockpit.db``.
+    Production builds the engine from settings; tests build a StaticPool
+    engine and patch the standalone ``open_session`` seam used by CLI
+    commands. The FastAPI app gets the matching session factory injected by
+    the ``client`` fixture, so no module-global engine is ever created.
     """
-    import kai.cockpit.app as cockpit_app
     import kai.cockpit.db as cockpit_db
 
     eng = create_engine(
@@ -74,17 +69,15 @@ def _isolated_db_engine(monkeypatch):
         poolclass=StaticPool,
     )
     Base.metadata.create_all(eng)
+    factory = sessionmaker(bind=eng)
 
-    monkeypatch.setattr(cockpit_db, "engine", eng)
-    monkeypatch.setattr(cockpit_db, "SessionLocal", sessionmaker(bind=eng))
-    monkeypatch.setattr(cockpit_app, "run_migrations", lambda: None)
-    monkeypatch.setattr(cockpit_db, "run_migrations", lambda: None)
+    monkeypatch.setattr(cockpit_db, "open_session", lambda: factory())
     return eng
 
 
 @pytest.fixture
 def engine(_isolated_db_engine):
-    """In-memory SQLite engine (the autouse-isolated module global)."""
+    """In-memory SQLite engine used by the isolated cockpit database."""
     return _isolated_db_engine
 
 
@@ -118,12 +111,12 @@ def user(db):
 
 
 @pytest.fixture
-def connected_user(user, db):
-    """The ``user`` fixture with a connected Resend ``Connection`` already
-    attached — for the majority of tests that just want a "ready to go"
-    user able to create an ``email`` deployment.
+def email_ready_user(user, db):
+    """The ``user`` fixture with the resend and smtp connections email
+    deployments require at ``DeploymentsService.create()`` time.
     """
     _connect_email(db, user)
+    _connect_smtp(db, user)
     return user
 
 
@@ -140,7 +133,7 @@ def client(db, monkeypatch):
     import kai.cockpit.db as cockpit_db
     from kai.cockpit.app import create_app
 
-    app = create_app()
+    app = create_app(session_factory=sessionmaker(bind=db.get_bind()))
 
     def _override_get_db(request: Request):
         request.state.db = db

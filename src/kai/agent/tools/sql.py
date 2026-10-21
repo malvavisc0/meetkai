@@ -2,7 +2,7 @@
 
 Registered by ``cli/bot.py`` when ``sql_enabled`` is true. The DSN lives only in
 the engine closure and is never passed to a logger — call/result logging is
-handled generically by ``agent/core.py:run_with_tools`` so no per-tool
+handled generically by ``agent/tool_loop.py`` (``ToolLoopMixin``) so no per-tool
 ``logger.info`` is added here.
 """
 

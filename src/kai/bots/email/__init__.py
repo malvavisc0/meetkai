@@ -20,7 +20,6 @@ from email.utils import formatdate, make_msgid
 from pathlib import Path
 from typing import Literal
 
-import httpx
 import uvicorn
 from pydantic import Field
 from rich.console import Console
@@ -38,6 +37,7 @@ from kai.agent.tools.email import (
     valid_recipient,
 )
 from kai.bots.base import BaseBot, TellResult
+from kai.bots.email.attachments import process_attachments
 from kai.bots.email.config import EmailSettings, get_email_settings
 from kai.bots.email.setup import BotConfig
 from kai.bots.processing import PostProcessor
@@ -100,7 +100,7 @@ class Bot(BaseBot):
 
     def __init__(self, bot_dir: Path, config: BotConfig | None = None):
         super().__init__(bot_dir)
-        self._agent: KaiAgent | None = None
+        self.agent: KaiAgent | None = None
         self._settings: Settings | None = None
         self._email: EmailSettings | None = None
         self._config: BotConfig = config or BotConfig()
@@ -273,7 +273,7 @@ class Bot(BaseBot):
 
     async def process_inbound_email(self, event: dict, source: str) -> None:
         """Run an inbound email through the agent and dispatch its action."""
-        assert self._agent is not None
+        assert self.agent is not None
         text = event["text"]
         metadata = event.get("metadata", {})
         subject = metadata.get("subject", "")
@@ -291,7 +291,7 @@ class Bot(BaseBot):
 
         self.set_task_context(chat_id=source, owner_id=source, tz_hint=self._config.timezone)
 
-        result = await self._agent.chat(
+        result = await self.agent.chat(
             enriched_text,
             output_cls=EmailAction,
             conversation_id=source,
@@ -375,13 +375,13 @@ class Bot(BaseBot):
         in the target's history; ``console`` returns the reply to the
         operator only; ``silent`` is a no-op.
         """
-        if self._agent is None:
+        if self.agent is None:
             return TellResult(ok=False, reply="bot has no agent")
 
         console.print(f"[magenta]< operator[/magenta]  {message}")
 
         try:
-            result = await self._agent.chat(
+            result = await self.agent.chat(
                 message,
                 output_cls=EmailAction,
                 conversation_id="operator",
@@ -454,8 +454,8 @@ class Bot(BaseBot):
                 logger.error("Failed to send email to %s: %s", target, exc)
                 console.print(f"[red]send failed: {target}: {exc}[/red]")
                 sent_ok = False
-        if sent_ok and self._agent is not None:
-            await self._agent.record_assistant_message(target, out_text)
+        if sent_ok and self.agent is not None:
+            await self.agent.record_assistant_message(target, out_text)
         snippet = out_text if len(out_text) <= 60 else out_text[:57] + "..."
         reply = f"sent to {target}: {snippet}" if sent_ok else f"failed to send to {target}"
         return sent_ok, reply
@@ -489,9 +489,9 @@ class Bot(BaseBot):
 
     async def clear_operator_history(self) -> dict:
         """Clear the operator conversation history."""
-        if self._agent is None:
+        if self.agent is None:
             return {"ok": False, "error": "bot has no agent"}
-        await self._agent.clear_history("operator")
+        await self.agent.clear_history("operator")
         return {"ok": True}
 
     async def send_reply(
@@ -567,64 +567,14 @@ class Bot(BaseBot):
     async def process_attachments(
         self, text: str, attachments: list[dict]
     ) -> tuple[list[bytes], str]:
-        """Download image attachments, tag non-image attachments.
-
-        Returns ``(image_bytes_list, enriched_text)``. Image bytes are only
-        downloaded when vision is enabled; otherwise (or for non-images) a
-        ``[attachment: ...]`` text tag is injected — graceful
-        degradation when ``image_enabled=False``.
-        """
-        images: list[bytes] = []
-        enriched = text
-
-        for att in attachments:
-            content_type = att.get("content_type", "")
-            filename = att.get("filename", "")
-            url = att.get("url", "")
-
-            if content_type.startswith("image/") and self.vision_enabled():
-                img_bytes = await self.download_attachment(url)
-                if img_bytes:
-                    images.append(img_bytes)
-                    tag = f"[image attached: {filename}]"
-                else:
-                    tag = f"[image attachment failed to download: {filename}]"
-            else:
-                tag = f"[attachment: {filename} ({content_type})]"
-
-            enriched = f"{tag}\n{enriched}" if enriched else tag
-
-        return images, enriched
-
-    async def download_attachment(self, url: str) -> bytes | None:
-        """Download an attachment with a size cap.
-
-        The URL comes from Resend's signed webhook (already verified by the
-        cockpit's ingress route), so it's trusted as a source — but the
-        content is still untrusted user data (prompt-injection guard in
-        ``prompt.md`` covers this).
-        """
-        try:
-            async with httpx.AsyncClient(timeout=30, follow_redirects=True) as client:
-                resp = await client.get(url)
-                resp.raise_for_status()
-                if self._email is None:
-                    return None
-                if len(resp.content) > self._email.max_attachment_bytes:
-                    logger.warning("Attachment too large: %d bytes", len(resp.content))
-                    return None
-                return resp.content
-        except Exception:
-            logger.exception("Failed to download attachment: %s", url)
-            return None
-
-    def vision_enabled(self) -> bool:
-        """True when the deployment's image feature flag is on.
-
-        Sourced from ``BotConfig.vision`` (config.json, written by the cockpit
-        from ``Deployment.feature_flags["image"]``).
-        """
-        return self._config.vision
+        """Download and tag inbound attachments for the agent turn."""
+        max_bytes = self._email.max_attachment_bytes if self._email else 0
+        return await process_attachments(
+            text,
+            attachments,
+            vision_enabled=self._config.vision,
+            max_attachment_bytes=max_bytes,
+        )
 
 
 __all__ = ["Bot", "BotConfig", "EmailAction"]

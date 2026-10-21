@@ -2,14 +2,22 @@
 
 import os
 import subprocess
+from dataclasses import dataclass
 
 import pytest
 from tests.cockpit.helpers import _connect_email, _connect_smtp, csrf_post
 
 from kai.cockpit import tokens
 from kai.cockpit.auth_backends import MagicLinkProvider
-from kai.cockpit.models import User
+from kai.cockpit.deployments import DeploymentsService
+from kai.cockpit.models import Deployment, User
 from kai.cockpit.naming import kai_slug_for
+
+
+@dataclass
+class _StartedDeployment:
+    dep: Deployment
+    service: DeploymentsService
 
 
 @pytest.fixture
@@ -39,86 +47,92 @@ def _login(client, db, bob):
     return client
 
 
+@pytest.fixture
+def started_deployment(client, db, bob, monkeypatch, tmp_path):
+    # 5. GET /console -> console (no deployments)
+    _login(client, db, bob)
+    r = client.get("/console")
+    assert r.status_code == 200
+    assert "deployment" in r.text.lower()
+
+    # Connect the email bot's required connections (resend + smtp).
+    _connect_email(db, bob)
+    _connect_smtp(db, bob)
+
+    # 8. GET /deployments/new?bot_type=email -> wizard
+    r = client.get("/deployments/new", params={"bot_type": "email"})
+    assert r.status_code == 200
+
+    # 9. POST /deployments/new -> deployment created, redirect to detail
+    r = csrf_post(
+        client,
+        "/deployments/new",
+        data={"bot_type": "email", "goal": "be helpful", "language": "English"},
+        follow_redirects=False,
+    )
+    assert r.status_code == 302
+    assert "/deployments/" in r.headers["location"]
+
+    dep_svc = DeploymentsService(db)
+    deps = dep_svc.list_for_user(bob.id)
+    assert len(deps) == 1
+    dep = deps[0]
+
+    # 10. POST /deployments/{id}/start -> (mock subprocess) -> running
+    monkeypatch.setattr("kai.cockpit.config_writer.write_config", lambda d, instance_id: None)
+
+    class FakeProc:
+        returncode = None
+
+        @property
+        def stdout(self):
+            return self
+
+        def __init__(self):
+            self._lines = iter(["KAI_RUN_ID=cafef00d\n"])
+
+        def readline(self):
+            return next(self._lines, "")
+
+        def poll(self):
+            return self.returncode
+
+    monkeypatch.setattr(subprocess, "Popen", lambda *a, **k: FakeProc())
+
+    from kai.config.settings import Settings
+    from kai.runs import RunRecord, RunRegistry, proc_start_time, runs_path
+
+    fake_settings = Settings.for_test(agent_history_folder=str(tmp_path))
+    monkeypatch.setattr("kai.config.settings.get_settings", lambda: fake_settings)
+
+    instance_id = f"{dep.bot_type}-{bob.email}"
+    registry = RunRegistry(runs_path(fake_settings.agent_history_folder, instance_id))
+    registry.replace(
+        RunRecord(
+            run_id="cafef00d",
+            endpoint="http://127.0.0.1:9999",
+            hmac_key="k",
+            hmac_algorithm="sha512",
+            pid=os.getpid(),
+            pid_start=proc_start_time(os.getpid()),  # live-looking seed
+            started_at="t",
+        ),
+    )
+
+    r = csrf_post(client, f"/deployments/{dep.id}/start", follow_redirects=False)
+    assert r.status_code == 302
+    db.refresh(dep)
+    assert dep.status == "running"
+    assert dep.run_id == "cafef00d"
+
+    return _StartedDeployment(dep=dep, service=dep_svc)
+
+
 class TestFullDeploymentFlow:
-    def test_end_to_end(self, client, db, bob, monkeypatch, tmp_path):
-        # 5. GET /console -> console (no deployments)
-        _login(client, db, bob)
-        r = client.get("/console")
-        assert r.status_code == 200
-        assert "deployment" in r.text.lower()
-
-        # Connect the email bot's required connections (resend + smtp).
-        _connect_email(db, bob)
-        _connect_smtp(db, bob)
-
-        # 8. GET /deployments/new?bot_type=email -> wizard
-        r = client.get("/deployments/new", params={"bot_type": "email"})
-        assert r.status_code == 200
-
-        # 9. POST /deployments/new -> deployment created, redirect to detail
-        r = csrf_post(
-            client,
-            "/deployments/new",
-            data={"bot_type": "email", "goal": "be helpful", "language": "English"},
-            follow_redirects=False,
-        )
-        assert r.status_code == 302
-        assert "/deployments/" in r.headers["location"]
-
-        from kai.cockpit.deployments import DeploymentsService
-
-        dep_svc = DeploymentsService(db)
-        deps = dep_svc.list_for_user(bob.id)
-        assert len(deps) == 1
-        dep = deps[0]
-
-        # 10. POST /deployments/{id}/start -> (mock subprocess) -> running
-        monkeypatch.setattr("kai.cockpit.config_writer.write_config", lambda d, instance_id: None)
-
-        class FakeProc:
-            returncode = None
-
-            @property
-            def stdout(self):
-                return self
-
-            def __init__(self):
-                self._lines = iter(["KAI_RUN_ID=cafef00d\n"])
-
-            def readline(self):
-                return next(self._lines, "")
-
-            def poll(self):
-                return self.returncode
-
-        monkeypatch.setattr(subprocess, "Popen", lambda *a, **k: FakeProc())
+    def test_chat_settings_and_restart(self, started_deployment, client, db, monkeypatch):
+        dep = started_deployment.dep
 
         import kai.cockpit.deployments as dep_mod
-        from kai.config.settings import Settings
-        from kai.runs import RunRecord, RunRegistry, proc_start_time, runs_path
-
-        fake_settings = Settings.for_test(agent_history_folder=str(tmp_path))
-        monkeypatch.setattr("kai.config.settings.get_settings", lambda: fake_settings)
-
-        instance_id = f"{dep.bot_type}-{bob.email}"
-        registry = RunRegistry(runs_path(fake_settings.agent_history_folder, instance_id))
-        registry.replace(
-            RunRecord(
-                run_id="cafef00d",
-                endpoint="http://127.0.0.1:9999",
-                hmac_key="k",
-                hmac_algorithm="sha512",
-                pid=os.getpid(),
-                pid_start=proc_start_time(os.getpid()),  # live-looking seed
-                started_at="t",
-            ),
-        )
-
-        r = csrf_post(client, f"/deployments/{dep.id}/start", follow_redirects=False)
-        assert r.status_code == 302
-        db.refresh(dep)
-        assert dep.status == "running"
-        assert dep.run_id == "cafef00d"
 
         # 11. GET /deployments/{id} -> status (mock /status response)
         monkeypatch.setattr(
@@ -159,13 +173,16 @@ class TestFullDeploymentFlow:
         assert r.status_code == 200
         assert "restart" in r.text.lower()
 
+    def test_stop_and_delete(self, started_deployment, client, db, monkeypatch):
+        dep = started_deployment.dep
+
         # 14. POST /deployments/{id}/stop -> stopped
         # The seeded record is live-looking (the test process itself), so
         # stub the kill: stop() would otherwise SIGTERM this pytest worker.
+        killed: list = []
         monkeypatch.setattr(
             "kai.cockpit.deployments.os.kill", lambda pid, sig: killed.append((pid, sig))
         )
-        killed: list = []
         r = csrf_post(client, f"/deployments/{dep.id}/stop", follow_redirects=False)
         assert r.status_code == 302
         db.refresh(dep)
@@ -180,4 +197,4 @@ class TestFullDeploymentFlow:
         )
         assert r.status_code == 302
         assert r.headers["location"] == "/console"
-        assert dep_svc.get(dep.id) is None
+        assert started_deployment.service.get(dep.id) is None

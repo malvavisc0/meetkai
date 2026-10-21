@@ -55,52 +55,57 @@ class TestToolSignature:
             assert "base_url" not in params
 
 
+def _list_event_types_result():
+    tools = _tools()
+    payload = {
+        "status": "success",
+        "data": [
+            {
+                "id": 1,
+                "title": "Intro",
+                "slug": "intro",
+                "lengthInMinutes": 30,
+                "bookingUrl": "https://cal.com/bob/intro",
+                "hidden": False,
+                "bookingFields": [
+                    {"type": "name", "label": "Name"},
+                    {"type": "email", "label": "Email"},
+                    {
+                        "slug": "topic",
+                        "type": "text",
+                        "label": "What's this about?",
+                        "required": True,
+                    },
+                    {
+                        "slug": "service",
+                        "type": "select",
+                        "label": "Which service?",
+                        "required": True,
+                        "options": ["Consultation", "Demo", "Support"],
+                        "hidden": False,
+                    },
+                    {
+                        "slug": "notes",
+                        "type": "textarea",
+                        "label": "Notes",
+                        "required": False,
+                    },
+                ],
+                "metadata": {"also": "dropped"},
+            }
+        ],
+    }
+    with patch(
+        "kai.agent.tools.calcom.httpx.request",
+        return_value=_FakeResp(200, payload),
+    ) as mock_req:
+        result = _call_tool(tools["list_event_types"])
+    return result, mock_req
+
+
 class TestListEventTypes:
     def test_projects_compact_fields(self):
-        tools = _tools()
-        payload = {
-            "status": "success",
-            "data": [
-                {
-                    "id": 1,
-                    "title": "Intro",
-                    "slug": "intro",
-                    "lengthInMinutes": 30,
-                    "bookingUrl": "https://cal.com/bob/intro",
-                    "hidden": False,
-                    "bookingFields": [
-                        {"type": "name", "label": "Name"},
-                        {"type": "email", "label": "Email"},
-                        {
-                            "slug": "topic",
-                            "type": "text",
-                            "label": "What's this about?",
-                            "required": True,
-                        },
-                        {
-                            "slug": "service",
-                            "type": "select",
-                            "label": "Which service?",
-                            "required": True,
-                            "options": ["Consultation", "Demo", "Support"],
-                            "hidden": False,
-                        },
-                        {
-                            "slug": "notes",
-                            "type": "textarea",
-                            "label": "Notes",
-                            "required": False,
-                        },
-                    ],
-                    "metadata": {"also": "dropped"},
-                }
-            ],
-        }
-        with patch(
-            "kai.agent.tools.calcom.httpx.request",
-            return_value=_FakeResp(200, payload),
-        ) as mock_req:
-            result = _call_tool(tools["list_event_types"])
+        result, _ = _list_event_types_result()
         items = json.loads(result)
         # Default name/email fields (no slug) are dropped — they're handled
         # by the attendee object. Custom fields with slugs are kept compact.
@@ -135,6 +140,9 @@ class TestListEventTypes:
                 ],
             }
         ]
+
+    def test_pins_api_version_and_auth_header(self):
+        _, mock_req = _list_event_types_result()
         # Pins the event-types API version (not a global version).
         _, kwargs = mock_req.call_args
         assert kwargs["headers"]["cal-api-version"] == "2024-06-14"
