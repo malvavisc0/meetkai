@@ -15,6 +15,8 @@ logger = logging.getLogger(__name__)
 
 
 class ConnectionsService:
+    """Shared CRUD base for operator service connections."""
+
     def __init__(self, db: Session) -> None:
         self.db = db
 

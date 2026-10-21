@@ -111,13 +111,13 @@ def parse_payload(wh_type: WebhookType, body: bytes, cfg: dict) -> NormalizedMes
     try:
         payload = json.loads(body) if body else {}
     except Exception:
-        raise HTTPException(status_code=400, detail="malformed body")
+        raise HTTPException(status_code=400, detail="malformed body") from None
     try:
         return wh_type.parse(payload, cfg)
     except WebhookUpstreamError as exc:
-        raise HTTPException(status_code=502, detail=f"upstream provider API error: {exc}")
+        raise HTTPException(status_code=502, detail=f"upstream provider API error: {exc}") from exc
     except Exception:
-        raise HTTPException(status_code=400, detail="malformed payload")
+        raise HTTPException(status_code=400, detail="malformed payload") from None
 
 
 def find_consuming_deployment(db: Session, user_id: int, type_name: str) -> Deployment | None:

@@ -40,6 +40,8 @@ def smtp_test(
 
 
 class SmtpConnectionsService:
+    """CRUD and testing for SMTP credentials."""
+
     def __init__(self, db: Session) -> None:
         self.db = db
 

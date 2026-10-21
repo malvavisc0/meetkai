@@ -17,6 +17,7 @@ Two behavioral guarantees:
 """
 
 import asyncio
+import contextlib
 import json
 import logging
 import uuid
@@ -328,10 +329,8 @@ class TaskScheduler:
         if self._task is None:
             return
         self._task.cancel()
-        try:
+        with contextlib.suppress(asyncio.CancelledError):
             await self._task
-        except asyncio.CancelledError:
-            pass
         self._task = None
 
     async def run(self) -> None:

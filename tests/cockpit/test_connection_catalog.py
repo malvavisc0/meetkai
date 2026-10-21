@@ -10,6 +10,7 @@ import os
 import subprocess
 
 import pytest
+from tests.cockpit.helpers import make_fake_proc, seed_run_registry
 
 from kai.cockpit.bots import BOT_TYPES, CREDENTIAL_TYPES, BotType
 from kai.cockpit.deployments import (
@@ -49,55 +50,14 @@ def _smtp_conn(user_id: int) -> Connection:
     )
 
 
-class _FakeProc:
-    """Shared fake subprocess.Popen stub for the bot-start read protocol."""
-
-    returncode = None
-
-    def __init__(self):
-        self._lines = iter(["starting...\n", "KAI_RUN_ID=deadbeef\n"])
-
-    @property
-    def stdout(self):
-        return self
-
-    def readline(self):
-        return next(self._lines, "")
-
-    def poll(self):
-        return self.returncode
-
-
 def _capture_popen_factory(env_sink: dict):
     """Return a Popen replacement that records the env dict into ``env_sink``."""
 
     def _capture(argv, *args, **kwargs):
         env_sink.update(kwargs.get("env", {}))
-        return _FakeProc()
+        return make_fake_proc()
 
     return _capture
-
-
-def _setup_run_registry(monkeypatch, tmp_path, instance_id: str):
-    """Register a fake run_id so start() finds it in the runs registry."""
-    from kai.config.settings import Settings
-    from kai.runs import RunRecord, RunRegistry, proc_start_time, runs_path
-
-    fake_settings = Settings.for_test(agent_history_folder=str(tmp_path))
-    monkeypatch.setattr("kai.config.settings.get_settings", lambda: fake_settings)
-    registry = RunRegistry(runs_path(fake_settings.agent_history_folder, instance_id))
-    registry.replace(
-        RunRecord(
-            run_id="deadbeef",
-            endpoint="http://x",
-            hmac_key="k",
-            hmac_algorithm="sha512",
-            pid=os.getpid(),
-            pid_start=proc_start_time(os.getpid()),  # live-looking seed
-            started_at="t",
-        ),
-    )
-    return fake_settings
 
 
 class TestCatalogData:
@@ -129,7 +89,7 @@ class _StartBase:
     def _run_start(self, svc, dep, monkeypatch, tmp_path, user):
         monkeypatch.setattr("kai.cockpit.config_writer.write_config", lambda d, i: None)
 
-        monkeypatch.setattr(subprocess, "Popen", lambda *a, **k: _FakeProc())
+        monkeypatch.setattr(subprocess, "Popen", lambda *a, **k: make_fake_proc())
 
         from kai.config.settings import Settings
         from kai.runs import RunRecord, RunRegistry, proc_start_time, runs_path
@@ -334,7 +294,8 @@ class TestSupportedInjectionLoop(_StartBase):
 
         monkeypatch.setattr(subprocess, "Popen", _capture_popen_factory(injected_env))
 
-        _setup_run_registry(monkeypatch, tmp_path, f"{dep.bot_type}-{user.email}")
+        fake_settings, _ = seed_run_registry(tmp_path, f"{dep.bot_type}-{user.email}")
+        monkeypatch.setattr("kai.config.settings.get_settings", lambda: fake_settings)
 
         svc.start(dep)
         assert "KAI_SQL_DSN" in injected_env
@@ -369,7 +330,8 @@ class TestSupportedInjectionLoop(_StartBase):
 
         monkeypatch.setattr(subprocess, "Popen", _capture_popen_factory(injected_env))
 
-        _setup_run_registry(monkeypatch, tmp_path, f"{dep.bot_type}-{user.email}")
+        fake_settings, _ = seed_run_registry(tmp_path, f"{dep.bot_type}-{user.email}")
+        monkeypatch.setattr("kai.config.settings.get_settings", lambda: fake_settings)
 
         svc.start(dep)
         assert injected_env["KAI_SQL_DSN"] == "sqlite:///x"

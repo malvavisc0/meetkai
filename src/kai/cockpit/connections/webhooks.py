@@ -70,6 +70,8 @@ class NormalizedMessage(BaseModel):
 
 @dataclass(frozen=True)
 class WebhookType:
+    """Catalog entry for one supported webhook provider."""
+
     name: str
     # Verify the provider's signature; call check_freshness after.
     verify_signature: Callable[[Request, bytes, str], bool]

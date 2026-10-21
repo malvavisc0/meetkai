@@ -86,9 +86,7 @@ def valid_recipient(addr: str) -> bool:
     a = (addr or "").strip()
     if not a or not EMAIL_RE.match(a):
         return False
-    if NO_REPLY.match(a):
-        return False
-    return True
+    return not NO_REPLY.match(a)
 
 
 def format_from_header(display_name: str, address: str) -> str:

@@ -126,7 +126,7 @@ def create_webhook_app(
         try:
             payload = await request.json()
         except Exception:
-            raise HTTPException(status_code=400, detail="malformed body")
+            raise HTTPException(status_code=400, detail="malformed body") from None
 
         message = str(payload.get("message", "")).strip()
         persist_raw = payload.get("persist", False)
@@ -169,15 +169,17 @@ def create_webhook_app(
         try:
             payload = await request.json()
         except Exception:
-            raise HTTPException(status_code=400, detail="malformed body")
+            raise HTTPException(status_code=400, detail="malformed body") from None
 
         try:
             return await on_ingest(payload)
         except NotImplementedError:
-            raise HTTPException(status_code=404, detail="ingest not supported by this bot")
-        except Exception:
+            raise HTTPException(
+                status_code=404, detail="ingest not supported by this bot"
+            ) from None
+        except Exception as exc:
             logger.exception("on_ingest handler error")
-            raise HTTPException(status_code=500, detail="ingest failed")
+            raise HTTPException(status_code=500, detail="ingest failed") from exc
 
     @app.get("/status")
     async def status(request: Request) -> dict[str, Any]:
@@ -198,9 +200,9 @@ def create_webhook_app(
 
         try:
             return await on_status()
-        except Exception:
+        except Exception as exc:
             logger.exception("on_status handler error")
-            raise HTTPException(status_code=500, detail="status failed")
+            raise HTTPException(status_code=500, detail="status failed") from exc
 
     @app.post("/clear")
     async def clear(request: Request) -> dict[str, Any]:
@@ -220,8 +222,8 @@ def create_webhook_app(
 
         try:
             return await on_clear()
-        except Exception:
+        except Exception as exc:
             logger.exception("on_clear handler error")
-            raise HTTPException(status_code=500, detail="clear failed")
+            raise HTTPException(status_code=500, detail="clear failed") from exc
 
     return app

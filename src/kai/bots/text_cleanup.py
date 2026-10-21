@@ -63,8 +63,7 @@ def strip_markdown(text: str) -> str:
     text = re.sub(r"_(.+?)_", r"\1", text)
     # List markers (bullets and numbered).
     text = re.sub(r"^\s*(?:[-*]|\d+\.)\s+", "", text, flags=re.MULTILINE)
-    text = re.sub(r"#\w+", "", text)
-    return text
+    return re.sub(r"#\w+", "", text)
 
 
 def collapse_lines(text: str) -> str:

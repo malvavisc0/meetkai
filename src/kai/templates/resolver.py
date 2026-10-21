@@ -71,6 +71,8 @@ VALID_ACTIONS_BY_TRANSPORT = {
 
 @dataclass(frozen=True)
 class ToolResolution:
+    """Resolved tools and workflow prompts for a deployment."""
+
     final_tools: frozenset[str]
     missing_required: list[str] = field(default_factory=list)
     rejected_disable: list[str] = field(default_factory=list)
@@ -180,11 +182,11 @@ def validate_tools(template: TemplateDef) -> list[str]:
 def validate_actions(template: TemplateDef) -> list[str]:
     """Return errors for actions the template's transport does not support."""
     valid = VALID_ACTIONS_BY_TRANSPORT.get(template.transport, set())
-    errors = []
-    for action in template.actions:
-        if action not in valid:
-            errors.append(f"action {action!r} is not valid for transport {template.transport!r}")
-    return errors
+    return [
+        f"action {action!r} is not valid for transport {template.transport!r}"
+        for action in template.actions
+        if action not in valid
+    ]
 
 
 def tool_configured_map(template: TemplateDef) -> dict[str, bool]:

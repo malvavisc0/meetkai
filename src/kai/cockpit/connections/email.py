@@ -5,6 +5,7 @@ fields preserves existing secrets. Probes just-saved credentials and sets
 ``status="connected"`` only when both sign and API are valid."""
 
 import base64
+import contextlib
 import json
 import logging
 import time
@@ -26,6 +27,8 @@ logger = logging.getLogger(__name__)
 
 
 class EmailConnectionsService:
+    """CRUD and provider-key management for email connections."""
+
     def __init__(self, db: Session) -> None:
         self.db = db
 
@@ -211,10 +214,8 @@ def interpret_loopback_status(resp: httpx.Response) -> tuple[bool, str]:
         return False, "no running email bot to receive the event (404)"
     if resp.status_code == 502:
         detail = ""
-        try:
+        with contextlib.suppress(Exception):
             detail = resp.json().get("detail", "")
-        except Exception:
-            pass
         if "upstream provider API error" in detail:
             return True, (
                 "ok — signature verified and event routed to the bot. "

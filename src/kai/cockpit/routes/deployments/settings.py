@@ -52,7 +52,7 @@ def parse_email_settings(
     dep_id: int, request: Request, form_fields: dict[str, str]
 ) -> SettingsParseResult:
     """Email-only settings: a blocklist of sender addresses to silently ignore."""
-    updates = {
+    return {
         "blacklist": [
             line.strip().lower()
             for line in (form_fields.get("blacklist") or "").splitlines()
@@ -60,7 +60,6 @@ def parse_email_settings(
         ],
         "display_name": (form_fields.get("display_name") or "").strip() or DEFAULT_DISPLAY_NAME,
     }
-    return updates
 
 
 # Bot types with no entry here (e.g. a brand-new bot type) simply get no

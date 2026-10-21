@@ -1,4 +1,5 @@
 import asyncio
+import contextlib
 import hashlib
 import json
 import logging
@@ -456,9 +457,7 @@ class HistoryStoreMixin:
         """Persist any pending history changes immediately."""
         if self._flush_task is not None and not self._flush_task.done():
             self._flush_task.cancel()
-            try:
+            with contextlib.suppress(asyncio.CancelledError):
                 await self._flush_task
-            except asyncio.CancelledError:
-                pass
             self._flush_task = None
         await self.flush_now()

@@ -151,7 +151,9 @@ async def template_preview(
     try:
         tmpl = TemplateRegistry.bundled().get(bot_type, template)
     except FileNotFoundError:
-        raise HTTPException(status_code=404, detail=f"Template not found: {bot_type}/{template}")
+        raise HTTPException(
+            status_code=404, detail=f"Template not found: {bot_type}/{template}"
+        ) from None
     configured = tool_configured_map(tmpl)
     warnings = validate_tools(tmpl)
     return templates.TemplateResponse(

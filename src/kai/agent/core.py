@@ -16,7 +16,6 @@ from llama_index.core.types import PydanticProgramMode
 from llama_index.llms.openai_like import OpenAILike
 from pydantic import BaseModel, ConfigDict, Field
 
-import kai.agent.openai_compat  # noqa: F401 - installs the VideoBlock serializer shim
 from kai.agent.action_parsing import (
     strip_reasoning_channels as strip_reasoning_channels,
 )
@@ -87,6 +86,8 @@ class ChatResult(BaseModel):
 
 
 class KaiAgent(HistoryStoreMixin, ToolLoopMixin):
+    """Conversational agent with tool calling and per-conversation history."""
+
     def __init__(
         self,
         settings: Settings | None = None,
@@ -356,10 +357,11 @@ class KaiAgent(HistoryStoreMixin, ToolLoopMixin):
 
         if images or videos:
             blocks: list = [TextBlock(text=user_message)]
-            for img_bytes in images or []:
-                blocks.append(ImageBlock(image=img_bytes))
-            for vid_bytes in videos or []:
-                blocks.append(VideoBlock(video=vid_bytes, video_mimetype="video/mp4"))
+            blocks.extend(ImageBlock(image=img_bytes) for img_bytes in images or [])
+            blocks.extend(
+                VideoBlock(video=vid_bytes, video_mimetype="video/mp4")
+                for vid_bytes in videos or []
+            )
             messages.append(ChatMessage(role=MessageRole.USER, blocks=blocks))
         else:
             messages.append(ChatMessage(role=MessageRole.USER, content=user_message))

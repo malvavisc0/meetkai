@@ -1,5 +1,6 @@
 """Process and run control for bot deployments."""
 
+import contextlib
 import logging
 import os
 import shutil
@@ -147,20 +148,16 @@ def stop(
     # deployment owns is stopped and removed.
     if record is not None:
         registry = svc.run_registry(deployment)
-        try:
+        with contextlib.suppress(ProcessLookupError):
             kill(record.pid, signal.SIGTERM)
-        except ProcessLookupError:
-            pass
         for _ in range(20):
             if not record_is_live(record):
                 break
             time.sleep(0.5)
         else:
             if record_is_live(record):
-                try:
+                with contextlib.suppress(ProcessLookupError):
                     kill(record.pid, signal.SIGKILL)
-                except ProcessLookupError:
-                    pass
                 time.sleep(0.5)
         registry.remove()
     deployment.run_id = None
@@ -211,29 +208,21 @@ def purge_bot_state(svc: "DeploymentsService", deployment: Deployment) -> None:
     if settings.agent_history_folder is not None:
         history_folder = Path(settings.agent_history_folder)
         for suffix in history_suffixes:
-            try:
+            with contextlib.suppress(OSError):
                 (history_folder / suffix).unlink(missing_ok=True)
-            except OSError:
-                pass
         history_dir = history_folder / f"{instance_id}.history"
         if history_dir.is_dir():
             shutil.rmtree(history_dir, ignore_errors=True)
-        try:
+        with contextlib.suppress(OSError):
             runs_path(settings.agent_history_folder, instance_id).unlink(missing_ok=True)
-        except OSError:
-            pass
 
     tasks_folder = Path(settings.tasks_folder)
     for suffix in task_suffixes:
-        try:
+        with contextlib.suppress(OSError):
             (tasks_folder / suffix).unlink(missing_ok=True)
-        except OSError:
-            pass
 
-    try:
+    with contextlib.suppress(OSError):
         (config_writer.CONFIGS_DIR / f"{instance_id}.json").unlink(missing_ok=True)
-    except OSError:
-        pass
 
 
 def run_started_at(svc: "DeploymentsService", deployment: Deployment) -> str | None:

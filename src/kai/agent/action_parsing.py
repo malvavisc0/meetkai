@@ -77,7 +77,7 @@ def parse_kv_lines(text: str) -> dict[str, str]:
     result: dict[str, str] = {}
     for line in text.strip().splitlines():
         line = line.strip()
-        if not line or line.startswith("#") or line.startswith("```"):
+        if not line or line.startswith(("#", "```")):
             continue
         match = KV_LINE_RE.match(line)
         if not match:

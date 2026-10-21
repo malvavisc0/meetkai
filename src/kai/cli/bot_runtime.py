@@ -95,7 +95,7 @@ def load_startup_template(
         tmpl = registry.get(transport, tmpl_name)
     except FileNotFoundError:
         err_line(f"template not found: {transport}/{tmpl_name}")
-        raise typer.Exit(1)
+        raise typer.Exit(1) from None
     except ValueError as exc:
         err_line(f"invalid template {transport}/{tmpl_name}: {exc}")
         raise typer.Exit(1) from exc

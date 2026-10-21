@@ -79,7 +79,7 @@ def show_template(template_id: str) -> None:
         tmpl = REGISTRY.get(parts.transport, parts.name)
     except FileNotFoundError:
         typer.echo(f"Template not found: {template_id}")
-        raise typer.Exit(1)
+        raise typer.Exit(1) from None
     except ValueError as exc:
         typer.echo(f"Invalid template {template_id}: {exc}")
         raise typer.Exit(1) from exc
@@ -94,7 +94,7 @@ def render_prompt(template_id: str, goal: str, language: str) -> None:
         tmpl = REGISTRY.get(parts.transport, parts.name)
     except FileNotFoundError:
         typer.echo(f"Template not found: {template_id}")
-        raise typer.Exit(1)
+        raise typer.Exit(1) from None
     except ValueError as exc:
         typer.echo(f"Invalid template {template_id}: {exc}")
         raise typer.Exit(1) from exc
@@ -114,7 +114,7 @@ def render_prompt(template_id: str, goal: str, language: str) -> None:
         prompt = load_system_prompt(str(prompt_path), variables=variables)
     except Exception as exc:
         typer.echo(f"Failed to load prompt: {exc}")
-        raise typer.Exit(1)
+        raise typer.Exit(1) from exc
 
     if tmpl.escalation_rules:
         prompt += escalation_prompt_section(tmpl)
@@ -123,6 +123,8 @@ def render_prompt(template_id: str, goal: str, language: str) -> None:
 
 
 class TemplateParts:
+    """Parsed template identifier: transport and template name."""
+
     transport: str
     name: str
 

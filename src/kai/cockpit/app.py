@@ -52,7 +52,7 @@ def require_real_secret(name: str, value: str) -> None:
 # Registered as a Jinja global (not threaded through every route's context)
 # so the topbar's status dot can render the same way on every page. See
 # `topbar_status()` for the cheap, no-live-probe status computation.
-from kai.cockpit.deployments import topbar_status  # noqa: E402
+from kai.cockpit.deployments import topbar_status  # noqa: E402 - Jinja global registration
 
 templates.env.globals["topbar_status"] = topbar_status
 

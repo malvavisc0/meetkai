@@ -33,6 +33,8 @@ TIMEOUT = 3.0
 
 @dataclass
 class HealthCheck:
+    """Result of one named cockpit health probe."""
+
     label: str
     ok: bool = False
     detail: str = ""

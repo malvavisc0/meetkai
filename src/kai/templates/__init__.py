@@ -92,10 +92,8 @@ def escalation_prompt_section(template: TemplateDef) -> str:
     if not template.escalation_rules:
         return ""
     lines = ["\n\n## ESCALATION RULES (hard — call escalate before replying)\n"]
-    for rule in template.escalation_rules:
-        lines.append(
-            f"- If {rule.condition} → "
-            f'escalate(severity="{rule.severity}", '
-            f'reason="{rule.message}")\n'
-        )
+    lines.extend(
+        f'- If {rule.condition} → escalate(severity="{rule.severity}", reason="{rule.message}")\n'
+        for rule in template.escalation_rules
+    )
     return "".join(lines)

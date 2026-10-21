@@ -41,8 +41,8 @@ logger = logging.getLogger(__name__)
 
 __all__ = [
     "ConnectionRequiredError",
-    "DeploymentsService",
     "DeploymentStartupError",
+    "DeploymentsService",
     "attention_reason",
     "inject_connection_env",
     "instance_id_for",
@@ -57,6 +57,8 @@ __all__ = [
 
 
 class DeploymentsService:
+    """Create, inspect, and control bot deployments."""
+
     def __init__(self, db: Session) -> None:
         self.db = db
         self._run_cache: dict[tuple[int, str | None], RunRecord | None] = {}

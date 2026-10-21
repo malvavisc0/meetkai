@@ -20,6 +20,8 @@ logger = logging.getLogger(__name__)
 
 
 class DatabaseConnectionsService:
+    """CRUD and connection testing for database DSNs."""
+
     def __init__(self, db: Session) -> None:
         self.db = db
 

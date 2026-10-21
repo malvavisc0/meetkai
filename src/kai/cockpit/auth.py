@@ -22,11 +22,7 @@ def get_current_user(request: Request, db: Session = Depends(get_db)) -> User | 
     user_id = request.session.get("user_id")
     if user_id is None:
         return None
-    return (
-        db.query(User)
-        .filter(User.id == user_id, User.is_disabled == False)  # noqa: E712
-        .first()
-    )
+    return db.query(User).filter(User.id == user_id, User.is_disabled.is_(False)).first()
 
 
 def require_user(

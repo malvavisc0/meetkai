@@ -14,6 +14,8 @@ SessionFactory = sessionmaker[Session]
 
 
 class Base(DeclarativeBase):
+    """Declarative base for cockpit ORM models."""
+
     pass
 
 

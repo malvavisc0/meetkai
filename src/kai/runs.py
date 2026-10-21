@@ -78,6 +78,8 @@ def proc_start_time(pid: int) -> int | None:
 
 
 class RunRecord(BaseModel):
+    """One live bot run registered for ``kai bot tell``."""
+
     model_config = ConfigDict(frozen=True)
 
     run_id: str

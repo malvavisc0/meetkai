@@ -62,7 +62,7 @@ class PostProcessor:
         if config.profile == "default_cleanup":
             self._fn = self.run_default_cleanup
         elif config.profile == "none":
-            self._fn = lambda text: text  # noqa: E731
+            self._fn = lambda text: text
         else:  # "custom"
             steps: list = []
             if config.strip_markdown:

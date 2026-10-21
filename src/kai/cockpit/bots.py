@@ -8,6 +8,8 @@ from dataclasses import dataclass, field
 
 @dataclass(frozen=True)
 class BotType:
+    """Catalog entry describing one bot type and its requirements."""
+
     name: str
     feature_flags: list[str]
     required_settings: list[str] = field(default_factory=list)
@@ -50,6 +52,8 @@ ALL_LANGUAGES: tuple[str, ...] = ("English", "French", "Italian", "Portuguese", 
 
 @dataclass(frozen=True)
 class CredentialField:
+    """One credential field the cockpit prompts for."""
+
     name: str
     label: str
     type: str  # "text" | "secret" | "int" | "bool"

@@ -59,7 +59,23 @@ line-length = 100
 src = ["src"]
 
 [tool.ruff.lint]
-select = ["E", "F", "I", "N", "W", "UP"]
+select = [
+  "E",
+  "F",
+  "I",
+  "N",
+  "W",
+  "UP",
+  "B904",
+  "PIE810",
+  "PERF401",
+  "PERF403",
+  "RET504",
+  "RUF022",
+  "RUF100",
+  "SIM103",
+  "SIM105",
+]
 
 [tool.pytest.ini_options]
 testpaths = ["tests", "src"]

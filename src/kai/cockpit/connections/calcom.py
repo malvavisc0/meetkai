@@ -23,6 +23,8 @@ DEFAULT_BASE_URL = "https://api.cal.com/v2"
 
 
 class CalcomConnectionsService:
+    """CRUD and testing for a user's Cal.com connection."""
+
     def __init__(self, db: Session) -> None:
         self.db = db
 

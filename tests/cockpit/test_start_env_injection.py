@@ -6,55 +6,17 @@ env, ``Deployment.settings["control_port"]`` is set on start and cleared on
 stop.
 """
 
-import os
 import subprocess
 from datetime import UTC, datetime
 
 import pytest
+from tests.cockpit.helpers import make_fake_proc, seed_run_registry
 
 from kai.cockpit.deployments import DeploymentsService
 from kai.cockpit.models import Connection, Deployment, User
 from kai.cockpit.naming import kai_slug_for
 
 _KEY = "a" * 64
-
-
-class _FakeProc:
-    returncode = None
-
-    def __init__(self):
-        self._lines = iter(["starting...\n", "KAI_RUN_ID=deadbeef\n"])
-
-    @property
-    def stdout(self):
-        return self
-
-    def readline(self):
-        return next(self._lines, "")
-
-    def poll(self):
-        return self.returncode
-
-
-def _setup_run_registry(monkeypatch, tmp_path, instance_id: str):
-    from kai.config.settings import Settings
-    from kai.runs import RunRecord, RunRegistry, proc_start_time, runs_path
-
-    fake_settings = Settings.for_test(agent_history_folder=str(tmp_path))
-    monkeypatch.setattr("kai.config.settings.get_settings", lambda: fake_settings)
-    registry = RunRegistry(runs_path(fake_settings.agent_history_folder, instance_id))
-    registry.replace(
-        RunRecord(
-            run_id="deadbeef",
-            endpoint="http://x",
-            hmac_key="k",
-            hmac_algorithm="sha512",
-            pid=os.getpid(),
-            pid_start=proc_start_time(os.getpid()),  # live-looking seed
-            started_at="t",
-        ),
-    )
-    return fake_settings
 
 
 @pytest.fixture(autouse=True)
@@ -155,7 +117,8 @@ class TestControlPortInjection:
 
         injected_env: dict = {}
         monkeypatch.setattr(subprocess, "Popen", _capture_popen_factory(injected_env))
-        _setup_run_registry(monkeypatch, tmp_path, f"{dep.bot_type}-{user.email}")
+        fake_settings, _ = seed_run_registry(tmp_path, f"{dep.bot_type}-{user.email}")
+        monkeypatch.setattr("kai.config.settings.get_settings", lambda: fake_settings)
 
         svc.start(dep)
         assert "KAI_BOT_CONTROL_PORT" in injected_env
@@ -172,8 +135,9 @@ class TestControlPortInjection:
         dep = _bare_deployment(db, user)
 
         monkeypatch.setattr("kai.cockpit.config_writer.write_config", lambda d, i: None)
-        monkeypatch.setattr(subprocess, "Popen", lambda *a, **k: _FakeProc())
-        _setup_run_registry(monkeypatch, tmp_path, f"{dep.bot_type}-{user.email}")
+        monkeypatch.setattr(subprocess, "Popen", lambda *a, **k: make_fake_proc())
+        fake_settings, _ = seed_run_registry(tmp_path, f"{dep.bot_type}-{user.email}")
+        monkeypatch.setattr("kai.config.settings.get_settings", lambda: fake_settings)
 
         svc.start(dep)
         db.refresh(dep)
@@ -191,8 +155,9 @@ class TestControlPortInjection:
         dep = _bare_deployment(db, user)
 
         monkeypatch.setattr("kai.cockpit.config_writer.write_config", lambda d, i: None)
-        monkeypatch.setattr(subprocess, "Popen", lambda *a, **k: _FakeProc())
-        _setup_run_registry(monkeypatch, tmp_path, f"{dep.bot_type}-{user.email}")
+        monkeypatch.setattr(subprocess, "Popen", lambda *a, **k: make_fake_proc())
+        fake_settings, _ = seed_run_registry(tmp_path, f"{dep.bot_type}-{user.email}")
+        monkeypatch.setattr("kai.config.settings.get_settings", lambda: fake_settings)
 
         svc.start(dep)
         db.refresh(dep)
@@ -222,7 +187,8 @@ class TestControlPortInjection:
 
         injected_env: dict = {}
         monkeypatch.setattr(subprocess, "Popen", _capture_popen_factory(injected_env))
-        _setup_run_registry(monkeypatch, tmp_path, f"{dep.bot_type}-{user.email}")
+        fake_settings, _ = seed_run_registry(tmp_path, f"{dep.bot_type}-{user.email}")
+        monkeypatch.setattr("kai.config.settings.get_settings", lambda: fake_settings)
 
         svc.start(dep)
         assert "KAI_EMAIL_VISION" not in injected_env
@@ -231,6 +197,6 @@ class TestControlPortInjection:
 def _capture_popen_factory(env_sink: dict):
     def _capture(argv, *args, **kwargs):
         env_sink.update(kwargs.get("env", {}))
-        return _FakeProc()
+        return make_fake_proc()
 
     return _capture

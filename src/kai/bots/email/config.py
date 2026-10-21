@@ -10,6 +10,8 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class EmailSettings(BaseSettings):
+    """Runtime settings parsed from the email bot's config."""
+
     model_config = SettingsConfigDict(
         env_prefix="KAI_BOT_", env_file=".env", extra="ignore", populate_by_name=True
     )

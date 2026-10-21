@@ -11,6 +11,8 @@ SAFE_METHODS = frozenset({"GET", "HEAD", "OPTIONS"})
 
 
 class CSRFMiddleware:
+    """Double-submit CSRF protection for cockpit forms."""
+
     def __init__(self, app: ASGIApp) -> None:
         self.app = app
 

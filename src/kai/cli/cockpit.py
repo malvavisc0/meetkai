@@ -122,7 +122,7 @@ def cockpit_user_create(
         ZoneInfo(timezone)
     except (ZoneInfoNotFoundError, ValueError):
         console.print(f"[{WARN}]\u25cf unknown timezone '{timezone}'[/{WARN}]")
-        raise typer.Exit(1)
+        raise typer.Exit(1) from None
 
     db = open_session()
     try:
@@ -251,9 +251,7 @@ def cockpit_user_flags(
         flags = dict(user.feature_flags or {})
         if not show:
             toggles = {"image": image, "sso": sso}
-            for name, val in toggles.items():
-                if val is not None:
-                    flags[name] = val
+            flags.update({name: val for name, val in toggles.items() if val is not None})
             user.feature_flags = flags
             db.commit()
             db.refresh(user)

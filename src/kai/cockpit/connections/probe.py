@@ -35,9 +35,7 @@ def is_transient_smtp_error(exc: Exception) -> bool:
         return True
     if isinstance(exc, socket.gaierror):
         return True  # DNS failure — transient
-    if isinstance(exc, OSError):
-        return True  # network-level error
-    return False
+    return isinstance(exc, OSError)  # network-level error
 
 
 def is_transient_db_error(exc: Exception) -> bool:
@@ -46,9 +44,10 @@ def is_transient_db_error(exc: Exception) -> bool:
     exc_name = type(exc).__name__
     if exc_name in ("OperationalError",):
         msg = str(exc).lower()
-        if any(k in msg for k in ("authentication", "password", "access denied", "permission")):
-            return False
-        return True  # connection refused, timeout, host unreachable
+        # connection refused, timeout, host unreachable
+        return not any(
+            k in msg for k in ("authentication", "password", "access denied", "permission")
+        )
     if exc_name == "ModuleNotFoundError":
         return False  # missing DBAPI driver — a config issue, not transient
     return False
@@ -61,9 +60,7 @@ def is_transient_resend_error(status_code: int | None, exc: Exception | None) ->
         return True  # httpx.ConnectError, TimeoutException, etc.
     if status_code == 429:
         return True  # rate-limited upstream
-    if status_code is not None and 500 <= status_code < 600:
-        return True  # server error
-    return False
+    return status_code is not None and 500 <= status_code < 600  # server error
 
 
 def reflect_probe_status(

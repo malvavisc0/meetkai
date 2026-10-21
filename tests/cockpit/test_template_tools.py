@@ -56,8 +56,7 @@ def _create_user(db):
 
 def _create_and_get_dep(db, user):
     svc = DeploymentsService(db)
-    dep = svc.create(user, "email", "test goal", "English", template="general")
-    return dep
+    return svc.create(user, "email", "test goal", "English", template="general")
 
 
 class TestSettingsTemplateTools:

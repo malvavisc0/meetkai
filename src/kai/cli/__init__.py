@@ -23,4 +23,4 @@ app.add_typer(connection_app, name="connection")
 app.add_typer(build_templates_app(), name="template")
 app.add_typer(build_templates_app(), name="templates", hidden=True)
 
-__all__ = ["app", "BotStartupError", "cockpit_user_app"]
+__all__ = ["BotStartupError", "app", "cockpit_user_app"]

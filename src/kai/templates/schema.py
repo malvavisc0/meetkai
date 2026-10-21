@@ -4,12 +4,16 @@ from pydantic import BaseModel, Field, model_validator
 
 
 class TemplateTools(BaseModel):
+    """Per-template default tool enable/disable lists."""
+
     required: list[str] = Field(default_factory=list)
     optional: list[str] = Field(default_factory=list)
     bot_tools: list[str] = Field(default_factory=list)
 
 
 class PostProcessingConfig(BaseModel):
+    """Optional post-processing configuration for a template."""
+
     profile: Literal["default_cleanup", "none", "custom"] = "none"
     strip_emojis: bool = False
     strip_markdown: bool = False
@@ -42,12 +46,16 @@ class PostProcessingConfig(BaseModel):
 
 
 class EscalationRule(BaseModel):
+    """One escalation trigger rendered into the system prompt."""
+
     condition: str
     severity: Literal["low", "medium", "high", "critical"]
     message: str
 
 
 class TemplateDef(BaseModel):
+    """A bot template loaded from the on-disk registry."""
+
     name: str
     transport: Literal["email"]
     display_name: str

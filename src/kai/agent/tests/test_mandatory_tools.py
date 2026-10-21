@@ -27,7 +27,7 @@ from kai.brain.config import BRAIN_TOOL_NAME, build_brain_workflow_instruction
 class _StubAgent(KaiAgent):
     """A KaiAgent that skips the real __init__ (no LLM, no tools, no files)."""
 
-    def __init__(self) -> None:  # noqa: D401 - test double
+    def __init__(self) -> None:
         self._system_prompt: str | None = None
         self._save_lock = asyncio.Lock()
         self._history: OrderedDict[str, list] = OrderedDict()

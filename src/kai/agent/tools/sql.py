@@ -134,17 +134,16 @@ def make_describe_database_tool(engine: sa.Engine) -> FunctionTool:
             if table is None:
                 tables = sorted(inspector.get_table_names())
                 return json.dumps({"tables": tables})
-            cols = []
             pk = set(inspector.get_pk_constraint(table).get("constrained_columns", []))
-            for col in inspector.get_columns(table):
-                cols.append(
-                    {
-                        "name": col["name"],
-                        "type": str(col["type"]),
-                        "nullable": col.get("nullable", True),
-                        "primary_key": col["name"] in pk,
-                    }
-                )
+            cols = [
+                {
+                    "name": col["name"],
+                    "type": str(col["type"]),
+                    "nullable": col.get("nullable", True),
+                    "primary_key": col["name"] in pk,
+                }
+                for col in inspector.get_columns(table)
+            ]
             return json.dumps({"table": table, "columns": cols}, default=str)
         except Exception as exc:  # surfaced to the model as a tool result
             logger.exception("describe_database failed")

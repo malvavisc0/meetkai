@@ -13,6 +13,8 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class CockpitSettings(BaseSettings):
+    """Environment-backed cockpit configuration."""
+
     model_config = SettingsConfigDict(env_prefix="KAI_", env_file=".env", extra="ignore")
 
     cockpit_secret: str = ""

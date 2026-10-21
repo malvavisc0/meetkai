@@ -17,6 +17,8 @@ from kai.cockpit.db import Base
 
 
 class User(Base):
+    """A cockpit operator authenticated through a magic link."""
+
     __tablename__ = "users"
     __table_args__ = {"sqlite_autoincrement": True}
 
@@ -40,6 +42,8 @@ class User(Base):
 
 
 class Deployment(Base):
+    """A bot deployment owned by an operator."""
+
     __tablename__ = "deployments"
     __table_args__ = (
         UniqueConstraint("user_id", "bot_type"),
@@ -77,6 +81,8 @@ class Deployment(Base):
 
 
 class Connection(Base):
+    """A stored third-party service connection for an operator."""
+
     __tablename__ = "connections"
     __table_args__ = (
         UniqueConstraint("user_id", "service"),
@@ -93,6 +99,8 @@ class Connection(Base):
 
 
 class LoginRequest(Base):
+    """Request body for starting a magic-link login."""
+
     __tablename__ = "login_requests"
     __table_args__ = {"sqlite_autoincrement": True}
 
@@ -105,6 +113,8 @@ class LoginRequest(Base):
 
 
 class LoginToken(Base):
+    """Single-use magic-link login token."""
+
     __tablename__ = "login_tokens"
     __table_args__ = {"sqlite_autoincrement": True}
 

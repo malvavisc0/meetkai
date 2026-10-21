@@ -61,8 +61,7 @@ def dep(db, bob):
     db.commit()
 
     svc = DeploymentsService(db)
-    d = svc.create(bob, "email", "be helpful", "English")
-    return d
+    return svc.create(bob, "email", "be helpful", "English")
 
 
 def _login(client, db, bob):

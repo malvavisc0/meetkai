@@ -14,7 +14,7 @@ from fastapi import Request
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
-from tests.cockpit.helpers import _connect_email, _connect_smtp  # noqa: F401 (re-exported)
+from tests.cockpit.helpers import _connect_email, _connect_smtp
 
 from kai.cockpit.db import Base
 from kai.cockpit.models import User

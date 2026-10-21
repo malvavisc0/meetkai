@@ -1,10 +1,9 @@
 """Tests for per-deployment Brain policy (brain_mandatory / brain_instruction)."""
 
-import os
 import subprocess
 
 import pytest
-from tests.cockpit.helpers import _connect_email
+from tests.cockpit.helpers import _connect_email, make_fake_proc, seed_run_registry
 
 from kai.cockpit.deployments import DeploymentsService
 from kai.cockpit.models import Connection
@@ -100,47 +99,15 @@ class _StartBrainPolicyBase:
 
         captured_env: dict = {}
 
-        class FakeProc:
-            returncode = None
-
-            def __init__(self):
-                self._lines = iter(["starting...\n", "KAI_RUN_ID=deadbeef\n"])
-
-            @property
-            def stdout(self):
-                return self
-
-            def readline(self):
-                return next(self._lines, "")
-
-            def poll(self):
-                return self.returncode
-
         def fake_popen(*args, **kwargs):
             captured_env.update(kwargs.get("env") or {})
-            return FakeProc()
+            return make_fake_proc()
 
         monkeypatch.setattr(subprocess, "Popen", fake_popen)
 
-        from kai.config.settings import Settings
-        from kai.runs import RunRecord, RunRegistry, proc_start_time, runs_path
-
-        fake_settings = Settings.for_test(agent_history_folder=str(tmp_path))
-        monkeypatch.setattr("kai.config.settings.get_settings", lambda: fake_settings)
-
         instance_id = f"{dep.bot_type}-{user.email}"
-        registry = RunRegistry(runs_path(fake_settings.agent_history_folder, instance_id))
-        registry.replace(
-            RunRecord(
-                run_id="deadbeef",
-                endpoint="http://x",
-                hmac_key="k",
-                hmac_algorithm="sha512",
-                pid=os.getpid(),
-                pid_start=proc_start_time(os.getpid()),  # live-looking seed
-                started_at="t",
-            ),
-        )
+        fake_settings, _ = seed_run_registry(tmp_path, instance_id)
+        monkeypatch.setattr("kai.config.settings.get_settings", lambda: fake_settings)
 
         svc.start(dep)
         return captured_env

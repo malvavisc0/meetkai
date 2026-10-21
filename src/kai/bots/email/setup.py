@@ -13,6 +13,8 @@ from kai.agent.tools.email import DEFAULT_DISPLAY_NAME
 
 
 class BotConfig(BaseModel):
+    """Per-deployment configuration written by the cockpit."""
+
     model_config = ConfigDict(frozen=True)
 
     language: str = "English"

@@ -56,6 +56,8 @@ def normalize_internal_link(href: str, page_url: str, seed_host: str) -> str | N
 
 
 class BrainsService:
+    """Cockpit service for Brain document and crawler operations."""
+
     def __init__(self, db: Session) -> None:
         self.db = db
 
