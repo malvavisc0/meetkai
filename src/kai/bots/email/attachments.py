@@ -132,16 +132,18 @@ async def process_attachments(
     attachments: list[dict],
     *,
     vision_enabled: bool,
+    video_enabled: bool,
     max_attachment_bytes: int,
-) -> tuple[list[bytes], str]:
-    """Download image attachments, tag non-image attachments.
+) -> tuple[list[bytes], list[bytes], str]:
+    """Download image/video attachments, tag everything else.
 
-    Returns ``(image_bytes_list, enriched_text)``. Image bytes are only
-    downloaded when vision is enabled; otherwise (or for non-images) a
-    ``[attachment: ...]`` text tag is injected — graceful degradation when
-    ``image_enabled=False``.
+    Returns ``(image_bytes_list, video_bytes_list, enriched_text)``. Media
+    bytes are only downloaded when the matching capability is enabled;
+    otherwise a ``[attachment: ...]`` text tag is injected — graceful
+    degradation when the feature flag is off.
     """
     images: list[bytes] = []
+    videos: list[bytes] = []
     enriched = text
 
     for att in attachments:
@@ -156,9 +158,16 @@ async def process_attachments(
                 tag = f"[image attached: {filename}]"
             else:
                 tag = f"[image attachment failed to download: {filename}]"
+        elif content_type.startswith("video/") and video_enabled:
+            vid_bytes = await download_attachment(url, max_attachment_bytes)
+            if vid_bytes:
+                videos.append(vid_bytes)
+                tag = f"[video attached: {filename}]"
+            else:
+                tag = f"[video attachment failed to download: {filename}]"
         else:
             tag = f"[attachment: {filename} ({content_type})]"
 
         enriched = f"{tag}\n{enriched}" if enriched else tag
 
-    return images, enriched
+    return images, videos, enriched

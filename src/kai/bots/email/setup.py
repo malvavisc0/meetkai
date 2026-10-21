@@ -32,6 +32,9 @@ class BotConfig(BaseModel):
     # channel. Sourced from the ``image`` feature flag via config.json
     # (written by the cockpit).
     vision: bool = False
+    # Whether video attachments are downloaded and passed to the LLM's video
+    # channel. Sourced from the ``video`` feature flag via config.json.
+    video: bool = False
     # LLM sampling temperature (passed to agent.set_temperature() in
     # configure()). Left un-set, the provider's own default applies, which
     # varies by backend and is often not low. A support bot answering from a

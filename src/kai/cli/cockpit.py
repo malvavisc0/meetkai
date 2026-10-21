@@ -222,21 +222,23 @@ def cockpit_user_disable(
         db.close()
 
 
-USER_FLAGS: tuple[str, ...] = ("image", "sso")
+USER_FLAGS: tuple[str, ...] = ("image", "video", "sso")
 
 
 @cockpit_user_app.command("flags")
 def cockpit_user_flags(
     email: str = typer.Argument(..., help="User email"),
     image: bool = typer.Option(None, "--image/--no-image", help="Toggle image interpretation"),
+    video: bool = typer.Option(None, "--video/--no-video", help="Toggle video interpretation"),
     sso: bool = typer.Option(None, "--sso/--no-sso", help="Toggle SSO login"),
     show: bool = typer.Option(False, "--show", help="Only print current flags, change nothing"),
 ) -> None:
     """Turn features on or off for a user.
 
-    Flags start off when a user is created. Pass ``--image`` to enable and
-    ``--no-image`` to disable; a flag you omit is left as it is. With
-    ``--show`` nothing changes, the current flags are just printed.
+    Flags start off when a user is created. Pass ``--image``/``--video`` to
+    enable and ``--no-image``/``--no-video`` to disable; a flag you omit is
+    left as it is. With ``--show`` nothing changes, the current flags are
+    just printed.
     """
     from kai.cockpit.db import open_session
     from kai.cockpit.models import User
@@ -250,7 +252,7 @@ def cockpit_user_flags(
 
         flags = dict(user.feature_flags or {})
         if not show:
-            toggles = {"image": image, "sso": sso}
+            toggles = {"image": image, "video": video, "sso": sso}
             flags.update({name: val for name, val in toggles.items() if val is not None})
             user.feature_flags = flags
             db.commit()

@@ -126,3 +126,17 @@ class TestUserFlagsCli:
         assert result.exit_code == 0
         db.refresh(bob)
         assert bob.feature_flags["image"] is False
+
+    def test_video_flag_enables_video(self, db, bob):
+        from typer.testing import CliRunner
+
+        from kai.cli import cockpit_user_app
+
+        bob.feature_flags = {}
+        db.commit()
+
+        result = CliRunner().invoke(cockpit_user_app, ["flags", bob.email, "--video"])
+        assert result.exit_code == 0
+        db.refresh(bob)
+        assert bob.feature_flags["video"] is True
+        assert bob.feature_flags.get("image") is not True

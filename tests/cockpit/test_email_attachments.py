@@ -326,6 +326,67 @@ class TestAttachments:
         mock_class.return_value.__aenter__.return_value.stream.assert_not_called()
         assert bot.agent.chat.call_args.kwargs["images"] is None
 
+    @pytest.mark.asyncio
+    async def test_video_attachment_downloaded_when_enabled(self, tmp_path):
+        bot = _make_bot(tmp_path, video=True)
+        bot.agent = AsyncMock()
+        bot.agent.chat = AsyncMock(return_value=_chat_result("silent"))
+        mock_class, mock_stream = self._mock_async_client(b"fake-mp4")
+
+        with patch("kai.bots.email.attachments.httpx.AsyncClient", mock_class):
+            await bot.ingest_event(
+                {
+                    "event": "email.inbound",
+                    "source": "a@b.com",
+                    "text": "see this video",
+                    "metadata": {
+                        "subject": "clip",
+                        "attachments": [
+                            {
+                                "url": "https://resend.example/clip",
+                                "content_type": "video/mp4",
+                                "filename": "clip.mp4",
+                            }
+                        ],
+                    },
+                }
+            )
+
+        mock_stream.assert_called_once_with("GET", "https://resend.example/clip")
+        assert bot.agent.chat.call_args.kwargs["videos"] == [b"fake-mp4"]
+        assert "video attached" in bot.agent.chat.call_args.args[0]
+
+    @pytest.mark.asyncio
+    async def test_video_attachment_not_downloaded_when_disabled(self, tmp_path):
+        bot = _make_bot(tmp_path, video=False)
+        bot.agent = AsyncMock()
+        bot.agent.chat = AsyncMock(return_value=_chat_result("silent"))
+
+        with patch("kai.bots.email.attachments.httpx.AsyncClient") as mock_class:
+            mock_class.return_value.__aenter__ = AsyncMock(return_value=MagicMock())
+            mock_class.return_value.__aexit__ = AsyncMock(return_value=False)
+            await bot.ingest_event(
+                {
+                    "event": "email.inbound",
+                    "source": "a@b.com",
+                    "text": "see this video",
+                    "metadata": {
+                        "subject": "clip",
+                        "attachments": [
+                            {
+                                "url": "https://resend.example/clip",
+                                "content_type": "video/mp4",
+                                "filename": "clip.mp4",
+                            }
+                        ],
+                    },
+                }
+            )
+
+        mock_class.return_value.__aenter__.return_value.stream.assert_not_called()
+        assert bot.agent.chat.call_args.kwargs["videos"] is None
+        assert "[attachment: clip.mp4 (video/mp4)]" in bot.agent.chat.call_args.args[0]
+
 
 class TestHostValidation:
     @pytest.mark.asyncio

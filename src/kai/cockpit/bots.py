@@ -26,7 +26,7 @@ class BotType:
 BOT_TYPES: dict[str, BotType] = {
     "email": BotType(
         name="email",
-        feature_flags=["image"],
+        feature_flags=["image", "video"],
         required_settings=["language"],
         description=(
             "A support bot that answers questions via email, grounded in "
@@ -177,4 +177,5 @@ CONNECTION_LABELS: dict[str, str] = {
 CAPABILITY_LABELS: dict[str, str] = {
     "vision": "Vision",
     "image": "Vision",
+    "video": "Video",
 }

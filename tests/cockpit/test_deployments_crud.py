@@ -19,7 +19,7 @@ class TestCreate:
         assert dep.status == "stopped"
         assert dep.desired_state == "stopped"
         assert dep.settings["language"] == "English"
-        assert dep.feature_flags == {"image": False}
+        assert dep.feature_flags == {"image": False, "video": False}
 
     def test_create_seeds_email_schema(self, db, user):
         """Regression: ``create()`` seeds the deployment from the email
@@ -246,3 +246,20 @@ class TestGetAndList:
         )
 
         assert svc.interaction_summary(dep) == (3, 4)
+
+    def test_write_config_maps_image_and_video_flags(self, db, user, tmp_path, monkeypatch):
+        import json
+
+        from kai.cockpit import config_writer
+
+        configs_dir = tmp_path / "configs" / "cockpit"
+        monkeypatch.setattr(config_writer, "CONFIGS_DIR", configs_dir)
+        svc = DeploymentsService(db)
+        dep = svc.create(user, "email", "goal", "English")
+        dep.feature_flags = {"image": True, "video": True}
+
+        path = config_writer.write_config(dep, f"{dep.bot_type}-{user.email}")
+
+        data = json.loads(path.read_text())
+        assert data["vision"] is True
+        assert data["video"] is True

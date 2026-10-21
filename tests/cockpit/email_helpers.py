@@ -13,11 +13,12 @@ def _make_bot(
     tmp_path: Path,
     *,
     vision: bool = False,
+    video: bool = False,
     max_attachment_bytes: int = 10 * 1024 * 1024,
 ) -> Bot:
     """Construct an email bot with minimal wiring for ingest_event tests."""
     bot = Bot(bot_dir=tmp_path)
-    bot._config = BotConfig(language="English", timezone="UTC", vision=vision)
+    bot._config = BotConfig(language="English", timezone="UTC", vision=vision, video=video)
     bot._email = EmailSettings(
         control_host="0.0.0.0",
         control_port=8200,

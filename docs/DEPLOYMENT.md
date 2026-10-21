@@ -117,11 +117,11 @@ a fresh install, create your operator account first:
 uv run kai cockpit user create you@example.com --language English --timezone Europe/Berlin
 ```
 
-Operators get **no feature flags by default** — image interpretation and SSO
+Operators get **no feature flags by default** — image interpretation, video interpretation, and SSO
 stay off until granted, so tools silently lose capabilities for that user:
 
 ```bash
-uv run kai cockpit user flags you@example.com --image    # --sso likewise; --show to inspect
+uv run kai cockpit user flags you@example.com --image --video  # --sso likewise; --show to inspect
 ```
 
 Then get the magic link to your inbox. The default SMTP target is a host
@@ -211,7 +211,7 @@ once, inside the running container:
 ```bash
 docker compose exec cockpit kai cockpit user create you@example.com \
   --language English --timezone Europe/Berlin
-docker compose exec cockpit kai cockpit user flags you@example.com --image
+docker compose exec cockpit kai cockpit user flags you@example.com --image --video
 ```
 
 (`user flags` grants the capabilities that are off by default for every new
@@ -478,7 +478,7 @@ docker compose --env-file .env.production -f docker-compose.yml \
   exec cockpit kai cockpit user create you@your-domain \
   --language English --timezone Europe/Berlin
 docker compose --env-file .env.production -f docker-compose.yml \
-  exec cockpit kai cockpit user flags you@your-domain --image
+  exec cockpit kai cockpit user flags you@your-domain --image --video
 ```
 
 The Brain (step 5) is a second stack, usually on its own host: there the

@@ -37,9 +37,9 @@ class TestEmailBotType:
         bt = BOT_TYPES["email"]
         assert bt.supported_connections == ["database", "calcom"]
 
-    def test_email_bot_enables_image_flag(self):
+    def test_email_bot_enables_media_flags(self):
         bt = BOT_TYPES["email"]
-        assert bt.feature_flags == ["image"]
+        assert bt.feature_flags == ["image", "video"]
 
     def test_email_bot_requires_language_setting(self):
         bt = BOT_TYPES["email"]

@@ -24,8 +24,9 @@ def write_config(deployment: Deployment, instance_id: str) -> Path:
     flags = deployment.feature_flags
 
     if deployment.bot_type == "email":
-        # Email: ``image`` feature flag maps to BotConfig.vision.
+        # Email: feature flags map to the bot's capability fields.
         config["vision"] = flags.get("image", False)
+        config["video"] = flags.get("video", False)
 
     path = CONFIGS_DIR / f"{instance_id}.json"
     path.parent.mkdir(parents=True, exist_ok=True)

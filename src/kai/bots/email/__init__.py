@@ -280,7 +280,7 @@ class Bot(BaseBot):
         message_id = metadata.get("message_id", "")
         attachments = metadata.get("attachments", [])
 
-        images, enriched_text = await self.process_attachments(text, attachments)
+        images, videos, enriched_text = await self.process_attachments(text, attachments)
 
         context = MessageContext(
             sender_name=source,
@@ -297,6 +297,7 @@ class Bot(BaseBot):
             conversation_id=source,
             context=context,
             images=images or None,
+            videos=videos or None,
             reply_style=self._reply_style or None,
         )
 
@@ -487,7 +488,10 @@ class Bot(BaseBot):
         return {
             "bot": "email",
             "language": self._config.language,
-            "capabilities": {"vision": self._config.vision},
+            "capabilities": {
+                "vision": self._config.vision,
+                "video": self._config.video,
+            },
         }
 
     async def clear_operator_history(self) -> dict:
@@ -569,13 +573,14 @@ class Bot(BaseBot):
 
     async def process_attachments(
         self, text: str, attachments: list[dict]
-    ) -> tuple[list[bytes], str]:
+    ) -> tuple[list[bytes], list[bytes], str]:
         """Download and tag inbound attachments for the agent turn."""
         max_bytes = self._email.max_attachment_bytes if self._email else 0
         return await process_attachments(
             text,
             attachments,
             vision_enabled=self._config.vision,
+            video_enabled=self._config.video,
             max_attachment_bytes=max_bytes,
         )
 
